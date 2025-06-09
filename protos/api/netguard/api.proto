@@ -1,0 +1,275 @@
+syntax = "proto3";
+package netguard.v1;
+option go_package = "netguard-pg-backend/protos/pkg/api/netguard;netguard";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "google/api/annotations.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+import "common/ip-transport.proto";
+
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  info: {
+    title: "Netguard API";
+    version: "1.0";
+  };
+  external_docs: {
+    url: "https://github.com/yourusername/netguard-pg-backend";
+    description: "Documentation";
+  }
+  schemes: [HTTP];
+  consumes: "application/json";
+  produces: "application/json";
+};
+
+// Service - represents a service with ports
+message Service {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      required: ["name", "namespace"]
+    }
+  };
+  string name = 1;
+  string namespace = 2;
+  string description = 3;
+  repeated IngressPort ingress_ports = 4;
+  repeated AddressGroupRef address_groups = 5;
+}
+
+// IngressPort - defines a port configuration for ingress traffic
+message IngressPort {
+  common.Networks.NetIP.Transport protocol = 1;
+  string port = 2;
+  string description = 3;
+}
+
+// AddressGroupRef - reference to an address group
+message AddressGroupRef {
+  string name = 1;
+  string namespace = 2;
+}
+
+// ServiceRef - reference to a service
+message ServiceRef {
+  string name = 1;
+  string namespace = 2;
+}
+
+// AddressGroup - represents a group of addresses
+message AddressGroup {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      required: ["name", "namespace"]
+    }
+  };
+  string name = 1;
+  string namespace = 2;
+  string description = 3;
+  repeated string addresses = 4;
+  repeated ServiceRef services = 5;
+}
+
+// AddressGroupBinding - binding between a service and an address group
+message AddressGroupBinding {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      required: ["name", "namespace", "service_ref", "address_group_ref"]
+    }
+  };
+  string name = 1;
+  string namespace = 2;
+  ServiceRef service_ref = 3;
+  AddressGroupRef address_group_ref = 4;
+}
+
+// ProtocolPorts - mapping of protocols to port ranges
+message ProtocolPorts {
+  map<string, PortRanges> ports = 1;
+}
+
+// PortRange - range of ports
+message PortRange {
+  int32 start = 1;
+  int32 end = 2;
+}
+
+// PortRanges - list of port ranges
+message PortRanges {
+  repeated PortRange ranges = 1;
+}
+
+// ServicePortsRef - reference to a service and its allowed ports
+message ServicePortsRef {
+  string name = 1;
+  string namespace = 2;
+  ProtocolPorts ports = 3;
+}
+
+// AddressGroupPortMapping - mapping between an address group and allowed ports
+message AddressGroupPortMapping {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      required: ["name", "namespace"]
+    }
+  };
+  string name = 1;
+  string namespace = 2;
+  repeated ServicePortsRef access_ports = 3;
+}
+
+// RuleS2S - rule between two services
+message RuleS2S {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      required: ["name", "namespace", "traffic", "service_local_ref", "service_ref"]
+    }
+  };
+  string name = 1;
+  string namespace = 2;
+  common.Traffic traffic = 3;
+  ServiceRef service_local_ref = 4;
+  ServiceRef service_ref = 5;
+}
+
+// SyncStatusResp - sync status
+message SyncStatusResp {
+  google.protobuf.Timestamp updated_at = 1;
+}
+
+// Requests and responses for API methods
+
+// ListServicesReq - request to list services
+message ListServicesReq {
+  repeated string names = 1;
+}
+
+// ListServicesResp - response with list of services
+message ListServicesResp {
+  repeated Service items = 1;
+}
+
+// ListAddressGroupsReq - request to list address groups
+message ListAddressGroupsReq {
+  repeated string names = 1;
+}
+
+// ListAddressGroupsResp - response with list of address groups
+message ListAddressGroupsResp {
+  repeated AddressGroup items = 1;
+}
+
+// ListAddressGroupBindingsReq - request to list address group bindings
+message ListAddressGroupBindingsReq {
+  repeated string names = 1;
+}
+
+// ListAddressGroupBindingsResp - response with list of address group bindings
+message ListAddressGroupBindingsResp {
+  repeated AddressGroupBinding items = 1;
+}
+
+// ListAddressGroupPortMappingsReq - request to list address group port mappings
+message ListAddressGroupPortMappingsReq {
+  repeated string names = 1;
+}
+
+// ListAddressGroupPortMappingsResp - response with list of address group port mappings
+message ListAddressGroupPortMappingsResp {
+  repeated AddressGroupPortMapping items = 1;
+}
+
+// ListRuleS2SReq - request to list rule s2s
+message ListRuleS2SReq {
+  repeated string names = 1;
+}
+
+// ListRuleS2SResp - response with list of rule s2s
+message ListRuleS2SResp {
+  repeated RuleS2S items = 1;
+}
+
+// SyncReq - request to sync
+message SyncReq {
+  repeated Service services = 1;
+  repeated AddressGroup address_groups = 2;
+  repeated AddressGroupBinding address_group_bindings = 3;
+  repeated AddressGroupPortMapping address_group_port_mappings = 4;
+  repeated RuleS2S rule_s2s = 5;
+}
+
+// Service definition
+service NetguardService {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_tag) = {
+    description: "Netguard API service"
+  };
+
+  // Sync - syncs data in DB
+  rpc Sync(SyncReq) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/v1/sync"
+      body: "*"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "Sync: makes changes in DB";
+    };
+  }
+
+  // SyncStatus - gets last succeeded update DB status
+  rpc SyncStatus(google.protobuf.Empty) returns(SyncStatusResp) {
+    option (google.api.http) = {
+      get: "/v1/sync/status"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "SyncStatus: gets last succeeded update DB status";
+    };
+  }
+
+  // ListServices - gets list of services
+  rpc ListServices(ListServicesReq) returns (ListServicesResp) {
+    option (google.api.http) = {
+      get: "/v1/services"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "ListServices: gets list of services";
+    };
+  }
+
+  // ListAddressGroups - gets list of address groups
+  rpc ListAddressGroups(ListAddressGroupsReq) returns (ListAddressGroupsResp) {
+    option (google.api.http) = {
+      get: "/v1/address-groups"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "ListAddressGroups: gets list of address groups";
+    };
+  }
+
+  // ListAddressGroupBindings - gets list of address group bindings
+  rpc ListAddressGroupBindings(ListAddressGroupBindingsReq) returns (ListAddressGroupBindingsResp) {
+    option (google.api.http) = {
+      get: "/v1/address-group-bindings"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "ListAddressGroupBindings: gets list of address group bindings";
+    };
+  }
+
+  // ListAddressGroupPortMappings - gets list of address group port mappings
+  rpc ListAddressGroupPortMappings(ListAddressGroupPortMappingsReq) returns (ListAddressGroupPortMappingsResp) {
+    option (google.api.http) = {
+      get: "/v1/address-group-port-mappings"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "ListAddressGroupPortMappings: gets list of address group port mappings";
+    };
+  }
+
+  // ListRuleS2S - gets list of rule s2s
+  rpc ListRuleS2S(ListRuleS2SReq) returns (ListRuleS2SResp) {
+    option (google.api.http) = {
+      get: "/v1/rule-s2s"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "ListRuleS2S: gets list of rule s2s";
+    };
+  }
+}
