@@ -30,7 +30,7 @@ fi
 
 # Check if the API is accessible
 echo "Checking if API is accessible..."
-if curl -s http://localhost:8080/v1/sync/status | grep -q "updated_at"; then
+if curl -s http://localhost:8080/v1/sync/status | grep -q "updatedAt"; then
     echo "✅ API is accessible"
 else
     echo "❌ Failed to access API"
