@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
+	"netguard-pg-backend/internal/application/validation"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 )
@@ -136,6 +137,23 @@ func (s *NetguardService) GetServiceAliases(ctx context.Context, scope ports.Sco
 
 // SyncServices syncs services
 func (s *NetguardService) SyncServices(ctx context.Context, services []models.Service, scope ports.Scope) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Create validator
+	validator := validation.NewDependencyValidator(reader)
+	serviceValidator := validator.GetServiceValidator()
+
+	// Validate all services
+	for _, service := range services {
+		if err := serviceValidator.ValidateForCreation(ctx, service); err != nil {
+			return err
+		}
+	}
+
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get writer")
@@ -157,6 +175,23 @@ func (s *NetguardService) SyncServices(ctx context.Context, services []models.Se
 
 // SyncAddressGroups syncs address groups
 func (s *NetguardService) SyncAddressGroups(ctx context.Context, addressGroups []models.AddressGroup, scope ports.Scope) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Create validator
+	validator := validation.NewDependencyValidator(reader)
+	addressGroupValidator := validator.GetAddressGroupValidator()
+
+	// Validate all address groups
+	for _, addressGroup := range addressGroups {
+		if err := addressGroupValidator.ValidateForCreation(ctx, addressGroup); err != nil {
+			return err
+		}
+	}
+
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get writer")
@@ -178,6 +213,23 @@ func (s *NetguardService) SyncAddressGroups(ctx context.Context, addressGroups [
 
 // SyncAddressGroupBindings syncs address group bindings
 func (s *NetguardService) SyncAddressGroupBindings(ctx context.Context, bindings []models.AddressGroupBinding, scope ports.Scope) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Create validator
+	validator := validation.NewDependencyValidator(reader)
+	bindingValidator := validator.GetAddressGroupBindingValidator()
+
+	// Validate all bindings
+	for _, binding := range bindings {
+		if err := bindingValidator.ValidateForCreation(ctx, binding); err != nil {
+			return err
+		}
+	}
+
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get writer")
@@ -199,6 +251,23 @@ func (s *NetguardService) SyncAddressGroupBindings(ctx context.Context, bindings
 
 // SyncAddressGroupPortMappings syncs address group port mappings
 func (s *NetguardService) SyncAddressGroupPortMappings(ctx context.Context, mappings []models.AddressGroupPortMapping, scope ports.Scope) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Create validator
+	validator := validation.NewDependencyValidator(reader)
+	mappingValidator := validator.GetAddressGroupPortMappingValidator()
+
+	// Validate all mappings
+	for _, mapping := range mappings {
+		if err := mappingValidator.ValidateForCreation(ctx, mapping); err != nil {
+			return err
+		}
+	}
+
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get writer")
@@ -220,6 +289,23 @@ func (s *NetguardService) SyncAddressGroupPortMappings(ctx context.Context, mapp
 
 // SyncRuleS2S syncs rule s2s
 func (s *NetguardService) SyncRuleS2S(ctx context.Context, rules []models.RuleS2S, scope ports.Scope) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Create validator
+	validator := validation.NewDependencyValidator(reader)
+	ruleValidator := validator.GetRuleS2SValidator()
+
+	// Validate all rules
+	for _, rule := range rules {
+		if err := ruleValidator.ValidateForCreation(ctx, rule); err != nil {
+			return err
+		}
+	}
+
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get writer")
@@ -241,6 +327,23 @@ func (s *NetguardService) SyncRuleS2S(ctx context.Context, rules []models.RuleS2
 
 // SyncServiceAliases syncs service aliases
 func (s *NetguardService) SyncServiceAliases(ctx context.Context, aliases []models.ServiceAlias, scope ports.Scope) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Create validator
+	validator := validation.NewDependencyValidator(reader)
+	aliasValidator := validator.GetServiceAliasValidator()
+
+	// Validate all aliases
+	for _, alias := range aliases {
+		if err := aliasValidator.ValidateForCreation(ctx, alias); err != nil {
+			return err
+		}
+	}
+
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get writer")
@@ -495,6 +598,23 @@ func (s *NetguardService) GetServiceAliasesByIDs(ctx context.Context, ids []mode
 
 // DeleteServicesByIDs deletes services by IDs
 func (s *NetguardService) DeleteServicesByIDs(ctx context.Context, ids []models.ResourceIdentifier) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Create validator
+	validator := validation.NewDependencyValidator(reader)
+	serviceValidator := validator.GetServiceValidator()
+
+	// Check dependencies for each service
+	for _, id := range ids {
+		if err := serviceValidator.CheckDependencies(ctx, id); err != nil {
+			return err
+		}
+	}
+
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get writer")
@@ -516,6 +636,23 @@ func (s *NetguardService) DeleteServicesByIDs(ctx context.Context, ids []models.
 
 // DeleteAddressGroupsByIDs deletes address groups by IDs
 func (s *NetguardService) DeleteAddressGroupsByIDs(ctx context.Context, ids []models.ResourceIdentifier) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Create validator
+	validator := validation.NewDependencyValidator(reader)
+	addressGroupValidator := validator.GetAddressGroupValidator()
+
+	// Check dependencies for each address group
+	for _, id := range ids {
+		if err := addressGroupValidator.CheckDependencies(ctx, id); err != nil {
+			return err
+		}
+	}
+
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get writer")
@@ -537,6 +674,9 @@ func (s *NetguardService) DeleteAddressGroupsByIDs(ctx context.Context, ids []mo
 
 // DeleteAddressGroupBindingsByIDs deletes address group bindings by IDs
 func (s *NetguardService) DeleteAddressGroupBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier) error {
+	// Note: Address group bindings don't have dependencies, so we don't need to check for them
+	// However, we could add validation to ensure the bindings exist before deleting them
+
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get writer")
@@ -558,6 +698,9 @@ func (s *NetguardService) DeleteAddressGroupBindingsByIDs(ctx context.Context, i
 
 // DeleteAddressGroupPortMappingsByIDs deletes address group port mappings by IDs
 func (s *NetguardService) DeleteAddressGroupPortMappingsByIDs(ctx context.Context, ids []models.ResourceIdentifier) error {
+	// Note: Address group port mappings don't have dependencies, so we don't need to check for them
+	// However, we could add validation to ensure the mappings exist before deleting them
+
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get writer")
@@ -579,6 +722,9 @@ func (s *NetguardService) DeleteAddressGroupPortMappingsByIDs(ctx context.Contex
 
 // DeleteRuleS2SByIDs deletes rules s2s by IDs
 func (s *NetguardService) DeleteRuleS2SByIDs(ctx context.Context, ids []models.ResourceIdentifier) error {
+	// Note: Rules don't have dependencies, so we don't need to check for them
+	// However, we could add validation to ensure the rules exist before deleting them
+
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get writer")
@@ -600,6 +746,23 @@ func (s *NetguardService) DeleteRuleS2SByIDs(ctx context.Context, ids []models.R
 
 // DeleteServiceAliasesByIDs deletes service aliases by IDs
 func (s *NetguardService) DeleteServiceAliasesByIDs(ctx context.Context, ids []models.ResourceIdentifier) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Create validator
+	validator := validation.NewDependencyValidator(reader)
+	aliasValidator := validator.GetServiceAliasValidator()
+
+	// Check dependencies for each service alias
+	for _, id := range ids {
+		if err := aliasValidator.CheckDependencies(ctx, id); err != nil {
+			return err
+		}
+	}
+
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get writer")
