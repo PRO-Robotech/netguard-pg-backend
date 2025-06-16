@@ -1,5 +1,4 @@
-name: Test
-
+name: test-memdb
 on:
   push:
     branches:
@@ -11,7 +10,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    services:
+#    services:
 #      postgres:
 #        image: postgres:14
 #        env:
