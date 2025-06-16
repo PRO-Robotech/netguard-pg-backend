@@ -3,6 +3,8 @@ package ports
 import (
 	"fmt"
 	"strings"
+
+	"netguard-pg-backend/internal/domain/models"
 )
 
 // EmptyScope represents an empty scope
@@ -18,25 +20,33 @@ func (EmptyScope) String() string {
 	return "empty"
 }
 
-// NameScope represents a scope with a name
-type NameScope struct {
-	Names []string
+// ResourceIdentifierScope represents a scope with resource identifiers
+type ResourceIdentifierScope struct {
+	Identifiers []models.ResourceIdentifier
 }
 
-// IsEmpty returns true if NameScope is empty
-func (s NameScope) IsEmpty() bool {
-	return len(s.Names) == 0
+// IsEmpty returns true if ResourceIdentifierScope is empty
+func (s ResourceIdentifierScope) IsEmpty() bool {
+	return len(s.Identifiers) == 0
 }
 
-// String returns a string representation of NameScope
-func (s NameScope) String() string {
+// String returns a string representation of ResourceIdentifierScope
+func (s ResourceIdentifierScope) String() string {
 	if s.IsEmpty() {
 		return "empty"
 	}
-	return fmt.Sprintf("names(%s)", strings.Join(s.Names, ","))
+
+	identifiers := make([]string, 0, len(s.Identifiers))
+	for _, id := range s.Identifiers {
+		identifiers = append(identifiers, id.Key())
+	}
+
+	return fmt.Sprintf("identifiers(%s)", strings.Join(identifiers, ","))
 }
 
-// NewNameScope creates a new NameScope
-func NewNameScope(names ...string) NameScope {
-	return NameScope{Names: names}
+// NewResourceIdentifierScope creates a new ResourceIdentifierScope
+func NewResourceIdentifierScope(identifiers ...models.ResourceIdentifier) ResourceIdentifierScope {
+	return ResourceIdentifierScope{
+		Identifiers: identifiers,
+	}
 }

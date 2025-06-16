@@ -19,12 +19,22 @@ type (
 
 	// ReaderNoClose defines read operations without close
 	ReaderNoClose interface {
+		// List methods with scope
 		ListServices(ctx context.Context, consume func(models.Service) error, scope Scope) error
 		ListAddressGroups(ctx context.Context, consume func(models.AddressGroup) error, scope Scope) error
 		ListAddressGroupBindings(ctx context.Context, consume func(models.AddressGroupBinding) error, scope Scope) error
 		ListAddressGroupPortMappings(ctx context.Context, consume func(models.AddressGroupPortMapping) error, scope Scope) error
 		ListRuleS2S(ctx context.Context, consume func(models.RuleS2S) error, scope Scope) error
+		ListServiceAliases(ctx context.Context, consume func(models.ServiceAlias) error, scope Scope) error
 		GetSyncStatus(ctx context.Context) (*models.SyncStatus, error)
+
+		// Get methods with ResourceIdentifier
+		GetServiceByID(ctx context.Context, id models.ResourceIdentifier) (*models.Service, error)
+		GetAddressGroupByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroup, error)
+		GetAddressGroupBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBinding, error)
+		GetAddressGroupPortMappingByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupPortMapping, error)
+		GetRuleS2SByID(ctx context.Context, id models.ResourceIdentifier) (*models.RuleS2S, error)
+		GetServiceAliasByID(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error)
 	}
 
 	// Reader defines read operations
@@ -35,11 +45,22 @@ type (
 
 	// Writer defines write operations
 	Writer interface {
+		// Sync methods with scope
 		SyncServices(ctx context.Context, services []models.Service, scope Scope, opts ...Option) error
 		SyncAddressGroups(ctx context.Context, addressGroups []models.AddressGroup, scope Scope, opts ...Option) error
 		SyncAddressGroupBindings(ctx context.Context, bindings []models.AddressGroupBinding, scope Scope, opts ...Option) error
 		SyncAddressGroupPortMappings(ctx context.Context, mappings []models.AddressGroupPortMapping, scope Scope, opts ...Option) error
 		SyncRuleS2S(ctx context.Context, rules []models.RuleS2S, scope Scope, opts ...Option) error
+		SyncServiceAliases(ctx context.Context, aliases []models.ServiceAlias, scope Scope, opts ...Option) error
+
+		// Delete methods with ResourceIdentifier
+		DeleteServicesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
+		DeleteAddressGroupsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
+		DeleteAddressGroupBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
+		DeleteAddressGroupPortMappingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
+		DeleteRuleS2SByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
+		DeleteServiceAliasesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
+
 		Commit() error
 		Abort()
 	}

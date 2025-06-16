@@ -25,11 +25,10 @@ option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
 message Service {
   option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
     json_schema: {
-      required: ["name", "namespace"]
+      required: ["self_ref"]
     }
   };
-  string name = 1;
-  string namespace = 2;
+  ResourceIdentifier self_ref = 1;
   string description = 3;
   repeated IngressPort ingress_ports = 4;
   repeated AddressGroupRef address_groups = 5;
@@ -42,27 +41,30 @@ message IngressPort {
   string description = 3;
 }
 
-// AddressGroupRef - reference to an address group
-message AddressGroupRef {
+// ResourceIdentifier - uniquely identifies a resource
+message ResourceIdentifier {
   string name = 1;
   string namespace = 2;
 }
 
+// AddressGroupRef - reference to an address group
+message AddressGroupRef {
+  ResourceIdentifier identifier = 1;
+}
+
 // ServiceRef - reference to a service
 message ServiceRef {
-  string name = 1;
-  string namespace = 2;
+  ResourceIdentifier identifier = 1;
 }
 
 // AddressGroup - represents a group of addresses
 message AddressGroup {
   option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
     json_schema: {
-      required: ["name", "namespace"]
+      required: ["self_ref"]
     }
   };
-  string name = 1;
-  string namespace = 2;
+  ResourceIdentifier self_ref = 1;
   string description = 3;
   repeated string addresses = 4;
   repeated ServiceRef services = 5;
@@ -72,11 +74,10 @@ message AddressGroup {
 message AddressGroupBinding {
   option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
     json_schema: {
-      required: ["name", "namespace", "service_ref", "address_group_ref"]
+      required: ["self_ref", "service_ref", "address_group_ref"]
     }
   };
-  string name = 1;
-  string namespace = 2;
+  ResourceIdentifier self_ref = 1;
   ServiceRef service_ref = 3;
   AddressGroupRef address_group_ref = 4;
 }
@@ -99,21 +100,30 @@ message PortRanges {
 
 // ServicePortsRef - reference to a service and its allowed ports
 message ServicePortsRef {
-  string name = 1;
-  string namespace = 2;
-  ProtocolPorts ports = 3;
+  ResourceIdentifier identifier = 1;
+  ProtocolPorts ports = 2;
 }
 
 // AddressGroupPortMapping - mapping between an address group and allowed ports
 message AddressGroupPortMapping {
   option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
     json_schema: {
-      required: ["name", "namespace"]
+      required: ["self_ref"]
     }
   };
-  string name = 1;
-  string namespace = 2;
+  ResourceIdentifier self_ref = 1;
   repeated ServicePortsRef access_ports = 3;
+}
+
+// ServiceAlias - alias for a service
+message ServiceAlias {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      required: ["name", "namespace", "service_ref"]
+    }
+  };
+  ResourceIdentifier self_ref = 1;
+  ServiceRef service_ref = 2;
 }
 
 // RuleS2S - rule between two services
@@ -123,11 +133,10 @@ message RuleS2S {
       required: ["name", "namespace", "traffic", "service_local_ref", "service_ref"]
     }
   };
-  string name = 1;
-  string namespace = 2;
-  common.Traffic traffic = 3;
-  ServiceRef service_local_ref = 4;
-  ServiceRef service_ref = 5;
+  ResourceIdentifier self_ref = 1;
+  common.Traffic traffic = 2;
+  ServiceRef service_local_ref = 3;
+  ServiceRef service_ref = 4;
 }
 
 // SyncStatusResp - sync status
@@ -139,7 +148,7 @@ message SyncStatusResp {
 
 // ListServicesReq - request to list services
 message ListServicesReq {
-  repeated string names = 1;
+  repeated ResourceIdentifier identifiers = 1;
 }
 
 // ListServicesResp - response with list of services
@@ -147,9 +156,19 @@ message ListServicesResp {
   repeated Service items = 1;
 }
 
+// GetServiceReq - request to get a specific service
+message GetServiceReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetServiceResp - response with a specific service
+message GetServiceResp {
+  Service service = 1;
+}
+
 // ListAddressGroupsReq - request to list address groups
 message ListAddressGroupsReq {
-  repeated string names = 1;
+  repeated ResourceIdentifier identifiers = 1;
 }
 
 // ListAddressGroupsResp - response with list of address groups
@@ -157,9 +176,19 @@ message ListAddressGroupsResp {
   repeated AddressGroup items = 1;
 }
 
+// GetAddressGroupReq - request to get a specific address group
+message GetAddressGroupReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetAddressGroupResp - response with a specific address group
+message GetAddressGroupResp {
+  AddressGroup address_group = 1;
+}
+
 // ListAddressGroupBindingsReq - request to list address group bindings
 message ListAddressGroupBindingsReq {
-  repeated string names = 1;
+  repeated ResourceIdentifier identifiers = 1;
 }
 
 // ListAddressGroupBindingsResp - response with list of address group bindings
@@ -169,7 +198,7 @@ message ListAddressGroupBindingsResp {
 
 // ListAddressGroupPortMappingsReq - request to list address group port mappings
 message ListAddressGroupPortMappingsReq {
-  repeated string names = 1;
+  repeated ResourceIdentifier identifiers = 1;
 }
 
 // ListAddressGroupPortMappingsResp - response with list of address group port mappings
@@ -179,12 +208,62 @@ message ListAddressGroupPortMappingsResp {
 
 // ListRuleS2SReq - request to list rule s2s
 message ListRuleS2SReq {
-  repeated string names = 1;
+  repeated ResourceIdentifier identifiers = 1;
 }
 
 // ListRuleS2SResp - response with list of rule s2s
 message ListRuleS2SResp {
   repeated RuleS2S items = 1;
+}
+
+// ListServiceAliasesReq - request to list service aliases
+message ListServiceAliasesReq {
+  repeated ResourceIdentifier identifiers = 1;
+}
+
+// ListServiceAliasesResp - response with list of service aliases
+message ListServiceAliasesResp {
+  repeated ServiceAlias items = 1;
+}
+
+// GetAddressGroupBindingReq - request to get a specific address group binding
+message GetAddressGroupBindingReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetAddressGroupBindingResp - response with a specific address group binding
+message GetAddressGroupBindingResp {
+  AddressGroupBinding address_group_binding = 1;
+}
+
+// GetAddressGroupPortMappingReq - request to get a specific address group port mapping
+message GetAddressGroupPortMappingReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetAddressGroupPortMappingResp - response with a specific address group port mapping
+message GetAddressGroupPortMappingResp {
+  AddressGroupPortMapping address_group_port_mapping = 1;
+}
+
+// GetRuleS2SReq - request to get a specific rule s2s
+message GetRuleS2SReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetRuleS2SResp - response with a specific rule s2s
+message GetRuleS2SResp {
+  RuleS2S rule_s2s = 1;
+}
+
+// GetServiceAliasReq - request to get a specific service alias
+message GetServiceAliasReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetServiceAliasResp - response with a specific service alias
+message GetServiceAliasResp {
+  ServiceAlias service_alias = 1;
 }
 
 // SyncReq - request to sync
@@ -194,6 +273,7 @@ message SyncReq {
   repeated AddressGroupBinding address_group_bindings = 3;
   repeated AddressGroupPortMapping address_group_port_mappings = 4;
   repeated RuleS2S rule_s2s = 5;
+  repeated ServiceAlias service_aliases = 6;
 }
 
 // Service definition
@@ -233,6 +313,16 @@ service NetguardService {
     };
   }
 
+  // GetService - gets a specific service by ID
+  rpc GetService(GetServiceReq) returns (GetServiceResp) {
+    option (google.api.http) = {
+      get: "/v1/services/{identifier.namespace}/{identifier.name}"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "GetService: gets a specific service by ID";
+    };
+  }
+
   // ListAddressGroups - gets list of address groups
   rpc ListAddressGroups(ListAddressGroupsReq) returns (ListAddressGroupsResp) {
     option (google.api.http) = {
@@ -240,6 +330,16 @@ service NetguardService {
     };
     option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
       description: "ListAddressGroups: gets list of address groups";
+    };
+  }
+
+  // GetAddressGroup - gets a specific address group by ID
+  rpc GetAddressGroup(GetAddressGroupReq) returns (GetAddressGroupResp) {
+    option (google.api.http) = {
+      get: "/v1/address-groups/{identifier.namespace}/{identifier.name}"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "GetAddressGroup: gets a specific address group by ID";
     };
   }
 
@@ -253,6 +353,16 @@ service NetguardService {
     };
   }
 
+  // GetAddressGroupBinding - gets a specific address group binding by ID
+  rpc GetAddressGroupBinding(GetAddressGroupBindingReq) returns (GetAddressGroupBindingResp) {
+    option (google.api.http) = {
+      get: "/v1/address-group-bindings/{identifier.namespace}/{identifier.name}"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "GetAddressGroupBinding: gets a specific address group binding by ID";
+    };
+  }
+
   // ListAddressGroupPortMappings - gets list of address group port mappings
   rpc ListAddressGroupPortMappings(ListAddressGroupPortMappingsReq) returns (ListAddressGroupPortMappingsResp) {
     option (google.api.http) = {
@@ -263,6 +373,16 @@ service NetguardService {
     };
   }
 
+  // GetAddressGroupPortMapping - gets a specific address group port mapping by ID
+  rpc GetAddressGroupPortMapping(GetAddressGroupPortMappingReq) returns (GetAddressGroupPortMappingResp) {
+    option (google.api.http) = {
+      get: "/v1/address-group-port-mappings/{identifier.namespace}/{identifier.name}"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "GetAddressGroupPortMapping: gets a specific address group port mapping by ID";
+    };
+  }
+
   // ListRuleS2S - gets list of rule s2s
   rpc ListRuleS2S(ListRuleS2SReq) returns (ListRuleS2SResp) {
     option (google.api.http) = {
@@ -270,6 +390,36 @@ service NetguardService {
     };
     option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
       description: "ListRuleS2S: gets list of rule s2s";
+    };
+  }
+
+  // GetRuleS2S - gets a specific rule s2s by ID
+  rpc GetRuleS2S(GetRuleS2SReq) returns (GetRuleS2SResp) {
+    option (google.api.http) = {
+      get: "/v1/rule-s2s/{identifier.namespace}/{identifier.name}"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "GetRuleS2S: gets a specific rule s2s by ID";
+    };
+  }
+
+  // ListServiceAliases - gets list of service aliases
+  rpc ListServiceAliases(ListServiceAliasesReq) returns (ListServiceAliasesResp) {
+    option (google.api.http) = {
+      get: "/v1/service-aliases"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "ListServiceAliases: gets list of service aliases";
+    };
+  }
+
+  // GetServiceAlias - gets a specific service alias by ID
+  rpc GetServiceAlias(GetServiceAliasReq) returns (GetServiceAliasResp) {
+    option (google.api.http) = {
+      get: "/v1/service-aliases/{identifier.namespace}/{identifier.name}"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "GetServiceAlias: gets a specific service alias by ID";
     };
   }
 }

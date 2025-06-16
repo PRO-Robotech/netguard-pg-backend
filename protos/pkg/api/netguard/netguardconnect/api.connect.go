@@ -42,18 +42,39 @@ const (
 	// NetguardServiceListServicesProcedure is the fully-qualified name of the NetguardService's
 	// ListServices RPC.
 	NetguardServiceListServicesProcedure = "/netguard.v1.NetguardService/ListServices"
+	// NetguardServiceGetServiceProcedure is the fully-qualified name of the NetguardService's
+	// GetService RPC.
+	NetguardServiceGetServiceProcedure = "/netguard.v1.NetguardService/GetService"
 	// NetguardServiceListAddressGroupsProcedure is the fully-qualified name of the NetguardService's
 	// ListAddressGroups RPC.
 	NetguardServiceListAddressGroupsProcedure = "/netguard.v1.NetguardService/ListAddressGroups"
+	// NetguardServiceGetAddressGroupProcedure is the fully-qualified name of the NetguardService's
+	// GetAddressGroup RPC.
+	NetguardServiceGetAddressGroupProcedure = "/netguard.v1.NetguardService/GetAddressGroup"
 	// NetguardServiceListAddressGroupBindingsProcedure is the fully-qualified name of the
 	// NetguardService's ListAddressGroupBindings RPC.
 	NetguardServiceListAddressGroupBindingsProcedure = "/netguard.v1.NetguardService/ListAddressGroupBindings"
+	// NetguardServiceGetAddressGroupBindingProcedure is the fully-qualified name of the
+	// NetguardService's GetAddressGroupBinding RPC.
+	NetguardServiceGetAddressGroupBindingProcedure = "/netguard.v1.NetguardService/GetAddressGroupBinding"
 	// NetguardServiceListAddressGroupPortMappingsProcedure is the fully-qualified name of the
 	// NetguardService's ListAddressGroupPortMappings RPC.
 	NetguardServiceListAddressGroupPortMappingsProcedure = "/netguard.v1.NetguardService/ListAddressGroupPortMappings"
+	// NetguardServiceGetAddressGroupPortMappingProcedure is the fully-qualified name of the
+	// NetguardService's GetAddressGroupPortMapping RPC.
+	NetguardServiceGetAddressGroupPortMappingProcedure = "/netguard.v1.NetguardService/GetAddressGroupPortMapping"
 	// NetguardServiceListRuleS2SProcedure is the fully-qualified name of the NetguardService's
 	// ListRuleS2S RPC.
 	NetguardServiceListRuleS2SProcedure = "/netguard.v1.NetguardService/ListRuleS2S"
+	// NetguardServiceGetRuleS2SProcedure is the fully-qualified name of the NetguardService's
+	// GetRuleS2S RPC.
+	NetguardServiceGetRuleS2SProcedure = "/netguard.v1.NetguardService/GetRuleS2S"
+	// NetguardServiceListServiceAliasesProcedure is the fully-qualified name of the NetguardService's
+	// ListServiceAliases RPC.
+	NetguardServiceListServiceAliasesProcedure = "/netguard.v1.NetguardService/ListServiceAliases"
+	// NetguardServiceGetServiceAliasProcedure is the fully-qualified name of the NetguardService's
+	// GetServiceAlias RPC.
+	NetguardServiceGetServiceAliasProcedure = "/netguard.v1.NetguardService/GetServiceAlias"
 )
 
 // NetguardServiceClient is a client for the netguard.v1.NetguardService service.
@@ -64,14 +85,28 @@ type NetguardServiceClient interface {
 	SyncStatus(context.Context, *connect.Request[emptypb.Empty]) (*connect.Response[netguard.SyncStatusResp], error)
 	// ListServices - gets list of services
 	ListServices(context.Context, *connect.Request[netguard.ListServicesReq]) (*connect.Response[netguard.ListServicesResp], error)
+	// GetService - gets a specific service by ID
+	GetService(context.Context, *connect.Request[netguard.GetServiceReq]) (*connect.Response[netguard.GetServiceResp], error)
 	// ListAddressGroups - gets list of address groups
 	ListAddressGroups(context.Context, *connect.Request[netguard.ListAddressGroupsReq]) (*connect.Response[netguard.ListAddressGroupsResp], error)
+	// GetAddressGroup - gets a specific address group by ID
+	GetAddressGroup(context.Context, *connect.Request[netguard.GetAddressGroupReq]) (*connect.Response[netguard.GetAddressGroupResp], error)
 	// ListAddressGroupBindings - gets list of address group bindings
 	ListAddressGroupBindings(context.Context, *connect.Request[netguard.ListAddressGroupBindingsReq]) (*connect.Response[netguard.ListAddressGroupBindingsResp], error)
+	// GetAddressGroupBinding - gets a specific address group binding by ID
+	GetAddressGroupBinding(context.Context, *connect.Request[netguard.GetAddressGroupBindingReq]) (*connect.Response[netguard.GetAddressGroupBindingResp], error)
 	// ListAddressGroupPortMappings - gets list of address group port mappings
 	ListAddressGroupPortMappings(context.Context, *connect.Request[netguard.ListAddressGroupPortMappingsReq]) (*connect.Response[netguard.ListAddressGroupPortMappingsResp], error)
+	// GetAddressGroupPortMapping - gets a specific address group port mapping by ID
+	GetAddressGroupPortMapping(context.Context, *connect.Request[netguard.GetAddressGroupPortMappingReq]) (*connect.Response[netguard.GetAddressGroupPortMappingResp], error)
 	// ListRuleS2S - gets list of rule s2s
 	ListRuleS2S(context.Context, *connect.Request[netguard.ListRuleS2SReq]) (*connect.Response[netguard.ListRuleS2SResp], error)
+	// GetRuleS2S - gets a specific rule s2s by ID
+	GetRuleS2S(context.Context, *connect.Request[netguard.GetRuleS2SReq]) (*connect.Response[netguard.GetRuleS2SResp], error)
+	// ListServiceAliases - gets list of service aliases
+	ListServiceAliases(context.Context, *connect.Request[netguard.ListServiceAliasesReq]) (*connect.Response[netguard.ListServiceAliasesResp], error)
+	// GetServiceAlias - gets a specific service alias by ID
+	GetServiceAlias(context.Context, *connect.Request[netguard.GetServiceAliasReq]) (*connect.Response[netguard.GetServiceAliasResp], error)
 }
 
 // NewNetguardServiceClient constructs a client for the netguard.v1.NetguardService service. By
@@ -103,10 +138,22 @@ func NewNetguardServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(netguardServiceMethods.ByName("ListServices")),
 			connect.WithClientOptions(opts...),
 		),
+		getService: connect.NewClient[netguard.GetServiceReq, netguard.GetServiceResp](
+			httpClient,
+			baseURL+NetguardServiceGetServiceProcedure,
+			connect.WithSchema(netguardServiceMethods.ByName("GetService")),
+			connect.WithClientOptions(opts...),
+		),
 		listAddressGroups: connect.NewClient[netguard.ListAddressGroupsReq, netguard.ListAddressGroupsResp](
 			httpClient,
 			baseURL+NetguardServiceListAddressGroupsProcedure,
 			connect.WithSchema(netguardServiceMethods.ByName("ListAddressGroups")),
+			connect.WithClientOptions(opts...),
+		),
+		getAddressGroup: connect.NewClient[netguard.GetAddressGroupReq, netguard.GetAddressGroupResp](
+			httpClient,
+			baseURL+NetguardServiceGetAddressGroupProcedure,
+			connect.WithSchema(netguardServiceMethods.ByName("GetAddressGroup")),
 			connect.WithClientOptions(opts...),
 		),
 		listAddressGroupBindings: connect.NewClient[netguard.ListAddressGroupBindingsReq, netguard.ListAddressGroupBindingsResp](
@@ -115,16 +162,46 @@ func NewNetguardServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(netguardServiceMethods.ByName("ListAddressGroupBindings")),
 			connect.WithClientOptions(opts...),
 		),
+		getAddressGroupBinding: connect.NewClient[netguard.GetAddressGroupBindingReq, netguard.GetAddressGroupBindingResp](
+			httpClient,
+			baseURL+NetguardServiceGetAddressGroupBindingProcedure,
+			connect.WithSchema(netguardServiceMethods.ByName("GetAddressGroupBinding")),
+			connect.WithClientOptions(opts...),
+		),
 		listAddressGroupPortMappings: connect.NewClient[netguard.ListAddressGroupPortMappingsReq, netguard.ListAddressGroupPortMappingsResp](
 			httpClient,
 			baseURL+NetguardServiceListAddressGroupPortMappingsProcedure,
 			connect.WithSchema(netguardServiceMethods.ByName("ListAddressGroupPortMappings")),
 			connect.WithClientOptions(opts...),
 		),
+		getAddressGroupPortMapping: connect.NewClient[netguard.GetAddressGroupPortMappingReq, netguard.GetAddressGroupPortMappingResp](
+			httpClient,
+			baseURL+NetguardServiceGetAddressGroupPortMappingProcedure,
+			connect.WithSchema(netguardServiceMethods.ByName("GetAddressGroupPortMapping")),
+			connect.WithClientOptions(opts...),
+		),
 		listRuleS2S: connect.NewClient[netguard.ListRuleS2SReq, netguard.ListRuleS2SResp](
 			httpClient,
 			baseURL+NetguardServiceListRuleS2SProcedure,
 			connect.WithSchema(netguardServiceMethods.ByName("ListRuleS2S")),
+			connect.WithClientOptions(opts...),
+		),
+		getRuleS2S: connect.NewClient[netguard.GetRuleS2SReq, netguard.GetRuleS2SResp](
+			httpClient,
+			baseURL+NetguardServiceGetRuleS2SProcedure,
+			connect.WithSchema(netguardServiceMethods.ByName("GetRuleS2S")),
+			connect.WithClientOptions(opts...),
+		),
+		listServiceAliases: connect.NewClient[netguard.ListServiceAliasesReq, netguard.ListServiceAliasesResp](
+			httpClient,
+			baseURL+NetguardServiceListServiceAliasesProcedure,
+			connect.WithSchema(netguardServiceMethods.ByName("ListServiceAliases")),
+			connect.WithClientOptions(opts...),
+		),
+		getServiceAlias: connect.NewClient[netguard.GetServiceAliasReq, netguard.GetServiceAliasResp](
+			httpClient,
+			baseURL+NetguardServiceGetServiceAliasProcedure,
+			connect.WithSchema(netguardServiceMethods.ByName("GetServiceAlias")),
 			connect.WithClientOptions(opts...),
 		),
 	}
@@ -135,10 +212,17 @@ type netguardServiceClient struct {
 	sync                         *connect.Client[netguard.SyncReq, emptypb.Empty]
 	syncStatus                   *connect.Client[emptypb.Empty, netguard.SyncStatusResp]
 	listServices                 *connect.Client[netguard.ListServicesReq, netguard.ListServicesResp]
+	getService                   *connect.Client[netguard.GetServiceReq, netguard.GetServiceResp]
 	listAddressGroups            *connect.Client[netguard.ListAddressGroupsReq, netguard.ListAddressGroupsResp]
+	getAddressGroup              *connect.Client[netguard.GetAddressGroupReq, netguard.GetAddressGroupResp]
 	listAddressGroupBindings     *connect.Client[netguard.ListAddressGroupBindingsReq, netguard.ListAddressGroupBindingsResp]
+	getAddressGroupBinding       *connect.Client[netguard.GetAddressGroupBindingReq, netguard.GetAddressGroupBindingResp]
 	listAddressGroupPortMappings *connect.Client[netguard.ListAddressGroupPortMappingsReq, netguard.ListAddressGroupPortMappingsResp]
+	getAddressGroupPortMapping   *connect.Client[netguard.GetAddressGroupPortMappingReq, netguard.GetAddressGroupPortMappingResp]
 	listRuleS2S                  *connect.Client[netguard.ListRuleS2SReq, netguard.ListRuleS2SResp]
+	getRuleS2S                   *connect.Client[netguard.GetRuleS2SReq, netguard.GetRuleS2SResp]
+	listServiceAliases           *connect.Client[netguard.ListServiceAliasesReq, netguard.ListServiceAliasesResp]
+	getServiceAlias              *connect.Client[netguard.GetServiceAliasReq, netguard.GetServiceAliasResp]
 }
 
 // Sync calls netguard.v1.NetguardService.Sync.
@@ -156,9 +240,19 @@ func (c *netguardServiceClient) ListServices(ctx context.Context, req *connect.R
 	return c.listServices.CallUnary(ctx, req)
 }
 
+// GetService calls netguard.v1.NetguardService.GetService.
+func (c *netguardServiceClient) GetService(ctx context.Context, req *connect.Request[netguard.GetServiceReq]) (*connect.Response[netguard.GetServiceResp], error) {
+	return c.getService.CallUnary(ctx, req)
+}
+
 // ListAddressGroups calls netguard.v1.NetguardService.ListAddressGroups.
 func (c *netguardServiceClient) ListAddressGroups(ctx context.Context, req *connect.Request[netguard.ListAddressGroupsReq]) (*connect.Response[netguard.ListAddressGroupsResp], error) {
 	return c.listAddressGroups.CallUnary(ctx, req)
+}
+
+// GetAddressGroup calls netguard.v1.NetguardService.GetAddressGroup.
+func (c *netguardServiceClient) GetAddressGroup(ctx context.Context, req *connect.Request[netguard.GetAddressGroupReq]) (*connect.Response[netguard.GetAddressGroupResp], error) {
+	return c.getAddressGroup.CallUnary(ctx, req)
 }
 
 // ListAddressGroupBindings calls netguard.v1.NetguardService.ListAddressGroupBindings.
@@ -166,14 +260,39 @@ func (c *netguardServiceClient) ListAddressGroupBindings(ctx context.Context, re
 	return c.listAddressGroupBindings.CallUnary(ctx, req)
 }
 
+// GetAddressGroupBinding calls netguard.v1.NetguardService.GetAddressGroupBinding.
+func (c *netguardServiceClient) GetAddressGroupBinding(ctx context.Context, req *connect.Request[netguard.GetAddressGroupBindingReq]) (*connect.Response[netguard.GetAddressGroupBindingResp], error) {
+	return c.getAddressGroupBinding.CallUnary(ctx, req)
+}
+
 // ListAddressGroupPortMappings calls netguard.v1.NetguardService.ListAddressGroupPortMappings.
 func (c *netguardServiceClient) ListAddressGroupPortMappings(ctx context.Context, req *connect.Request[netguard.ListAddressGroupPortMappingsReq]) (*connect.Response[netguard.ListAddressGroupPortMappingsResp], error) {
 	return c.listAddressGroupPortMappings.CallUnary(ctx, req)
 }
 
+// GetAddressGroupPortMapping calls netguard.v1.NetguardService.GetAddressGroupPortMapping.
+func (c *netguardServiceClient) GetAddressGroupPortMapping(ctx context.Context, req *connect.Request[netguard.GetAddressGroupPortMappingReq]) (*connect.Response[netguard.GetAddressGroupPortMappingResp], error) {
+	return c.getAddressGroupPortMapping.CallUnary(ctx, req)
+}
+
 // ListRuleS2S calls netguard.v1.NetguardService.ListRuleS2S.
 func (c *netguardServiceClient) ListRuleS2S(ctx context.Context, req *connect.Request[netguard.ListRuleS2SReq]) (*connect.Response[netguard.ListRuleS2SResp], error) {
 	return c.listRuleS2S.CallUnary(ctx, req)
+}
+
+// GetRuleS2S calls netguard.v1.NetguardService.GetRuleS2S.
+func (c *netguardServiceClient) GetRuleS2S(ctx context.Context, req *connect.Request[netguard.GetRuleS2SReq]) (*connect.Response[netguard.GetRuleS2SResp], error) {
+	return c.getRuleS2S.CallUnary(ctx, req)
+}
+
+// ListServiceAliases calls netguard.v1.NetguardService.ListServiceAliases.
+func (c *netguardServiceClient) ListServiceAliases(ctx context.Context, req *connect.Request[netguard.ListServiceAliasesReq]) (*connect.Response[netguard.ListServiceAliasesResp], error) {
+	return c.listServiceAliases.CallUnary(ctx, req)
+}
+
+// GetServiceAlias calls netguard.v1.NetguardService.GetServiceAlias.
+func (c *netguardServiceClient) GetServiceAlias(ctx context.Context, req *connect.Request[netguard.GetServiceAliasReq]) (*connect.Response[netguard.GetServiceAliasResp], error) {
+	return c.getServiceAlias.CallUnary(ctx, req)
 }
 
 // NetguardServiceHandler is an implementation of the netguard.v1.NetguardService service.
@@ -184,14 +303,28 @@ type NetguardServiceHandler interface {
 	SyncStatus(context.Context, *connect.Request[emptypb.Empty]) (*connect.Response[netguard.SyncStatusResp], error)
 	// ListServices - gets list of services
 	ListServices(context.Context, *connect.Request[netguard.ListServicesReq]) (*connect.Response[netguard.ListServicesResp], error)
+	// GetService - gets a specific service by ID
+	GetService(context.Context, *connect.Request[netguard.GetServiceReq]) (*connect.Response[netguard.GetServiceResp], error)
 	// ListAddressGroups - gets list of address groups
 	ListAddressGroups(context.Context, *connect.Request[netguard.ListAddressGroupsReq]) (*connect.Response[netguard.ListAddressGroupsResp], error)
+	// GetAddressGroup - gets a specific address group by ID
+	GetAddressGroup(context.Context, *connect.Request[netguard.GetAddressGroupReq]) (*connect.Response[netguard.GetAddressGroupResp], error)
 	// ListAddressGroupBindings - gets list of address group bindings
 	ListAddressGroupBindings(context.Context, *connect.Request[netguard.ListAddressGroupBindingsReq]) (*connect.Response[netguard.ListAddressGroupBindingsResp], error)
+	// GetAddressGroupBinding - gets a specific address group binding by ID
+	GetAddressGroupBinding(context.Context, *connect.Request[netguard.GetAddressGroupBindingReq]) (*connect.Response[netguard.GetAddressGroupBindingResp], error)
 	// ListAddressGroupPortMappings - gets list of address group port mappings
 	ListAddressGroupPortMappings(context.Context, *connect.Request[netguard.ListAddressGroupPortMappingsReq]) (*connect.Response[netguard.ListAddressGroupPortMappingsResp], error)
+	// GetAddressGroupPortMapping - gets a specific address group port mapping by ID
+	GetAddressGroupPortMapping(context.Context, *connect.Request[netguard.GetAddressGroupPortMappingReq]) (*connect.Response[netguard.GetAddressGroupPortMappingResp], error)
 	// ListRuleS2S - gets list of rule s2s
 	ListRuleS2S(context.Context, *connect.Request[netguard.ListRuleS2SReq]) (*connect.Response[netguard.ListRuleS2SResp], error)
+	// GetRuleS2S - gets a specific rule s2s by ID
+	GetRuleS2S(context.Context, *connect.Request[netguard.GetRuleS2SReq]) (*connect.Response[netguard.GetRuleS2SResp], error)
+	// ListServiceAliases - gets list of service aliases
+	ListServiceAliases(context.Context, *connect.Request[netguard.ListServiceAliasesReq]) (*connect.Response[netguard.ListServiceAliasesResp], error)
+	// GetServiceAlias - gets a specific service alias by ID
+	GetServiceAlias(context.Context, *connect.Request[netguard.GetServiceAliasReq]) (*connect.Response[netguard.GetServiceAliasResp], error)
 }
 
 // NewNetguardServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -219,10 +352,22 @@ func NewNetguardServiceHandler(svc NetguardServiceHandler, opts ...connect.Handl
 		connect.WithSchema(netguardServiceMethods.ByName("ListServices")),
 		connect.WithHandlerOptions(opts...),
 	)
+	netguardServiceGetServiceHandler := connect.NewUnaryHandler(
+		NetguardServiceGetServiceProcedure,
+		svc.GetService,
+		connect.WithSchema(netguardServiceMethods.ByName("GetService")),
+		connect.WithHandlerOptions(opts...),
+	)
 	netguardServiceListAddressGroupsHandler := connect.NewUnaryHandler(
 		NetguardServiceListAddressGroupsProcedure,
 		svc.ListAddressGroups,
 		connect.WithSchema(netguardServiceMethods.ByName("ListAddressGroups")),
+		connect.WithHandlerOptions(opts...),
+	)
+	netguardServiceGetAddressGroupHandler := connect.NewUnaryHandler(
+		NetguardServiceGetAddressGroupProcedure,
+		svc.GetAddressGroup,
+		connect.WithSchema(netguardServiceMethods.ByName("GetAddressGroup")),
 		connect.WithHandlerOptions(opts...),
 	)
 	netguardServiceListAddressGroupBindingsHandler := connect.NewUnaryHandler(
@@ -231,16 +376,46 @@ func NewNetguardServiceHandler(svc NetguardServiceHandler, opts ...connect.Handl
 		connect.WithSchema(netguardServiceMethods.ByName("ListAddressGroupBindings")),
 		connect.WithHandlerOptions(opts...),
 	)
+	netguardServiceGetAddressGroupBindingHandler := connect.NewUnaryHandler(
+		NetguardServiceGetAddressGroupBindingProcedure,
+		svc.GetAddressGroupBinding,
+		connect.WithSchema(netguardServiceMethods.ByName("GetAddressGroupBinding")),
+		connect.WithHandlerOptions(opts...),
+	)
 	netguardServiceListAddressGroupPortMappingsHandler := connect.NewUnaryHandler(
 		NetguardServiceListAddressGroupPortMappingsProcedure,
 		svc.ListAddressGroupPortMappings,
 		connect.WithSchema(netguardServiceMethods.ByName("ListAddressGroupPortMappings")),
 		connect.WithHandlerOptions(opts...),
 	)
+	netguardServiceGetAddressGroupPortMappingHandler := connect.NewUnaryHandler(
+		NetguardServiceGetAddressGroupPortMappingProcedure,
+		svc.GetAddressGroupPortMapping,
+		connect.WithSchema(netguardServiceMethods.ByName("GetAddressGroupPortMapping")),
+		connect.WithHandlerOptions(opts...),
+	)
 	netguardServiceListRuleS2SHandler := connect.NewUnaryHandler(
 		NetguardServiceListRuleS2SProcedure,
 		svc.ListRuleS2S,
 		connect.WithSchema(netguardServiceMethods.ByName("ListRuleS2S")),
+		connect.WithHandlerOptions(opts...),
+	)
+	netguardServiceGetRuleS2SHandler := connect.NewUnaryHandler(
+		NetguardServiceGetRuleS2SProcedure,
+		svc.GetRuleS2S,
+		connect.WithSchema(netguardServiceMethods.ByName("GetRuleS2S")),
+		connect.WithHandlerOptions(opts...),
+	)
+	netguardServiceListServiceAliasesHandler := connect.NewUnaryHandler(
+		NetguardServiceListServiceAliasesProcedure,
+		svc.ListServiceAliases,
+		connect.WithSchema(netguardServiceMethods.ByName("ListServiceAliases")),
+		connect.WithHandlerOptions(opts...),
+	)
+	netguardServiceGetServiceAliasHandler := connect.NewUnaryHandler(
+		NetguardServiceGetServiceAliasProcedure,
+		svc.GetServiceAlias,
+		connect.WithSchema(netguardServiceMethods.ByName("GetServiceAlias")),
 		connect.WithHandlerOptions(opts...),
 	)
 	return "/netguard.v1.NetguardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -251,14 +426,28 @@ func NewNetguardServiceHandler(svc NetguardServiceHandler, opts ...connect.Handl
 			netguardServiceSyncStatusHandler.ServeHTTP(w, r)
 		case NetguardServiceListServicesProcedure:
 			netguardServiceListServicesHandler.ServeHTTP(w, r)
+		case NetguardServiceGetServiceProcedure:
+			netguardServiceGetServiceHandler.ServeHTTP(w, r)
 		case NetguardServiceListAddressGroupsProcedure:
 			netguardServiceListAddressGroupsHandler.ServeHTTP(w, r)
+		case NetguardServiceGetAddressGroupProcedure:
+			netguardServiceGetAddressGroupHandler.ServeHTTP(w, r)
 		case NetguardServiceListAddressGroupBindingsProcedure:
 			netguardServiceListAddressGroupBindingsHandler.ServeHTTP(w, r)
+		case NetguardServiceGetAddressGroupBindingProcedure:
+			netguardServiceGetAddressGroupBindingHandler.ServeHTTP(w, r)
 		case NetguardServiceListAddressGroupPortMappingsProcedure:
 			netguardServiceListAddressGroupPortMappingsHandler.ServeHTTP(w, r)
+		case NetguardServiceGetAddressGroupPortMappingProcedure:
+			netguardServiceGetAddressGroupPortMappingHandler.ServeHTTP(w, r)
 		case NetguardServiceListRuleS2SProcedure:
 			netguardServiceListRuleS2SHandler.ServeHTTP(w, r)
+		case NetguardServiceGetRuleS2SProcedure:
+			netguardServiceGetRuleS2SHandler.ServeHTTP(w, r)
+		case NetguardServiceListServiceAliasesProcedure:
+			netguardServiceListServiceAliasesHandler.ServeHTTP(w, r)
+		case NetguardServiceGetServiceAliasProcedure:
+			netguardServiceGetServiceAliasHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -280,18 +469,46 @@ func (UnimplementedNetguardServiceHandler) ListServices(context.Context, *connec
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.ListServices is not implemented"))
 }
 
+func (UnimplementedNetguardServiceHandler) GetService(context.Context, *connect.Request[netguard.GetServiceReq]) (*connect.Response[netguard.GetServiceResp], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetService is not implemented"))
+}
+
 func (UnimplementedNetguardServiceHandler) ListAddressGroups(context.Context, *connect.Request[netguard.ListAddressGroupsReq]) (*connect.Response[netguard.ListAddressGroupsResp], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.ListAddressGroups is not implemented"))
+}
+
+func (UnimplementedNetguardServiceHandler) GetAddressGroup(context.Context, *connect.Request[netguard.GetAddressGroupReq]) (*connect.Response[netguard.GetAddressGroupResp], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetAddressGroup is not implemented"))
 }
 
 func (UnimplementedNetguardServiceHandler) ListAddressGroupBindings(context.Context, *connect.Request[netguard.ListAddressGroupBindingsReq]) (*connect.Response[netguard.ListAddressGroupBindingsResp], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.ListAddressGroupBindings is not implemented"))
 }
 
+func (UnimplementedNetguardServiceHandler) GetAddressGroupBinding(context.Context, *connect.Request[netguard.GetAddressGroupBindingReq]) (*connect.Response[netguard.GetAddressGroupBindingResp], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetAddressGroupBinding is not implemented"))
+}
+
 func (UnimplementedNetguardServiceHandler) ListAddressGroupPortMappings(context.Context, *connect.Request[netguard.ListAddressGroupPortMappingsReq]) (*connect.Response[netguard.ListAddressGroupPortMappingsResp], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.ListAddressGroupPortMappings is not implemented"))
 }
 
+func (UnimplementedNetguardServiceHandler) GetAddressGroupPortMapping(context.Context, *connect.Request[netguard.GetAddressGroupPortMappingReq]) (*connect.Response[netguard.GetAddressGroupPortMappingResp], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetAddressGroupPortMapping is not implemented"))
+}
+
 func (UnimplementedNetguardServiceHandler) ListRuleS2S(context.Context, *connect.Request[netguard.ListRuleS2SReq]) (*connect.Response[netguard.ListRuleS2SResp], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.ListRuleS2S is not implemented"))
+}
+
+func (UnimplementedNetguardServiceHandler) GetRuleS2S(context.Context, *connect.Request[netguard.GetRuleS2SReq]) (*connect.Response[netguard.GetRuleS2SResp], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetRuleS2S is not implemented"))
+}
+
+func (UnimplementedNetguardServiceHandler) ListServiceAliases(context.Context, *connect.Request[netguard.ListServiceAliasesReq]) (*connect.Response[netguard.ListServiceAliasesResp], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.ListServiceAliases is not implemented"))
+}
+
+func (UnimplementedNetguardServiceHandler) GetServiceAlias(context.Context, *connect.Request[netguard.GetServiceAliasReq]) (*connect.Response[netguard.GetServiceAliasResp], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetServiceAlias is not implemented"))
 }

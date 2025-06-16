@@ -4,31 +4,31 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"  # HTTP port for REST API and Swagger UI
+      - "8080:8080"
       - "9090:9090"  # gRPC port
-    command: ["--memory", "--grpc-addr=:9090", "--http-addr=:8080"]
+    command: ["--pg-uri=postgres://postgres:postgres@postgres:5432/netguard", "--migrate", "--grpc-addr=:9090", "--http-addr=:8080"]
     restart: unless-stopped
     networks:
       - netguard-network
+    depends_on:
+      - postgres
 
-  # Uncomment to enable PostgreSQL
-  # postgres:
-  #   image: postgres:14
-  #   environment:
-  #     POSTGRES_USER: postgres
-  #     POSTGRES_PASSWORD: postgres
-  #     POSTGRES_DB: netguard
-  #   ports:
-  #     - "5432:5432"
-  #   volumes:
-  #     - postgres-data:/var/lib/postgresql/data
-  #   networks:
-  #     - netguard-network
+  postgres:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: netguard
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - netguard-network
 
 networks:
   netguard-network:
     driver: bridge
 
-# Uncomment to enable PostgreSQL
-# volumes:
-#   postgres-data:
+volumes:
+  postgres-data:

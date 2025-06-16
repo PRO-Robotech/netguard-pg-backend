@@ -16,14 +16,16 @@ import (
 	"netguard-pg-backend/internal/application/services"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/infrastructure/repositories/mem"
+	//"netguard-pg-backend/internal/infrastructure/repositories/pg"
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
 )
 
 var (
-	memoryDB = flag.Bool("memory", false, "Use in-memory database")
-	pgURI    = flag.String("pg-uri", "", "PostgreSQL connection URI")
-	grpcAddr = flag.String("grpc-addr", ":9090", "gRPC server address")
-	httpAddr = flag.String("http-addr", ":8080", "HTTP server address")
+	memoryDB  = flag.Bool("memory", false, "Use in-memory database")
+	pgURI     = flag.String("pg-uri", "", "PostgreSQL connection URI")
+	migrateDB = flag.Bool("migrate", false, "Run database migrations")
+	grpcAddr  = flag.String("grpc-addr", ":9090", "gRPC server address")
+	httpAddr  = flag.String("http-addr", ":8080", "HTTP server address")
 )
 
 func main() {
@@ -48,7 +50,22 @@ func main() {
 		registry = mem.NewRegistry()
 	} else if *pgURI != "" {
 		log.Println("Using PostgreSQL database")
-		log.Fatal("PostgreSQL registry not implemented yet")
+
+		//// Run migrations if requested
+		//if *migrateDB {
+		//	log.Println("Running database migrations")
+		//	if err := pg.RunMigrations(*pgURI); err != nil {
+		//		log.Fatalf("Failed to run migrations: %v", err)
+		//	}
+		//	log.Println("Migrations completed successfully")
+		//}
+		//
+		//// Create PostgreSQL registry
+		//pgRegistry, err := pg.NewRegistry(ctx, *pgURI)
+		//if err != nil {
+		//	log.Fatalf("Failed to create PostgreSQL registry: %v", err)
+		//}
+		//registry = pgRegistry
 	} else {
 		log.Fatal("Either --memory or --pg-uri must be specified")
 	}

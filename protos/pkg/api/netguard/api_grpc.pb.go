@@ -23,10 +23,17 @@ const (
 	NetguardService_Sync_FullMethodName                         = "/netguard.v1.NetguardService/Sync"
 	NetguardService_SyncStatus_FullMethodName                   = "/netguard.v1.NetguardService/SyncStatus"
 	NetguardService_ListServices_FullMethodName                 = "/netguard.v1.NetguardService/ListServices"
+	NetguardService_GetService_FullMethodName                   = "/netguard.v1.NetguardService/GetService"
 	NetguardService_ListAddressGroups_FullMethodName            = "/netguard.v1.NetguardService/ListAddressGroups"
+	NetguardService_GetAddressGroup_FullMethodName              = "/netguard.v1.NetguardService/GetAddressGroup"
 	NetguardService_ListAddressGroupBindings_FullMethodName     = "/netguard.v1.NetguardService/ListAddressGroupBindings"
+	NetguardService_GetAddressGroupBinding_FullMethodName       = "/netguard.v1.NetguardService/GetAddressGroupBinding"
 	NetguardService_ListAddressGroupPortMappings_FullMethodName = "/netguard.v1.NetguardService/ListAddressGroupPortMappings"
+	NetguardService_GetAddressGroupPortMapping_FullMethodName   = "/netguard.v1.NetguardService/GetAddressGroupPortMapping"
 	NetguardService_ListRuleS2S_FullMethodName                  = "/netguard.v1.NetguardService/ListRuleS2S"
+	NetguardService_GetRuleS2S_FullMethodName                   = "/netguard.v1.NetguardService/GetRuleS2S"
+	NetguardService_ListServiceAliases_FullMethodName           = "/netguard.v1.NetguardService/ListServiceAliases"
+	NetguardService_GetServiceAlias_FullMethodName              = "/netguard.v1.NetguardService/GetServiceAlias"
 )
 
 // NetguardServiceClient is the client API for NetguardService service.
@@ -41,14 +48,28 @@ type NetguardServiceClient interface {
 	SyncStatus(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*SyncStatusResp, error)
 	// ListServices - gets list of services
 	ListServices(ctx context.Context, in *ListServicesReq, opts ...grpc.CallOption) (*ListServicesResp, error)
+	// GetService - gets a specific service by ID
+	GetService(ctx context.Context, in *GetServiceReq, opts ...grpc.CallOption) (*GetServiceResp, error)
 	// ListAddressGroups - gets list of address groups
 	ListAddressGroups(ctx context.Context, in *ListAddressGroupsReq, opts ...grpc.CallOption) (*ListAddressGroupsResp, error)
+	// GetAddressGroup - gets a specific address group by ID
+	GetAddressGroup(ctx context.Context, in *GetAddressGroupReq, opts ...grpc.CallOption) (*GetAddressGroupResp, error)
 	// ListAddressGroupBindings - gets list of address group bindings
 	ListAddressGroupBindings(ctx context.Context, in *ListAddressGroupBindingsReq, opts ...grpc.CallOption) (*ListAddressGroupBindingsResp, error)
+	// GetAddressGroupBinding - gets a specific address group binding by ID
+	GetAddressGroupBinding(ctx context.Context, in *GetAddressGroupBindingReq, opts ...grpc.CallOption) (*GetAddressGroupBindingResp, error)
 	// ListAddressGroupPortMappings - gets list of address group port mappings
 	ListAddressGroupPortMappings(ctx context.Context, in *ListAddressGroupPortMappingsReq, opts ...grpc.CallOption) (*ListAddressGroupPortMappingsResp, error)
+	// GetAddressGroupPortMapping - gets a specific address group port mapping by ID
+	GetAddressGroupPortMapping(ctx context.Context, in *GetAddressGroupPortMappingReq, opts ...grpc.CallOption) (*GetAddressGroupPortMappingResp, error)
 	// ListRuleS2S - gets list of rule s2s
 	ListRuleS2S(ctx context.Context, in *ListRuleS2SReq, opts ...grpc.CallOption) (*ListRuleS2SResp, error)
+	// GetRuleS2S - gets a specific rule s2s by ID
+	GetRuleS2S(ctx context.Context, in *GetRuleS2SReq, opts ...grpc.CallOption) (*GetRuleS2SResp, error)
+	// ListServiceAliases - gets list of service aliases
+	ListServiceAliases(ctx context.Context, in *ListServiceAliasesReq, opts ...grpc.CallOption) (*ListServiceAliasesResp, error)
+	// GetServiceAlias - gets a specific service alias by ID
+	GetServiceAlias(ctx context.Context, in *GetServiceAliasReq, opts ...grpc.CallOption) (*GetServiceAliasResp, error)
 }
 
 type netguardServiceClient struct {
@@ -89,10 +110,30 @@ func (c *netguardServiceClient) ListServices(ctx context.Context, in *ListServic
 	return out, nil
 }
 
+func (c *netguardServiceClient) GetService(ctx context.Context, in *GetServiceReq, opts ...grpc.CallOption) (*GetServiceResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetServiceResp)
+	err := c.cc.Invoke(ctx, NetguardService_GetService_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *netguardServiceClient) ListAddressGroups(ctx context.Context, in *ListAddressGroupsReq, opts ...grpc.CallOption) (*ListAddressGroupsResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListAddressGroupsResp)
 	err := c.cc.Invoke(ctx, NetguardService_ListAddressGroups_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *netguardServiceClient) GetAddressGroup(ctx context.Context, in *GetAddressGroupReq, opts ...grpc.CallOption) (*GetAddressGroupResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAddressGroupResp)
+	err := c.cc.Invoke(ctx, NetguardService_GetAddressGroup_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -109,6 +150,16 @@ func (c *netguardServiceClient) ListAddressGroupBindings(ctx context.Context, in
 	return out, nil
 }
 
+func (c *netguardServiceClient) GetAddressGroupBinding(ctx context.Context, in *GetAddressGroupBindingReq, opts ...grpc.CallOption) (*GetAddressGroupBindingResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAddressGroupBindingResp)
+	err := c.cc.Invoke(ctx, NetguardService_GetAddressGroupBinding_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *netguardServiceClient) ListAddressGroupPortMappings(ctx context.Context, in *ListAddressGroupPortMappingsReq, opts ...grpc.CallOption) (*ListAddressGroupPortMappingsResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListAddressGroupPortMappingsResp)
@@ -119,10 +170,50 @@ func (c *netguardServiceClient) ListAddressGroupPortMappings(ctx context.Context
 	return out, nil
 }
 
+func (c *netguardServiceClient) GetAddressGroupPortMapping(ctx context.Context, in *GetAddressGroupPortMappingReq, opts ...grpc.CallOption) (*GetAddressGroupPortMappingResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAddressGroupPortMappingResp)
+	err := c.cc.Invoke(ctx, NetguardService_GetAddressGroupPortMapping_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *netguardServiceClient) ListRuleS2S(ctx context.Context, in *ListRuleS2SReq, opts ...grpc.CallOption) (*ListRuleS2SResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListRuleS2SResp)
 	err := c.cc.Invoke(ctx, NetguardService_ListRuleS2S_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *netguardServiceClient) GetRuleS2S(ctx context.Context, in *GetRuleS2SReq, opts ...grpc.CallOption) (*GetRuleS2SResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRuleS2SResp)
+	err := c.cc.Invoke(ctx, NetguardService_GetRuleS2S_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *netguardServiceClient) ListServiceAliases(ctx context.Context, in *ListServiceAliasesReq, opts ...grpc.CallOption) (*ListServiceAliasesResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListServiceAliasesResp)
+	err := c.cc.Invoke(ctx, NetguardService_ListServiceAliases_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *netguardServiceClient) GetServiceAlias(ctx context.Context, in *GetServiceAliasReq, opts ...grpc.CallOption) (*GetServiceAliasResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetServiceAliasResp)
+	err := c.cc.Invoke(ctx, NetguardService_GetServiceAlias_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -141,14 +232,28 @@ type NetguardServiceServer interface {
 	SyncStatus(context.Context, *emptypb.Empty) (*SyncStatusResp, error)
 	// ListServices - gets list of services
 	ListServices(context.Context, *ListServicesReq) (*ListServicesResp, error)
+	// GetService - gets a specific service by ID
+	GetService(context.Context, *GetServiceReq) (*GetServiceResp, error)
 	// ListAddressGroups - gets list of address groups
 	ListAddressGroups(context.Context, *ListAddressGroupsReq) (*ListAddressGroupsResp, error)
+	// GetAddressGroup - gets a specific address group by ID
+	GetAddressGroup(context.Context, *GetAddressGroupReq) (*GetAddressGroupResp, error)
 	// ListAddressGroupBindings - gets list of address group bindings
 	ListAddressGroupBindings(context.Context, *ListAddressGroupBindingsReq) (*ListAddressGroupBindingsResp, error)
+	// GetAddressGroupBinding - gets a specific address group binding by ID
+	GetAddressGroupBinding(context.Context, *GetAddressGroupBindingReq) (*GetAddressGroupBindingResp, error)
 	// ListAddressGroupPortMappings - gets list of address group port mappings
 	ListAddressGroupPortMappings(context.Context, *ListAddressGroupPortMappingsReq) (*ListAddressGroupPortMappingsResp, error)
+	// GetAddressGroupPortMapping - gets a specific address group port mapping by ID
+	GetAddressGroupPortMapping(context.Context, *GetAddressGroupPortMappingReq) (*GetAddressGroupPortMappingResp, error)
 	// ListRuleS2S - gets list of rule s2s
 	ListRuleS2S(context.Context, *ListRuleS2SReq) (*ListRuleS2SResp, error)
+	// GetRuleS2S - gets a specific rule s2s by ID
+	GetRuleS2S(context.Context, *GetRuleS2SReq) (*GetRuleS2SResp, error)
+	// ListServiceAliases - gets list of service aliases
+	ListServiceAliases(context.Context, *ListServiceAliasesReq) (*ListServiceAliasesResp, error)
+	// GetServiceAlias - gets a specific service alias by ID
+	GetServiceAlias(context.Context, *GetServiceAliasReq) (*GetServiceAliasResp, error)
 	mustEmbedUnimplementedNetguardServiceServer()
 }
 
@@ -168,17 +273,38 @@ func (UnimplementedNetguardServiceServer) SyncStatus(context.Context, *emptypb.E
 func (UnimplementedNetguardServiceServer) ListServices(context.Context, *ListServicesReq) (*ListServicesResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListServices not implemented")
 }
+func (UnimplementedNetguardServiceServer) GetService(context.Context, *GetServiceReq) (*GetServiceResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetService not implemented")
+}
 func (UnimplementedNetguardServiceServer) ListAddressGroups(context.Context, *ListAddressGroupsReq) (*ListAddressGroupsResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListAddressGroups not implemented")
+}
+func (UnimplementedNetguardServiceServer) GetAddressGroup(context.Context, *GetAddressGroupReq) (*GetAddressGroupResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetAddressGroup not implemented")
 }
 func (UnimplementedNetguardServiceServer) ListAddressGroupBindings(context.Context, *ListAddressGroupBindingsReq) (*ListAddressGroupBindingsResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListAddressGroupBindings not implemented")
 }
+func (UnimplementedNetguardServiceServer) GetAddressGroupBinding(context.Context, *GetAddressGroupBindingReq) (*GetAddressGroupBindingResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetAddressGroupBinding not implemented")
+}
 func (UnimplementedNetguardServiceServer) ListAddressGroupPortMappings(context.Context, *ListAddressGroupPortMappingsReq) (*ListAddressGroupPortMappingsResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListAddressGroupPortMappings not implemented")
 }
+func (UnimplementedNetguardServiceServer) GetAddressGroupPortMapping(context.Context, *GetAddressGroupPortMappingReq) (*GetAddressGroupPortMappingResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetAddressGroupPortMapping not implemented")
+}
 func (UnimplementedNetguardServiceServer) ListRuleS2S(context.Context, *ListRuleS2SReq) (*ListRuleS2SResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListRuleS2S not implemented")
+}
+func (UnimplementedNetguardServiceServer) GetRuleS2S(context.Context, *GetRuleS2SReq) (*GetRuleS2SResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetRuleS2S not implemented")
+}
+func (UnimplementedNetguardServiceServer) ListServiceAliases(context.Context, *ListServiceAliasesReq) (*ListServiceAliasesResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListServiceAliases not implemented")
+}
+func (UnimplementedNetguardServiceServer) GetServiceAlias(context.Context, *GetServiceAliasReq) (*GetServiceAliasResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetServiceAlias not implemented")
 }
 func (UnimplementedNetguardServiceServer) mustEmbedUnimplementedNetguardServiceServer() {}
 func (UnimplementedNetguardServiceServer) testEmbeddedByValue()                         {}
@@ -255,6 +381,24 @@ func _NetguardService_ListServices_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NetguardService_GetService_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetServiceReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).GetService(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_GetService_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).GetService(ctx, req.(*GetServiceReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _NetguardService_ListAddressGroups_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListAddressGroupsReq)
 	if err := dec(in); err != nil {
@@ -269,6 +413,24 @@ func _NetguardService_ListAddressGroups_Handler(srv interface{}, ctx context.Con
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(NetguardServiceServer).ListAddressGroups(ctx, req.(*ListAddressGroupsReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NetguardService_GetAddressGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAddressGroupReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).GetAddressGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_GetAddressGroup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).GetAddressGroup(ctx, req.(*GetAddressGroupReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -291,6 +453,24 @@ func _NetguardService_ListAddressGroupBindings_Handler(srv interface{}, ctx cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NetguardService_GetAddressGroupBinding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAddressGroupBindingReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).GetAddressGroupBinding(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_GetAddressGroupBinding_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).GetAddressGroupBinding(ctx, req.(*GetAddressGroupBindingReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _NetguardService_ListAddressGroupPortMappings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListAddressGroupPortMappingsReq)
 	if err := dec(in); err != nil {
@@ -309,6 +489,24 @@ func _NetguardService_ListAddressGroupPortMappings_Handler(srv interface{}, ctx 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NetguardService_GetAddressGroupPortMapping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAddressGroupPortMappingReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).GetAddressGroupPortMapping(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_GetAddressGroupPortMapping_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).GetAddressGroupPortMapping(ctx, req.(*GetAddressGroupPortMappingReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _NetguardService_ListRuleS2S_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListRuleS2SReq)
 	if err := dec(in); err != nil {
@@ -323,6 +521,60 @@ func _NetguardService_ListRuleS2S_Handler(srv interface{}, ctx context.Context, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(NetguardServiceServer).ListRuleS2S(ctx, req.(*ListRuleS2SReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NetguardService_GetRuleS2S_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRuleS2SReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).GetRuleS2S(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_GetRuleS2S_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).GetRuleS2S(ctx, req.(*GetRuleS2SReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NetguardService_ListServiceAliases_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListServiceAliasesReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).ListServiceAliases(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_ListServiceAliases_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).ListServiceAliases(ctx, req.(*ListServiceAliasesReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NetguardService_GetServiceAlias_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetServiceAliasReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).GetServiceAlias(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_GetServiceAlias_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).GetServiceAlias(ctx, req.(*GetServiceAliasReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -347,20 +599,48 @@ var NetguardService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _NetguardService_ListServices_Handler,
 		},
 		{
+			MethodName: "GetService",
+			Handler:    _NetguardService_GetService_Handler,
+		},
+		{
 			MethodName: "ListAddressGroups",
 			Handler:    _NetguardService_ListAddressGroups_Handler,
+		},
+		{
+			MethodName: "GetAddressGroup",
+			Handler:    _NetguardService_GetAddressGroup_Handler,
 		},
 		{
 			MethodName: "ListAddressGroupBindings",
 			Handler:    _NetguardService_ListAddressGroupBindings_Handler,
 		},
 		{
+			MethodName: "GetAddressGroupBinding",
+			Handler:    _NetguardService_GetAddressGroupBinding_Handler,
+		},
+		{
 			MethodName: "ListAddressGroupPortMappings",
 			Handler:    _NetguardService_ListAddressGroupPortMappings_Handler,
 		},
 		{
+			MethodName: "GetAddressGroupPortMapping",
+			Handler:    _NetguardService_GetAddressGroupPortMapping_Handler,
+		},
+		{
 			MethodName: "ListRuleS2S",
 			Handler:    _NetguardService_ListRuleS2S_Handler,
+		},
+		{
+			MethodName: "GetRuleS2S",
+			Handler:    _NetguardService_GetRuleS2S_Handler,
+		},
+		{
+			MethodName: "ListServiceAliases",
+			Handler:    _NetguardService_ListServiceAliases_Handler,
+		},
+		{
+			MethodName: "GetServiceAlias",
+			Handler:    _NetguardService_GetServiceAlias_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -27,12 +27,17 @@ func NewNetguardServiceServer(service *services.NetguardService) *NetguardServic
 	}
 }
 
-// Sync syncs data in DB
 func (s *NetguardServiceServer) Sync(ctx context.Context, req *netguardpb.SyncReq) (*emptypb.Empty, error) {
 	// Convert services
 	servicesList := make([]models.Service, 0, len(req.Services))
 	for _, svc := range req.Services {
 		servicesList = append(servicesList, convertService(svc))
+	}
+
+	// Convert service aliases
+	serviceAliasesList := make([]models.ServiceAlias, 0, len(req.ServiceAliases))
+	for _, svcAlias := range req.ServiceAliases {
+		serviceAliasesList = append(serviceAliasesList, convertServiceAlias(svcAlias))
 	}
 
 	// Convert address groups
@@ -62,6 +67,10 @@ func (s *NetguardServiceServer) Sync(ctx context.Context, req *netguardpb.SyncRe
 	// Sync data
 	if err := s.service.SyncServices(ctx, servicesList, ports.EmptyScope{}); err != nil {
 		return nil, errors.Wrap(err, "failed to sync services")
+	}
+
+	if err := s.service.SyncServiceAliases(ctx, serviceAliasesList, ports.EmptyScope{}); err != nil {
+		return nil, errors.Wrap(err, "failed to sync service aliases")
 	}
 
 	if err := s.service.SyncAddressGroups(ctx, addressGroups, ports.EmptyScope{}); err != nil {
@@ -98,8 +107,12 @@ func (s *NetguardServiceServer) SyncStatus(ctx context.Context, _ *emptypb.Empty
 // ListServices gets list of services
 func (s *NetguardServiceServer) ListServices(ctx context.Context, req *netguardpb.ListServicesReq) (*netguardpb.ListServicesResp, error) {
 	var scope ports.Scope = ports.EmptyScope{}
-	if len(req.Names) > 0 {
-		scope = ports.NewNameScope(req.Names...)
+	if len(req.Identifiers) > 0 {
+		identifiers := make([]models.ResourceIdentifier, 0, len(req.Identifiers))
+		for _, id := range req.Identifiers {
+			identifiers = append(identifiers, models.NewResourceIdentifier(id.Name, models.WithNamespace(id.Namespace)))
+		}
+		scope = ports.NewResourceIdentifierScope(identifiers...)
 	}
 
 	services, err := s.service.GetServices(ctx, scope)
@@ -117,11 +130,32 @@ func (s *NetguardServiceServer) ListServices(ctx context.Context, req *netguardp
 	}, nil
 }
 
+func idFromReq(ri *netguardpb.ResourceIdentifier) models.ResourceIdentifier {
+	return models.NewResourceIdentifier(ri.GetName(), models.WithNamespace(ri.GetNamespace()))
+}
+
+// GetService gets a specific service by ID
+func (s *NetguardServiceServer) GetService(ctx context.Context, req *netguardpb.GetServiceReq) (*netguardpb.GetServiceResp, error) {
+	id := idFromReq(req.GetIdentifier())
+	service, err := s.service.GetServiceByID(ctx, id)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get service")
+	}
+
+	return &netguardpb.GetServiceResp{
+		Service: convertServiceToPB(*service),
+	}, nil
+}
+
 // ListAddressGroups gets list of address groups
 func (s *NetguardServiceServer) ListAddressGroups(ctx context.Context, req *netguardpb.ListAddressGroupsReq) (*netguardpb.ListAddressGroupsResp, error) {
 	var scope ports.Scope = ports.EmptyScope{}
-	if len(req.Names) > 0 {
-		scope = ports.NewNameScope(req.Names...)
+	if len(req.GetIdentifiers()) > 0 {
+		identifiers := make([]models.ResourceIdentifier, 0, len(req.GetIdentifiers()))
+		for _, id := range req.GetIdentifiers() {
+			identifiers = append(identifiers, models.NewResourceIdentifier(id.GetName(), models.WithNamespace(id.GetNamespace())))
+		}
+		scope = ports.NewResourceIdentifierScope(identifiers...)
 	}
 
 	addressGroups, err := s.service.GetAddressGroups(ctx, scope)
@@ -139,11 +173,28 @@ func (s *NetguardServiceServer) ListAddressGroups(ctx context.Context, req *netg
 	}, nil
 }
 
+// GetAddressGroup gets a specific address group by ID
+func (s *NetguardServiceServer) GetAddressGroup(ctx context.Context, req *netguardpb.GetAddressGroupReq) (*netguardpb.GetAddressGroupResp, error) {
+	id := idFromReq(req.GetIdentifier())
+	addressGroup, err := s.service.GetAddressGroupByID(ctx, id)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get address group")
+	}
+
+	return &netguardpb.GetAddressGroupResp{
+		AddressGroup: convertAddressGroupToPB(*addressGroup),
+	}, nil
+}
+
 // ListAddressGroupBindings gets list of address group bindings
 func (s *NetguardServiceServer) ListAddressGroupBindings(ctx context.Context, req *netguardpb.ListAddressGroupBindingsReq) (*netguardpb.ListAddressGroupBindingsResp, error) {
 	var scope ports.Scope = ports.EmptyScope{}
-	if len(req.Names) > 0 {
-		scope = ports.NewNameScope(req.Names...)
+	if len(req.Identifiers) > 0 {
+		identifiers := make([]models.ResourceIdentifier, 0, len(req.Identifiers))
+		for _, id := range req.Identifiers {
+			identifiers = append(identifiers, models.NewResourceIdentifier(id.Name, models.WithNamespace(id.Namespace)))
+		}
+		scope = ports.NewResourceIdentifierScope(identifiers...)
 	}
 
 	bindings, err := s.service.GetAddressGroupBindings(ctx, scope)
@@ -161,11 +212,28 @@ func (s *NetguardServiceServer) ListAddressGroupBindings(ctx context.Context, re
 	}, nil
 }
 
+// GetAddressGroupBinding gets a specific address group binding by ID
+func (s *NetguardServiceServer) GetAddressGroupBinding(ctx context.Context, req *netguardpb.GetAddressGroupBindingReq) (*netguardpb.GetAddressGroupBindingResp, error) {
+	id := idFromReq(req.GetIdentifier())
+	binding, err := s.service.GetAddressGroupBindingByID(ctx, id)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get address group binding")
+	}
+
+	return &netguardpb.GetAddressGroupBindingResp{
+		AddressGroupBinding: convertAddressGroupBindingToPB(*binding),
+	}, nil
+}
+
 // ListAddressGroupPortMappings gets list of address group port mappings
 func (s *NetguardServiceServer) ListAddressGroupPortMappings(ctx context.Context, req *netguardpb.ListAddressGroupPortMappingsReq) (*netguardpb.ListAddressGroupPortMappingsResp, error) {
 	var scope ports.Scope = ports.EmptyScope{}
-	if len(req.Names) > 0 {
-		scope = ports.NewNameScope(req.Names...)
+	if len(req.Identifiers) > 0 {
+		identifiers := make([]models.ResourceIdentifier, 0, len(req.Identifiers))
+		for _, id := range req.Identifiers {
+			identifiers = append(identifiers, models.NewResourceIdentifier(id.Name, models.WithNamespace(id.Namespace)))
+		}
+		scope = ports.NewResourceIdentifierScope(identifiers...)
 	}
 
 	mappings, err := s.service.GetAddressGroupPortMappings(ctx, scope)
@@ -183,11 +251,28 @@ func (s *NetguardServiceServer) ListAddressGroupPortMappings(ctx context.Context
 	}, nil
 }
 
+// GetAddressGroupPortMapping gets a specific address group port mapping by ID
+func (s *NetguardServiceServer) GetAddressGroupPortMapping(ctx context.Context, req *netguardpb.GetAddressGroupPortMappingReq) (*netguardpb.GetAddressGroupPortMappingResp, error) {
+	id := idFromReq(req.GetIdentifier())
+	mapping, err := s.service.GetAddressGroupPortMappingByID(ctx, id)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get address group port mapping")
+	}
+
+	return &netguardpb.GetAddressGroupPortMappingResp{
+		AddressGroupPortMapping: convertAddressGroupPortMappingToPB(*mapping),
+	}, nil
+}
+
 // ListRuleS2S gets list of rule s2s
 func (s *NetguardServiceServer) ListRuleS2S(ctx context.Context, req *netguardpb.ListRuleS2SReq) (*netguardpb.ListRuleS2SResp, error) {
 	var scope ports.Scope = ports.EmptyScope{}
-	if len(req.Names) > 0 {
-		scope = ports.NewNameScope(req.Names...)
+	if len(req.Identifiers) > 0 {
+		identifiers := make([]models.ResourceIdentifier, 0, len(req.Identifiers))
+		for _, id := range req.Identifiers {
+			identifiers = append(identifiers, models.NewResourceIdentifier(id.Name, models.WithNamespace(id.Namespace)))
+		}
+		scope = ports.NewResourceIdentifierScope(identifiers...)
 	}
 
 	rules, err := s.service.GetRuleS2S(ctx, scope)
@@ -205,12 +290,67 @@ func (s *NetguardServiceServer) ListRuleS2S(ctx context.Context, req *netguardpb
 	}, nil
 }
 
+// GetRuleS2S gets a specific rule s2s by ID
+func (s *NetguardServiceServer) GetRuleS2S(ctx context.Context, req *netguardpb.GetRuleS2SReq) (*netguardpb.GetRuleS2SResp, error) {
+	id := idFromReq(req.GetIdentifier())
+	rule, err := s.service.GetRuleS2SByID(ctx, id)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get rule s2s")
+	}
+
+	return &netguardpb.GetRuleS2SResp{
+		RuleS2S: convertRuleS2SToPB(*rule),
+	}, nil
+}
+
+// ListServiceAliases gets list of service aliases
+func (s *NetguardServiceServer) ListServiceAliases(ctx context.Context, req *netguardpb.ListServiceAliasesReq) (*netguardpb.ListServiceAliasesResp, error) {
+	var scope ports.Scope = ports.EmptyScope{}
+	if len(req.Identifiers) > 0 {
+		identifiers := make([]models.ResourceIdentifier, 0, len(req.Identifiers))
+		for _, id := range req.Identifiers {
+			identifiers = append(identifiers, models.NewResourceIdentifier(id.Name, models.WithNamespace(id.Namespace)))
+		}
+		scope = ports.NewResourceIdentifierScope(identifiers...)
+	}
+
+	aliases, err := s.service.GetServiceAliases(ctx, scope)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get service aliases")
+	}
+
+	items := make([]*netguardpb.ServiceAlias, 0, len(aliases))
+	for _, a := range aliases {
+		items = append(items, convertServiceAliasToPB(a))
+	}
+
+	return &netguardpb.ListServiceAliasesResp{
+		Items: items,
+	}, nil
+}
+
+// GetServiceAlias gets a specific service alias by ID
+func (s *NetguardServiceServer) GetServiceAlias(ctx context.Context, req *netguardpb.GetServiceAliasReq) (*netguardpb.GetServiceAliasResp, error) {
+	id := idFromReq(req.GetIdentifier())
+	alias, err := s.service.GetServiceAliasByID(ctx, id)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get service alias")
+	}
+
+	return &netguardpb.GetServiceAliasResp{
+		ServiceAlias: convertServiceAliasToPB(*alias),
+	}, nil
+}
+
 // Helper functions for converting between protobuf and domain models
+
+func getSelfRef(identifier *netguardpb.ResourceIdentifier) models.ResourceIdentifier {
+	return models.NewResourceIdentifier(identifier.GetName(), models.WithNamespace(identifier.GetNamespace()))
+}
 
 func convertService(svc *netguardpb.Service) models.Service {
 	result := models.Service{
-		Name:        svc.Name,
-		Namespace:   svc.Namespace,
+		SelfRef:     models.NewSelfRef(getSelfRef(svc.GetSelfRef())),
 		Description: svc.Description,
 	}
 
@@ -225,10 +365,11 @@ func convertService(svc *netguardpb.Service) models.Service {
 
 	// Convert address groups
 	for _, ag := range svc.AddressGroups {
-		result.AddressGroups = append(result.AddressGroups, models.AddressGroupRef{
-			Name:      ag.Name,
-			Namespace: ag.Namespace,
-		})
+		ref := models.AddressGroupRef{
+			ResourceIdentifier: models.NewResourceIdentifier(ag.GetIdentifier().GetName(),
+				models.WithNamespace(ag.GetIdentifier().GetNamespace())),
+		}
+		result.AddressGroups = append(result.AddressGroups, ref)
 	}
 
 	return result
@@ -236,51 +377,51 @@ func convertService(svc *netguardpb.Service) models.Service {
 
 func convertAddressGroup(ag *netguardpb.AddressGroup) models.AddressGroup {
 	result := models.AddressGroup{
-		Name:        ag.Name,
-		Namespace:   ag.Namespace,
+		SelfRef:     models.NewSelfRef(getSelfRef(ag.GetSelfRef())),
 		Description: ag.Description,
 		Addresses:   ag.Addresses,
 	}
 
 	// Convert services
 	for _, svc := range ag.Services {
-		result.Services = append(result.Services, models.ServiceRef{
-			Name:      svc.Name,
-			Namespace: svc.Namespace,
-		})
+		ref := models.ServiceRef{
+			ResourceIdentifier: models.NewResourceIdentifier(svc.GetIdentifier().GetName(),
+				models.WithNamespace(svc.GetIdentifier().GetNamespace())),
+		}
+		result.Services = append(result.Services, ref)
 	}
 
 	return result
 }
 
 func convertAddressGroupBinding(b *netguardpb.AddressGroupBinding) models.AddressGroupBinding {
-	return models.AddressGroupBinding{
-		Name:      b.Name,
-		Namespace: b.Namespace,
-		ServiceRef: models.ServiceRef{
-			Name:      b.ServiceRef.Name,
-			Namespace: b.ServiceRef.Namespace,
-		},
-		AddressGroupRef: models.AddressGroupRef{
-			Name:      b.AddressGroupRef.Name,
-			Namespace: b.AddressGroupRef.Namespace,
-		},
+	result := models.AddressGroupBinding{
+		SelfRef: models.NewSelfRef(getSelfRef(b.GetSelfRef())),
 	}
+
+	// Convert ServiceRef
+	result.ServiceRef = models.NewServiceRef(b.GetServiceRef().GetIdentifier().GetName(),
+		models.WithNamespace(b.GetServiceRef().GetIdentifier().GetNamespace()))
+
+	// Convert AddressGroupRef
+	result.AddressGroupRef = models.NewAddressGroupRef(b.GetAddressGroupRef().GetIdentifier().GetName(),
+		models.WithNamespace(b.GetAddressGroupRef().GetIdentifier().GetNamespace()))
+
+	return result
 }
 
 func convertAddressGroupPortMapping(m *netguardpb.AddressGroupPortMapping) models.AddressGroupPortMapping {
 	result := models.AddressGroupPortMapping{
-		Name:      m.Name,
-		Namespace: m.Namespace,
+		SelfRef:     models.NewSelfRef(getSelfRef(m.GetSelfRef())),
+		AccessPorts: map[models.ServiceRef]models.ServicePorts{},
 	}
 
 	// Convert access ports
 	for _, ap := range m.AccessPorts {
-		spr := models.ServicePortsRef{
-			Name:      ap.Name,
-			Namespace: ap.Namespace,
-			Ports:     make(models.ProtocolPorts),
+		spr := models.ServiceRef{
+			ResourceIdentifier: models.NewResourceIdentifier(ap.Identifier.Name, models.WithNamespace(ap.GetIdentifier().GetNamespace())),
 		}
+		ports := make(models.ProtocolPorts)
 
 		// Convert ports
 		for proto, ranges := range ap.Ports.Ports {
@@ -291,35 +432,40 @@ func convertAddressGroupPortMapping(m *netguardpb.AddressGroupPortMapping) model
 					End:   int(r.End),
 				})
 			}
-			spr.Ports[models.TransportProtocol(proto)] = portRanges
+			ports[models.TransportProtocol(proto)] = portRanges
 		}
 
-		result.AccessPorts = append(result.AccessPorts, spr)
+		result.AccessPorts[spr] = models.ServicePorts{Ports: ports}
 	}
 
 	return result
 }
 
 func convertRuleS2S(r *netguardpb.RuleS2S) models.RuleS2S {
-	return models.RuleS2S{
-		Name:      r.Name,
-		Namespace: r.Namespace,
-		Traffic:   models.Traffic(r.Traffic.String()),
-		ServiceLocalRef: models.ServiceRef{
-			Name:      r.ServiceLocalRef.Name,
-			Namespace: r.ServiceLocalRef.Namespace,
-		},
-		ServiceRef: models.ServiceRef{
-			Name:      r.ServiceRef.Name,
-			Namespace: r.ServiceRef.Namespace,
-		},
+	result := models.RuleS2S{
+		SelfRef: models.NewSelfRef(getSelfRef(r.GetSelfRef())),
+		Traffic: models.Traffic(r.Traffic.String()),
 	}
+
+	// Convert ServiceLocalRef
+	result.ServiceLocalRef = models.ServiceAliasRef{
+		ResourceIdentifier: models.NewResourceIdentifier(r.ServiceLocalRef.Identifier.Name, models.WithNamespace(r.GetServiceLocalRef().GetIdentifier().GetNamespace())),
+	}
+
+	// Convert ServiceRef
+	result.ServiceRef = models.ServiceAliasRef{
+		ResourceIdentifier: models.NewResourceIdentifier(r.ServiceRef.Identifier.Name, models.WithNamespace(r.GetServiceRef().GetIdentifier().GetNamespace())),
+	}
+
+	return result
 }
 
 func convertServiceToPB(svc models.Service) *netguardpb.Service {
 	result := &netguardpb.Service{
-		Name:        svc.Name,
-		Namespace:   svc.Namespace,
+		SelfRef: &netguardpb.ResourceIdentifier{
+			Name:      svc.ResourceIdentifier.Name,
+			Namespace: svc.ResourceIdentifier.Namespace,
+		},
 		Description: svc.Description,
 	}
 
@@ -343,8 +489,10 @@ func convertServiceToPB(svc models.Service) *netguardpb.Service {
 	// Convert address groups
 	for _, ag := range svc.AddressGroups {
 		result.AddressGroups = append(result.AddressGroups, &netguardpb.AddressGroupRef{
-			Name:      ag.Name,
-			Namespace: ag.Namespace,
+			Identifier: &netguardpb.ResourceIdentifier{
+				Name:      ag.ResourceIdentifier.Name,
+				Namespace: ag.ResourceIdentifier.Namespace,
+			},
 		})
 	}
 
@@ -353,8 +501,10 @@ func convertServiceToPB(svc models.Service) *netguardpb.Service {
 
 func convertAddressGroupToPB(ag models.AddressGroup) *netguardpb.AddressGroup {
 	result := &netguardpb.AddressGroup{
-		Name:        ag.Name,
-		Namespace:   ag.Namespace,
+		SelfRef: &netguardpb.ResourceIdentifier{
+			Name:      ag.ResourceIdentifier.Name,
+			Namespace: ag.ResourceIdentifier.Namespace,
+		},
 		Description: ag.Description,
 		Addresses:   ag.Addresses,
 	}
@@ -362,8 +512,10 @@ func convertAddressGroupToPB(ag models.AddressGroup) *netguardpb.AddressGroup {
 	// Convert services
 	for _, svc := range ag.Services {
 		result.Services = append(result.Services, &netguardpb.ServiceRef{
-			Name:      svc.Name,
-			Namespace: svc.Namespace,
+			Identifier: &netguardpb.ResourceIdentifier{
+				Name:      svc.ResourceIdentifier.Name,
+				Namespace: svc.ResourceIdentifier.Namespace,
+			},
 		})
 	}
 
@@ -372,30 +524,40 @@ func convertAddressGroupToPB(ag models.AddressGroup) *netguardpb.AddressGroup {
 
 func convertAddressGroupBindingToPB(b models.AddressGroupBinding) *netguardpb.AddressGroupBinding {
 	return &netguardpb.AddressGroupBinding{
-		Name:      b.Name,
-		Namespace: b.Namespace,
+		SelfRef: &netguardpb.ResourceIdentifier{
+			Name:      b.ResourceIdentifier.Name,
+			Namespace: b.ResourceIdentifier.Namespace,
+		},
 		ServiceRef: &netguardpb.ServiceRef{
-			Name:      b.ServiceRef.Name,
-			Namespace: b.ServiceRef.Namespace,
+			Identifier: &netguardpb.ResourceIdentifier{
+				Name:      b.ServiceRef.ResourceIdentifier.Name,
+				Namespace: b.ServiceRef.ResourceIdentifier.Namespace,
+			},
 		},
 		AddressGroupRef: &netguardpb.AddressGroupRef{
-			Name:      b.AddressGroupRef.Name,
-			Namespace: b.AddressGroupRef.Namespace,
+			Identifier: &netguardpb.ResourceIdentifier{
+				Name:      b.AddressGroupRef.ResourceIdentifier.Name,
+				Namespace: b.AddressGroupRef.ResourceIdentifier.Namespace,
+			},
 		},
 	}
 }
 
 func convertAddressGroupPortMappingToPB(m models.AddressGroupPortMapping) *netguardpb.AddressGroupPortMapping {
 	result := &netguardpb.AddressGroupPortMapping{
-		Name:      m.Name,
-		Namespace: m.Namespace,
+		SelfRef: &netguardpb.ResourceIdentifier{
+			Name:      m.ResourceIdentifier.Name,
+			Namespace: m.ResourceIdentifier.Namespace,
+		},
 	}
 
 	// Convert access ports
-	for _, ap := range m.AccessPorts {
+	for srv, ap := range m.AccessPorts {
 		spr := &netguardpb.ServicePortsRef{
-			Name:      ap.Name,
-			Namespace: ap.Namespace,
+			Identifier: &netguardpb.ResourceIdentifier{
+				Name:      srv.ResourceIdentifier.Name,
+				Namespace: srv.ResourceIdentifier.Namespace,
+			},
 			Ports: &netguardpb.ProtocolPorts{
 				Ports: make(map[string]*netguardpb.PortRanges),
 			},
@@ -431,16 +593,46 @@ func convertRuleS2SToPB(r models.RuleS2S) *netguardpb.RuleS2S {
 	}
 
 	return &netguardpb.RuleS2S{
-		Name:      r.Name,
-		Namespace: r.Namespace,
-		Traffic:   traffic,
+		SelfRef: &netguardpb.ResourceIdentifier{
+			Name:      r.ResourceIdentifier.Name,
+			Namespace: r.ResourceIdentifier.Namespace,
+		},
+		Traffic: traffic,
 		ServiceLocalRef: &netguardpb.ServiceRef{
-			Name:      r.ServiceLocalRef.Name,
-			Namespace: r.ServiceLocalRef.Namespace,
+			Identifier: &netguardpb.ResourceIdentifier{
+				Name:      r.ServiceLocalRef.ResourceIdentifier.Name,
+				Namespace: r.ServiceLocalRef.ResourceIdentifier.Namespace,
+			},
 		},
 		ServiceRef: &netguardpb.ServiceRef{
-			Name:      r.ServiceRef.Name,
-			Namespace: r.ServiceRef.Namespace,
+			Identifier: &netguardpb.ResourceIdentifier{
+				Name:      r.ServiceRef.ResourceIdentifier.Name,
+				Namespace: r.ServiceRef.ResourceIdentifier.Namespace,
+			},
+		},
+	}
+}
+
+func convertServiceAliasToPB(a models.ServiceAlias) *netguardpb.ServiceAlias {
+	return &netguardpb.ServiceAlias{
+		SelfRef: &netguardpb.ResourceIdentifier{
+			Name:      a.ResourceIdentifier.Name,
+			Namespace: a.ResourceIdentifier.Namespace,
+		},
+		ServiceRef: &netguardpb.ServiceRef{
+			Identifier: &netguardpb.ResourceIdentifier{
+				Name:      a.ServiceRef.ResourceIdentifier.Name,
+				Namespace: a.ServiceRef.ResourceIdentifier.Namespace,
+			},
+		},
+	}
+}
+
+func convertServiceAlias(a *netguardpb.ServiceAlias) models.ServiceAlias {
+	return models.ServiceAlias{
+		SelfRef: models.NewSelfRef(getSelfRef(a.GetSelfRef())),
+		ServiceRef: models.ServiceRef{
+			ResourceIdentifier: models.NewResourceIdentifier(a.GetServiceRef().GetIdentifier().GetName(), models.WithNamespace(a.GetServiceRef().GetIdentifier().GetNamespace())),
 		},
 	}
 }

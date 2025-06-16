@@ -1,8 +1,52 @@
 package models
 
 import (
+	"fmt"
 	"time"
 )
+
+// ResourceIdentifier uniquely identifies a resource by name and namespace
+type ResourceIdentifier struct {
+	Name      string
+	Namespace string
+}
+
+// NewResourceIdentifier creates a new ResourceIdentifier
+func NewResourceIdentifier(name string, opts ...ResourceIdentifierOption) ResourceIdentifier {
+	ri := ResourceIdentifier{Name: name}
+	for _, o := range opts {
+		o(&ri)
+	}
+	return ri
+}
+
+// Key возвращает:
+// - "Name", если Namespace пустой
+// - "Namespace/Name" в противном случае
+func (r ResourceIdentifier) Key() string {
+	if r.Namespace == "" {
+		return r.Name
+	}
+	return fmt.Sprintf("%s/%s", r.Namespace, r.Name)
+}
+
+type ResourceIdentifierOption func(*ResourceIdentifier)
+
+//Общие опции для ResourceIdentifier
+
+func WithNamespace(ns string) ResourceIdentifierOption {
+	return func(r *ResourceIdentifier) {
+		r.Namespace = ns
+	}
+}
+
+type SelfRef struct {
+	ResourceIdentifier
+}
+
+func NewSelfRef(identifier ResourceIdentifier) SelfRef {
+	return SelfRef{ResourceIdentifier: identifier}
+}
 
 // TransportProtocol represents the transport protocol (TCP, UDP)
 type TransportProtocol string
@@ -38,67 +82,6 @@ type IngressPort struct {
 	Protocol    TransportProtocol
 	Port        string
 	Description string
-}
-
-// ServiceRef represents a reference to a Service
-type ServiceRef struct {
-	Name      string
-	Namespace string
-}
-
-// AddressGroupRef represents a reference to an AddressGroup
-type AddressGroupRef struct {
-	Name      string
-	Namespace string
-}
-
-// Service represents a service with its ports
-type Service struct {
-	Name          string
-	Namespace     string
-	Description   string
-	IngressPorts  []IngressPort
-	AddressGroups []AddressGroupRef
-}
-
-// AddressGroup represents a group of addresses
-type AddressGroup struct {
-	Name        string
-	Namespace   string
-	Description string
-	Addresses   []string
-	Services    []ServiceRef
-}
-
-// AddressGroupBinding represents a binding between a Service and an AddressGroup
-type AddressGroupBinding struct {
-	Name            string
-	Namespace       string
-	ServiceRef      ServiceRef
-	AddressGroupRef AddressGroupRef
-}
-
-// ServicePortsRef defines a reference to a Service and its allowed ports
-type ServicePortsRef struct {
-	Name      string
-	Namespace string
-	Ports     ProtocolPorts
-}
-
-// AddressGroupPortMapping represents a mapping between an AddressGroup and allowed ports
-type AddressGroupPortMapping struct {
-	Name        string
-	Namespace   string
-	AccessPorts []ServicePortsRef
-}
-
-// RuleS2S represents a rule between two services
-type RuleS2S struct {
-	Name            string
-	Namespace       string
-	Traffic         Traffic
-	ServiceLocalRef ServiceRef
-	ServiceRef      ServiceRef
 }
 
 // SyncStatus represents the status of a synchronization operation

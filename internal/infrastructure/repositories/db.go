@@ -21,6 +21,9 @@ const (
 
 	// TblSyncStatus table 'sync-status'
 	TblSyncStatus
+
+	// TblServiceAliases table 'service aliases'
+	TblServiceAliases
 )
 
 // SchemaName database scheme name
@@ -33,6 +36,7 @@ func (tid TableID) String() string {
 
 var tableID2string = map[TableID]string{
 	TblServices:                 "tbl_service",
+	TblServiceAliases:           "tbl_service_alias",
 	TblAddressGroups:            "tbl_address_group",
 	TblAddressGroupBindings:     "tbl_address_group_binding",
 	TblAddressGroupPortMappings: "tbl_address_group_port_mapping",

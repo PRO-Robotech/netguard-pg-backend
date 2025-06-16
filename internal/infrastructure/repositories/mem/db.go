@@ -9,6 +9,7 @@ import (
 // MemDB in-memory database
 type MemDB struct {
 	services                 map[string]models.Service
+	serviceAliases           map[string]models.ServiceAlias
 	addressGroups            map[string]models.AddressGroup
 	addressGroupBindings     map[string]models.AddressGroupBinding
 	addressGroupPortMappings map[string]models.AddressGroupPortMapping
@@ -21,6 +22,7 @@ type MemDB struct {
 func NewMemDB() *MemDB {
 	return &MemDB{
 		services:                 make(map[string]models.Service),
+		serviceAliases:           make(map[string]models.ServiceAlias),
 		addressGroups:            make(map[string]models.AddressGroup),
 		addressGroupBindings:     make(map[string]models.AddressGroupBinding),
 		addressGroupPortMappings: make(map[string]models.AddressGroupPortMapping),
@@ -130,4 +132,22 @@ func (db *MemDB) SetRuleS2S(rules map[string]models.RuleS2S) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	db.ruleS2S = rules
+}
+
+// GetServiceAliases returns all service aliases
+func (db *MemDB) GetServiceAliases() map[string]models.ServiceAlias {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	result := make(map[string]models.ServiceAlias, len(db.serviceAliases))
+	for k, v := range db.serviceAliases {
+		result[k] = v
+	}
+	return result
+}
+
+// SetServiceAliases sets the service aliases
+func (db *MemDB) SetServiceAliases(aliases map[string]models.ServiceAlias) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.serviceAliases = aliases
 }

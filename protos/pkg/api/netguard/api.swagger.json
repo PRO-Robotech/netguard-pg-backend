@@ -39,16 +39,42 @@
             }
           }
         },
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/address-group-bindings/{identifier.namespace}/{identifier.name}": {
+      "get": {
+        "summary": "GetAddressGroupBinding - gets a specific address group binding by ID",
+        "description": "GetAddressGroupBinding: gets a specific address group binding by ID",
+        "operationId": "NetguardService_GetAddressGroupBinding",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetAddressGroupBindingResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
         "parameters": [
           {
-            "name": "names",
-            "in": "query",
-            "required": false,
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "collectionFormat": "multi"
+            "name": "identifier.namespace",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "identifier.name",
+            "in": "path",
+            "required": true,
+            "type": "string"
           }
         ],
         "tags": [
@@ -75,16 +101,42 @@
             }
           }
         },
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/address-group-port-mappings/{identifier.namespace}/{identifier.name}": {
+      "get": {
+        "summary": "GetAddressGroupPortMapping - gets a specific address group port mapping by ID",
+        "description": "GetAddressGroupPortMapping: gets a specific address group port mapping by ID",
+        "operationId": "NetguardService_GetAddressGroupPortMapping",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetAddressGroupPortMappingResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
         "parameters": [
           {
-            "name": "names",
-            "in": "query",
-            "required": false,
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "collectionFormat": "multi"
+            "name": "identifier.namespace",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "identifier.name",
+            "in": "path",
+            "required": true,
+            "type": "string"
           }
         ],
         "tags": [
@@ -111,16 +163,42 @@
             }
           }
         },
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/address-groups/{identifier.namespace}/{identifier.name}": {
+      "get": {
+        "summary": "GetAddressGroup - gets a specific address group by ID",
+        "description": "GetAddressGroup: gets a specific address group by ID",
+        "operationId": "NetguardService_GetAddressGroup",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetAddressGroupResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
         "parameters": [
           {
-            "name": "names",
-            "in": "query",
-            "required": false,
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "collectionFormat": "multi"
+            "name": "identifier.namespace",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "identifier.name",
+            "in": "path",
+            "required": true,
+            "type": "string"
           }
         ],
         "tags": [
@@ -147,16 +225,104 @@
             }
           }
         },
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/rule-s2s/{identifier.namespace}/{identifier.name}": {
+      "get": {
+        "summary": "GetRuleS2S - gets a specific rule s2s by ID",
+        "description": "GetRuleS2S: gets a specific rule s2s by ID",
+        "operationId": "NetguardService_GetRuleS2S",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetRuleS2SResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
         "parameters": [
           {
-            "name": "names",
-            "in": "query",
-            "required": false,
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "collectionFormat": "multi"
+            "name": "identifier.namespace",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "identifier.name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/service-aliases": {
+      "get": {
+        "summary": "ListServiceAliases - gets list of service aliases",
+        "description": "ListServiceAliases: gets list of service aliases",
+        "operationId": "NetguardService_ListServiceAliases",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListServiceAliasesResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/service-aliases/{identifier.namespace}/{identifier.name}": {
+      "get": {
+        "summary": "GetServiceAlias - gets a specific service alias by ID",
+        "description": "GetServiceAlias: gets a specific service alias by ID",
+        "operationId": "NetguardService_GetServiceAlias",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetServiceAliasResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "identifier.namespace",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "identifier.name",
+            "in": "path",
+            "required": true,
+            "type": "string"
           }
         ],
         "tags": [
@@ -183,16 +349,42 @@
             }
           }
         },
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/services/{identifier.namespace}/{identifier.name}": {
+      "get": {
+        "summary": "GetService - gets a specific service by ID",
+        "description": "GetService: gets a specific service by ID",
+        "operationId": "NetguardService_GetService",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetServiceResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
         "parameters": [
           {
-            "name": "names",
-            "in": "query",
-            "required": false,
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "collectionFormat": "multi"
+            "name": "identifier.namespace",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "identifier.name",
+            "in": "path",
+            "required": true,
+            "type": "string"
           }
         ],
         "tags": [
@@ -326,11 +518,8 @@
     "v1AddressGroup": {
       "type": "object",
       "properties": {
-        "name": {
-          "type": "string"
-        },
-        "namespace": {
-          "type": "string"
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
         },
         "description": {
           "type": "string"
@@ -351,18 +540,14 @@
       },
       "title": "AddressGroup - represents a group of addresses",
       "required": [
-        "name",
-        "namespace"
+        "selfRef"
       ]
     },
     "v1AddressGroupBinding": {
       "type": "object",
       "properties": {
-        "name": {
-          "type": "string"
-        },
-        "namespace": {
-          "type": "string"
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
         },
         "serviceRef": {
           "$ref": "#/definitions/v1ServiceRef"
@@ -373,8 +558,7 @@
       },
       "title": "AddressGroupBinding - binding between a service and an address group",
       "required": [
-        "name",
-        "namespace",
+        "selfRef",
         "serviceRef",
         "addressGroupRef"
       ]
@@ -382,11 +566,8 @@
     "v1AddressGroupPortMapping": {
       "type": "object",
       "properties": {
-        "name": {
-          "type": "string"
-        },
-        "namespace": {
-          "type": "string"
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
         },
         "accessPorts": {
           "type": "array",
@@ -398,21 +579,71 @@
       },
       "title": "AddressGroupPortMapping - mapping between an address group and allowed ports",
       "required": [
-        "name",
-        "namespace"
+        "selfRef"
       ]
     },
     "v1AddressGroupRef": {
       "type": "object",
       "properties": {
-        "name": {
-          "type": "string"
-        },
-        "namespace": {
-          "type": "string"
+        "identifier": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
         }
       },
       "title": "AddressGroupRef - reference to an address group"
+    },
+    "v1GetAddressGroupBindingResp": {
+      "type": "object",
+      "properties": {
+        "addressGroupBinding": {
+          "$ref": "#/definitions/v1AddressGroupBinding"
+        }
+      },
+      "title": "GetAddressGroupBindingResp - response with a specific address group binding"
+    },
+    "v1GetAddressGroupPortMappingResp": {
+      "type": "object",
+      "properties": {
+        "addressGroupPortMapping": {
+          "$ref": "#/definitions/v1AddressGroupPortMapping"
+        }
+      },
+      "title": "GetAddressGroupPortMappingResp - response with a specific address group port mapping"
+    },
+    "v1GetAddressGroupResp": {
+      "type": "object",
+      "properties": {
+        "addressGroup": {
+          "$ref": "#/definitions/v1AddressGroup"
+        }
+      },
+      "title": "GetAddressGroupResp - response with a specific address group"
+    },
+    "v1GetRuleS2SResp": {
+      "type": "object",
+      "properties": {
+        "ruleS2s": {
+          "$ref": "#/definitions/v1RuleS2S"
+        }
+      },
+      "title": "GetRuleS2SResp - response with a specific rule s2s"
+    },
+    "v1GetServiceAliasResp": {
+      "type": "object",
+      "properties": {
+        "serviceAlias": {
+          "$ref": "#/definitions/v1ServiceAlias"
+        }
+      },
+      "title": "GetServiceAliasResp - response with a specific service alias"
+    },
+    "v1GetServiceResp": {
+      "type": "object",
+      "properties": {
+        "service": {
+          "$ref": "#/definitions/v1Service"
+        }
+      },
+      "title": "GetServiceResp - response with a specific service"
     },
     "v1IngressPort": {
       "type": "object",
@@ -481,6 +712,19 @@
       },
       "title": "ListRuleS2SResp - response with list of rule s2s"
     },
+    "v1ListServiceAliasesResp": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ServiceAlias"
+          }
+        }
+      },
+      "title": "ListServiceAliasesResp - response with list of service aliases"
+    },
     "v1ListServicesResp": {
       "type": "object",
       "properties": {
@@ -519,7 +763,7 @@
       },
       "title": "ProtocolPorts - mapping of protocols to port ranges"
     },
-    "v1RuleS2S": {
+    "v1ResourceIdentifier": {
       "type": "object",
       "properties": {
         "name": {
@@ -527,6 +771,15 @@
         },
         "namespace": {
           "type": "string"
+        }
+      },
+      "title": "ResourceIdentifier - uniquely identifies a resource"
+    },
+    "v1RuleS2S": {
+      "type": "object",
+      "properties": {
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
         },
         "traffic": {
           "$ref": "#/definitions/commonTraffic"
@@ -550,11 +803,8 @@
     "v1Service": {
       "type": "object",
       "properties": {
-        "name": {
-          "type": "string"
-        },
-        "namespace": {
-          "type": "string"
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
         },
         "description": {
           "type": "string"
@@ -576,18 +826,31 @@
       },
       "title": "Service - represents a service with ports",
       "required": [
+        "selfRef"
+      ]
+    },
+    "v1ServiceAlias": {
+      "type": "object",
+      "properties": {
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
+        },
+        "serviceRef": {
+          "$ref": "#/definitions/v1ServiceRef"
+        }
+      },
+      "title": "ServiceAlias - alias for a service",
+      "required": [
         "name",
-        "namespace"
+        "namespace",
+        "serviceRef"
       ]
     },
     "v1ServicePortsRef": {
       "type": "object",
       "properties": {
-        "name": {
-          "type": "string"
-        },
-        "namespace": {
-          "type": "string"
+        "identifier": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
         },
         "ports": {
           "$ref": "#/definitions/v1ProtocolPorts"
@@ -598,11 +861,8 @@
     "v1ServiceRef": {
       "type": "object",
       "properties": {
-        "name": {
-          "type": "string"
-        },
-        "namespace": {
-          "type": "string"
+        "identifier": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
         }
       },
       "title": "ServiceRef - reference to a service"
@@ -643,6 +903,13 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1RuleS2S"
+          }
+        },
+        "serviceAliases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ServiceAlias"
           }
         }
       },
