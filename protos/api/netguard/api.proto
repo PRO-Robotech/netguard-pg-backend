@@ -144,6 +144,51 @@ message SyncStatusResp {
   google.protobuf.Timestamp updated_at = 1;
 }
 
+// SyncOp - sync operation type
+enum SyncOp {
+  // NoOp - no operation defined (default)
+  NoOp = 0;
+
+  // FullSync - Delete+Insert+Update operations (default)
+  FullSync = 1;
+
+  // Upsert - Insert+Update operations
+  Upsert = 2;
+
+  // Delete - Delete operation
+  Delete = 3;
+}
+
+// SyncServices - subject of Services to sync
+message SyncServices {
+  repeated Service services = 1;
+}
+
+// SyncAddressGroups - subject of Address Groups to sync
+message SyncAddressGroups {
+  repeated AddressGroup address_groups = 1;
+}
+
+// SyncAddressGroupBindings - subject of Address Group Bindings to sync
+message SyncAddressGroupBindings {
+  repeated AddressGroupBinding address_group_bindings = 1;
+}
+
+// SyncAddressGroupPortMappings - subject of Address Group Port Mappings to sync
+message SyncAddressGroupPortMappings {
+  repeated AddressGroupPortMapping address_group_port_mappings = 1;
+}
+
+// SyncRuleS2S - subject of Rule S2S to sync
+message SyncRuleS2S {
+  repeated RuleS2S rule_s2s = 1;
+}
+
+// SyncServiceAliases - subject of Service Aliases to sync
+message SyncServiceAliases {
+  repeated ServiceAlias service_aliases = 1;
+}
+
 // Requests and responses for API methods
 
 // ListServicesReq - request to list services
@@ -268,12 +313,29 @@ message GetServiceAliasResp {
 
 // SyncReq - request to sync
 message SyncReq {
-  repeated Service services = 1;
-  repeated AddressGroup address_groups = 2;
-  repeated AddressGroupBinding address_group_bindings = 3;
-  repeated AddressGroupPortMapping address_group_port_mappings = 4;
-  repeated RuleS2S rule_s2s = 5;
-  repeated ServiceAlias service_aliases = 6;
+  // Sync operation to apply
+  SyncOp sync_op = 1;
+
+  // One of subject
+  oneof subject {
+    // Subject of Services
+    SyncServices services = 2;
+
+    // Subject of Address Groups
+    SyncAddressGroups address_groups = 3;
+
+    // Subject of Address Group Bindings
+    SyncAddressGroupBindings address_group_bindings = 4;
+
+    // Subject of Address Group Port Mappings
+    SyncAddressGroupPortMappings address_group_port_mappings = 5;
+
+    // Subject of Rule S2S
+    SyncRuleS2S rule_s2s = 6;
+
+    // Subject of Service Aliases
+    SyncServiceAliases service_aliases = 7;
+  }
 }
 
 // Service definition

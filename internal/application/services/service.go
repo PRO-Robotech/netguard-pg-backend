@@ -135,6 +135,168 @@ func (s *NetguardService) GetServiceAliases(ctx context.Context, scope ports.Sco
 	return aliases, nil
 }
 
+// CreateService создает новый сервис
+func (s *NetguardService) CreateService(ctx context.Context, service models.Service) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Создаем валидатор
+	validator := validation.NewDependencyValidator(reader)
+	serviceValidator := validator.GetServiceValidator()
+
+	// Валидируем сервис перед созданием
+	if err := serviceValidator.ValidateForCreation(ctx, service); err != nil {
+		return err
+	}
+
+	writer, err := s.registry.Writer(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get writer")
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	if err = writer.SyncServices(ctx, []models.Service{service}, ports.NewResourceIdentifierScope(service.ResourceIdentifier)); err != nil {
+		return errors.Wrap(err, "failed to create service")
+	}
+	if err = writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+	return nil
+}
+
+// UpdateService обновляет существующий сервис
+func (s *NetguardService) UpdateService(ctx context.Context, service models.Service) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Получаем старую версию сервиса
+	oldService, err := reader.GetServiceByID(ctx, service.ResourceIdentifier)
+	if err != nil {
+		return errors.Wrap(err, "failed to get existing service")
+	}
+
+	// Создаем валидатор
+	validator := validation.NewDependencyValidator(reader)
+	serviceValidator := validator.GetServiceValidator()
+
+	// Валидируем сервис перед обновлением
+	if err := serviceValidator.ValidateForUpdate(ctx, *oldService, service); err != nil {
+		return err
+	}
+
+	writer, err := s.registry.Writer(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get writer")
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	if err = writer.SyncServices(ctx, []models.Service{service}, ports.NewResourceIdentifierScope(service.ResourceIdentifier)); err != nil {
+		return errors.Wrap(err, "failed to update service")
+	}
+	if err = writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+	return nil
+}
+
+// Sync выполняет синхронизацию с указанной операцией и субъектом
+func (s *NetguardService) Sync(ctx context.Context, syncOp models.SyncOp, subject interface{}) error {
+	writer, err := s.registry.Writer(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get writer")
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	// Обработка разных типов субъектов
+	switch v := subject.(type) {
+	case []models.Service:
+		return s.syncServices(ctx, writer, v, syncOp)
+	case []models.AddressGroup:
+		return s.syncAddressGroups(ctx, writer, v, syncOp)
+	case []models.AddressGroupBinding:
+		return s.syncAddressGroupBindings(ctx, writer, v, syncOp)
+	case []models.AddressGroupPortMapping:
+		return s.syncAddressGroupPortMappings(ctx, writer, v, syncOp)
+	case []models.RuleS2S:
+		return s.syncRuleS2S(ctx, writer, v, syncOp)
+	case []models.ServiceAlias:
+		return s.syncServiceAliases(ctx, writer, v, syncOp)
+	default:
+		return errors.New("unsupported subject type")
+	}
+}
+
+// syncServices синхронизирует сервисы с указанной операцией
+func (s *NetguardService) syncServices(ctx context.Context, writer ports.Writer, services []models.Service, syncOp models.SyncOp) error {
+	// Валидация в зависимости от операции
+	if syncOp != models.SyncOpDelete {
+		reader, err := s.registry.Reader(ctx)
+		if err != nil {
+			return errors.Wrap(err, "failed to get reader")
+		}
+		defer reader.Close()
+
+		validator := validation.NewDependencyValidator(reader)
+		serviceValidator := validator.GetServiceValidator()
+
+		for _, service := range services {
+			existingService, err := reader.GetServiceByID(ctx, service.ResourceIdentifier)
+			if err == nil && existingService != nil && syncOp != models.SyncOpDelete {
+				// Сервис существует - используем ValidateForUpdate
+				if err := serviceValidator.ValidateForUpdate(ctx, *existingService, service); err != nil {
+					return err
+				}
+			} else if syncOp != models.SyncOpDelete {
+				// Сервис новый или не найден - используем ValidateForCreation
+				if err := serviceValidator.ValidateForCreation(ctx, service); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	// Определение scope
+	var scope ports.Scope
+	if len(services) > 0 {
+		var ids []models.ResourceIdentifier
+		for _, service := range services {
+			ids = append(ids, service.ResourceIdentifier)
+		}
+		scope = ports.NewResourceIdentifierScope(ids...)
+	} else {
+		scope = ports.EmptyScope{}
+	}
+
+	// Выполнение операции с указанной опцией
+	if err := writer.SyncServices(ctx, services, scope, ports.WithSyncOp(syncOp)); err != nil {
+		return errors.Wrap(err, "failed to sync services")
+	}
+
+	if err := writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+
+	return nil
+}
+
 // SyncServices syncs services
 func (s *NetguardService) SyncServices(ctx context.Context, services []models.Service, scope ports.Scope) error {
 	reader, err := s.registry.Reader(ctx)
@@ -149,8 +311,18 @@ func (s *NetguardService) SyncServices(ctx context.Context, services []models.Se
 
 	// Validate all services
 	for _, service := range services {
-		if err := serviceValidator.ValidateForCreation(ctx, service); err != nil {
-			return err
+		// Check if service exists
+		existingService, err := reader.GetServiceByID(ctx, service.ResourceIdentifier)
+		if err == nil {
+			// Service exists - use ValidateForUpdate
+			if err := serviceValidator.ValidateForUpdate(ctx, *existingService, service); err != nil {
+				return err
+			}
+		} else {
+			// Service is new - use ValidateForCreation
+			if err := serviceValidator.ValidateForCreation(ctx, service); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -164,12 +336,65 @@ func (s *NetguardService) SyncServices(ctx context.Context, services []models.Se
 		}
 	}()
 
-	if err = writer.SyncServices(ctx, services, scope); err != nil {
+	if err = writer.SyncServices(ctx, services, scope, ports.WithSyncOp(models.SyncOpFullSync)); err != nil {
 		return errors.Wrap(err, "failed to sync services")
 	}
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
+	return nil
+}
+
+// syncAddressGroups синхронизирует группы адресов с указанной операцией
+func (s *NetguardService) syncAddressGroups(ctx context.Context, writer ports.Writer, addressGroups []models.AddressGroup, syncOp models.SyncOp) error {
+	// Валидация в зависимости от операции
+	if syncOp != models.SyncOpDelete {
+		reader, err := s.registry.Reader(ctx)
+		if err != nil {
+			return errors.Wrap(err, "failed to get reader")
+		}
+		defer reader.Close()
+
+		validator := validation.NewDependencyValidator(reader)
+		addressGroupValidator := validator.GetAddressGroupValidator()
+
+		for _, addressGroup := range addressGroups {
+			existingAddressGroup, err := reader.GetAddressGroupByID(ctx, addressGroup.ResourceIdentifier)
+			if err == nil && syncOp != models.SyncOpDelete {
+				// Группа адресов существует - используем ValidateForUpdate
+				if err := addressGroupValidator.ValidateForUpdate(ctx, *existingAddressGroup, addressGroup); err != nil {
+					return err
+				}
+			} else if syncOp != models.SyncOpDelete {
+				// Группа адресов новая - используем ValidateForCreation
+				if err := addressGroupValidator.ValidateForCreation(ctx, addressGroup); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	// Определение scope
+	var scope ports.Scope
+	if len(addressGroups) > 0 {
+		var ids []models.ResourceIdentifier
+		for _, addressGroup := range addressGroups {
+			ids = append(ids, addressGroup.ResourceIdentifier)
+		}
+		scope = ports.NewResourceIdentifierScope(ids...)
+	} else {
+		scope = ports.EmptyScope{}
+	}
+
+	// Выполнение операции с указанной опцией
+	if err := writer.SyncAddressGroups(ctx, addressGroups, scope, ports.WithSyncOp(syncOp)); err != nil {
+		return errors.Wrap(err, "failed to sync address groups")
+	}
+
+	if err := writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+
 	return nil
 }
 
@@ -187,8 +412,18 @@ func (s *NetguardService) SyncAddressGroups(ctx context.Context, addressGroups [
 
 	// Validate all address groups
 	for _, addressGroup := range addressGroups {
-		if err := addressGroupValidator.ValidateForCreation(ctx, addressGroup); err != nil {
-			return err
+		// Check if address group exists
+		existingAddressGroup, err := reader.GetAddressGroupByID(ctx, addressGroup.ResourceIdentifier)
+		if err == nil {
+			// Address group exists - use ValidateForUpdate
+			if err := addressGroupValidator.ValidateForUpdate(ctx, *existingAddressGroup, addressGroup); err != nil {
+				return err
+			}
+		} else {
+			// Address group is new - use ValidateForCreation
+			if err := addressGroupValidator.ValidateForCreation(ctx, addressGroup); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -202,12 +437,65 @@ func (s *NetguardService) SyncAddressGroups(ctx context.Context, addressGroups [
 		}
 	}()
 
-	if err = writer.SyncAddressGroups(ctx, addressGroups, scope); err != nil {
+	if err = writer.SyncAddressGroups(ctx, addressGroups, scope, ports.WithSyncOp(models.SyncOpFullSync)); err != nil {
 		return errors.Wrap(err, "failed to sync address groups")
 	}
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
+	return nil
+}
+
+// syncAddressGroupBindings синхронизирует привязки групп адресов с указанной операцией
+func (s *NetguardService) syncAddressGroupBindings(ctx context.Context, writer ports.Writer, bindings []models.AddressGroupBinding, syncOp models.SyncOp) error {
+	// Валидация в зависимости от операции
+	if syncOp != models.SyncOpDelete {
+		reader, err := s.registry.Reader(ctx)
+		if err != nil {
+			return errors.Wrap(err, "failed to get reader")
+		}
+		defer reader.Close()
+
+		validator := validation.NewDependencyValidator(reader)
+		bindingValidator := validator.GetAddressGroupBindingValidator()
+
+		for _, binding := range bindings {
+			existingBinding, err := reader.GetAddressGroupBindingByID(ctx, binding.ResourceIdentifier)
+			if err == nil && syncOp != models.SyncOpDelete {
+				// Привязка существует - используем ValidateForUpdate
+				if err := bindingValidator.ValidateForUpdate(ctx, *existingBinding, binding); err != nil {
+					return err
+				}
+			} else if syncOp != models.SyncOpDelete {
+				// Привязка новая - используем ValidateForCreation
+				if err := bindingValidator.ValidateForCreation(ctx, binding); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	// Определение scope
+	var scope ports.Scope
+	if len(bindings) > 0 {
+		var ids []models.ResourceIdentifier
+		for _, binding := range bindings {
+			ids = append(ids, binding.ResourceIdentifier)
+		}
+		scope = ports.NewResourceIdentifierScope(ids...)
+	} else {
+		scope = ports.EmptyScope{}
+	}
+
+	// Выполнение операции с указанной опцией
+	if err := writer.SyncAddressGroupBindings(ctx, bindings, scope, ports.WithSyncOp(syncOp)); err != nil {
+		return errors.Wrap(err, "failed to sync address group bindings")
+	}
+
+	if err := writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+
 	return nil
 }
 
@@ -225,8 +513,18 @@ func (s *NetguardService) SyncAddressGroupBindings(ctx context.Context, bindings
 
 	// Validate all bindings
 	for _, binding := range bindings {
-		if err := bindingValidator.ValidateForCreation(ctx, binding); err != nil {
-			return err
+		// Check if binding exists
+		existingBinding, err := reader.GetAddressGroupBindingByID(ctx, binding.ResourceIdentifier)
+		if err == nil {
+			// Binding exists - use ValidateForUpdate
+			if err := bindingValidator.ValidateForUpdate(ctx, *existingBinding, binding); err != nil {
+				return err
+			}
+		} else {
+			// Binding is new - use ValidateForCreation
+			if err := bindingValidator.ValidateForCreation(ctx, binding); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -240,12 +538,65 @@ func (s *NetguardService) SyncAddressGroupBindings(ctx context.Context, bindings
 		}
 	}()
 
-	if err = writer.SyncAddressGroupBindings(ctx, bindings, scope); err != nil {
+	if err = writer.SyncAddressGroupBindings(ctx, bindings, scope, ports.WithSyncOp(models.SyncOpFullSync)); err != nil {
 		return errors.Wrap(err, "failed to sync address group bindings")
 	}
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
+	return nil
+}
+
+// syncAddressGroupPortMappings синхронизирует маппинги портов групп адресов с указанной операцией
+func (s *NetguardService) syncAddressGroupPortMappings(ctx context.Context, writer ports.Writer, mappings []models.AddressGroupPortMapping, syncOp models.SyncOp) error {
+	// Валидация в зависимости от операции
+	if syncOp != models.SyncOpDelete {
+		reader, err := s.registry.Reader(ctx)
+		if err != nil {
+			return errors.Wrap(err, "failed to get reader")
+		}
+		defer reader.Close()
+
+		validator := validation.NewDependencyValidator(reader)
+		mappingValidator := validator.GetAddressGroupPortMappingValidator()
+
+		for _, mapping := range mappings {
+			existingMapping, err := reader.GetAddressGroupPortMappingByID(ctx, mapping.ResourceIdentifier)
+			if err == nil && syncOp != models.SyncOpDelete {
+				// Маппинг существует - используем ValidateForUpdate
+				if err := mappingValidator.ValidateForUpdate(ctx, *existingMapping, mapping); err != nil {
+					return err
+				}
+			} else if syncOp != models.SyncOpDelete {
+				// Маппинг новый - используем ValidateForCreation
+				if err := mappingValidator.ValidateForCreation(ctx, mapping); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	// Определение scope
+	var scope ports.Scope
+	if len(mappings) > 0 {
+		var ids []models.ResourceIdentifier
+		for _, mapping := range mappings {
+			ids = append(ids, mapping.ResourceIdentifier)
+		}
+		scope = ports.NewResourceIdentifierScope(ids...)
+	} else {
+		scope = ports.EmptyScope{}
+	}
+
+	// Выполнение операции с указанной опцией
+	if err := writer.SyncAddressGroupPortMappings(ctx, mappings, scope, ports.WithSyncOp(syncOp)); err != nil {
+		return errors.Wrap(err, "failed to sync address group port mappings")
+	}
+
+	if err := writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+
 	return nil
 }
 
@@ -263,8 +614,18 @@ func (s *NetguardService) SyncAddressGroupPortMappings(ctx context.Context, mapp
 
 	// Validate all mappings
 	for _, mapping := range mappings {
-		if err := mappingValidator.ValidateForCreation(ctx, mapping); err != nil {
-			return err
+		// Check if mapping exists
+		existingMapping, err := reader.GetAddressGroupPortMappingByID(ctx, mapping.ResourceIdentifier)
+		if err == nil {
+			// Mapping exists - use ValidateForUpdate
+			if err := mappingValidator.ValidateForUpdate(ctx, *existingMapping, mapping); err != nil {
+				return err
+			}
+		} else {
+			// Mapping is new - use ValidateForCreation
+			if err := mappingValidator.ValidateForCreation(ctx, mapping); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -278,12 +639,65 @@ func (s *NetguardService) SyncAddressGroupPortMappings(ctx context.Context, mapp
 		}
 	}()
 
-	if err = writer.SyncAddressGroupPortMappings(ctx, mappings, scope); err != nil {
+	if err = writer.SyncAddressGroupPortMappings(ctx, mappings, scope, ports.WithSyncOp(models.SyncOpFullSync)); err != nil {
 		return errors.Wrap(err, "failed to sync address group port mappings")
 	}
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
+	return nil
+}
+
+// syncRuleS2S синхронизирует правила s2s с указанной операцией
+func (s *NetguardService) syncRuleS2S(ctx context.Context, writer ports.Writer, rules []models.RuleS2S, syncOp models.SyncOp) error {
+	// Валидация в зависимости от операции
+	if syncOp != models.SyncOpDelete {
+		reader, err := s.registry.Reader(ctx)
+		if err != nil {
+			return errors.Wrap(err, "failed to get reader")
+		}
+		defer reader.Close()
+
+		validator := validation.NewDependencyValidator(reader)
+		ruleValidator := validator.GetRuleS2SValidator()
+
+		for _, rule := range rules {
+			existingRule, err := reader.GetRuleS2SByID(ctx, rule.ResourceIdentifier)
+			if err == nil && syncOp != models.SyncOpDelete {
+				// Правило существует - используем ValidateForUpdate
+				if err := ruleValidator.ValidateForUpdate(ctx, *existingRule, rule); err != nil {
+					return err
+				}
+			} else if syncOp != models.SyncOpDelete {
+				// Правило новое - используем ValidateForCreation
+				if err := ruleValidator.ValidateForCreation(ctx, rule); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	// Определение scope
+	var scope ports.Scope
+	if len(rules) > 0 {
+		var ids []models.ResourceIdentifier
+		for _, rule := range rules {
+			ids = append(ids, rule.ResourceIdentifier)
+		}
+		scope = ports.NewResourceIdentifierScope(ids...)
+	} else {
+		scope = ports.EmptyScope{}
+	}
+
+	// Выполнение операции с указанной опцией
+	if err := writer.SyncRuleS2S(ctx, rules, scope, ports.WithSyncOp(syncOp)); err != nil {
+		return errors.Wrap(err, "failed to sync rule s2s")
+	}
+
+	if err := writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+
 	return nil
 }
 
@@ -301,8 +715,18 @@ func (s *NetguardService) SyncRuleS2S(ctx context.Context, rules []models.RuleS2
 
 	// Validate all rules
 	for _, rule := range rules {
-		if err := ruleValidator.ValidateForCreation(ctx, rule); err != nil {
-			return err
+		// Check if rule exists
+		existingRule, err := reader.GetRuleS2SByID(ctx, rule.ResourceIdentifier)
+		if err == nil {
+			// Rule exists - use ValidateForUpdate
+			if err := ruleValidator.ValidateForUpdate(ctx, *existingRule, rule); err != nil {
+				return err
+			}
+		} else {
+			// Rule is new - use ValidateForCreation
+			if err := ruleValidator.ValidateForCreation(ctx, rule); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -316,12 +740,65 @@ func (s *NetguardService) SyncRuleS2S(ctx context.Context, rules []models.RuleS2
 		}
 	}()
 
-	if err = writer.SyncRuleS2S(ctx, rules, scope); err != nil {
+	if err = writer.SyncRuleS2S(ctx, rules, scope, ports.WithSyncOp(models.SyncOpFullSync)); err != nil {
 		return errors.Wrap(err, "failed to sync rule s2s")
 	}
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
+	return nil
+}
+
+// syncServiceAliases синхронизирует алиасы сервисов с указанной операцией
+func (s *NetguardService) syncServiceAliases(ctx context.Context, writer ports.Writer, aliases []models.ServiceAlias, syncOp models.SyncOp) error {
+	// Валидация в зависимости от операции
+	if syncOp != models.SyncOpDelete {
+		reader, err := s.registry.Reader(ctx)
+		if err != nil {
+			return errors.Wrap(err, "failed to get reader")
+		}
+		defer reader.Close()
+
+		validator := validation.NewDependencyValidator(reader)
+		aliasValidator := validator.GetServiceAliasValidator()
+
+		for _, alias := range aliases {
+			existingAlias, err := reader.GetServiceAliasByID(ctx, alias.ResourceIdentifier)
+			if err == nil && syncOp != models.SyncOpDelete {
+				// Алиас существует - используем ValidateForUpdate
+				if err := aliasValidator.ValidateForUpdate(ctx, *existingAlias, alias); err != nil {
+					return err
+				}
+			} else if syncOp != models.SyncOpDelete {
+				// Алиас новый - используем ValidateForCreation
+				if err := aliasValidator.ValidateForCreation(ctx, alias); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	// Определение scope
+	var scope ports.Scope
+	if len(aliases) > 0 {
+		var ids []models.ResourceIdentifier
+		for _, alias := range aliases {
+			ids = append(ids, alias.ResourceIdentifier)
+		}
+		scope = ports.NewResourceIdentifierScope(ids...)
+	} else {
+		scope = ports.EmptyScope{}
+	}
+
+	// Выполнение операции с указанной опцией
+	if err := writer.SyncServiceAliases(ctx, aliases, scope, ports.WithSyncOp(syncOp)); err != nil {
+		return errors.Wrap(err, "failed to sync service aliases")
+	}
+
+	if err := writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+
 	return nil
 }
 
@@ -339,8 +816,18 @@ func (s *NetguardService) SyncServiceAliases(ctx context.Context, aliases []mode
 
 	// Validate all aliases
 	for _, alias := range aliases {
-		if err := aliasValidator.ValidateForCreation(ctx, alias); err != nil {
-			return err
+		// Check if alias exists
+		existingAlias, err := reader.GetServiceAliasByID(ctx, alias.ResourceIdentifier)
+		if err == nil {
+			// Alias exists - use ValidateForUpdate
+			if err := aliasValidator.ValidateForUpdate(ctx, *existingAlias, alias); err != nil {
+				return err
+			}
+		} else {
+			// Alias is new - use ValidateForCreation
+			if err := aliasValidator.ValidateForCreation(ctx, alias); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -354,7 +841,7 @@ func (s *NetguardService) SyncServiceAliases(ctx context.Context, aliases []mode
 		}
 	}()
 
-	if err = writer.SyncServiceAliases(ctx, aliases, scope); err != nil {
+	if err = writer.SyncServiceAliases(ctx, aliases, scope, ports.WithSyncOp(models.SyncOpFullSync)); err != nil {
 		return errors.Wrap(err, "failed to sync service aliases")
 	}
 	if err = writer.Commit(); err != nil {

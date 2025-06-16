@@ -27,66 +27,127 @@ func NewNetguardServiceServer(service *services.NetguardService) *NetguardServic
 	}
 }
 
+// convertSyncOp преобразует proto SyncOp в models.SyncOp
+func convertSyncOp(protoSyncOp netguardpb.SyncOp) models.SyncOp {
+	return models.ProtoToSyncOp(int32(protoSyncOp))
+}
+
+// convertSyncOpToPB преобразует models.SyncOp в proto SyncOp
+func convertSyncOpToPB(syncOp models.SyncOp) netguardpb.SyncOp {
+	return netguardpb.SyncOp(models.SyncOpToProto(syncOp))
+}
+
 func (s *NetguardServiceServer) Sync(ctx context.Context, req *netguardpb.SyncReq) (*emptypb.Empty, error) {
-	// Convert services
-	servicesList := make([]models.Service, 0, len(req.Services))
-	for _, svc := range req.Services {
-		servicesList = append(servicesList, convertService(svc))
-	}
+	// Преобразуем тип операции из proto в модель
+	syncOp := convertSyncOp(req.SyncOp)
 
-	// Convert service aliases
-	serviceAliasesList := make([]models.ServiceAlias, 0, len(req.ServiceAliases))
-	for _, svcAlias := range req.ServiceAliases {
-		serviceAliasesList = append(serviceAliasesList, convertServiceAlias(svcAlias))
-	}
+	// Обрабатываем разные типы субъектов
+	var err error
+	switch subject := req.Subject.(type) {
+	case *netguardpb.SyncReq_Services:
+		if subject.Services == nil || len(subject.Services.Services) == 0 {
+			return &emptypb.Empty{}, nil
+		}
 
-	// Convert address groups
-	addressGroups := make([]models.AddressGroup, 0, len(req.AddressGroups))
-	for _, ag := range req.AddressGroups {
-		addressGroups = append(addressGroups, convertAddressGroup(ag))
-	}
+		// Конвертируем сервисы
+		services := make([]models.Service, 0, len(subject.Services.Services))
+		for _, svc := range subject.Services.Services {
+			services = append(services, convertService(svc))
+		}
 
-	// Convert address group bindings
-	bindings := make([]models.AddressGroupBinding, 0, len(req.AddressGroupBindings))
-	for _, b := range req.AddressGroupBindings {
-		bindings = append(bindings, convertAddressGroupBinding(b))
-	}
+		// Синхронизируем сервисы с указанной операцией
+		err = s.service.Sync(ctx, syncOp, services)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to sync services")
+		}
 
-	// Convert address group port mappings
-	mappings := make([]models.AddressGroupPortMapping, 0, len(req.AddressGroupPortMappings))
-	for _, m := range req.AddressGroupPortMappings {
-		mappings = append(mappings, convertAddressGroupPortMapping(m))
-	}
+	case *netguardpb.SyncReq_AddressGroups:
+		if subject.AddressGroups == nil || len(subject.AddressGroups.AddressGroups) == 0 {
+			return &emptypb.Empty{}, nil
+		}
 
-	// Convert rule s2s
-	rules := make([]models.RuleS2S, 0, len(req.RuleS2S))
-	for _, r := range req.RuleS2S {
-		rules = append(rules, convertRuleS2S(r))
-	}
+		// Конвертируем группы адресов
+		addressGroups := make([]models.AddressGroup, 0, len(subject.AddressGroups.AddressGroups))
+		for _, ag := range subject.AddressGroups.AddressGroups {
+			addressGroups = append(addressGroups, convertAddressGroup(ag))
+		}
 
-	// Sync data
-	if err := s.service.SyncServices(ctx, servicesList, ports.EmptyScope{}); err != nil {
-		return nil, errors.Wrap(err, "failed to sync services")
-	}
+		// Синхронизируем группы адресов с указанной операцией
+		err = s.service.Sync(ctx, syncOp, addressGroups)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to sync address groups")
+		}
 
-	if err := s.service.SyncServiceAliases(ctx, serviceAliasesList, ports.EmptyScope{}); err != nil {
-		return nil, errors.Wrap(err, "failed to sync service aliases")
-	}
+	case *netguardpb.SyncReq_AddressGroupBindings:
+		if subject.AddressGroupBindings == nil || len(subject.AddressGroupBindings.AddressGroupBindings) == 0 {
+			return &emptypb.Empty{}, nil
+		}
 
-	if err := s.service.SyncAddressGroups(ctx, addressGroups, ports.EmptyScope{}); err != nil {
-		return nil, errors.Wrap(err, "failed to sync address groups")
-	}
+		// Конвертируем привязки групп адресов
+		bindings := make([]models.AddressGroupBinding, 0, len(subject.AddressGroupBindings.AddressGroupBindings))
+		for _, b := range subject.AddressGroupBindings.AddressGroupBindings {
+			bindings = append(bindings, convertAddressGroupBinding(b))
+		}
 
-	if err := s.service.SyncAddressGroupBindings(ctx, bindings, ports.EmptyScope{}); err != nil {
-		return nil, errors.Wrap(err, "failed to sync address group bindings")
-	}
+		// Синхронизируем привязки групп адресов с указанной операцией
+		err = s.service.Sync(ctx, syncOp, bindings)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to sync address group bindings")
+		}
 
-	if err := s.service.SyncAddressGroupPortMappings(ctx, mappings, ports.EmptyScope{}); err != nil {
-		return nil, errors.Wrap(err, "failed to sync address group port mappings")
-	}
+	case *netguardpb.SyncReq_AddressGroupPortMappings:
+		if subject.AddressGroupPortMappings == nil || len(subject.AddressGroupPortMappings.AddressGroupPortMappings) == 0 {
+			return &emptypb.Empty{}, nil
+		}
 
-	if err := s.service.SyncRuleS2S(ctx, rules, ports.EmptyScope{}); err != nil {
-		return nil, errors.Wrap(err, "failed to sync rule s2s")
+		// Конвертируем маппинги портов групп адресов
+		mappings := make([]models.AddressGroupPortMapping, 0, len(subject.AddressGroupPortMappings.AddressGroupPortMappings))
+		for _, m := range subject.AddressGroupPortMappings.AddressGroupPortMappings {
+			mappings = append(mappings, convertAddressGroupPortMapping(m))
+		}
+
+		// Синхронизируем маппинги портов групп адресов с указанной операцией
+		err = s.service.Sync(ctx, syncOp, mappings)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to sync address group port mappings")
+		}
+
+	case *netguardpb.SyncReq_RuleS2S:
+		if subject.RuleS2S == nil || len(subject.RuleS2S.RuleS2S) == 0 {
+			return &emptypb.Empty{}, nil
+		}
+
+		// Конвертируем правила s2s
+		rules := make([]models.RuleS2S, 0, len(subject.RuleS2S.RuleS2S))
+		for _, r := range subject.RuleS2S.RuleS2S {
+			rules = append(rules, convertRuleS2S(r))
+		}
+
+		// Синхронизируем правила s2s с указанной операцией
+		err = s.service.Sync(ctx, syncOp, rules)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to sync rule s2s")
+		}
+
+	case *netguardpb.SyncReq_ServiceAliases:
+		if subject.ServiceAliases == nil || len(subject.ServiceAliases.ServiceAliases) == 0 {
+			return &emptypb.Empty{}, nil
+		}
+
+		// Конвертируем алиасы сервисов
+		aliases := make([]models.ServiceAlias, 0, len(subject.ServiceAliases.ServiceAliases))
+		for _, a := range subject.ServiceAliases.ServiceAliases {
+			aliases = append(aliases, convertServiceAlias(a))
+		}
+
+		// Синхронизируем алиасы сервисов с указанной операцией
+		err = s.service.Sync(ctx, syncOp, aliases)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to sync service aliases")
+		}
+
+	default:
+		return nil, errors.New("subject not specified")
 	}
 
 	return &emptypb.Empty{}, nil

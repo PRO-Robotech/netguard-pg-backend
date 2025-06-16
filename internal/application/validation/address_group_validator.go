@@ -2,31 +2,16 @@ package validation
 
 import (
 	"context"
-	"netguard-pg-backend/internal/domain/models"
-	"netguard-pg-backend/internal/domain/ports"
 
 	"github.com/pkg/errors"
+	"netguard-pg-backend/internal/domain/models"
 )
 
 // ValidateExists checks if an address group exists
 func (v *AddressGroupValidator) ValidateExists(ctx context.Context, id models.ResourceIdentifier) error {
-	exists := false
-	err := v.reader.ListAddressGroups(ctx, func(group models.AddressGroup) error {
-		if group.Key() == id.Key() {
-			exists = true
-		}
-		return nil
-	}, ports.NewResourceIdentifierScope(id))
-
-	if err != nil {
-		return errors.Wrap(err, "failed to check address group existence")
-	}
-
-	if !exists {
-		return NewEntityNotFoundError("address_group", id.Key())
-	}
-
-	return nil
+	return v.BaseValidator.ValidateExists(ctx, id, func(entity interface{}) string {
+		return entity.(models.AddressGroup).Key()
+	})
 }
 
 // ValidateReferences checks if all references in an address group are valid
@@ -39,6 +24,13 @@ func (v *AddressGroupValidator) ValidateReferences(ctx context.Context, group mo
 // ValidateForCreation validates an address group before creation
 func (v *AddressGroupValidator) ValidateForCreation(ctx context.Context, group models.AddressGroup) error {
 	return v.ValidateReferences(ctx, group)
+}
+
+// ValidateForUpdate validates an address group before update
+func (v *AddressGroupValidator) ValidateForUpdate(ctx context.Context, oldGroup, newGroup models.AddressGroup) error {
+	// For address groups, the validation for update is the same as for creation
+	// We might add specific update validation rules in the future if needed
+	return v.ValidateReferences(ctx, newGroup)
 }
 
 // CheckDependencies checks if there are dependencies before deleting an address group

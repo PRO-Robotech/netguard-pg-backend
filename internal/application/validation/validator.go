@@ -3,6 +3,7 @@ package validation
 import (
 	"context"
 
+	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 )
 
@@ -56,72 +57,120 @@ func (v *DependencyValidator) GetAddressGroupPortMappingValidator() *AddressGrou
 
 // ServiceValidator provides methods for validating services
 type ServiceValidator struct {
-	reader ports.Reader
+	reader        ports.Reader
+	BaseValidator *BaseValidator
 }
 
 // NewServiceValidator creates a new service validator
 func NewServiceValidator(reader ports.Reader) *ServiceValidator {
+	listFunction := func(ctx context.Context, consume func(entity interface{}) error, scope ports.Scope) error {
+		return reader.ListServices(ctx, func(service models.Service) error {
+			return consume(service)
+		}, scope)
+	}
+
 	return &ServiceValidator{
-		reader: reader,
+		reader:        reader,
+		BaseValidator: NewBaseValidator(reader, "service", listFunction),
 	}
 }
 
 // AddressGroupValidator provides methods for validating address groups
 type AddressGroupValidator struct {
-	reader ports.Reader
+	reader        ports.Reader
+	BaseValidator *BaseValidator
 }
 
 // NewAddressGroupValidator creates a new address group validator
 func NewAddressGroupValidator(reader ports.Reader) *AddressGroupValidator {
+	listFunction := func(ctx context.Context, consume func(entity interface{}) error, scope ports.Scope) error {
+		return reader.ListAddressGroups(ctx, func(group models.AddressGroup) error {
+			return consume(group)
+		}, scope)
+	}
+
 	return &AddressGroupValidator{
-		reader: reader,
+		reader:        reader,
+		BaseValidator: NewBaseValidator(reader, "address_group", listFunction),
 	}
 }
 
 // AddressGroupBindingValidator provides methods for validating address group bindings
 type AddressGroupBindingValidator struct {
-	reader ports.Reader
+	reader        ports.Reader
+	BaseValidator *BaseValidator
 }
 
 // NewAddressGroupBindingValidator creates a new address group binding validator
 func NewAddressGroupBindingValidator(reader ports.Reader) *AddressGroupBindingValidator {
+	listFunction := func(ctx context.Context, consume func(entity interface{}) error, scope ports.Scope) error {
+		return reader.ListAddressGroupBindings(ctx, func(binding models.AddressGroupBinding) error {
+			return consume(binding)
+		}, scope)
+	}
+
 	return &AddressGroupBindingValidator{
-		reader: reader,
+		reader:        reader,
+		BaseValidator: NewBaseValidator(reader, "address_group_binding", listFunction),
 	}
 }
 
 // ServiceAliasValidator provides methods for validating service aliases
 type ServiceAliasValidator struct {
-	reader ports.Reader
+	reader        ports.Reader
+	BaseValidator *BaseValidator
 }
 
 // NewServiceAliasValidator creates a new service alias validator
 func NewServiceAliasValidator(reader ports.Reader) *ServiceAliasValidator {
+	listFunction := func(ctx context.Context, consume func(entity interface{}) error, scope ports.Scope) error {
+		return reader.ListServiceAliases(ctx, func(alias models.ServiceAlias) error {
+			return consume(alias)
+		}, scope)
+	}
+
 	return &ServiceAliasValidator{
-		reader: reader,
+		reader:        reader,
+		BaseValidator: NewBaseValidator(reader, "service_alias", listFunction),
 	}
 }
 
 // RuleS2SValidator provides methods for validating rule s2s
 type RuleS2SValidator struct {
-	reader ports.Reader
+	reader        ports.Reader
+	BaseValidator *BaseValidator
 }
 
 // NewRuleS2SValidator creates a new rule s2s validator
 func NewRuleS2SValidator(reader ports.Reader) *RuleS2SValidator {
+	listFunction := func(ctx context.Context, consume func(entity interface{}) error, scope ports.Scope) error {
+		return reader.ListRuleS2S(ctx, func(rule models.RuleS2S) error {
+			return consume(rule)
+		}, scope)
+	}
+
 	return &RuleS2SValidator{
-		reader: reader,
+		reader:        reader,
+		BaseValidator: NewBaseValidator(reader, "rule_s2s", listFunction),
 	}
 }
 
 // AddressGroupPortMappingValidator provides methods for validating address group port mappings
 type AddressGroupPortMappingValidator struct {
-	reader ports.Reader
+	reader        ports.Reader
+	BaseValidator *BaseValidator
 }
 
 // NewAddressGroupPortMappingValidator creates a new address group port mapping validator
 func NewAddressGroupPortMappingValidator(reader ports.Reader) *AddressGroupPortMappingValidator {
+	listFunction := func(ctx context.Context, consume func(entity interface{}) error, scope ports.Scope) error {
+		return reader.ListAddressGroupPortMappings(ctx, func(mapping models.AddressGroupPortMapping) error {
+			return consume(mapping)
+		}, scope)
+	}
+
 	return &AddressGroupPortMappingValidator{
-		reader: reader,
+		reader:        reader,
+		BaseValidator: NewBaseValidator(reader, "address_group_port_mapping", listFunction),
 	}
 }

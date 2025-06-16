@@ -2,32 +2,18 @@ package validation
 
 import (
 	"context"
+	"fmt"
 
 	"netguard-pg-backend/internal/domain/models"
-	"netguard-pg-backend/internal/domain/ports"
 
 	"github.com/pkg/errors"
 )
 
 // ValidateExists checks if an address group binding exists
 func (v *AddressGroupBindingValidator) ValidateExists(ctx context.Context, id models.ResourceIdentifier) error {
-	exists := false
-	err := v.reader.ListAddressGroupBindings(ctx, func(binding models.AddressGroupBinding) error {
-		if binding.Key() == id.Key() {
-			exists = true
-		}
-		return nil
-	}, ports.NewResourceIdentifierScope(id))
-
-	if err != nil {
-		return errors.Wrap(err, "failed to check address group binding existence")
-	}
-
-	if !exists {
-		return NewEntityNotFoundError("address_group_binding", id.Key())
-	}
-
-	return nil
+	return v.BaseValidator.ValidateExists(ctx, id, func(entity interface{}) string {
+		return entity.(models.AddressGroupBinding).Key()
+	})
 }
 
 // ValidateReferences checks if all references in an address group binding are valid
@@ -49,4 +35,24 @@ func (v *AddressGroupBindingValidator) ValidateReferences(ctx context.Context, b
 // ValidateForCreation validates an address group binding before creation
 func (v *AddressGroupBindingValidator) ValidateForCreation(ctx context.Context, binding models.AddressGroupBinding) error {
 	return v.ValidateReferences(ctx, binding)
+}
+
+// ValidateForUpdate validates an address group binding before update
+func (v *AddressGroupBindingValidator) ValidateForUpdate(ctx context.Context, oldBinding, newBinding models.AddressGroupBinding) error {
+	// Validate references
+	if err := v.ValidateReferences(ctx, newBinding); err != nil {
+		return err
+	}
+
+	// Check that service reference hasn't changed
+	if oldBinding.ServiceRef.Key() != newBinding.ServiceRef.Key() {
+		return fmt.Errorf("cannot change service reference after creation")
+	}
+
+	// Check that address group reference hasn't changed
+	if oldBinding.AddressGroupRef.Key() != newBinding.AddressGroupRef.Key() {
+		return fmt.Errorf("cannot change address group reference after creation")
+	}
+
+	return nil
 }

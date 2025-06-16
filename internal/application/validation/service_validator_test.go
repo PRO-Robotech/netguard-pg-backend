@@ -43,9 +43,9 @@ func TestServiceValidator_ValidateExists(t *testing.T) {
 func TestServiceValidator_CheckDependencies(t *testing.T) {
 	// Create a mock reader with no dependencies
 	mockReader := &MockReaderForServiceValidator{
-		serviceID:      "test-service",
-		hasAliases:     false,
-		hasBindings:    false,
+		serviceID:   "test-service",
+		hasAliases:  false,
+		hasBindings: false,
 	}
 
 	validator := validation.NewServiceValidator(mockReader)
@@ -89,6 +89,11 @@ type MockReaderForServiceValidator struct {
 	serviceID     string
 	hasAliases    bool
 	hasBindings   bool
+
+	// Дополнительные поля для тестирования новых методов
+	addressGroups            map[string]models.AddressGroup
+	addressGroupPortMappings map[string]models.AddressGroupPortMapping
+	services                 map[string]models.Service
 }
 
 func (m *MockReaderForServiceValidator) Close() error {
@@ -154,11 +159,29 @@ func (m *MockReaderForServiceValidator) GetSyncStatus(ctx context.Context) (*mod
 }
 
 func (m *MockReaderForServiceValidator) GetServiceByID(ctx context.Context, id models.ResourceIdentifier) (*models.Service, error) {
-	return nil, nil
+	if m.services == nil {
+		return nil, validation.NewEntityNotFoundError("service", id.Key())
+	}
+
+	service, ok := m.services[id.Key()]
+	if !ok {
+		return nil, validation.NewEntityNotFoundError("service", id.Key())
+	}
+
+	return &service, nil
 }
 
 func (m *MockReaderForServiceValidator) GetAddressGroupByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroup, error) {
-	return nil, nil
+	if m.addressGroups == nil {
+		return nil, validation.NewEntityNotFoundError("address_group", id.Key())
+	}
+
+	ag, ok := m.addressGroups[id.Key()]
+	if !ok {
+		return nil, validation.NewEntityNotFoundError("address_group", id.Key())
+	}
+
+	return &ag, nil
 }
 
 func (m *MockReaderForServiceValidator) GetAddressGroupBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBinding, error) {
@@ -166,7 +189,16 @@ func (m *MockReaderForServiceValidator) GetAddressGroupBindingByID(ctx context.C
 }
 
 func (m *MockReaderForServiceValidator) GetAddressGroupPortMappingByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupPortMapping, error) {
-	return nil, nil
+	if m.addressGroupPortMappings == nil {
+		return nil, validation.NewEntityNotFoundError("address_group_port_mapping", id.Key())
+	}
+
+	agpm, ok := m.addressGroupPortMappings[id.Key()]
+	if !ok {
+		return nil, validation.NewEntityNotFoundError("address_group_port_mapping", id.Key())
+	}
+
+	return &agpm, nil
 }
 
 func (m *MockReaderForServiceValidator) GetRuleS2SByID(ctx context.Context, id models.ResourceIdentifier) (*models.RuleS2S, error) {
@@ -175,4 +207,283 @@ func (m *MockReaderForServiceValidator) GetRuleS2SByID(ctx context.Context, id m
 
 func (m *MockReaderForServiceValidator) GetServiceAliasByID(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error) {
 	return nil, nil
+}
+
+// Вспомогательные методы для настройки мока
+
+// InitMockData инициализирует структуры данных мока
+func (m *MockReaderForServiceValidator) InitMockData() {
+	if m.services == nil {
+		m.services = make(map[string]models.Service)
+	}
+	if m.addressGroups == nil {
+		m.addressGroups = make(map[string]models.AddressGroup)
+	}
+	if m.addressGroupPortMappings == nil {
+		m.addressGroupPortMappings = make(map[string]models.AddressGroupPortMapping)
+	}
+}
+
+// AddService добавляет сервис в мок
+func (m *MockReaderForServiceValidator) AddService(service models.Service) {
+	m.InitMockData()
+	m.services[service.Key()] = service
+}
+
+// AddAddressGroup добавляет адресную группу в мок
+func (m *MockReaderForServiceValidator) AddAddressGroup(ag models.AddressGroup) {
+	m.InitMockData()
+	m.addressGroups[ag.Key()] = ag
+}
+
+// AddAddressGroupPortMapping добавляет маппинг портов адресной группы в мок
+func (m *MockReaderForServiceValidator) AddAddressGroupPortMapping(agpm models.AddressGroupPortMapping) {
+	m.InitMockData()
+	m.addressGroupPortMappings[agpm.Key()] = agpm
+}
+
+// TestServiceValidator_ValidateNoDuplicatePorts тестирует метод ValidateNoDuplicatePorts
+func TestServiceValidator_ValidateNoDuplicatePorts(t *testing.T) {
+	mockReader := &MockReaderForServiceValidator{}
+	validator := validation.NewServiceValidator(mockReader)
+
+	tests := []struct {
+		name         string
+		ingressPorts []models.IngressPort
+		expectError  bool
+	}{
+		{
+			name: "No duplicate ports",
+			ingressPorts: []models.IngressPort{
+				{Protocol: models.TCP, Port: "80"},
+				{Protocol: models.TCP, Port: "443"},
+				{Protocol: models.UDP, Port: "53"},
+			},
+			expectError: false,
+		},
+		{
+			name: "Duplicate TCP ports",
+			ingressPorts: []models.IngressPort{
+				{Protocol: models.TCP, Port: "80"},
+				{Protocol: models.TCP, Port: "80"},
+			},
+			expectError: true,
+		},
+		{
+			name: "Overlapping TCP port ranges",
+			ingressPorts: []models.IngressPort{
+				{Protocol: models.TCP, Port: "80-100"},
+				{Protocol: models.TCP, Port: "90-110"},
+			},
+			expectError: true,
+		},
+		{
+			name: "Same port different protocols",
+			ingressPorts: []models.IngressPort{
+				{Protocol: models.TCP, Port: "80"},
+				{Protocol: models.UDP, Port: "80"},
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validator.ValidateNoDuplicatePorts(tt.ingressPorts)
+			if tt.expectError && err == nil {
+				t.Errorf("Expected error for ports %v, but got nil", tt.ingressPorts)
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("Unexpected error for ports %v: %v", tt.ingressPorts, err)
+			}
+		})
+	}
+}
+
+// TestServiceValidator_ValidateForCreation тестирует обновленный метод ValidateForCreation
+func TestServiceValidator_ValidateForCreation(t *testing.T) {
+	ctx := context.Background()
+	mockReader := &MockReaderForServiceValidator{}
+	mockReader.InitMockData()
+
+	// Создаем AddressGroup
+	ag := models.AddressGroup{
+		SelfRef: models.NewSelfRef(models.NewResourceIdentifier("test-ag")),
+	}
+	mockReader.AddAddressGroup(ag)
+
+	// Создаем AddressGroupPortMapping
+	agpm := models.AddressGroupPortMapping{
+		SelfRef:     models.NewSelfRef(models.NewResourceIdentifier("test-ag")),
+		AccessPorts: make(map[models.ServiceRef]models.ServicePorts),
+	}
+
+	// Добавляем существующий сервис с портом 80 TCP
+	existingService := models.Service{
+		SelfRef: models.NewSelfRef(models.NewResourceIdentifier("existing-service")),
+		IngressPorts: []models.IngressPort{
+			{Protocol: models.TCP, Port: "80"},
+		},
+	}
+	mockReader.AddService(existingService)
+
+	// Добавляем порты существующего сервиса в AddressGroupPortMapping
+	servicePorts := models.ServicePorts{
+		Ports: models.ProtocolPorts{
+			models.TCP: []models.PortRange{{Start: 80, End: 80}},
+		},
+	}
+	agpm.AccessPorts[models.NewServiceRef("existing-service")] = servicePorts
+	mockReader.AddAddressGroupPortMapping(agpm)
+
+	validator := validation.NewServiceValidator(mockReader)
+
+	tests := []struct {
+		name        string
+		service     models.Service
+		expectError bool
+	}{
+		{
+			name: "Valid service with non-overlapping ports",
+			service: models.Service{
+				SelfRef: models.NewSelfRef(models.NewResourceIdentifier("test-service")),
+				IngressPorts: []models.IngressPort{
+					{Protocol: models.TCP, Port: "443"},
+				},
+				AddressGroups: []models.AddressGroupRef{
+					{ResourceIdentifier: models.NewResourceIdentifier("test-ag")},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Service with overlapping ports",
+			service: models.Service{
+				SelfRef: models.NewSelfRef(models.NewResourceIdentifier("test-service-2")),
+				IngressPorts: []models.IngressPort{
+					{Protocol: models.TCP, Port: "80"},
+				},
+				AddressGroups: []models.AddressGroupRef{
+					{ResourceIdentifier: models.NewResourceIdentifier("test-ag")},
+				},
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validator.ValidateForCreation(ctx, tt.service)
+			if tt.expectError && err == nil {
+				t.Errorf("Expected error for service %v, but got nil", tt.service)
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("Unexpected error for service %v: %v", tt.service, err)
+			}
+		})
+	}
+}
+
+// TestServiceValidator_ValidateForUpdate тестирует метод ValidateForUpdate
+func TestServiceValidator_ValidateForUpdate(t *testing.T) {
+	ctx := context.Background()
+	mockReader := &MockReaderForServiceValidator{}
+	mockReader.InitMockData()
+
+	// Создаем AddressGroup
+	ag := models.AddressGroup{
+		SelfRef: models.NewSelfRef(models.NewResourceIdentifier("test-ag")),
+	}
+	mockReader.AddAddressGroup(ag)
+
+	// Создаем AddressGroupPortMapping
+	agpm := models.AddressGroupPortMapping{
+		SelfRef:     models.NewSelfRef(models.NewResourceIdentifier("test-ag")),
+		AccessPorts: make(map[models.ServiceRef]models.ServicePorts),
+	}
+
+	// Добавляем существующий сервис с портом 80 TCP
+	existingService := models.Service{
+		SelfRef: models.NewSelfRef(models.NewResourceIdentifier("existing-service")),
+		IngressPorts: []models.IngressPort{
+			{Protocol: models.TCP, Port: "80"},
+		},
+	}
+	mockReader.AddService(existingService)
+
+	// Добавляем сервис, который будем обновлять
+	oldService := models.Service{
+		SelfRef: models.NewSelfRef(models.NewResourceIdentifier("test-service")),
+		IngressPorts: []models.IngressPort{
+			{Protocol: models.TCP, Port: "443"},
+		},
+		AddressGroups: []models.AddressGroupRef{
+			{ResourceIdentifier: models.NewResourceIdentifier("test-ag")},
+		},
+	}
+	mockReader.AddService(oldService)
+
+	// Добавляем порты сервисов в AddressGroupPortMapping
+	existingServicePorts := models.ServicePorts{
+		Ports: models.ProtocolPorts{
+			models.TCP: []models.PortRange{{Start: 80, End: 80}},
+		},
+	}
+	agpm.AccessPorts[models.NewServiceRef("existing-service")] = existingServicePorts
+
+	oldServicePorts := models.ServicePorts{
+		Ports: models.ProtocolPorts{
+			models.TCP: []models.PortRange{{Start: 443, End: 443}},
+		},
+	}
+	agpm.AccessPorts[models.NewServiceRef("test-service")] = oldServicePorts
+
+	mockReader.AddAddressGroupPortMapping(agpm)
+
+	validator := validation.NewServiceValidator(mockReader)
+
+	tests := []struct {
+		name        string
+		newService  models.Service
+		expectError bool
+	}{
+		{
+			name: "Valid update with non-overlapping ports",
+			newService: models.Service{
+				SelfRef: models.NewSelfRef(models.NewResourceIdentifier("test-service")),
+				IngressPorts: []models.IngressPort{
+					{Protocol: models.TCP, Port: "8080"},
+				},
+				AddressGroups: []models.AddressGroupRef{
+					{ResourceIdentifier: models.NewResourceIdentifier("test-ag")},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Update with overlapping ports",
+			newService: models.Service{
+				SelfRef: models.NewSelfRef(models.NewResourceIdentifier("test-service")),
+				IngressPorts: []models.IngressPort{
+					{Protocol: models.TCP, Port: "80"},
+				},
+				AddressGroups: []models.AddressGroupRef{
+					{ResourceIdentifier: models.NewResourceIdentifier("test-ag")},
+				},
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validator.ValidateForUpdate(ctx, oldService, tt.newService)
+			if tt.expectError && err == nil {
+				t.Errorf("Expected error for service update %v, but got nil", tt.newService)
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("Unexpected error for service update %v: %v", tt.newService, err)
+			}
+		})
+	}
 }

@@ -84,6 +84,39 @@ type IngressPort struct {
 	Description string
 }
 
+// SyncOp определяет тип операции синхронизации
+type SyncOp int
+
+const (
+	// SyncOpNoOp - операция не определена
+	SyncOpNoOp SyncOp = iota
+
+	// SyncOpFullSync - полная синхронизация (удаление + вставка + обновление)
+	SyncOpFullSync
+
+	// SyncOpUpsert - только вставка и обновление
+	SyncOpUpsert
+
+	// SyncOpDelete - только удаление
+	SyncOpDelete
+)
+
+// String возвращает строковое представление SyncOp
+func (s SyncOp) String() string {
+	switch s {
+	case SyncOpNoOp:
+		return "NoOp"
+	case SyncOpFullSync:
+		return "FullSync"
+	case SyncOpUpsert:
+		return "Upsert"
+	case SyncOpDelete:
+		return "Delete"
+	default:
+		return "Unknown"
+	}
+}
+
 // SyncStatus represents the status of a synchronization operation
 type SyncStatus struct {
 	UpdatedAt time.Time

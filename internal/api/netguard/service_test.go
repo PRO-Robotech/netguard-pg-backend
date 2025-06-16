@@ -28,18 +28,23 @@ func TestSync(t *testing.T) {
 
 	// Create test request
 	req := &netguardpb.SyncReq{
-		Services: []*netguardpb.Service{
-			{
-				SelfRef: &netguardpb.ResourceIdentifier{
-					Name:      "web",
-					Namespace: "default",
-				},
-				Description: "Web service",
-				IngressPorts: []*netguardpb.IngressPort{
+		SyncOp: netguardpb.SyncOp_FullSync,
+		Subject: &netguardpb.SyncReq_Services{
+			Services: &netguardpb.SyncServices{
+				Services: []*netguardpb.Service{
 					{
-						Protocol:    commonpb.Networks_NetIP_TCP,
-						Port:        "80",
-						Description: "HTTP",
+						SelfRef: &netguardpb.ResourceIdentifier{
+							Name:      "web",
+							Namespace: "default",
+						},
+						Description: "Web service",
+						IngressPorts: []*netguardpb.IngressPort{
+							{
+								Protocol:    commonpb.Networks_NetIP_TCP,
+								Port:        "80",
+								Description: "HTTP",
+							},
+						},
 					},
 				},
 			},
@@ -75,6 +80,38 @@ func TestSync(t *testing.T) {
 
 	if foundServices[0].Name != "web" {
 		t.Errorf("Expected name 'web', got '%s'", foundServices[0].Name)
+	}
+}
+
+func TestConvertSyncOp(t *testing.T) {
+	tests := []struct {
+		name    string
+		protoOp netguardpb.SyncOp
+		modelOp models.SyncOp
+	}{
+		{"NoOp", netguardpb.SyncOp_NoOp, models.SyncOpNoOp},
+		{"FullSync", netguardpb.SyncOp_FullSync, models.SyncOpFullSync},
+		{"Upsert", netguardpb.SyncOp_Upsert, models.SyncOpUpsert},
+		{"Delete", netguardpb.SyncOp_Delete, models.SyncOpDelete},
+		{"Invalid", netguardpb.SyncOp(99), models.SyncOpFullSync}, // По умолчанию должен быть FullSync
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Test convertSyncOp (proto -> model)
+			modelOp := convertSyncOp(tt.protoOp)
+			if modelOp != tt.modelOp {
+				t.Errorf("convertSyncOp(%v) = %v, want %v", tt.protoOp, modelOp, tt.modelOp)
+			}
+
+			// Test convertSyncOpToPB (model -> proto)
+			if tt.name != "Invalid" { // Пропускаем тест для недопустимого значения
+				protoOp := convertSyncOpToPB(tt.modelOp)
+				if protoOp != tt.protoOp {
+					t.Errorf("convertSyncOpToPB(%v) = %v, want %v", tt.modelOp, protoOp, tt.protoOp)
+				}
+			}
+		})
 	}
 }
 

@@ -867,44 +867,107 @@
       },
       "title": "ServiceRef - reference to a service"
     },
-    "v1SyncReq": {
+    "v1SyncAddressGroupBindings": {
       "type": "object",
       "properties": {
-        "services": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1Service"
-          }
-        },
-        "addressGroups": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1AddressGroup"
-          }
-        },
         "addressGroupBindings": {
           "type": "array",
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1AddressGroupBinding"
           }
-        },
+        }
+      },
+      "title": "SyncAddressGroupBindings - subject of Address Group Bindings to sync"
+    },
+    "v1SyncAddressGroupPortMappings": {
+      "type": "object",
+      "properties": {
         "addressGroupPortMappings": {
           "type": "array",
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1AddressGroupPortMapping"
           }
+        }
+      },
+      "title": "SyncAddressGroupPortMappings - subject of Address Group Port Mappings to sync"
+    },
+    "v1SyncAddressGroups": {
+      "type": "object",
+      "properties": {
+        "addressGroups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1AddressGroup"
+          }
+        }
+      },
+      "title": "SyncAddressGroups - subject of Address Groups to sync"
+    },
+    "v1SyncOp": {
+      "type": "string",
+      "enum": [
+        "NoOp",
+        "FullSync",
+        "Upsert",
+        "Delete"
+      ],
+      "default": "NoOp",
+      "description": "- NoOp: NoOp - no operation defined (default)\n - FullSync: FullSync - Delete+Insert+Update operations (default)\n - Upsert: Upsert - Insert+Update operations\n - Delete: Delete - Delete operation",
+      "title": "SyncOp - sync operation type"
+    },
+    "v1SyncReq": {
+      "type": "object",
+      "properties": {
+        "syncOp": {
+          "$ref": "#/definitions/v1SyncOp",
+          "title": "Sync operation to apply"
         },
+        "services": {
+          "$ref": "#/definitions/v1SyncServices",
+          "title": "Subject of Services"
+        },
+        "addressGroups": {
+          "$ref": "#/definitions/v1SyncAddressGroups",
+          "title": "Subject of Address Groups"
+        },
+        "addressGroupBindings": {
+          "$ref": "#/definitions/v1SyncAddressGroupBindings",
+          "title": "Subject of Address Group Bindings"
+        },
+        "addressGroupPortMappings": {
+          "$ref": "#/definitions/v1SyncAddressGroupPortMappings",
+          "title": "Subject of Address Group Port Mappings"
+        },
+        "ruleS2s": {
+          "$ref": "#/definitions/v1SyncRuleS2S",
+          "title": "Subject of Rule S2S"
+        },
+        "serviceAliases": {
+          "$ref": "#/definitions/v1SyncServiceAliases",
+          "title": "Subject of Service Aliases"
+        }
+      },
+      "title": "SyncReq - request to sync"
+    },
+    "v1SyncRuleS2S": {
+      "type": "object",
+      "properties": {
         "ruleS2s": {
           "type": "array",
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1RuleS2S"
           }
-        },
+        }
+      },
+      "title": "SyncRuleS2S - subject of Rule S2S to sync"
+    },
+    "v1SyncServiceAliases": {
+      "type": "object",
+      "properties": {
         "serviceAliases": {
           "type": "array",
           "items": {
@@ -913,7 +976,20 @@
           }
         }
       },
-      "title": "SyncReq - request to sync"
+      "title": "SyncServiceAliases - subject of Service Aliases to sync"
+    },
+    "v1SyncServices": {
+      "type": "object",
+      "properties": {
+        "services": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Service"
+          }
+        }
+      },
+      "title": "SyncServices - subject of Services to sync"
     },
     "v1SyncStatusResp": {
       "type": "object",
