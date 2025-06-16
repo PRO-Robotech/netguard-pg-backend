@@ -83,6 +83,945 @@ func TestSync(t *testing.T) {
 	}
 }
 
+// TestSyncWithDifferentOperations tests the Sync method with different operations and entity types
+func TestSyncWithDifferentOperations(t *testing.T) {
+	// Test Services with different operations
+	t.Run("Services", func(t *testing.T) {
+		// Create in-memory registry for tests
+		registry := mem.NewRegistry()
+		defer registry.Close()
+
+		// Create service
+		service := services.NewNetguardService(registry)
+
+		// Create API server
+		server := NewNetguardServiceServer(service)
+
+		ctx := context.Background()
+
+		// Test FullSync operation
+		t.Run("FullSync", func(t *testing.T) {
+			// Create initial services
+			initialReq := &netguardpb.SyncReq{
+				SyncOp: netguardpb.SyncOp_FullSync,
+				Subject: &netguardpb.SyncReq_Services{
+					Services: &netguardpb.SyncServices{
+						Services: []*netguardpb.Service{
+							{
+								SelfRef: &netguardpb.ResourceIdentifier{
+									Name:      "web",
+									Namespace: "default",
+								},
+								Description: "Web service",
+								IngressPorts: []*netguardpb.IngressPort{
+									{
+										Protocol:    commonpb.Networks_NetIP_TCP,
+										Port:        "80",
+										Description: "HTTP",
+									},
+								},
+							},
+							{
+								SelfRef: &netguardpb.ResourceIdentifier{
+									Name:      "db",
+									Namespace: "default",
+								},
+								Description: "Database service",
+								IngressPorts: []*netguardpb.IngressPort{
+									{
+										Protocol:    commonpb.Networks_NetIP_TCP,
+										Port:        "5432",
+										Description: "PostgreSQL",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			// Call Sync method with initial data
+			_, err := server.Sync(ctx, initialReq)
+			if err != nil {
+				t.Fatalf("Failed to sync initial services: %v", err)
+			}
+
+			// Verify initial data
+			reader, err := registry.Reader(ctx)
+			if err != nil {
+				t.Fatalf("Failed to get reader: %v", err)
+			}
+			defer reader.Close()
+
+			var foundServices []models.Service
+			err = reader.ListServices(ctx, func(service models.Service) error {
+				foundServices = append(foundServices, service)
+				return nil
+			}, ports.EmptyScope{})
+			if err != nil {
+				t.Fatalf("Failed to list services: %v", err)
+			}
+
+			if len(foundServices) != 2 {
+				t.Fatalf("Expected 2 services after initial sync, got %d", len(foundServices))
+			}
+
+			// Create new services for FullSync
+			fullSyncReq := &netguardpb.SyncReq{
+				SyncOp: netguardpb.SyncOp_FullSync,
+				Subject: &netguardpb.SyncReq_Services{
+					Services: &netguardpb.SyncServices{
+						Services: []*netguardpb.Service{
+							{
+								SelfRef: &netguardpb.ResourceIdentifier{
+									Name:      "api",
+									Namespace: "default",
+								},
+								Description: "API service",
+								IngressPorts: []*netguardpb.IngressPort{
+									{
+										Protocol:    commonpb.Networks_NetIP_TCP,
+										Port:        "8080",
+										Description: "API",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			// Call Sync method with FullSync
+			_, err = server.Sync(ctx, fullSyncReq)
+			if err != nil {
+				t.Fatalf("Failed to sync with FullSync: %v", err)
+			}
+
+			// Verify that old data was replaced with new data
+			reader, err = registry.Reader(ctx)
+			if err != nil {
+				t.Fatalf("Failed to get reader: %v", err)
+			}
+			defer reader.Close()
+
+			foundServices = nil
+			err = reader.ListServices(ctx, func(service models.Service) error {
+				foundServices = append(foundServices, service)
+				return nil
+			}, ports.EmptyScope{})
+			if err != nil {
+				t.Fatalf("Failed to list services: %v", err)
+			}
+
+			if len(foundServices) != 1 {
+				t.Fatalf("Expected 1 service after FullSync, got %d", len(foundServices))
+			}
+
+			if foundServices[0].Name != "api" {
+				t.Errorf("Expected service name 'api', got '%s'", foundServices[0].Name)
+			}
+		})
+
+		// Test Upsert operation
+		t.Run("Upsert", func(t *testing.T) {
+			// Create a new registry for this test
+			registry := mem.NewRegistry()
+			defer registry.Close()
+
+			// Create service
+			service := services.NewNetguardService(registry)
+
+			// Create API server
+			server := NewNetguardServiceServer(service)
+
+			// Create initial services
+			initialReq := &netguardpb.SyncReq{
+				SyncOp: netguardpb.SyncOp_FullSync,
+				Subject: &netguardpb.SyncReq_Services{
+					Services: &netguardpb.SyncServices{
+						Services: []*netguardpb.Service{
+							{
+								SelfRef: &netguardpb.ResourceIdentifier{
+									Name:      "web",
+									Namespace: "default",
+								},
+								Description: "Web service",
+								IngressPorts: []*netguardpb.IngressPort{
+									{
+										Protocol:    commonpb.Networks_NetIP_TCP,
+										Port:        "80",
+										Description: "HTTP",
+									},
+								},
+							},
+							{
+								SelfRef: &netguardpb.ResourceIdentifier{
+									Name:      "db",
+									Namespace: "default",
+								},
+								Description: "Database service",
+								IngressPorts: []*netguardpb.IngressPort{
+									{
+										Protocol:    commonpb.Networks_NetIP_TCP,
+										Port:        "5432",
+										Description: "PostgreSQL",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			// Call Sync method with initial data
+			_, err := server.Sync(ctx, initialReq)
+			if err != nil {
+				t.Fatalf("Failed to sync initial services: %v", err)
+			}
+
+			// Create services for Upsert
+			upsertReq := &netguardpb.SyncReq{
+				SyncOp: netguardpb.SyncOp_Upsert,
+				Subject: &netguardpb.SyncReq_Services{
+					Services: &netguardpb.SyncServices{
+						Services: []*netguardpb.Service{
+							{
+								SelfRef: &netguardpb.ResourceIdentifier{
+									Name:      "web",
+									Namespace: "default",
+								},
+								Description: "Updated web service",
+								IngressPorts: []*netguardpb.IngressPort{
+									{
+										Protocol:    commonpb.Networks_NetIP_TCP,
+										Port:        "80",
+										Description: "HTTP",
+									},
+									{
+										Protocol:    commonpb.Networks_NetIP_TCP,
+										Port:        "443",
+										Description: "HTTPS",
+									},
+								},
+							},
+							{
+								SelfRef: &netguardpb.ResourceIdentifier{
+									Name:      "api",
+									Namespace: "default",
+								},
+								Description: "API service",
+								IngressPorts: []*netguardpb.IngressPort{
+									{
+										Protocol:    commonpb.Networks_NetIP_TCP,
+										Port:        "8080",
+										Description: "API",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			// Call Sync method with Upsert
+			_, err = server.Sync(ctx, upsertReq)
+			if err != nil {
+				t.Fatalf("Failed to sync with Upsert: %v", err)
+			}
+
+			// Verify that data was updated and added, but not deleted
+			reader, err := registry.Reader(ctx)
+			if err != nil {
+				t.Fatalf("Failed to get reader: %v", err)
+			}
+			defer reader.Close()
+
+			var foundServices []models.Service
+			err = reader.ListServices(ctx, func(service models.Service) error {
+				foundServices = append(foundServices, service)
+				return nil
+			}, ports.EmptyScope{})
+			if err != nil {
+				t.Fatalf("Failed to list services: %v", err)
+			}
+
+			if len(foundServices) != 3 {
+				t.Fatalf("Expected 3 services after Upsert, got %d", len(foundServices))
+			}
+
+			// Find web service and check if it was updated
+			var webService *models.Service
+			for i, service := range foundServices {
+				if service.Name == "web" {
+					webService = &foundServices[i]
+					break
+				}
+			}
+
+			if webService == nil {
+				t.Fatalf("Web service not found after Upsert")
+			}
+
+			if webService.Description != "Updated web service" {
+				t.Errorf("Expected web service description 'Updated web service', got '%s'", webService.Description)
+			}
+
+			if len(webService.IngressPorts) != 2 {
+				t.Errorf("Expected 2 ingress ports for web service, got %d", len(webService.IngressPorts))
+			}
+		})
+
+		// Test Delete operation
+		t.Run("Delete", func(t *testing.T) {
+			// Create a new registry for this test
+			registry := mem.NewRegistry()
+			defer registry.Close()
+
+			// Create service
+			service := services.NewNetguardService(registry)
+
+			// Create API server
+			server := NewNetguardServiceServer(service)
+
+			// Create initial services
+			initialReq := &netguardpb.SyncReq{
+				SyncOp: netguardpb.SyncOp_FullSync,
+				Subject: &netguardpb.SyncReq_Services{
+					Services: &netguardpb.SyncServices{
+						Services: []*netguardpb.Service{
+							{
+								SelfRef: &netguardpb.ResourceIdentifier{
+									Name:      "web",
+									Namespace: "default",
+								},
+								Description: "Web service",
+								IngressPorts: []*netguardpb.IngressPort{
+									{
+										Protocol:    commonpb.Networks_NetIP_TCP,
+										Port:        "80",
+										Description: "HTTP",
+									},
+								},
+							},
+							{
+								SelfRef: &netguardpb.ResourceIdentifier{
+									Name:      "db",
+									Namespace: "default",
+								},
+								Description: "Database service",
+								IngressPorts: []*netguardpb.IngressPort{
+									{
+										Protocol:    commonpb.Networks_NetIP_TCP,
+										Port:        "5432",
+										Description: "PostgreSQL",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			// Call Sync method with initial data
+			_, err := server.Sync(ctx, initialReq)
+			if err != nil {
+				t.Fatalf("Failed to sync initial services: %v", err)
+			}
+
+			// Create services for Delete
+			deleteReq := &netguardpb.SyncReq{
+				SyncOp: netguardpb.SyncOp_Delete,
+				Subject: &netguardpb.SyncReq_Services{
+					Services: &netguardpb.SyncServices{
+						Services: []*netguardpb.Service{
+							{
+								SelfRef: &netguardpb.ResourceIdentifier{
+									Name:      "web",
+									Namespace: "default",
+								},
+							},
+						},
+					},
+				},
+			}
+
+			// Call Sync method with Delete
+			_, err = server.Sync(ctx, deleteReq)
+			if err != nil {
+				t.Fatalf("Failed to sync with Delete: %v", err)
+			}
+
+			// Verify that data was deleted
+			reader, err := registry.Reader(ctx)
+			if err != nil {
+				t.Fatalf("Failed to get reader: %v", err)
+			}
+			defer reader.Close()
+
+			var foundServices []models.Service
+			err = reader.ListServices(ctx, func(service models.Service) error {
+				foundServices = append(foundServices, service)
+				return nil
+			}, ports.EmptyScope{})
+			if err != nil {
+				t.Fatalf("Failed to list services: %v", err)
+			}
+
+			if len(foundServices) != 1 {
+				t.Fatalf("Expected 1 service after Delete, got %d", len(foundServices))
+			}
+
+			if foundServices[0].Name != "db" {
+				t.Errorf("Expected service name 'db', got '%s'", foundServices[0].Name)
+			}
+		})
+	})
+
+	// Test AddressGroups with different operations
+	t.Run("AddressGroups", func(t *testing.T) {
+		// Create in-memory registry for tests
+		registry := mem.NewRegistry()
+		defer registry.Close()
+
+		// Create service
+		service := services.NewNetguardService(registry)
+
+		// Create API server
+		server := NewNetguardServiceServer(service)
+
+		ctx := context.Background()
+
+		// Test FullSync operation
+		t.Run("FullSync", func(t *testing.T) {
+			// Create initial address groups
+			initialReq := &netguardpb.SyncReq{
+				SyncOp: netguardpb.SyncOp_FullSync,
+				Subject: &netguardpb.SyncReq_AddressGroups{
+					AddressGroups: &netguardpb.SyncAddressGroups{
+						AddressGroups: []*netguardpb.AddressGroup{
+							{
+								SelfRef: &netguardpb.ResourceIdentifier{
+									Name:      "internal",
+									Namespace: "default",
+								},
+								Description: "Internal network",
+								Addresses:   []string{"10.0.0.0/8", "172.16.0.0/12"},
+							},
+							{
+								SelfRef: &netguardpb.ResourceIdentifier{
+									Name:      "external",
+									Namespace: "default",
+								},
+								Description: "External network",
+								Addresses:   []string{"0.0.0.0/0"},
+							},
+						},
+					},
+				},
+			}
+
+			// Call Sync method with initial data
+			_, err := server.Sync(ctx, initialReq)
+			if err != nil {
+				t.Fatalf("Failed to sync initial address groups: %v", err)
+			}
+
+			// Verify initial data
+			reader, err := registry.Reader(ctx)
+			if err != nil {
+				t.Fatalf("Failed to get reader: %v", err)
+			}
+			defer reader.Close()
+
+			var foundAddressGroups []models.AddressGroup
+			err = reader.ListAddressGroups(ctx, func(addressGroup models.AddressGroup) error {
+				foundAddressGroups = append(foundAddressGroups, addressGroup)
+				return nil
+			}, ports.EmptyScope{})
+			if err != nil {
+				t.Fatalf("Failed to list address groups: %v", err)
+			}
+
+			if len(foundAddressGroups) != 2 {
+				t.Fatalf("Expected 2 address groups after initial sync, got %d", len(foundAddressGroups))
+			}
+
+			// Create new address groups for FullSync
+			fullSyncReq := &netguardpb.SyncReq{
+				SyncOp: netguardpb.SyncOp_FullSync,
+				Subject: &netguardpb.SyncReq_AddressGroups{
+					AddressGroups: &netguardpb.SyncAddressGroups{
+						AddressGroups: []*netguardpb.AddressGroup{
+							{
+								SelfRef: &netguardpb.ResourceIdentifier{
+									Name:      "dmz",
+									Namespace: "default",
+								},
+								Description: "DMZ network",
+								Addresses:   []string{"192.168.1.0/24"},
+							},
+						},
+					},
+				},
+			}
+
+			// Call Sync method with FullSync
+			_, err = server.Sync(ctx, fullSyncReq)
+			if err != nil {
+				t.Fatalf("Failed to sync with FullSync: %v", err)
+			}
+
+			// Verify that old data was replaced with new data
+			reader, err = registry.Reader(ctx)
+			if err != nil {
+				t.Fatalf("Failed to get reader: %v", err)
+			}
+			defer reader.Close()
+
+			foundAddressGroups = nil
+			err = reader.ListAddressGroups(ctx, func(addressGroup models.AddressGroup) error {
+				foundAddressGroups = append(foundAddressGroups, addressGroup)
+				return nil
+			}, ports.EmptyScope{})
+			if err != nil {
+				t.Fatalf("Failed to list address groups: %v", err)
+			}
+
+			if len(foundAddressGroups) != 1 {
+				t.Fatalf("Expected 1 address group after FullSync, got %d", len(foundAddressGroups))
+			}
+
+			if foundAddressGroups[0].Name != "dmz" {
+				t.Errorf("Expected address group name 'dmz', got '%s'", foundAddressGroups[0].Name)
+			}
+		})
+
+		// Test Upsert operation
+		t.Run("Upsert", func(t *testing.T) {
+			// Create a new registry for this test
+			registry := mem.NewRegistry()
+			defer registry.Close()
+
+			// Create service
+			service := services.NewNetguardService(registry)
+
+			// Create API server
+			server := NewNetguardServiceServer(service)
+
+			// Create initial address groups
+			initialReq := &netguardpb.SyncReq{
+				SyncOp: netguardpb.SyncOp_FullSync,
+				Subject: &netguardpb.SyncReq_AddressGroups{
+					AddressGroups: &netguardpb.SyncAddressGroups{
+						AddressGroups: []*netguardpb.AddressGroup{
+							{
+								SelfRef: &netguardpb.ResourceIdentifier{
+									Name:      "internal",
+									Namespace: "default",
+								},
+								Description: "Internal network",
+								Addresses:   []string{"10.0.0.0/8", "172.16.0.0/12"},
+							},
+							{
+								SelfRef: &netguardpb.ResourceIdentifier{
+									Name:      "external",
+									Namespace: "default",
+								},
+								Description: "External network",
+								Addresses:   []string{"0.0.0.0/0"},
+							},
+						},
+					},
+				},
+			}
+
+			// Call Sync method with initial data
+			_, err := server.Sync(ctx, initialReq)
+			if err != nil {
+				t.Fatalf("Failed to sync initial address groups: %v", err)
+			}
+
+			// Create address groups for Upsert
+			upsertReq := &netguardpb.SyncReq{
+				SyncOp: netguardpb.SyncOp_Upsert,
+				Subject: &netguardpb.SyncReq_AddressGroups{
+					AddressGroups: &netguardpb.SyncAddressGroups{
+						AddressGroups: []*netguardpb.AddressGroup{
+							{
+								SelfRef: &netguardpb.ResourceIdentifier{
+									Name:      "internal",
+									Namespace: "default",
+								},
+								Description: "Updated internal network",
+								Addresses:   []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"},
+							},
+							{
+								SelfRef: &netguardpb.ResourceIdentifier{
+									Name:      "dmz",
+									Namespace: "default",
+								},
+								Description: "DMZ network",
+								Addresses:   []string{"192.168.1.0/24"},
+							},
+						},
+					},
+				},
+			}
+
+			// Call Sync method with Upsert
+			_, err = server.Sync(ctx, upsertReq)
+			if err != nil {
+				t.Fatalf("Failed to sync with Upsert: %v", err)
+			}
+
+			// Verify that data was updated and added, but not deleted
+			reader, err := registry.Reader(ctx)
+			if err != nil {
+				t.Fatalf("Failed to get reader: %v", err)
+			}
+			defer reader.Close()
+
+			var foundAddressGroups []models.AddressGroup
+			err = reader.ListAddressGroups(ctx, func(addressGroup models.AddressGroup) error {
+				foundAddressGroups = append(foundAddressGroups, addressGroup)
+				return nil
+			}, ports.EmptyScope{})
+			if err != nil {
+				t.Fatalf("Failed to list address groups: %v", err)
+			}
+
+			if len(foundAddressGroups) != 3 {
+				t.Fatalf("Expected 3 address groups after Upsert, got %d", len(foundAddressGroups))
+			}
+
+			// Find internal address group and check if it was updated
+			var internalAddressGroup *models.AddressGroup
+			for i, addressGroup := range foundAddressGroups {
+				if addressGroup.Name == "internal" {
+					internalAddressGroup = &foundAddressGroups[i]
+					break
+				}
+			}
+
+			if internalAddressGroup == nil {
+				t.Fatalf("Internal address group not found after Upsert")
+			}
+
+			if internalAddressGroup.Description != "Updated internal network" {
+				t.Errorf("Expected address group description 'Updated internal network', got '%s'", internalAddressGroup.Description)
+			}
+
+			if len(internalAddressGroup.Addresses) != 3 {
+				t.Errorf("Expected 3 addresses for internal address group, got %d", len(internalAddressGroup.Addresses))
+			}
+		})
+
+		// Test Delete operation
+		t.Run("Delete", func(t *testing.T) {
+			// Create a new registry for this test
+			registry := mem.NewRegistry()
+			defer registry.Close()
+
+			// Create service
+			service := services.NewNetguardService(registry)
+
+			// Create API server
+			server := NewNetguardServiceServer(service)
+
+			// Create initial address groups
+			initialReq := &netguardpb.SyncReq{
+				SyncOp: netguardpb.SyncOp_FullSync,
+				Subject: &netguardpb.SyncReq_AddressGroups{
+					AddressGroups: &netguardpb.SyncAddressGroups{
+						AddressGroups: []*netguardpb.AddressGroup{
+							{
+								SelfRef: &netguardpb.ResourceIdentifier{
+									Name:      "internal",
+									Namespace: "default",
+								},
+								Description: "Internal network",
+								Addresses:   []string{"10.0.0.0/8", "172.16.0.0/12"},
+							},
+							{
+								SelfRef: &netguardpb.ResourceIdentifier{
+									Name:      "external",
+									Namespace: "default",
+								},
+								Description: "External network",
+								Addresses:   []string{"0.0.0.0/0"},
+							},
+						},
+					},
+				},
+			}
+
+			// Call Sync method with initial data
+			_, err := server.Sync(ctx, initialReq)
+			if err != nil {
+				t.Fatalf("Failed to sync initial address groups: %v", err)
+			}
+
+			// Create address groups for Delete
+			deleteReq := &netguardpb.SyncReq{
+				SyncOp: netguardpb.SyncOp_Delete,
+				Subject: &netguardpb.SyncReq_AddressGroups{
+					AddressGroups: &netguardpb.SyncAddressGroups{
+						AddressGroups: []*netguardpb.AddressGroup{
+							{
+								SelfRef: &netguardpb.ResourceIdentifier{
+									Name:      "internal",
+									Namespace: "default",
+								},
+							},
+						},
+					},
+				},
+			}
+
+			// Call Sync method with Delete
+			_, err = server.Sync(ctx, deleteReq)
+			if err != nil {
+				t.Fatalf("Failed to sync with Delete: %v", err)
+			}
+
+			// Verify that data was deleted
+			reader, err := registry.Reader(ctx)
+			if err != nil {
+				t.Fatalf("Failed to get reader: %v", err)
+			}
+			defer reader.Close()
+
+			var foundAddressGroups []models.AddressGroup
+			err = reader.ListAddressGroups(ctx, func(addressGroup models.AddressGroup) error {
+				foundAddressGroups = append(foundAddressGroups, addressGroup)
+				return nil
+			}, ports.EmptyScope{})
+			if err != nil {
+				t.Fatalf("Failed to list address groups: %v", err)
+			}
+
+			if len(foundAddressGroups) != 1 {
+				t.Fatalf("Expected 1 address group after Delete, got %d", len(foundAddressGroups))
+			}
+
+			if foundAddressGroups[0].Name != "external" {
+				t.Errorf("Expected address group name 'external', got '%s'", foundAddressGroups[0].Name)
+			}
+		})
+	})
+
+	// Test AddressGroupBindings with different operations
+	t.Run("AddressGroupBindings", func(t *testing.T) {
+		// Create in-memory registry for tests
+		registry := mem.NewRegistry()
+		defer registry.Close()
+
+		// Create service
+		service := services.NewNetguardService(registry)
+
+		// Create API server
+		server := NewNetguardServiceServer(service)
+
+		ctx := context.Background()
+
+		// First, create services and address groups that will be referenced by bindings
+		servicesReq := &netguardpb.SyncReq{
+			SyncOp: netguardpb.SyncOp_FullSync,
+			Subject: &netguardpb.SyncReq_Services{
+				Services: &netguardpb.SyncServices{
+					Services: []*netguardpb.Service{
+						{
+							SelfRef: &netguardpb.ResourceIdentifier{
+								Name:      "web",
+								Namespace: "default",
+							},
+							Description: "Web service",
+						},
+						{
+							SelfRef: &netguardpb.ResourceIdentifier{
+								Name:      "api",
+								Namespace: "default",
+							},
+							Description: "API service",
+						},
+					},
+				},
+			},
+		}
+
+		// Call Sync method to create services
+		_, err := server.Sync(ctx, servicesReq)
+		if err != nil {
+			t.Fatalf("Failed to sync services: %v", err)
+		}
+
+		addressGroupsReq := &netguardpb.SyncReq{
+			SyncOp: netguardpb.SyncOp_FullSync,
+			Subject: &netguardpb.SyncReq_AddressGroups{
+				AddressGroups: &netguardpb.SyncAddressGroups{
+					AddressGroups: []*netguardpb.AddressGroup{
+						{
+							SelfRef: &netguardpb.ResourceIdentifier{
+								Name:      "internal",
+								Namespace: "default",
+							},
+							Description: "Internal network",
+						},
+						{
+							SelfRef: &netguardpb.ResourceIdentifier{
+								Name:      "external",
+								Namespace: "default",
+							},
+							Description: "External network",
+						},
+					},
+				},
+			},
+		}
+
+		// Call Sync method to create address groups
+		_, err = server.Sync(ctx, addressGroupsReq)
+		if err != nil {
+			t.Fatalf("Failed to sync address groups: %v", err)
+		}
+
+		// Test FullSync operation
+		t.Run("FullSync", func(t *testing.T) {
+			// Create initial bindings
+			initialReq := &netguardpb.SyncReq{
+				SyncOp: netguardpb.SyncOp_FullSync,
+				Subject: &netguardpb.SyncReq_AddressGroupBindings{
+					AddressGroupBindings: &netguardpb.SyncAddressGroupBindings{
+						AddressGroupBindings: []*netguardpb.AddressGroupBinding{
+							{
+								SelfRef: &netguardpb.ResourceIdentifier{
+									Name:      "web-internal",
+									Namespace: "default",
+								},
+								ServiceRef: &netguardpb.ServiceRef{
+									Identifier: &netguardpb.ResourceIdentifier{
+										Name:      "web",
+										Namespace: "default",
+									},
+								},
+								AddressGroupRef: &netguardpb.AddressGroupRef{
+									Identifier: &netguardpb.ResourceIdentifier{
+										Name:      "internal",
+										Namespace: "default",
+									},
+								},
+							},
+							{
+								SelfRef: &netguardpb.ResourceIdentifier{
+									Name:      "web-external",
+									Namespace: "default",
+								},
+								ServiceRef: &netguardpb.ServiceRef{
+									Identifier: &netguardpb.ResourceIdentifier{
+										Name:      "web",
+										Namespace: "default",
+									},
+								},
+								AddressGroupRef: &netguardpb.AddressGroupRef{
+									Identifier: &netguardpb.ResourceIdentifier{
+										Name:      "external",
+										Namespace: "default",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			// Call Sync method with initial data
+			_, err := server.Sync(ctx, initialReq)
+			if err != nil {
+				t.Fatalf("Failed to sync initial bindings: %v", err)
+			}
+
+			// Verify initial data
+			reader, err := registry.Reader(ctx)
+			if err != nil {
+				t.Fatalf("Failed to get reader: %v", err)
+			}
+			defer reader.Close()
+
+			var foundBindings []models.AddressGroupBinding
+			err = reader.ListAddressGroupBindings(ctx, func(binding models.AddressGroupBinding) error {
+				foundBindings = append(foundBindings, binding)
+				return nil
+			}, ports.EmptyScope{})
+			if err != nil {
+				t.Fatalf("Failed to list bindings: %v", err)
+			}
+
+			if len(foundBindings) != 2 {
+				t.Fatalf("Expected 2 bindings after initial sync, got %d", len(foundBindings))
+			}
+
+			// Create new bindings for FullSync
+			fullSyncReq := &netguardpb.SyncReq{
+				SyncOp: netguardpb.SyncOp_FullSync,
+				Subject: &netguardpb.SyncReq_AddressGroupBindings{
+					AddressGroupBindings: &netguardpb.SyncAddressGroupBindings{
+						AddressGroupBindings: []*netguardpb.AddressGroupBinding{
+							{
+								SelfRef: &netguardpb.ResourceIdentifier{
+									Name:      "api-internal",
+									Namespace: "default",
+								},
+								ServiceRef: &netguardpb.ServiceRef{
+									Identifier: &netguardpb.ResourceIdentifier{
+										Name:      "api",
+										Namespace: "default",
+									},
+								},
+								AddressGroupRef: &netguardpb.AddressGroupRef{
+									Identifier: &netguardpb.ResourceIdentifier{
+										Name:      "internal",
+										Namespace: "default",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			// Call Sync method with FullSync
+			_, err = server.Sync(ctx, fullSyncReq)
+			if err != nil {
+				t.Fatalf("Failed to sync with FullSync: %v", err)
+			}
+
+			// Verify that old data was replaced with new data
+			reader, err = registry.Reader(ctx)
+			if err != nil {
+				t.Fatalf("Failed to get reader: %v", err)
+			}
+			defer reader.Close()
+
+			foundBindings = nil
+			err = reader.ListAddressGroupBindings(ctx, func(binding models.AddressGroupBinding) error {
+				foundBindings = append(foundBindings, binding)
+				return nil
+			}, ports.EmptyScope{})
+			if err != nil {
+				t.Fatalf("Failed to list bindings: %v", err)
+			}
+
+			if len(foundBindings) != 1 {
+				t.Fatalf("Expected 1 binding after FullSync, got %d", len(foundBindings))
+			}
+
+			if foundBindings[0].Name != "api-internal" {
+				t.Errorf("Expected binding name 'api-internal', got '%s'", foundBindings[0].Name)
+			}
+		})
+	})
+}
+
 func TestConvertSyncOp(t *testing.T) {
 	tests := []struct {
 		name    string
