@@ -94,7 +94,7 @@ func TestIntegration_AddressGroupBindingReferences(t *testing.T) {
 	defer reader.Close()
 
 	// Create test data
-	serviceID := models.NewResourceIdentifier("test-service")
+	serviceID := models.NewResourceIdentifier("test-service", models.WithNamespace("test-ns"))
 	service := models.Service{
 		SelfRef: models.SelfRef{ResourceIdentifier: serviceID},
 	}
@@ -104,7 +104,7 @@ func TestIntegration_AddressGroupBindingReferences(t *testing.T) {
 		SelfRef: models.SelfRef{ResourceIdentifier: addressGroupID},
 	}
 
-	bindingID := models.NewResourceIdentifier("test-binding")
+	bindingID := models.NewResourceIdentifier("test-binding", models.WithNamespace("test-ns"))
 	binding := models.AddressGroupBinding{
 		SelfRef:         models.SelfRef{ResourceIdentifier: bindingID},
 		ServiceRef:      models.ServiceRef{ResourceIdentifier: serviceID},
@@ -134,10 +134,21 @@ func TestIntegration_AddressGroupBindingReferences(t *testing.T) {
 	bindingValidator := validator.GetAddressGroupBindingValidator()
 
 	// Act & Assert
-	// Test ValidateReferences with valid references
+	// Test ValidateReferences with valid references and matching namespace
 	err = bindingValidator.ValidateReferences(context.Background(), binding)
 	if err != nil {
-		t.Errorf("Expected no error for valid references, got %v", err)
+		t.Errorf("Expected no error for valid references and matching namespace, got %v", err)
+	}
+
+	// Test ValidateReferences with mismatched namespace
+	bindingWithMismatchedNS := models.AddressGroupBinding{
+		SelfRef:         models.SelfRef{ResourceIdentifier: models.NewResourceIdentifier("test-binding", models.WithNamespace("other-ns"))},
+		ServiceRef:      models.ServiceRef{ResourceIdentifier: serviceID},
+		AddressGroupRef: models.AddressGroupRef{ResourceIdentifier: addressGroupID},
+	}
+	err = bindingValidator.ValidateReferences(context.Background(), bindingWithMismatchedNS)
+	if err == nil {
+		t.Error("Expected error for mismatched namespaces, got nil")
 	}
 
 	// Test ValidateReferences with invalid service reference
@@ -215,7 +226,7 @@ func TestIntegration_AddressGroupBindingValidateForCreation(t *testing.T) {
 
 	// Act & Assert
 	// Test ValidateForCreation with valid binding
-	err = bindingValidator.ValidateForCreation(context.Background(), binding)
+	err = bindingValidator.ValidateForCreation(context.Background(), &binding)
 	if err != nil {
 		t.Errorf("Expected no error for valid binding, got %v", err)
 	}
@@ -226,7 +237,7 @@ func TestIntegration_AddressGroupBindingValidateForCreation(t *testing.T) {
 		ServiceRef:      models.ServiceRef{ResourceIdentifier: models.NewResourceIdentifier("non-existent-service")},
 		AddressGroupRef: models.AddressGroupRef{ResourceIdentifier: addressGroupID},
 	}
-	err = bindingValidator.ValidateForCreation(context.Background(), invalidBinding)
+	err = bindingValidator.ValidateForCreation(context.Background(), &invalidBinding)
 	if err == nil {
 		t.Error("Expected error for invalid binding, got nil")
 	}

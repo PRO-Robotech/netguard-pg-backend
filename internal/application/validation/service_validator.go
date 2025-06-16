@@ -152,6 +152,47 @@ func (v *ServiceValidator) ValidateForCreation(ctx context.Context, service mode
 	return nil
 }
 
+// CheckBindingsPortOverlaps проверяет перекрытие портов во всех AddressGroupPortMappings,
+// которые ссылаются на сервис через AddressGroupBindings
+func (v *ServiceValidator) CheckBindingsPortOverlaps(ctx context.Context, service models.Service) error {
+	// Находим все AddressGroupBindings, которые ссылаются на этот сервис
+	var addressGroupIDs []models.ResourceIdentifier
+	err := v.reader.ListAddressGroupBindings(ctx, func(binding models.AddressGroupBinding) error {
+		if binding.ServiceRef.Key() == service.Key() {
+			addressGroupIDs = append(addressGroupIDs, binding.AddressGroupRef.ResourceIdentifier)
+		}
+		return nil
+	}, nil)
+
+	if err != nil {
+		return errors.Wrap(err, "failed to list address group bindings")
+	}
+
+	// Проверяем перекрытие портов в каждом AddressGroupPortMapping
+	for _, agID := range addressGroupIDs {
+		portMapping, err := v.reader.GetAddressGroupPortMappingByID(ctx, agID)
+		if err != nil {
+			// Если портмаппинг не найден, пропускаем проверку для этой AddressGroup
+			continue
+		}
+
+		// Создаем временную копию портмаппинга для проверки
+		tempMapping := *portMapping
+
+		// Удаляем текущий сервис из временной копии
+		if tempMapping.AccessPorts != nil {
+			delete(tempMapping.AccessPorts, models.ServiceRef{ResourceIdentifier: service.ResourceIdentifier})
+		}
+
+		// Проверяем перекрытие портов
+		if err := CheckPortOverlaps(service, tempMapping); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // ValidateForUpdate валидирует сервис перед обновлением
 func (v *ServiceValidator) ValidateForUpdate(ctx context.Context, oldService, newService models.Service) error {
 	// Проверяем ссылки
@@ -168,10 +209,17 @@ func (v *ServiceValidator) ValidateForUpdate(ctx context.Context, oldService, ne
 	portsChanged := !reflect.DeepEqual(oldService.IngressPorts, newService.IngressPorts)
 	addressGroupsChanged := !reflect.DeepEqual(oldService.AddressGroups, newService.AddressGroups)
 
-	// Если порты или AddressGroups изменились, проверяем на перекрытие портов
 	if portsChanged || addressGroupsChanged {
+		// Проверяем перекрытие портов в AddressGroups, к которым привязан сервис
 		if err := v.CheckPortOverlaps(ctx, newService); err != nil {
 			return err
+		}
+
+		// Дополнительно проверяем все AddressGroupBindings, которые ссылаются на этот сервис
+		if portsChanged {
+			if err := v.CheckBindingsPortOverlaps(ctx, newService); err != nil {
+				return err
+			}
 		}
 	}
 

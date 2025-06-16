@@ -2,6 +2,7 @@ package validation_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"netguard-pg-backend/internal/application/validation"
@@ -43,24 +44,41 @@ func TestServiceAliasValidator_ValidateExists(t *testing.T) {
 func TestServiceAliasValidator_ValidateReferences(t *testing.T) {
 	// Create a mock reader with valid references
 	mockReader := &MockReaderForServiceAliasValidator{
-		serviceExists: true,
-		serviceID:     "test-service",
+		serviceExists:    true,
+		serviceID:        "test-service",
+		serviceNamespace: "test-ns",
 	}
 
 	validator := validation.NewServiceAliasValidator(mockReader)
+
+	// Test when all references are valid and namespace matches
 	alias := models.ServiceAlias{
 		SelfRef: models.SelfRef{
-			ResourceIdentifier: models.NewResourceIdentifier("test-alias"),
+			ResourceIdentifier: models.NewResourceIdentifier("test-alias", models.WithNamespace("test-ns")),
 		},
 		ServiceRef: models.ServiceRef{
 			ResourceIdentifier: models.NewResourceIdentifier("test-service"),
 		},
 	}
 
-	// Test when all references are valid
 	err := validator.ValidateReferences(context.Background(), alias)
 	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
+		t.Errorf("Expected no error for matching namespaces, got %v", err)
+	}
+
+	// Test when namespace doesn't match
+	aliasMismatchedNS := models.ServiceAlias{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: models.NewResourceIdentifier("test-alias", models.WithNamespace("other-ns")),
+		},
+		ServiceRef: models.ServiceRef{
+			ResourceIdentifier: models.NewResourceIdentifier("test-service"),
+		},
+	}
+
+	err = validator.ValidateReferences(context.Background(), aliasMismatchedNS)
+	if err == nil {
+		t.Error("Expected error for mismatched namespaces, got nil")
 	}
 
 	// Test when service reference is invalid
@@ -71,11 +89,80 @@ func TestServiceAliasValidator_ValidateReferences(t *testing.T) {
 	}
 }
 
+// TestServiceAliasValidator_ValidateForCreation tests the ValidateForCreation method of ServiceAliasValidator
+func TestServiceAliasValidator_ValidateForCreation(t *testing.T) {
+	// Create a mock reader with valid references
+	mockReader := &MockReaderForServiceAliasValidator{
+		serviceExists:    true,
+		serviceID:        "test-service",
+		serviceNamespace: "test-ns",
+	}
+
+	validator := validation.NewServiceAliasValidator(mockReader)
+
+	// Test when namespace is not specified (should be auto-filled)
+	aliasWithoutNS := &models.ServiceAlias{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: models.NewResourceIdentifier("test-alias"),
+		},
+		ServiceRef: models.ServiceRef{
+			ResourceIdentifier: models.NewResourceIdentifier("test-service"),
+		},
+	}
+
+	err := validator.ValidateForCreation(context.Background(), aliasWithoutNS)
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+
+	// Check that namespace was set from service
+	if aliasWithoutNS.Namespace != "test-ns" {
+		t.Errorf("Expected namespace to be 'test-ns', got '%s'", aliasWithoutNS.Namespace)
+	}
+
+	// Test when namespace is specified and matches service namespace
+	aliasWithMatchingNS := &models.ServiceAlias{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: models.NewResourceIdentifier("test-alias", models.WithNamespace("test-ns")),
+		},
+		ServiceRef: models.ServiceRef{
+			ResourceIdentifier: models.NewResourceIdentifier("test-service"),
+		},
+	}
+
+	err = validator.ValidateForCreation(context.Background(), aliasWithMatchingNS)
+	if err != nil {
+		t.Errorf("Expected no error for matching namespaces, got %v", err)
+	}
+
+	// Test when namespace is specified but doesn't match service namespace
+	aliasWithMismatchedNS := &models.ServiceAlias{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: models.NewResourceIdentifier("test-alias", models.WithNamespace("other-ns")),
+		},
+		ServiceRef: models.ServiceRef{
+			ResourceIdentifier: models.NewResourceIdentifier("test-service"),
+		},
+	}
+
+	err = validator.ValidateForCreation(context.Background(), aliasWithMismatchedNS)
+	if err == nil {
+		t.Error("Expected error for mismatched namespaces, got nil")
+	}
+
+	// Test when service reference is invalid
+	mockReader.serviceExists = false
+	err = validator.ValidateForCreation(context.Background(), aliasWithoutNS)
+	if err == nil {
+		t.Error("Expected error for invalid service reference, got nil")
+	}
+}
+
 // TestServiceAliasValidator_CheckDependencies tests the CheckDependencies method of ServiceAliasValidator
 func TestServiceAliasValidator_CheckDependencies(t *testing.T) {
 	// Create a mock reader with no dependencies
 	mockReader := &MockReaderForServiceAliasValidator{
-		aliasID:   "test-alias",
+		aliasID:     "test-alias",
 		hasRuleRefs: false,
 	}
 
@@ -103,11 +190,12 @@ func TestServiceAliasValidator_CheckDependencies(t *testing.T) {
 
 // MockReaderForServiceAliasValidator is a specialized mock for testing ServiceAliasValidator
 type MockReaderForServiceAliasValidator struct {
-	aliasExists   bool
-	aliasID       string
-	serviceExists bool
-	serviceID     string
-	hasRuleRefs   bool
+	aliasExists      bool
+	aliasID          string
+	serviceExists    bool
+	serviceID        string
+	serviceNamespace string
+	hasRuleRefs      bool
 }
 
 func (m *MockReaderForServiceAliasValidator) Close() error {
@@ -173,7 +261,14 @@ func (m *MockReaderForServiceAliasValidator) GetSyncStatus(ctx context.Context) 
 }
 
 func (m *MockReaderForServiceAliasValidator) GetServiceByID(ctx context.Context, id models.ResourceIdentifier) (*models.Service, error) {
-	return nil, nil
+	if m.serviceExists && id.Key() == m.serviceID {
+		return &models.Service{
+			SelfRef: models.SelfRef{
+				ResourceIdentifier: models.NewResourceIdentifier(m.serviceID, models.WithNamespace(m.serviceNamespace)),
+			},
+		}, nil
+	}
+	return nil, fmt.Errorf("service not found")
 }
 
 func (m *MockReaderForServiceAliasValidator) GetAddressGroupByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroup, error) {

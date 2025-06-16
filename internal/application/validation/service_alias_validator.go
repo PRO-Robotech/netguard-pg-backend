@@ -23,12 +23,45 @@ func (v *ServiceAliasValidator) ValidateReferences(ctx context.Context, alias mo
 		return errors.Wrapf(err, "invalid service reference in service alias %s", alias.Key())
 	}
 
+	// Получаем сервис для проверки namespace
+	service, err := v.reader.GetServiceByID(ctx, alias.ServiceRef.ResourceIdentifier)
+	if err != nil {
+		return errors.Wrapf(err, "failed to get service for namespace validation in service alias %s", alias.Key())
+	}
+
+	// Проверяем соответствие namespace, если он указан в алиасе
+	if alias.Namespace != "" && alias.Namespace != service.Namespace {
+		return fmt.Errorf("service alias namespace '%s' must match service namespace '%s'",
+			alias.Namespace, service.Namespace)
+	}
+
 	return nil
 }
 
 // ValidateForCreation validates a service alias before creation
-func (v *ServiceAliasValidator) ValidateForCreation(ctx context.Context, alias models.ServiceAlias) error {
-	return v.ValidateReferences(ctx, alias)
+func (v *ServiceAliasValidator) ValidateForCreation(ctx context.Context, alias *models.ServiceAlias) error {
+	// Проверяем существование сервиса
+	serviceValidator := NewServiceValidator(v.reader)
+	if err := serviceValidator.ValidateExists(ctx, alias.ServiceRef.ResourceIdentifier); err != nil {
+		return errors.Wrapf(err, "invalid service reference in service alias %s", alias.Key())
+	}
+
+	// Получаем сервис для проверки и/или установки namespace
+	service, err := v.reader.GetServiceByID(ctx, alias.ServiceRef.ResourceIdentifier)
+	if err != nil {
+		return errors.Wrapf(err, "failed to get service for namespace validation in service alias %s", alias.Key())
+	}
+
+	// Если namespace не указан, берем его из сервиса
+	if alias.Namespace == "" {
+		alias.Namespace = service.Namespace
+	} else if alias.Namespace != service.Namespace {
+		// Если namespace указан, проверяем соответствие
+		return fmt.Errorf("service alias namespace '%s' must match service namespace '%s'",
+			alias.Namespace, service.Namespace)
+	}
+
+	return nil
 }
 
 // ValidateForUpdate validates a service alias before update

@@ -84,12 +84,12 @@ func TestIntegration_ServiceAliasReferences(t *testing.T) {
 	defer reader.Close()
 
 	// Create test data
-	serviceID := models.NewResourceIdentifier("test-service")
+	serviceID := models.NewResourceIdentifier("test-service", models.WithNamespace("test-ns"))
 	service := models.Service{
 		SelfRef: models.SelfRef{ResourceIdentifier: serviceID},
 	}
 
-	aliasID := models.NewResourceIdentifier("test-alias")
+	aliasID := models.NewResourceIdentifier("test-alias", models.WithNamespace("test-ns"))
 	alias := models.ServiceAlias{
 		SelfRef:    models.SelfRef{ResourceIdentifier: aliasID},
 		ServiceRef: models.ServiceRef{ResourceIdentifier: serviceID},
@@ -114,10 +114,24 @@ func TestIntegration_ServiceAliasReferences(t *testing.T) {
 	aliasValidator := validator.GetServiceAliasValidator()
 
 	// Act & Assert
-	// Test ValidateReferences with valid references
+	// Test ValidateReferences with valid references and matching namespace
 	err = aliasValidator.ValidateReferences(context.Background(), alias)
 	if err != nil {
-		t.Errorf("Expected no error for valid references, got %v", err)
+		t.Errorf("Expected no error for valid references and matching namespaces, got %v", err)
+	}
+
+	// Test ValidateReferences with mismatched namespace
+	aliasMismatchedNS := models.ServiceAlias{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: models.NewResourceIdentifier("test-alias", models.WithNamespace("other-ns")),
+		},
+		ServiceRef: models.ServiceRef{
+			ResourceIdentifier: serviceID,
+		},
+	}
+	err = aliasValidator.ValidateReferences(context.Background(), aliasMismatchedNS)
+	if err == nil {
+		t.Error("Expected error for mismatched namespaces, got nil")
 	}
 
 	// Test ValidateReferences with invalid service reference
@@ -142,15 +156,9 @@ func TestIntegration_ServiceAliasValidateForCreation(t *testing.T) {
 	defer reader.Close()
 
 	// Create test data
-	serviceID := models.NewResourceIdentifier("test-service")
+	serviceID := models.NewResourceIdentifier("test-service", models.WithNamespace("test-ns"))
 	service := models.Service{
 		SelfRef: models.SelfRef{ResourceIdentifier: serviceID},
-	}
-
-	aliasID := models.NewResourceIdentifier("test-alias")
-	alias := models.ServiceAlias{
-		SelfRef:    models.SelfRef{ResourceIdentifier: aliasID},
-		ServiceRef: models.ServiceRef{ResourceIdentifier: serviceID},
 	}
 
 	// Add data to repository
@@ -172,20 +180,69 @@ func TestIntegration_ServiceAliasValidateForCreation(t *testing.T) {
 	aliasValidator := validator.GetServiceAliasValidator()
 
 	// Act & Assert
-	// Test ValidateForCreation with valid alias
-	err = aliasValidator.ValidateForCreation(context.Background(), alias)
-	if err != nil {
-		t.Errorf("Expected no error for valid alias, got %v", err)
+	// Test when namespace is not specified (should be auto-filled)
+	aliasWithoutNS := &models.ServiceAlias{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: models.NewResourceIdentifier("test-alias"),
+		},
+		ServiceRef: models.ServiceRef{
+			ResourceIdentifier: serviceID,
+		},
 	}
 
-	// Test ValidateForCreation with invalid alias
-	invalidAlias := models.ServiceAlias{
-		SelfRef:    models.SelfRef{ResourceIdentifier: aliasID},
-		ServiceRef: models.ServiceRef{ResourceIdentifier: models.NewResourceIdentifier("non-existent-service")},
+	err = aliasValidator.ValidateForCreation(context.Background(), aliasWithoutNS)
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
 	}
+
+	// Check that namespace was set from service
+	if aliasWithoutNS.Namespace != "test-ns" {
+		t.Errorf("Expected namespace to be 'test-ns', got '%s'", aliasWithoutNS.Namespace)
+	}
+
+	// Test when namespace is specified and matches service namespace
+	aliasWithMatchingNS := &models.ServiceAlias{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: models.NewResourceIdentifier("test-alias-2", models.WithNamespace("test-ns")),
+		},
+		ServiceRef: models.ServiceRef{
+			ResourceIdentifier: serviceID,
+		},
+	}
+
+	err = aliasValidator.ValidateForCreation(context.Background(), aliasWithMatchingNS)
+	if err != nil {
+		t.Errorf("Expected no error for matching namespaces, got %v", err)
+	}
+
+	// Test when namespace is specified but doesn't match service namespace
+	aliasWithMismatchedNS := &models.ServiceAlias{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: models.NewResourceIdentifier("test-alias-3", models.WithNamespace("other-ns")),
+		},
+		ServiceRef: models.ServiceRef{
+			ResourceIdentifier: serviceID,
+		},
+	}
+
+	err = aliasValidator.ValidateForCreation(context.Background(), aliasWithMismatchedNS)
+	if err == nil {
+		t.Error("Expected error for mismatched namespaces, got nil")
+	}
+
+	// Test with invalid service reference
+	invalidAlias := &models.ServiceAlias{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: models.NewResourceIdentifier("test-alias-4"),
+		},
+		ServiceRef: models.ServiceRef{
+			ResourceIdentifier: models.NewResourceIdentifier("non-existent-service"),
+		},
+	}
+
 	err = aliasValidator.ValidateForCreation(context.Background(), invalidAlias)
 	if err == nil {
-		t.Error("Expected error for invalid alias, got nil")
+		t.Error("Expected error for invalid service reference, got nil")
 	}
 }
 

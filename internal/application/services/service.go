@@ -459,7 +459,10 @@ func (s *NetguardService) syncAddressGroupBindings(ctx context.Context, writer p
 		validator := validation.NewDependencyValidator(reader)
 		bindingValidator := validator.GetAddressGroupBindingValidator()
 
-		for _, binding := range bindings {
+		for i := range bindings {
+			// Use pointer to binding so we can modify it
+			binding := &bindings[i]
+
 			existingBinding, err := reader.GetAddressGroupBindingByID(ctx, binding.ResourceIdentifier)
 			if err == nil && syncOp != models.SyncOpDelete {
 				// Привязка существует - используем ValidateForUpdate
@@ -492,7 +495,74 @@ func (s *NetguardService) syncAddressGroupBindings(ctx context.Context, writer p
 		return errors.Wrap(err, "failed to sync address group bindings")
 	}
 
+	// Синхронизируем port mappings для каждого binding, если это не удаление
+	if syncOp != models.SyncOpDelete {
+		for _, binding := range bindings {
+			// Игнорируем ошибки при синхронизации port mappings, чтобы не блокировать основную операцию
+			_ = s.SyncAddressGroupPortMappings(ctx, binding)
+		}
+	}
+
 	if err := writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+
+	return nil
+}
+
+// SyncAddressGroupPortMappings обеспечивает синхронизацию port mapping для binding
+func (s *NetguardService) SyncAddressGroupPortMappings(ctx context.Context, binding models.AddressGroupBinding) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Получаем сервис для доступа к его портам
+	service, err := reader.GetServiceByID(ctx, binding.ServiceRef.ResourceIdentifier)
+	if err != nil {
+		return errors.Wrapf(err, "failed to get service for port mapping")
+	}
+
+	// Проверяем существующий port mapping для этой address group
+	portMapping, err := reader.GetAddressGroupPortMappingByID(ctx, binding.AddressGroupRef.ResourceIdentifier)
+
+	var updatedMapping models.AddressGroupPortMapping
+
+	if err != nil {
+		// Port mapping не существует - создаем новый
+		updatedMapping = *validation.CreateNewPortMapping(binding.AddressGroupRef.ResourceIdentifier, *service)
+	} else {
+		// Port mapping существует - обновляем его
+		updatedMapping = *validation.UpdatePortMapping(*portMapping, binding.ServiceRef, *service)
+
+		// Проверяем перекрытие портов
+		if err := validation.CheckPortOverlaps(*service, updatedMapping); err != nil {
+			return err
+		}
+	}
+
+	// Сохраняем port mapping
+	writer, err := s.registry.Writer(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get writer")
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	if err = writer.SyncAddressGroupPortMappings(
+		ctx,
+		[]models.AddressGroupPortMapping{updatedMapping},
+		ports.NewResourceIdentifierScope(updatedMapping.ResourceIdentifier),
+		ports.WithSyncOp(models.SyncOpUpsert),
+	); err != nil {
+		return errors.Wrap(err, "failed to sync address group port mappings")
+	}
+
+	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
 
@@ -512,7 +582,9 @@ func (s *NetguardService) SyncAddressGroupBindings(ctx context.Context, bindings
 	bindingValidator := validator.GetAddressGroupBindingValidator()
 
 	// Validate all bindings
-	for _, binding := range bindings {
+	for i := range bindings {
+		binding := &bindings[i]
+
 		// Check if binding exists
 		existingBinding, err := reader.GetAddressGroupBindingByID(ctx, binding.ResourceIdentifier)
 		if err == nil {
@@ -538,9 +610,18 @@ func (s *NetguardService) SyncAddressGroupBindings(ctx context.Context, bindings
 		}
 	}()
 
+	// Sync bindings
 	if err = writer.SyncAddressGroupBindings(ctx, bindings, scope, ports.WithSyncOp(models.SyncOpFullSync)); err != nil {
 		return errors.Wrap(err, "failed to sync address group bindings")
 	}
+
+	// Синхронизируем port mappings для каждого binding
+	for _, binding := range bindings {
+		if err := s.SyncAddressGroupPortMappings(ctx, binding); err != nil {
+			return err
+		}
+	}
+
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
@@ -600,8 +681,8 @@ func (s *NetguardService) syncAddressGroupPortMappings(ctx context.Context, writ
 	return nil
 }
 
-// SyncAddressGroupPortMappings syncs address group port mappings
-func (s *NetguardService) SyncAddressGroupPortMappings(ctx context.Context, mappings []models.AddressGroupPortMapping, scope ports.Scope) error {
+// SyncMultipleAddressGroupPortMappings syncs multiple address group port mappings
+func (s *NetguardService) SyncMultipleAddressGroupPortMappings(ctx context.Context, mappings []models.AddressGroupPortMapping, scope ports.Scope) error {
 	reader, err := s.registry.Reader(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get reader")
@@ -762,11 +843,14 @@ func (s *NetguardService) syncServiceAliases(ctx context.Context, writer ports.W
 		validator := validation.NewDependencyValidator(reader)
 		aliasValidator := validator.GetServiceAliasValidator()
 
-		for _, alias := range aliases {
+		for i := range aliases {
+			// Используем указатель на элемент слайса, чтобы изменения сохранились
+			alias := &aliases[i]
+
 			existingAlias, err := reader.GetServiceAliasByID(ctx, alias.ResourceIdentifier)
 			if err == nil && syncOp != models.SyncOpDelete {
 				// Алиас существует - используем ValidateForUpdate
-				if err := aliasValidator.ValidateForUpdate(ctx, *existingAlias, alias); err != nil {
+				if err := aliasValidator.ValidateForUpdate(ctx, *existingAlias, *alias); err != nil {
 					return err
 				}
 			} else if syncOp != models.SyncOpDelete {
@@ -815,12 +899,15 @@ func (s *NetguardService) SyncServiceAliases(ctx context.Context, aliases []mode
 	aliasValidator := validator.GetServiceAliasValidator()
 
 	// Validate all aliases
-	for _, alias := range aliases {
+	for i := range aliases {
+		// Используем указатель на элемент слайса, чтобы изменения сохранились
+		alias := &aliases[i]
+
 		// Check if alias exists
 		existingAlias, err := reader.GetServiceAliasByID(ctx, alias.ResourceIdentifier)
 		if err == nil {
 			// Alias exists - use ValidateForUpdate
-			if err := aliasValidator.ValidateForUpdate(ctx, *existingAlias, alias); err != nil {
+			if err := aliasValidator.ValidateForUpdate(ctx, *existingAlias, *alias); err != nil {
 				return err
 			}
 		} else {
@@ -1161,8 +1248,21 @@ func (s *NetguardService) DeleteAddressGroupsByIDs(ctx context.Context, ids []mo
 
 // DeleteAddressGroupBindingsByIDs deletes address group bindings by IDs
 func (s *NetguardService) DeleteAddressGroupBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier) error {
-	// Note: Address group bindings don't have dependencies, so we don't need to check for them
-	// However, we could add validation to ensure the bindings exist before deleting them
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Получаем bindings, которые будут удалены
+	var bindings []models.AddressGroupBinding
+	for _, id := range ids {
+		binding, err := reader.GetAddressGroupBindingByID(ctx, id)
+		if err != nil {
+			continue // Пропускаем, если binding не существует
+		}
+		bindings = append(bindings, *binding)
+	}
 
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
@@ -1174,9 +1274,53 @@ func (s *NetguardService) DeleteAddressGroupBindingsByIDs(ctx context.Context, i
 		}
 	}()
 
+	// Удаляем bindings
 	if err = writer.DeleteAddressGroupBindingsByIDs(ctx, ids); err != nil {
 		return errors.Wrap(err, "failed to delete address group bindings")
 	}
+
+	// Обновляем port mappings для каждого удаленного binding
+	for _, binding := range bindings {
+		// Проверяем, есть ли другие bindings для той же address group
+		hasOtherBindings := false
+		err = reader.ListAddressGroupBindings(ctx, func(b models.AddressGroupBinding) error {
+			if b.AddressGroupRef.Key() == binding.AddressGroupRef.Key() && b.Key() != binding.Key() {
+				hasOtherBindings = true
+			}
+			return nil
+		}, nil)
+
+		if err != nil {
+			return errors.Wrap(err, "failed to check for other bindings")
+		}
+
+		// Если нет других bindings, удаляем port mapping
+		if !hasOtherBindings {
+			if err = writer.DeleteAddressGroupPortMappingsByIDs(ctx, []models.ResourceIdentifier{binding.AddressGroupRef.ResourceIdentifier}); err != nil {
+				return errors.Wrap(err, "failed to delete address group port mappings")
+			}
+		} else {
+			// Иначе обновляем port mapping, удаляя сервис
+			portMapping, err := reader.GetAddressGroupPortMappingByID(ctx, binding.AddressGroupRef.ResourceIdentifier)
+			if err != nil {
+				continue // Пропускаем, если port mapping не существует
+			}
+
+			// Удаляем сервис из port mapping
+			delete(portMapping.AccessPorts, binding.ServiceRef)
+
+			// Обновляем port mapping
+			if err = writer.SyncAddressGroupPortMappings(
+				ctx,
+				[]models.AddressGroupPortMapping{*portMapping},
+				ports.NewResourceIdentifierScope(portMapping.ResourceIdentifier),
+				ports.WithSyncOp(models.SyncOpUpsert),
+			); err != nil {
+				return errors.Wrap(err, "failed to update address group port mappings")
+			}
+		}
+	}
+
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}

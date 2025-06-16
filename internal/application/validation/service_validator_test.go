@@ -94,6 +94,7 @@ type MockReaderForServiceValidator struct {
 	addressGroups            map[string]models.AddressGroup
 	addressGroupPortMappings map[string]models.AddressGroupPortMapping
 	services                 map[string]models.Service
+	addressGroupBindings     []models.AddressGroupBinding
 }
 
 func (m *MockReaderForServiceValidator) Close() error {
@@ -381,6 +382,91 @@ func TestServiceValidator_ValidateForCreation(t *testing.T) {
 				t.Errorf("Unexpected error for service %v: %v", tt.service, err)
 			}
 		})
+	}
+}
+
+// TestServiceValidator_CheckBindingsPortOverlaps тестирует метод CheckBindingsPortOverlaps
+func TestServiceValidator_CheckBindingsPortOverlaps(t *testing.T) {
+	ctx := context.Background()
+	mockReader := &MockReaderForServiceValidator{}
+	mockReader.InitMockData()
+
+	// Создаем AddressGroup
+	ag := models.AddressGroup{
+		SelfRef: models.NewSelfRef(models.NewResourceIdentifier("test-ag")),
+	}
+	mockReader.AddAddressGroup(ag)
+
+	// Создаем сервис, который будем проверять
+	service := models.Service{
+		SelfRef: models.NewSelfRef(models.NewResourceIdentifier("test-service")),
+		IngressPorts: []models.IngressPort{
+			{Protocol: models.TCP, Port: "8080"},
+		},
+	}
+	mockReader.AddService(service)
+
+	// Создаем другой сервис с портом 80 TCP
+	otherService := models.Service{
+		SelfRef: models.NewSelfRef(models.NewResourceIdentifier("other-service")),
+		IngressPorts: []models.IngressPort{
+			{Protocol: models.TCP, Port: "80"},
+		},
+	}
+	mockReader.AddService(otherService)
+
+	// Создаем AddressGroupBinding, связывающий test-service с test-ag
+	binding := models.AddressGroupBinding{
+		SelfRef:         models.NewSelfRef(models.NewResourceIdentifier("test-binding")),
+		ServiceRef:      models.NewServiceRef("test-service"),
+		AddressGroupRef: models.NewAddressGroupRef("test-ag"),
+	}
+
+	// Добавляем binding в mock reader
+	mockReader.bindings = append(mockReader.bindings, binding)
+
+	// Создаем AddressGroupPortMapping для test-ag
+	agpm := models.AddressGroupPortMapping{
+		SelfRef:     models.NewSelfRef(models.NewResourceIdentifier("test-ag")),
+		AccessPorts: make(map[models.ServiceRef]models.ServicePorts),
+	}
+
+	// Добавляем порты other-service в AddressGroupPortMapping
+	otherServicePorts := models.ServicePorts{
+		Ports: models.ProtocolPorts{
+			models.TCP: []models.PortRange{{Start: 80, End: 80}},
+		},
+	}
+	agpm.AccessPorts[models.NewServiceRef("other-service")] = otherServicePorts
+
+	// Добавляем порты test-service в AddressGroupPortMapping
+	servicePorts := models.ServicePorts{
+		Ports: models.ProtocolPorts{
+			models.TCP: []models.PortRange{{Start: 8080, End: 8080}},
+		},
+	}
+	agpm.AccessPorts[models.NewServiceRef("test-service")] = servicePorts
+
+	mockReader.AddAddressGroupPortMapping(agpm)
+
+	validator := validation.NewServiceValidator(mockReader)
+
+	// Тест 1: Сервис с неперекрывающимися портами
+	err := validator.CheckBindingsPortOverlaps(ctx, service)
+	if err != nil {
+		t.Errorf("Unexpected error for service with non-overlapping ports: %v", err)
+	}
+
+	// Тест 2: Сервис с перекрывающимися портами
+	serviceWithOverlap := models.Service{
+		SelfRef: models.NewSelfRef(models.NewResourceIdentifier("test-service")),
+		IngressPorts: []models.IngressPort{
+			{Protocol: models.TCP, Port: "80"}, // Перекрывается с other-service
+		},
+	}
+	err = validator.CheckBindingsPortOverlaps(ctx, serviceWithOverlap)
+	if err == nil {
+		t.Errorf("Expected error for service with overlapping ports, but got nil")
 	}
 }
 
