@@ -201,6 +201,11 @@ message SyncServiceAliases {
   repeated ServiceAlias service_aliases = 1;
 }
 
+// SyncAddressGroupBindingPolicies - subject of Address Group Binding Policies to sync
+message SyncAddressGroupBindingPolicies {
+  repeated AddressGroupBindingPolicy address_group_binding_policies = 1;
+}
+
 // Requests and responses for API methods
 
 // ListServicesReq - request to list services
@@ -323,6 +328,26 @@ message GetServiceAliasResp {
   ServiceAlias service_alias = 1;
 }
 
+// ListAddressGroupBindingPoliciesReq - request to list address group binding policies
+message ListAddressGroupBindingPoliciesReq {
+  repeated ResourceIdentifier identifiers = 1;
+}
+
+// ListAddressGroupBindingPoliciesResp - response with list of address group binding policies
+message ListAddressGroupBindingPoliciesResp {
+  repeated AddressGroupBindingPolicy items = 1;
+}
+
+// GetAddressGroupBindingPolicyReq - request to get a specific address group binding policy
+message GetAddressGroupBindingPolicyReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetAddressGroupBindingPolicyResp - response with a specific address group binding policy
+message GetAddressGroupBindingPolicyResp {
+  AddressGroupBindingPolicy address_group_binding_policy = 1;
+}
+
 // SyncReq - request to sync
 message SyncReq {
   // Sync operation to apply
@@ -347,6 +372,9 @@ message SyncReq {
 
     // Subject of Service Aliases
     SyncServiceAliases service_aliases = 7;
+
+    // Subject of Address Group Binding Policies
+    SyncAddressGroupBindingPolicies address_group_binding_policies = 8;
   }
 }
 
@@ -494,6 +522,26 @@ service NetguardService {
     };
     option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
       description: "GetServiceAlias: gets a specific service alias by ID";
+    };
+  }
+
+  // ListAddressGroupBindingPolicies - gets list of address group binding policies
+  rpc ListAddressGroupBindingPolicies(ListAddressGroupBindingPoliciesReq) returns (ListAddressGroupBindingPoliciesResp) {
+    option (google.api.http) = {
+      get: "/v1/address-group-binding-policies"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "ListAddressGroupBindingPolicies: gets list of address group binding policies";
+    };
+  }
+
+  // GetAddressGroupBindingPolicy - gets a specific address group binding policy by ID
+  rpc GetAddressGroupBindingPolicy(GetAddressGroupBindingPolicyReq) returns (GetAddressGroupBindingPolicyResp) {
+    option (google.api.http) = {
+      get: "/v1/address-group-binding-policies/{identifier.namespace}/{identifier.name}"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "GetAddressGroupBindingPolicy: gets a specific address group binding policy by ID";
     };
   }
 }

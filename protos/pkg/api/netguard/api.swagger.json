@@ -20,6 +20,68 @@
     "application/json"
   ],
   "paths": {
+    "/v1/address-group-binding-policies": {
+      "get": {
+        "summary": "ListAddressGroupBindingPolicies - gets list of address group binding policies",
+        "description": "ListAddressGroupBindingPolicies: gets list of address group binding policies",
+        "operationId": "NetguardService_ListAddressGroupBindingPolicies",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListAddressGroupBindingPoliciesResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/address-group-binding-policies/{identifier.namespace}/{identifier.name}": {
+      "get": {
+        "summary": "GetAddressGroupBindingPolicy - gets a specific address group binding policy by ID",
+        "description": "GetAddressGroupBindingPolicy: gets a specific address group binding policy by ID",
+        "operationId": "NetguardService_GetAddressGroupBindingPolicy",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetAddressGroupBindingPolicyResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "identifier.namespace",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "identifier.name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
     "/v1/address-group-bindings": {
       "get": {
         "summary": "ListAddressGroupBindings - gets list of address group bindings",
@@ -563,6 +625,26 @@
         "addressGroupRef"
       ]
     },
+    "v1AddressGroupBindingPolicy": {
+      "type": "object",
+      "properties": {
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
+        },
+        "serviceRef": {
+          "$ref": "#/definitions/v1ServiceRef"
+        },
+        "addressGroupRef": {
+          "$ref": "#/definitions/v1AddressGroupRef"
+        }
+      },
+      "title": "AddressGroupBindingPolicy - policy allowing binding of a service to an address group",
+      "required": [
+        "selfRef",
+        "serviceRef",
+        "addressGroupRef"
+      ]
+    },
     "v1AddressGroupPortMapping": {
       "type": "object",
       "properties": {
@@ -590,6 +672,15 @@
         }
       },
       "title": "AddressGroupRef - reference to an address group"
+    },
+    "v1GetAddressGroupBindingPolicyResp": {
+      "type": "object",
+      "properties": {
+        "addressGroupBindingPolicy": {
+          "$ref": "#/definitions/v1AddressGroupBindingPolicy"
+        }
+      },
+      "title": "GetAddressGroupBindingPolicyResp - response with a specific address group binding policy"
     },
     "v1GetAddressGroupBindingResp": {
       "type": "object",
@@ -659,6 +750,19 @@
         }
       },
       "title": "IngressPort - defines a port configuration for ingress traffic"
+    },
+    "v1ListAddressGroupBindingPoliciesResp": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1AddressGroupBindingPolicy"
+          }
+        }
+      },
+      "title": "ListAddressGroupBindingPoliciesResp - response with list of address group binding policies"
     },
     "v1ListAddressGroupBindingsResp": {
       "type": "object",
@@ -867,6 +971,19 @@
       },
       "title": "ServiceRef - reference to a service"
     },
+    "v1SyncAddressGroupBindingPolicies": {
+      "type": "object",
+      "properties": {
+        "addressGroupBindingPolicies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1AddressGroupBindingPolicy"
+          }
+        }
+      },
+      "title": "SyncAddressGroupBindingPolicies - subject of Address Group Binding Policies to sync"
+    },
     "v1SyncAddressGroupBindings": {
       "type": "object",
       "properties": {
@@ -948,6 +1065,10 @@
         "serviceAliases": {
           "$ref": "#/definitions/v1SyncServiceAliases",
           "title": "Subject of Service Aliases"
+        },
+        "addressGroupBindingPolicies": {
+          "$ref": "#/definitions/v1SyncAddressGroupBindingPolicies",
+          "title": "Subject of Address Group Binding Policies"
         }
       },
       "title": "SyncReq - request to sync"
