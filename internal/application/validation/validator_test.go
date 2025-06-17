@@ -12,6 +12,14 @@ import (
 // MockReader is a mock implementation of ports.Reader for testing
 type MockReader struct{}
 
+func (m *MockReader) ListAddressGroupBindingPolicies(ctx context.Context, consume func(models.AddressGroupBindingPolicy) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReader) GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
+	return nil, nil
+}
+
 func (m *MockReader) Close() error {
 	return nil
 }

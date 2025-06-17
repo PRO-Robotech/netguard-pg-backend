@@ -48,7 +48,7 @@ func TestAddressGroupPortMappingValidator_ValidateReferences(t *testing.T) {
 	}
 
 	validator := validation.NewAddressGroupPortMappingValidator(mockReader)
-	
+
 	// Create a port mapping with a service reference
 	accessPorts := make(map[models.ServiceRef]models.ServicePorts)
 	accessPorts[models.ServiceRef{
@@ -58,7 +58,7 @@ func TestAddressGroupPortMappingValidator_ValidateReferences(t *testing.T) {
 			models.TCP: []models.PortRange{{Start: 80, End: 80}},
 		},
 	}
-	
+
 	mapping := models.AddressGroupPortMapping{
 		SelfRef: models.SelfRef{
 			ResourceIdentifier: models.NewResourceIdentifier("test-mapping"),
@@ -88,10 +88,6 @@ type MockReaderForAddressGroupPortMappingValidator struct {
 	serviceID     string
 }
 
-func (m *MockReaderForAddressGroupPortMappingValidator) Close() error {
-	return nil
-}
-
 func (m *MockReaderForAddressGroupPortMappingValidator) ListServices(ctx context.Context, consume func(models.Service) error, scope ports.Scope) error {
 	if m.serviceExists {
 		service := models.Service{
@@ -101,14 +97,6 @@ func (m *MockReaderForAddressGroupPortMappingValidator) ListServices(ctx context
 		}
 		return consume(service)
 	}
-	return nil
-}
-
-func (m *MockReaderForAddressGroupPortMappingValidator) ListAddressGroups(ctx context.Context, consume func(models.AddressGroup) error, scope ports.Scope) error {
-	return nil
-}
-
-func (m *MockReaderForAddressGroupPortMappingValidator) ListAddressGroupBindings(ctx context.Context, consume func(models.AddressGroupBinding) error, scope ports.Scope) error {
 	return nil
 }
 
@@ -123,7 +111,7 @@ func (m *MockReaderForAddressGroupPortMappingValidator) ListAddressGroupPortMapp
 				models.TCP: []models.PortRange{{Start: 80, End: 80}},
 			},
 		}
-		
+
 		mapping := models.AddressGroupPortMapping{
 			SelfRef: models.SelfRef{
 				ResourceIdentifier: models.NewResourceIdentifier(m.mappingID),
@@ -169,4 +157,24 @@ func (m *MockReaderForAddressGroupPortMappingValidator) GetRuleS2SByID(ctx conte
 
 func (m *MockReaderForAddressGroupPortMappingValidator) GetServiceAliasByID(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error) {
 	return nil, nil
+}
+
+func (m *MockReaderForAddressGroupPortMappingValidator) ListAddressGroups(ctx context.Context, consume func(models.AddressGroup) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReaderForAddressGroupPortMappingValidator) ListAddressGroupBindings(ctx context.Context, consume func(models.AddressGroupBinding) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReaderForAddressGroupPortMappingValidator) ListAddressGroupBindingPolicies(ctx context.Context, consume func(models.AddressGroupBindingPolicy) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReaderForAddressGroupPortMappingValidator) GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
+	return nil, nil
+}
+
+func (m *MockReaderForAddressGroupPortMappingValidator) Close() error {
+	return nil
 }

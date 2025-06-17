@@ -86,12 +86,22 @@ func TestRuleS2SValidator_ValidateReferences(t *testing.T) {
 
 // MockReaderForRuleS2SValidator is a specialized mock for testing RuleS2SValidator
 type MockReaderForRuleS2SValidator struct {
-	ruleExists             bool
-	ruleID                 string
+	ruleExists              bool
+	ruleID                  string
 	serviceLocalAliasExists bool
 	serviceLocalAliasID     string
 	serviceAliasExists      bool
 	serviceAliasID          string
+}
+
+func (m *MockReaderForRuleS2SValidator) ListAddressGroupBindingPolicies(ctx context.Context, consume func(models.AddressGroupBindingPolicy) error, scope ports.Scope) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (m *MockReaderForRuleS2SValidator) GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (m *MockReaderForRuleS2SValidator) Close() error {

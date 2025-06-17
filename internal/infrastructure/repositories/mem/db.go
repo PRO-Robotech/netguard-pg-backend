@@ -8,25 +8,27 @@ import (
 
 // MemDB in-memory database
 type MemDB struct {
-	services                 map[string]models.Service
-	serviceAliases           map[string]models.ServiceAlias
-	addressGroups            map[string]models.AddressGroup
-	addressGroupBindings     map[string]models.AddressGroupBinding
-	addressGroupPortMappings map[string]models.AddressGroupPortMapping
-	ruleS2S                  map[string]models.RuleS2S
-	syncStatus               models.SyncStatus
-	mu                       sync.RWMutex
+	services                   map[string]models.Service
+	serviceAliases             map[string]models.ServiceAlias
+	addressGroups              map[string]models.AddressGroup
+	addressGroupBindings       map[string]models.AddressGroupBinding
+	addressGroupPortMappings   map[string]models.AddressGroupPortMapping
+	addressGroupBindingPolicies map[string]models.AddressGroupBindingPolicy
+	ruleS2S                    map[string]models.RuleS2S
+	syncStatus                 models.SyncStatus
+	mu                         sync.RWMutex
 }
 
 // NewMemDB creates a new in-memory database
 func NewMemDB() *MemDB {
 	return &MemDB{
-		services:                 make(map[string]models.Service),
-		serviceAliases:           make(map[string]models.ServiceAlias),
-		addressGroups:            make(map[string]models.AddressGroup),
-		addressGroupBindings:     make(map[string]models.AddressGroupBinding),
-		addressGroupPortMappings: make(map[string]models.AddressGroupPortMapping),
-		ruleS2S:                  make(map[string]models.RuleS2S),
+		services:                   make(map[string]models.Service),
+		serviceAliases:             make(map[string]models.ServiceAlias),
+		addressGroups:              make(map[string]models.AddressGroup),
+		addressGroupBindings:       make(map[string]models.AddressGroupBinding),
+		addressGroupPortMappings:   make(map[string]models.AddressGroupPortMapping),
+		addressGroupBindingPolicies: make(map[string]models.AddressGroupBindingPolicy),
+		ruleS2S:                    make(map[string]models.RuleS2S),
 	}
 }
 
@@ -150,4 +152,22 @@ func (db *MemDB) SetServiceAliases(aliases map[string]models.ServiceAlias) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	db.serviceAliases = aliases
+}
+
+// GetAddressGroupBindingPolicies returns all address group binding policies
+func (db *MemDB) GetAddressGroupBindingPolicies() map[string]models.AddressGroupBindingPolicy {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	result := make(map[string]models.AddressGroupBindingPolicy, len(db.addressGroupBindingPolicies))
+	for k, v := range db.addressGroupBindingPolicies {
+		result[k] = v
+	}
+	return result
+}
+
+// SetAddressGroupBindingPolicies sets the address group binding policies
+func (db *MemDB) SetAddressGroupBindingPolicies(policies map[string]models.AddressGroupBindingPolicy) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.addressGroupBindingPolicies = policies
 }

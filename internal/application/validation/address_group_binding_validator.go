@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"netguard-pg-backend/internal/domain/models"
+	"netguard-pg-backend/internal/domain/ports"
 
 	"github.com/pkg/errors"
 )
@@ -192,10 +193,49 @@ func (v *AddressGroupBindingValidator) ValidateForCreation(ctx context.Context, 
 		return errors.Wrapf(err, "invalid address group reference in binding %s", binding.Key())
 	}
 
+	// Получаем address group для проверки namespace
+	addressGroup, err := v.reader.GetAddressGroupByID(ctx, binding.AddressGroupRef.ResourceIdentifier)
+	if err != nil {
+		return errors.Wrapf(err, "failed to get address group for namespace validation in binding %s", binding.Key())
+	}
+
+	// Если AddressGroup находится в другом namespace, чем Binding/Service
+	if addressGroup.Namespace != binding.Namespace {
+		// Проверяем наличие политики в namespace AddressGroup
+		policyFound := false
+
+		// Создаем скоуп для namespace адресной группы
+		namespaceScope := ports.ResourceIdentifierScope{
+			Identifiers: []models.ResourceIdentifier{
+				{Namespace: addressGroup.Namespace},
+			},
+		}
+
+		err := v.reader.ListAddressGroupBindingPolicies(ctx, func(policy models.AddressGroupBindingPolicy) error {
+			// Проверяем, что политика ссылается на нужные AddressGroup и Service
+			if policy.AddressGroupRef.Key() == binding.AddressGroupRef.Key() &&
+				policy.ServiceRef.Key() == binding.ServiceRef.Key() {
+				policyFound = true
+				return fmt.Errorf("policy found") // Используем ошибку для прерывания цикла
+			}
+			return nil
+		}, namespaceScope)
+
+		// Игнорируем ошибку "policy found", так как это не настоящая ошибка
+		if err != nil && err.Error() != "policy found" {
+			return errors.Wrap(err, "failed to check for binding policies")
+		}
+
+		if !policyFound {
+			return fmt.Errorf("cross-namespace binding not allowed: no AddressGroupBindingPolicy found in namespace %s that references both AddressGroup %s and Service %s",
+				addressGroup.Namespace, binding.AddressGroupRef.Name, binding.ServiceRef.Name)
+		}
+	}
+
 	// Check if there's an existing port mapping for this address group
 	portMapping, err := v.reader.GetAddressGroupPortMappingByID(ctx, binding.AddressGroupRef.ResourceIdentifier)
 
-	if err == nil {
+	if err == nil && portMapping != nil {
 		// Port mapping exists - check for port overlaps
 		// Create a temporary updated mapping to check for overlaps
 		updatedMapping := UpdatePortMapping(*portMapping, binding.ServiceRef, *service)
@@ -226,6 +266,45 @@ func (v *AddressGroupBindingValidator) ValidateForUpdate(ctx context.Context, ol
 		return fmt.Errorf("cannot change address group reference after creation")
 	}
 
+	// Получаем address group для проверки namespace
+	addressGroup, err := v.reader.GetAddressGroupByID(ctx, newBinding.AddressGroupRef.ResourceIdentifier)
+	if err != nil {
+		return errors.Wrapf(err, "failed to get address group for namespace validation in binding %s", newBinding.Key())
+	}
+
+	// Если AddressGroup находится в другом namespace, чем Binding/Service
+	if addressGroup.Namespace != newBinding.Namespace {
+		// Проверяем наличие политики в namespace AddressGroup
+		policyFound := false
+
+		// Создаем скоуп для namespace адресной группы
+		namespaceScope := ports.ResourceIdentifierScope{
+			Identifiers: []models.ResourceIdentifier{
+				{Namespace: addressGroup.Namespace},
+			},
+		}
+
+		err := v.reader.ListAddressGroupBindingPolicies(ctx, func(policy models.AddressGroupBindingPolicy) error {
+			// Проверяем, что политика ссылается на нужные AddressGroup и Service
+			if policy.AddressGroupRef.Key() == newBinding.AddressGroupRef.Key() &&
+				policy.ServiceRef.Key() == newBinding.ServiceRef.Key() {
+				policyFound = true
+				return fmt.Errorf("policy found") // Используем ошибку для прерывания цикла
+			}
+			return nil
+		}, namespaceScope)
+
+		// Игнорируем ошибку "policy found", так как это не настоящая ошибка
+		if err != nil && err.Error() != "policy found" {
+			return errors.Wrap(err, "failed to check for binding policies")
+		}
+
+		if !policyFound {
+			return fmt.Errorf("cross-namespace binding not allowed: no AddressGroupBindingPolicy found in namespace %s that references both AddressGroup %s and Service %s",
+				addressGroup.Namespace, newBinding.AddressGroupRef.Name, newBinding.ServiceRef.Name)
+		}
+	}
+
 	// Get the service to access its ports
 	service, err := v.reader.GetServiceByID(ctx, newBinding.ServiceRef.ResourceIdentifier)
 	if err != nil {
@@ -234,7 +313,7 @@ func (v *AddressGroupBindingValidator) ValidateForUpdate(ctx context.Context, ol
 
 	// Check if there's an existing port mapping for this address group
 	portMapping, err := v.reader.GetAddressGroupPortMappingByID(ctx, newBinding.AddressGroupRef.ResourceIdentifier)
-	if err == nil {
+	if err == nil && portMapping != nil {
 		// Port mapping exists - check for port overlaps
 		// Create a temporary updated mapping to check for overlaps
 		updatedMapping := UpdatePortMapping(*portMapping, newBinding.ServiceRef, *service)

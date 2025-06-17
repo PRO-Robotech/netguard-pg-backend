@@ -55,6 +55,11 @@ func (v *DependencyValidator) GetAddressGroupPortMappingValidator() *AddressGrou
 	return NewAddressGroupPortMappingValidator(v.reader)
 }
 
+// GetAddressGroupBindingPolicyValidator returns a validator for address group binding policies
+func (v *DependencyValidator) GetAddressGroupBindingPolicyValidator() *AddressGroupBindingPolicyValidator {
+	return NewAddressGroupBindingPolicyValidator(v.reader)
+}
+
 // ServiceValidator provides methods for validating services
 type ServiceValidator struct {
 	reader        ports.Reader
@@ -172,5 +177,25 @@ func NewAddressGroupPortMappingValidator(reader ports.Reader) *AddressGroupPortM
 	return &AddressGroupPortMappingValidator{
 		reader:        reader,
 		BaseValidator: NewBaseValidator(reader, "address_group_port_mapping", listFunction),
+	}
+}
+
+// AddressGroupBindingPolicyValidator provides methods for validating address group binding policies
+type AddressGroupBindingPolicyValidator struct {
+	reader        ports.Reader
+	BaseValidator *BaseValidator
+}
+
+// NewAddressGroupBindingPolicyValidator creates a new address group binding policy validator
+func NewAddressGroupBindingPolicyValidator(reader ports.Reader) *AddressGroupBindingPolicyValidator {
+	listFunction := func(ctx context.Context, consume func(entity interface{}) error, scope ports.Scope) error {
+		return reader.ListAddressGroupBindingPolicies(ctx, func(policy models.AddressGroupBindingPolicy) error {
+			return consume(policy)
+		}, scope)
+	}
+
+	return &AddressGroupBindingPolicyValidator{
+		reader:        reader,
+		BaseValidator: NewBaseValidator(reader, "address_group_binding_policy", listFunction),
 	}
 }

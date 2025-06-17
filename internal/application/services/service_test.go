@@ -171,6 +171,14 @@ type MockWriter struct {
 	abortCalled       bool
 }
 
+func (m *MockWriter) SyncAddressGroupBindingPolicies(ctx context.Context, policies []models.AddressGroupBindingPolicy, scope ports.Scope, opts ...ports.Option) error {
+	return nil
+}
+
+func (m *MockWriter) DeleteAddressGroupBindingPoliciesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	return nil
+}
+
 func NewMockWriter() *MockWriter {
 	return &MockWriter{}
 }
@@ -420,4 +428,12 @@ func TestUpdateService(t *testing.T) {
 	if err == nil {
 		t.Error("Expected validation error, got nil")
 	}
+}
+
+func (m *MockReader) ListAddressGroupBindingPolicies(ctx context.Context, consume func(models.AddressGroupBindingPolicy) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReader) GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
+	return nil, nil
 }

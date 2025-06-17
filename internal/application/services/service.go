@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/pkg/errors"
 	"netguard-pg-backend/internal/application/validation"
@@ -135,6 +136,25 @@ func (s *NetguardService) GetServiceAliases(ctx context.Context, scope ports.Sco
 	return aliases, nil
 }
 
+// GetAddressGroupBindingPolicies returns all address group binding policies
+func (s *NetguardService) GetAddressGroupBindingPolicies(ctx context.Context, scope ports.Scope) ([]models.AddressGroupBindingPolicy, error) {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	var policies []models.AddressGroupBindingPolicy
+	err = reader.ListAddressGroupBindingPolicies(ctx, func(policy models.AddressGroupBindingPolicy) error {
+		policies = append(policies, policy)
+		return nil
+	}, scope)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to list address group binding policies")
+	}
+	return policies, nil
+}
+
 // CreateService создает новый сервис
 func (s *NetguardService) CreateService(ctx context.Context, service models.Service) error {
 	reader, err := s.registry.Reader(ctx)
@@ -239,6 +259,8 @@ func (s *NetguardService) Sync(ctx context.Context, syncOp models.SyncOp, subjec
 		return s.syncRuleS2S(ctx, writer, v, syncOp)
 	case []models.ServiceAlias:
 		return s.syncServiceAliases(ctx, writer, v, syncOp)
+	case []models.AddressGroupBindingPolicy:
+		return s.syncAddressGroupBindingPolicies(ctx, writer, v, syncOp)
 	default:
 		return errors.New("unsupported subject type")
 	}
@@ -510,8 +532,9 @@ func (s *NetguardService) syncAddressGroupBindings(ctx context.Context, writer p
 	return nil
 }
 
-// SyncAddressGroupPortMappings обеспечивает синхронизацию port mapping для binding
-func (s *NetguardService) SyncAddressGroupPortMappings(ctx context.Context, binding models.AddressGroupBinding) error {
+// SyncAddressGroupPortMappingsWithWriter обеспечивает синхронизацию port mapping для binding
+// writer - существующий открытый writer для транзакции
+func (s *NetguardService) SyncAddressGroupPortMappingsWithWriter(ctx context.Context, writer ports.Writer, binding models.AddressGroupBinding) error {
 	reader, err := s.registry.Reader(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get reader")
@@ -542,7 +565,22 @@ func (s *NetguardService) SyncAddressGroupPortMappings(ctx context.Context, bind
 		}
 	}
 
-	// Сохраняем port mapping
+	// Используем переданный writer вместо создания нового
+	if err = writer.SyncAddressGroupPortMappings(
+		ctx,
+		[]models.AddressGroupPortMapping{updatedMapping},
+		ports.NewResourceIdentifierScope(updatedMapping.ResourceIdentifier),
+		ports.WithSyncOp(models.SyncOpUpsert),
+	); err != nil {
+		return errors.Wrap(err, "failed to sync address group port mappings")
+	}
+
+	return nil
+}
+
+// SyncAddressGroupPortMappings обеспечивает синхронизацию port mapping для binding
+// с созданием собственной транзакции
+func (s *NetguardService) SyncAddressGroupPortMappings(ctx context.Context, binding models.AddressGroupBinding) error {
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get writer")
@@ -553,13 +591,8 @@ func (s *NetguardService) SyncAddressGroupPortMappings(ctx context.Context, bind
 		}
 	}()
 
-	if err = writer.SyncAddressGroupPortMappings(
-		ctx,
-		[]models.AddressGroupPortMapping{updatedMapping},
-		ports.NewResourceIdentifierScope(updatedMapping.ResourceIdentifier),
-		ports.WithSyncOp(models.SyncOpUpsert),
-	); err != nil {
-		return errors.Wrap(err, "failed to sync address group port mappings")
+	if err = s.SyncAddressGroupPortMappingsWithWriter(ctx, writer, binding); err != nil {
+		return err
 	}
 
 	if err = writer.Commit(); err != nil {
@@ -600,6 +633,7 @@ func (s *NetguardService) SyncAddressGroupBindings(ctx context.Context, bindings
 		}
 	}
 
+	// Создаем единую транзакцию для всех операций
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get writer")
@@ -615,13 +649,14 @@ func (s *NetguardService) SyncAddressGroupBindings(ctx context.Context, bindings
 		return errors.Wrap(err, "failed to sync address group bindings")
 	}
 
-	// Синхронизируем port mappings для каждого binding
+	// Синхронизируем port mappings для каждого binding в той же транзакции
 	for _, binding := range bindings {
-		if err := s.SyncAddressGroupPortMappings(ctx, binding); err != nil {
-			return err
+		if err := s.SyncAddressGroupPortMappingsWithWriter(ctx, writer, binding); err != nil {
+			return errors.Wrapf(err, "failed to sync port mapping for binding %s", binding.Key())
 		}
 	}
 
+	// Фиксируем все изменения в одной транзакции
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
@@ -629,6 +664,7 @@ func (s *NetguardService) SyncAddressGroupBindings(ctx context.Context, bindings
 }
 
 // syncAddressGroupPortMappings синхронизирует маппинги портов групп адресов с указанной операцией
+// Не вызывает Commit() - это должен делать вызывающий метод
 func (s *NetguardService) syncAddressGroupPortMappings(ctx context.Context, writer ports.Writer, mappings []models.AddressGroupPortMapping, syncOp models.SyncOp) error {
 	// Валидация в зависимости от операции
 	if syncOp != models.SyncOpDelete {
@@ -674,9 +710,7 @@ func (s *NetguardService) syncAddressGroupPortMappings(ctx context.Context, writ
 		return errors.Wrap(err, "failed to sync address group port mappings")
 	}
 
-	if err := writer.Commit(); err != nil {
-		return errors.Wrap(err, "failed to commit")
-	}
+	// Не вызываем Commit() - это должен делать вызывающий метод
 
 	return nil
 }
@@ -720,9 +754,12 @@ func (s *NetguardService) SyncMultipleAddressGroupPortMappings(ctx context.Conte
 		}
 	}()
 
-	if err = writer.SyncAddressGroupPortMappings(ctx, mappings, scope, ports.WithSyncOp(models.SyncOpFullSync)); err != nil {
-		return errors.Wrap(err, "failed to sync address group port mappings")
+	// Используем обновленный метод syncAddressGroupPortMappings
+	if err = s.syncAddressGroupPortMappings(ctx, writer, mappings, models.SyncOpFullSync); err != nil {
+		return err
 	}
+
+	// Фиксируем транзакцию
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
@@ -1044,6 +1081,22 @@ func (s *NetguardService) GetServiceAliasByID(ctx context.Context, id models.Res
 	return alias, nil
 }
 
+// GetAddressGroupBindingPolicyByID returns an address group binding policy by ID
+func (s *NetguardService) GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	policy, err := reader.GetAddressGroupBindingPolicyByID(ctx, id)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get address group binding policy")
+	}
+
+	return policy, nil
+}
+
 // GetServicesByIDs returns services by IDs
 func (s *NetguardService) GetServicesByIDs(ctx context.Context, ids []models.ResourceIdentifier) ([]models.Service, error) {
 	reader, err := s.registry.Reader(ctx)
@@ -1168,6 +1221,27 @@ func (s *NetguardService) GetServiceAliasesByIDs(ctx context.Context, ids []mode
 	}
 
 	return aliases, nil
+}
+
+// GetAddressGroupBindingPoliciesByIDs returns address group binding policies by IDs
+func (s *NetguardService) GetAddressGroupBindingPoliciesByIDs(ctx context.Context, ids []models.ResourceIdentifier) ([]models.AddressGroupBindingPolicy, error) {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	var policies []models.AddressGroupBindingPolicy
+	err = reader.ListAddressGroupBindingPolicies(ctx, func(policy models.AddressGroupBindingPolicy) error {
+		policies = append(policies, policy)
+		return nil
+	}, ports.NewResourceIdentifierScope(ids...))
+
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to list address group binding policies")
+	}
+
+	return policies, nil
 }
 
 // DeleteServicesByIDs deletes services by IDs
@@ -1406,6 +1480,176 @@ func (s *NetguardService) DeleteServiceAliasesByIDs(ctx context.Context, ids []m
 
 	if err = writer.DeleteServiceAliasesByIDs(ctx, ids); err != nil {
 		return errors.Wrap(err, "failed to delete service aliases")
+	}
+	if err = writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+	return nil
+}
+
+// syncAddressGroupBindingPolicies синхронизирует политики привязки групп адресов с указанной операцией
+func (s *NetguardService) syncAddressGroupBindingPolicies(ctx context.Context, writer ports.Writer, policies []models.AddressGroupBindingPolicy, syncOp models.SyncOp) error {
+	// Валидация в зависимости от операции
+	if syncOp != models.SyncOpDelete {
+		reader, err := s.registry.Reader(ctx)
+		if err != nil {
+			return errors.Wrap(err, "failed to get reader")
+		}
+		defer reader.Close()
+
+		validator := validation.NewDependencyValidator(reader)
+		policyValidator := validator.GetAddressGroupBindingPolicyValidator()
+
+		for i := range policies {
+			// Используем указатель на элемент слайса, чтобы изменения сохранились
+			policy := &policies[i]
+
+			existingPolicy, err := reader.GetAddressGroupBindingPolicyByID(ctx, policy.ResourceIdentifier)
+			if err == nil && syncOp != models.SyncOpDelete {
+				// Политика существует - используем ValidateForUpdate
+				if err := policyValidator.ValidateForUpdate(ctx, *existingPolicy, policy); err != nil {
+					return err
+				}
+			} else if syncOp != models.SyncOpDelete {
+				// Политика новая - используем ValidateForCreation
+				if err := policyValidator.ValidateForCreation(ctx, policy); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	// Определение scope
+	var scope ports.Scope
+	if len(policies) > 0 {
+		var ids []models.ResourceIdentifier
+		for _, policy := range policies {
+			ids = append(ids, policy.ResourceIdentifier)
+		}
+		scope = ports.NewResourceIdentifierScope(ids...)
+	} else {
+		scope = ports.EmptyScope{}
+	}
+
+	// Выполнение операции с указанной опцией
+	if err := writer.SyncAddressGroupBindingPolicies(ctx, policies, scope, ports.WithSyncOp(syncOp)); err != nil {
+		return errors.Wrap(err, "failed to sync address group binding policies")
+	}
+
+	if err := writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+
+	return nil
+}
+
+// SyncAddressGroupBindingPolicies syncs address group binding policies
+func (s *NetguardService) SyncAddressGroupBindingPolicies(ctx context.Context, policies []models.AddressGroupBindingPolicy, scope ports.Scope) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Create validator
+	validator := validation.NewDependencyValidator(reader)
+	policyValidator := validator.GetAddressGroupBindingPolicyValidator()
+
+	// Validate all policies
+	for i := range policies {
+		// Используем указатель на элемент слайса, чтобы изменения сохранились
+		policy := &policies[i]
+
+		// Check if policy exists
+		existingPolicy, err := reader.GetAddressGroupBindingPolicyByID(ctx, policy.ResourceIdentifier)
+		if err == nil {
+			// Policy exists - use ValidateForUpdate
+			if err := policyValidator.ValidateForUpdate(ctx, *existingPolicy, policy); err != nil {
+				return err
+			}
+		} else {
+			// Policy is new - use ValidateForCreation
+			if err := policyValidator.ValidateForCreation(ctx, policy); err != nil {
+				return err
+			}
+		}
+	}
+
+	writer, err := s.registry.Writer(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get writer")
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	if err = writer.SyncAddressGroupBindingPolicies(ctx, policies, scope, ports.WithSyncOp(models.SyncOpFullSync)); err != nil {
+		return errors.Wrap(err, "failed to sync address group binding policies")
+	}
+	if err = writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+	return nil
+}
+
+// DeleteAddressGroupBindingPoliciesByIDs deletes address group binding policies by IDs
+func (s *NetguardService) DeleteAddressGroupBindingPoliciesByIDs(ctx context.Context, ids []models.ResourceIdentifier) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Get policies to be deleted
+	var policies []models.AddressGroupBindingPolicy
+	for _, id := range ids {
+		policy, err := reader.GetAddressGroupBindingPolicyByID(ctx, id)
+		if err != nil {
+			continue // Skip if policy doesn't exist
+		}
+		policies = append(policies, *policy)
+	}
+
+	// Check for active bindings that depend on these policies
+	for _, policy := range policies {
+		// Check for bindings that might be using this policy
+		var bindingsFound bool
+		err = reader.ListAddressGroupBindings(ctx, func(binding models.AddressGroupBinding) error {
+			// If binding references the same AddressGroup and Service as the policy,
+			// and binding is in a different namespace than AddressGroup
+			if binding.AddressGroupRef.Key() == policy.AddressGroupRef.Key() &&
+				binding.ServiceRef.Key() == policy.ServiceRef.Key() &&
+				binding.Namespace != policy.Namespace {
+				bindingsFound = true
+				return fmt.Errorf("binding found") // Use error to break the loop
+			}
+			return nil
+		}, nil)
+
+		// Ignore "binding found" error as it's not a real error
+		if err != nil && err.Error() != "binding found" {
+			return errors.Wrap(err, "failed to check for active bindings")
+		}
+
+		if bindingsFound {
+			return fmt.Errorf("cannot delete policy %s while active AddressGroupBindings exist", policy.Key())
+		}
+	}
+
+	writer, err := s.registry.Writer(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get writer")
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	if err = writer.DeleteAddressGroupBindingPoliciesByIDs(ctx, ids); err != nil {
+		return errors.Wrap(err, "failed to delete address group binding policies")
 	}
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")

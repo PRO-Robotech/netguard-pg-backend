@@ -9,14 +9,15 @@ import (
 )
 
 type writer struct {
-	registry                 *Registry
-	ctx                      context.Context
-	services                 map[string]models.Service
-	addressGroups            map[string]models.AddressGroup
-	addressGroupBindings     map[string]models.AddressGroupBinding
-	addressGroupPortMappings map[string]models.AddressGroupPortMapping
-	ruleS2S                  map[string]models.RuleS2S
-	serviceAliases           map[string]models.ServiceAlias
+	registry                   *Registry
+	ctx                        context.Context
+	services                   map[string]models.Service
+	addressGroups              map[string]models.AddressGroup
+	addressGroupBindings       map[string]models.AddressGroupBinding
+	addressGroupPortMappings   map[string]models.AddressGroupPortMapping
+	addressGroupBindingPolicies map[string]models.AddressGroupBindingPolicy
+	ruleS2S                    map[string]models.RuleS2S
+	serviceAliases             map[string]models.ServiceAlias
 }
 
 func (w *writer) SyncServices(ctx context.Context, services []models.Service, scope ports.Scope, opts ...ports.Option) error {
@@ -492,6 +493,84 @@ func (w *writer) SyncServiceAliases(ctx context.Context, aliases []models.Servic
 	return nil
 }
 
+func (w *writer) SyncAddressGroupBindingPolicies(ctx context.Context, policies []models.AddressGroupBindingPolicy, scope ports.Scope, opts ...ports.Option) error {
+	// Определение операции (по умолчанию FullSync)
+	syncOp := models.SyncOpFullSync
+
+	// Извлечение опций
+	for _, opt := range opts {
+		if so, ok := opt.(ports.SyncOption); ok {
+			syncOp = so.Operation
+		}
+	}
+
+	// Инициализация карты, если она еще не создана
+	if w.addressGroupBindingPolicies == nil {
+		w.addressGroupBindingPolicies = make(map[string]models.AddressGroupBindingPolicy)
+		// Всегда копируем существующие политики, чтобы иметь полную карту для работы
+		for k, v := range w.registry.db.GetAddressGroupBindingPolicies() {
+			w.addressGroupBindingPolicies[k] = v
+		}
+	}
+
+	// Обработка в зависимости от типа операции
+	switch syncOp {
+	case models.SyncOpFullSync:
+		// Если scope не пустой, удаляем только политики в указанной области
+		if scope != nil && !scope.IsEmpty() {
+			// Проверяем, что scope имеет тип ResourceIdentifierScope
+			if ris, ok := scope.(ports.ResourceIdentifierScope); ok && !ris.IsEmpty() {
+				// Создаем временную карту для хранения политик вне области видимости
+				tempPolicies := make(map[string]models.AddressGroupBindingPolicy)
+
+				// Создаем карту идентификаторов в области видимости для быстрого поиска
+				scopeIds := make(map[string]bool)
+				for _, id := range ris.Identifiers {
+					scopeIds[id.Key()] = true
+				}
+
+				// Сохраняем политики вне области видимости
+				for k, v := range w.addressGroupBindingPolicies {
+					if !scopeIds[k] {
+						tempPolicies[k] = v
+					}
+				}
+
+				// Очищаем карту и восстанавливаем политики вне области видимости
+				w.addressGroupBindingPolicies = make(map[string]models.AddressGroupBindingPolicy)
+				for k, v := range tempPolicies {
+					w.addressGroupBindingPolicies[k] = v
+				}
+			} else {
+				// Если scope не ResourceIdentifierScope, но не пустой,
+				// то мы не знаем, как его обрабатывать, поэтому не удаляем ничего
+			}
+		} else {
+			// Если область пуста, очищаем всю карту
+			w.addressGroupBindingPolicies = make(map[string]models.AddressGroupBindingPolicy)
+		}
+
+		// Добавляем новые политики
+		for _, policy := range policies {
+			w.addressGroupBindingPolicies[policy.Key()] = policy
+		}
+
+	case models.SyncOpUpsert:
+		// Только добавление и обновление
+		for _, policy := range policies {
+			w.addressGroupBindingPolicies[policy.Key()] = policy
+		}
+
+	case models.SyncOpDelete:
+		// Только удаление
+		for _, policy := range policies {
+			delete(w.addressGroupBindingPolicies, policy.Key())
+		}
+	}
+
+	return nil
+}
+
 func (w *writer) Commit() error {
 	if w.services != nil {
 		w.registry.db.SetServices(w.services)
@@ -507,6 +586,9 @@ func (w *writer) Commit() error {
 	}
 	if w.addressGroupPortMappings != nil {
 		w.registry.db.SetAddressGroupPortMappings(w.addressGroupPortMappings)
+	}
+	if w.addressGroupBindingPolicies != nil {
+		w.registry.db.SetAddressGroupBindingPolicies(w.addressGroupBindingPolicies)
 	}
 	if w.ruleS2S != nil {
 		w.registry.db.SetRuleS2S(w.ruleS2S)
@@ -619,11 +701,29 @@ func (w *writer) DeleteServiceAliasesByIDs(ctx context.Context, ids []models.Res
 	return nil
 }
 
+// DeleteAddressGroupBindingPoliciesByIDs deletes address group binding policies by IDs
+func (w *writer) DeleteAddressGroupBindingPoliciesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	if w.addressGroupBindingPolicies == nil {
+		w.addressGroupBindingPolicies = make(map[string]models.AddressGroupBindingPolicy)
+		// Copy existing address group binding policies
+		for k, v := range w.registry.db.GetAddressGroupBindingPolicies() {
+			w.addressGroupBindingPolicies[k] = v
+		}
+	}
+
+	for _, id := range ids {
+		delete(w.addressGroupBindingPolicies, id.Key())
+	}
+
+	return nil
+}
+
 func (w *writer) Abort() {
 	w.services = nil
 	w.addressGroups = nil
 	w.addressGroupBindings = nil
 	w.addressGroupPortMappings = nil
+	w.addressGroupBindingPolicies = nil
 	w.ruleS2S = nil
 	w.serviceAliases = nil
 }

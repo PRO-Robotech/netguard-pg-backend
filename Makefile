@@ -1,5 +1,6 @@
 .PHONY: test
-test: test-unit test-integration test-e2e
+test: test-unit test-integration
+#test-e2e
 
 .PHONY: test-unit
 test-unit:

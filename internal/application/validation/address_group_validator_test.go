@@ -43,9 +43,9 @@ func TestAddressGroupValidator_ValidateExists(t *testing.T) {
 func TestAddressGroupValidator_CheckDependencies(t *testing.T) {
 	// Create a mock reader with no dependencies
 	mockReader := &MockReaderForAddressGroupValidator{
-		addressGroupID:      "test-address-group",
-		hasServiceRefs:      false,
-		hasBindingRefs:      false,
+		addressGroupID: "test-address-group",
+		hasServiceRefs: false,
+		hasBindingRefs: false,
 	}
 
 	validator := validation.NewAddressGroupValidator(mockReader)
@@ -176,5 +176,13 @@ func (m *MockReaderForAddressGroupValidator) GetRuleS2SByID(ctx context.Context,
 }
 
 func (m *MockReaderForAddressGroupValidator) GetServiceAliasByID(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error) {
+	return nil, nil
+}
+
+func (m *MockReaderForAddressGroupValidator) ListAddressGroupBindingPolicies(ctx context.Context, consume func(models.AddressGroupBindingPolicy) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReaderForAddressGroupValidator) GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
 	return nil, nil
 }

@@ -126,6 +126,18 @@ message ServiceAlias {
   ServiceRef service_ref = 2;
 }
 
+// AddressGroupBindingPolicy - policy allowing binding of a service to an address group
+message AddressGroupBindingPolicy {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      required: ["self_ref", "service_ref", "address_group_ref"]
+    }
+  };
+  ResourceIdentifier self_ref = 1;
+  ServiceRef service_ref = 2;
+  AddressGroupRef address_group_ref = 3;
+}
+
 // RuleS2S - rule between two services
 message RuleS2S {
   option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {

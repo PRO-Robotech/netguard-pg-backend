@@ -290,3 +290,11 @@ func (m *MockReaderForServiceAliasValidator) GetRuleS2SByID(ctx context.Context,
 func (m *MockReaderForServiceAliasValidator) GetServiceAliasByID(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error) {
 	return nil, nil
 }
+
+func (m *MockReaderForServiceAliasValidator) ListAddressGroupBindingPolicies(ctx context.Context, consume func(models.AddressGroupBindingPolicy) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReaderForServiceAliasValidator) GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
+	return nil, nil
+}

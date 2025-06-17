@@ -206,3 +206,33 @@ func (r *reader) GetServiceAliasByID(ctx context.Context, id models.ResourceIden
 	}
 	return nil, nil
 }
+
+func (r *reader) ListAddressGroupBindingPolicies(ctx context.Context, consume func(models.AddressGroupBindingPolicy) error, scope ports.Scope) error {
+	policies := r.registry.db.GetAddressGroupBindingPolicies()
+	if scope != nil && !scope.IsEmpty() {
+		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && !ris.IsEmpty() {
+			for _, id := range ris.Identifiers {
+				if policy, ok := policies[id.Key()]; ok {
+					if err := consume(policy); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		}
+	}
+	for _, policy := range policies {
+		if err := consume(policy); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *reader) GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
+	policies := r.registry.db.GetAddressGroupBindingPolicies()
+	if policy, ok := policies[id.Key()]; ok {
+		return &policy, nil
+	}
+	return nil, nil
+}

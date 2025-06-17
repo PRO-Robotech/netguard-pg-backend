@@ -26,6 +26,7 @@ type (
 		ListAddressGroupPortMappings(ctx context.Context, consume func(models.AddressGroupPortMapping) error, scope Scope) error
 		ListRuleS2S(ctx context.Context, consume func(models.RuleS2S) error, scope Scope) error
 		ListServiceAliases(ctx context.Context, consume func(models.ServiceAlias) error, scope Scope) error
+		ListAddressGroupBindingPolicies(ctx context.Context, consume func(models.AddressGroupBindingPolicy) error, scope Scope) error
 		GetSyncStatus(ctx context.Context) (*models.SyncStatus, error)
 
 		// Get methods with ResourceIdentifier
@@ -35,6 +36,7 @@ type (
 		GetAddressGroupPortMappingByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupPortMapping, error)
 		GetRuleS2SByID(ctx context.Context, id models.ResourceIdentifier) (*models.RuleS2S, error)
 		GetServiceAliasByID(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error)
+		GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error)
 	}
 
 	// Reader defines read operations
@@ -52,6 +54,7 @@ type (
 		SyncAddressGroupPortMappings(ctx context.Context, mappings []models.AddressGroupPortMapping, scope Scope, opts ...Option) error
 		SyncRuleS2S(ctx context.Context, rules []models.RuleS2S, scope Scope, opts ...Option) error
 		SyncServiceAliases(ctx context.Context, aliases []models.ServiceAlias, scope Scope, opts ...Option) error
+		SyncAddressGroupBindingPolicies(ctx context.Context, policies []models.AddressGroupBindingPolicy, scope Scope, opts ...Option) error
 
 		// Delete methods with ResourceIdentifier
 		DeleteServicesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
@@ -60,6 +63,7 @@ type (
 		DeleteAddressGroupPortMappingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
 		DeleteRuleS2SByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
 		DeleteServiceAliasesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
+		DeleteAddressGroupBindingPoliciesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
 
 		Commit() error
 		Abort()

@@ -423,7 +423,7 @@ func TestServiceValidator_CheckBindingsPortOverlaps(t *testing.T) {
 	}
 
 	// Добавляем binding в mock reader
-	mockReader.bindings = append(mockReader.bindings, binding)
+	mockReader.addressGroupBindings = append(mockReader.addressGroupBindings, binding)
 
 	// Создаем AddressGroupPortMapping для test-ag
 	agpm := models.AddressGroupPortMapping{
@@ -572,4 +572,12 @@ func TestServiceValidator_ValidateForUpdate(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (m *MockReaderForServiceValidator) ListAddressGroupBindingPolicies(ctx context.Context, consume func(models.AddressGroupBindingPolicy) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReaderForServiceValidator) GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
+	return nil, nil
 }

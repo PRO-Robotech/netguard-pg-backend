@@ -36,50 +36,41 @@ func TestAddressGroupBindingValidator_ValidateForCreation(t *testing.T) {
 		},
 	}
 
-	// Test when port mapping doesn't exist (should create a new one)
+	// Test when port mapping doesn't exist (should pass validation)
 	err := validator.ValidateForCreation(context.Background(), binding)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
 
-	// Check that a port mapping was created
-	if binding.PortMapping == nil {
-		t.Error("Expected port mapping to be created, got nil")
-	}
-
-	// Check that the port mapping has the correct ID
-	if binding.PortMapping.ResourceIdentifier.Key() != "test-address-group" {
-		t.Errorf("Expected port mapping ID to be 'test-address-group', got '%s'", binding.PortMapping.ResourceIdentifier.Key())
-	}
-
-	// Check that the port mapping has the service ports
-	serviceRef := models.ServiceRef{ResourceIdentifier: models.NewResourceIdentifier("test-service")}
-	if _, ok := binding.PortMapping.AccessPorts[serviceRef]; !ok {
-		t.Error("Expected port mapping to have service ports, got none")
-	}
-
-	// Test when port mapping exists (should update it and check for overlaps)
+	// Test when port mapping exists (should check for overlaps)
 	mockReader.portMappingExists = true
-	binding.PortMapping = nil // Reset port mapping
 
 	err = validator.ValidateForCreation(context.Background(), binding)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
 
-	// Check that a port mapping was created
-	if binding.PortMapping == nil {
-		t.Error("Expected port mapping to be created, got nil")
+	// Test with namespace mismatch
+	binding.Namespace = "different-ns"
+	err = validator.ValidateForCreation(context.Background(), binding)
+	if err == nil {
+		t.Error("Expected error for namespace mismatch, got nil")
 	}
 
-	// Check that the port mapping has the correct ID
-	if binding.PortMapping.ResourceIdentifier.Key() != "test-address-group" {
-		t.Errorf("Expected port mapping ID to be 'test-address-group', got '%s'", binding.PortMapping.ResourceIdentifier.Key())
+	// Test with non-existent service
+	mockReader.serviceExists = false
+	binding.Namespace = "test-ns" // Reset namespace
+	err = validator.ValidateForCreation(context.Background(), binding)
+	if err == nil {
+		t.Error("Expected error for non-existent service, got nil")
 	}
 
-	// Check that the port mapping has both the existing service ports and the new service ports
-	if len(binding.PortMapping.AccessPorts) != 2 {
-		t.Errorf("Expected port mapping to have 2 services, got %d", len(binding.PortMapping.AccessPorts))
+	// Test with non-existent address group
+	mockReader.serviceExists = true
+	mockReader.addressGroupExists = false
+	err = validator.ValidateForCreation(context.Background(), binding)
+	if err == nil {
+		t.Error("Expected error for non-existent address group, got nil")
 	}
 }
 
@@ -154,43 +145,27 @@ func TestAddressGroupBindingValidator_ValidateForUpdate(t *testing.T) {
 		},
 	}
 
-	// Test when port mapping doesn't exist (should create a new one)
+	// Test when port mapping doesn't exist (should pass validation)
 	err := validator.ValidateForUpdate(context.Background(), oldBinding, newBinding)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
 
-	// Check that a port mapping was created
-	if newBinding.PortMapping == nil {
-		t.Error("Expected port mapping to be created, got nil")
-	}
-
-	// Check that the port mapping has the correct ID
-	if newBinding.PortMapping.ResourceIdentifier.Key() != "test-address-group" {
-		t.Errorf("Expected port mapping ID to be 'test-address-group', got '%s'", newBinding.PortMapping.ResourceIdentifier.Key())
-	}
-
-	// Test when port mapping exists (should update it and check for overlaps)
+	// Test when port mapping exists (should check for overlaps)
 	mockReader.portMappingExists = true
-	newBinding.PortMapping = nil // Reset port mapping
 
 	err = validator.ValidateForUpdate(context.Background(), oldBinding, newBinding)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
 
-	// Check that a port mapping was created
-	if newBinding.PortMapping == nil {
-		t.Error("Expected port mapping to be created, got nil")
-	}
-
-	// Test when service reference is changed (should return error)
+	// Test with changed service reference (should return error)
 	newBindingWithChangedService := &models.AddressGroupBinding{
 		SelfRef: models.SelfRef{
 			ResourceIdentifier: models.NewResourceIdentifier("test-binding", models.WithNamespace("test-ns")),
 		},
 		ServiceRef: models.ServiceRef{
-			ResourceIdentifier: models.NewResourceIdentifier("other-service"),
+			ResourceIdentifier: models.NewResourceIdentifier("different-service"),
 		},
 		AddressGroupRef: models.AddressGroupRef{
 			ResourceIdentifier: models.NewResourceIdentifier("test-address-group"),
@@ -199,7 +174,7 @@ func TestAddressGroupBindingValidator_ValidateForUpdate(t *testing.T) {
 
 	err = validator.ValidateForUpdate(context.Background(), oldBinding, newBindingWithChangedService)
 	if err == nil {
-		t.Error("Expected error when changing service reference, got nil")
+		t.Error("Expected error when service reference is changed, got nil")
 	}
 
 	// Test when address group reference is changed (should return error)
@@ -392,22 +367,23 @@ func (m *MockReaderForAddressGroupBindingValidator) GetAddressGroupPortMappingBy
 			AccessPorts: make(map[models.ServiceRef]models.ServicePorts),
 		}
 
-		// Add some existing service ports
+		// Add some existing service ports for a different service
+		// Use a service name that is different from the one we're testing with
 		existingServiceRef := models.ServiceRef{
-			ResourceIdentifier: models.NewResourceIdentifier("existing-service"),
+			ResourceIdentifier: models.NewResourceIdentifier("different-service"),
 		}
 
 		existingServicePorts := models.ServicePorts{
 			Ports: make(models.ProtocolPorts),
 		}
 
-		// Add TCP port 8080
+		// Add TCP port 8080 (different from the test service's port 80)
 		existingServicePorts.Ports[models.TCP] = append(
 			existingServicePorts.Ports[models.TCP],
 			models.PortRange{Start: 8080, End: 8080},
 		)
 
-		// Add UDP port range 1000-2000
+		// Add UDP port range 1000-2000 (different from the test service's port 53)
 		existingServicePorts.Ports[models.UDP] = append(
 			existingServicePorts.Ports[models.UDP],
 			models.PortRange{Start: 1000, End: 2000},
@@ -425,5 +401,13 @@ func (m *MockReaderForAddressGroupBindingValidator) GetRuleS2SByID(ctx context.C
 }
 
 func (m *MockReaderForAddressGroupBindingValidator) GetServiceAliasByID(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error) {
+	return nil, nil
+}
+
+func (m *MockReaderForAddressGroupBindingValidator) ListAddressGroupBindingPolicies(ctx context.Context, consume func(models.AddressGroupBindingPolicy) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReaderForAddressGroupBindingValidator) GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
 	return nil, nil
 }
