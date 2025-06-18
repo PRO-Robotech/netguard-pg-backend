@@ -10,6 +10,7 @@ import (
 type reader struct {
 	registry *Registry
 	ctx      context.Context
+	writer   *writer // If not nil, use data from this writer instead of registry.db
 }
 
 func (r *reader) Close() error {
@@ -17,12 +18,67 @@ func (r *reader) Close() error {
 }
 
 func (r *reader) ListServices(ctx context.Context, consume func(models.Service) error, scope ports.Scope) error {
-	services := r.registry.db.GetServices()
+	var services map[string]models.Service
+	var bindings map[string]models.AddressGroupBinding
+
+	// Use data from writer if available
+	if r.writer != nil && r.writer.services != nil {
+		services = r.writer.services
+	} else {
+		services = r.registry.db.GetServices()
+	}
+
+	// Use data from writer if available
+	if r.writer != nil && r.writer.addressGroupBindings != nil {
+		bindings = r.writer.addressGroupBindings
+	} else {
+		bindings = r.registry.db.GetAddressGroupBindings()
+	}
+
 	if scope != nil && !scope.IsEmpty() {
 		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && !ris.IsEmpty() {
 			for _, id := range ris.Identifiers {
+				// If only namespace is set, return all services in that namespace
+				if id.Name == "" && id.Namespace != "" {
+					for _, service := range services {
+						if service.Namespace == id.Namespace {
+							// Create a copy of the service to avoid modifying the original
+							serviceCopy := service
+
+							// Clear the address groups to avoid duplicates
+							serviceCopy.AddressGroups = []models.AddressGroupRef{}
+
+							// Populate address groups from bindings
+							for _, binding := range bindings {
+								if binding.ServiceRef.Key() == serviceCopy.Key() {
+									serviceCopy.AddressGroups = append(serviceCopy.AddressGroups, binding.AddressGroupRef)
+								}
+							}
+
+							if err := consume(serviceCopy); err != nil {
+								return err
+							}
+						}
+					}
+					return nil
+				}
+
+				// Otherwise, look for the service by exact key
 				if service, ok := services[id.Key()]; ok {
-					if err := consume(service); err != nil {
+					// Create a copy of the service to avoid modifying the original
+					serviceCopy := service
+
+					// Clear the address groups to avoid duplicates
+					serviceCopy.AddressGroups = []models.AddressGroupRef{}
+
+					// Populate address groups from bindings
+					for _, binding := range bindings {
+						if binding.ServiceRef.Key() == serviceCopy.Key() {
+							serviceCopy.AddressGroups = append(serviceCopy.AddressGroups, binding.AddressGroupRef)
+						}
+					}
+
+					if err := consume(serviceCopy); err != nil {
 						return err
 					}
 				}
@@ -31,7 +87,20 @@ func (r *reader) ListServices(ctx context.Context, consume func(models.Service) 
 		}
 	}
 	for _, service := range services {
-		if err := consume(service); err != nil {
+		// Create a copy of the service to avoid modifying the original
+		serviceCopy := service
+
+		// Clear the address groups to avoid duplicates
+		serviceCopy.AddressGroups = []models.AddressGroupRef{}
+
+		// Populate address groups from bindings
+		for _, binding := range bindings {
+			if binding.ServiceRef.Key() == serviceCopy.Key() {
+				serviceCopy.AddressGroups = append(serviceCopy.AddressGroups, binding.AddressGroupRef)
+			}
+		}
+
+		if err := consume(serviceCopy); err != nil {
 			return err
 		}
 	}
@@ -39,10 +108,30 @@ func (r *reader) ListServices(ctx context.Context, consume func(models.Service) 
 }
 
 func (r *reader) ListAddressGroups(ctx context.Context, consume func(models.AddressGroup) error, scope ports.Scope) error {
-	addressGroups := r.registry.db.GetAddressGroups()
+	var addressGroups map[string]models.AddressGroup
+
+	// Use data from writer if available
+	if r.writer != nil && r.writer.addressGroups != nil {
+		addressGroups = r.writer.addressGroups
+	} else {
+		addressGroups = r.registry.db.GetAddressGroups()
+	}
 	if scope != nil && !scope.IsEmpty() {
 		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && !ris.IsEmpty() {
 			for _, id := range ris.Identifiers {
+				// If only namespace is set, return all address groups in that namespace
+				if id.Name == "" && id.Namespace != "" {
+					for _, addressGroup := range addressGroups {
+						if addressGroup.Namespace == id.Namespace {
+							if err := consume(addressGroup); err != nil {
+								return err
+							}
+						}
+					}
+					return nil
+				}
+
+				// Otherwise, look for the address group by exact key
 				if addressGroup, ok := addressGroups[id.Key()]; ok {
 					if err := consume(addressGroup); err != nil {
 						return err
@@ -61,10 +150,30 @@ func (r *reader) ListAddressGroups(ctx context.Context, consume func(models.Addr
 }
 
 func (r *reader) ListAddressGroupBindings(ctx context.Context, consume func(models.AddressGroupBinding) error, scope ports.Scope) error {
-	bindings := r.registry.db.GetAddressGroupBindings()
+	var bindings map[string]models.AddressGroupBinding
+
+	// Use data from writer if available
+	if r.writer != nil && r.writer.addressGroupBindings != nil {
+		bindings = r.writer.addressGroupBindings
+	} else {
+		bindings = r.registry.db.GetAddressGroupBindings()
+	}
 	if scope != nil && !scope.IsEmpty() {
 		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && !ris.IsEmpty() {
 			for _, id := range ris.Identifiers {
+				// If only namespace is set, return all bindings in that namespace
+				if id.Name == "" && id.Namespace != "" {
+					for _, binding := range bindings {
+						if binding.Namespace == id.Namespace {
+							if err := consume(binding); err != nil {
+								return err
+							}
+						}
+					}
+					return nil
+				}
+
+				// Otherwise, look for the binding by exact key
 				if binding, ok := bindings[id.Key()]; ok {
 					if err := consume(binding); err != nil {
 						return err
@@ -83,10 +192,30 @@ func (r *reader) ListAddressGroupBindings(ctx context.Context, consume func(mode
 }
 
 func (r *reader) ListAddressGroupPortMappings(ctx context.Context, consume func(models.AddressGroupPortMapping) error, scope ports.Scope) error {
-	mappings := r.registry.db.GetAddressGroupPortMappings()
+	var mappings map[string]models.AddressGroupPortMapping
+
+	// Use data from writer if available
+	if r.writer != nil && r.writer.addressGroupPortMappings != nil {
+		mappings = r.writer.addressGroupPortMappings
+	} else {
+		mappings = r.registry.db.GetAddressGroupPortMappings()
+	}
 	if scope != nil && !scope.IsEmpty() {
 		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && !ris.IsEmpty() {
 			for _, id := range ris.Identifiers {
+				// If only namespace is set, return all port mappings in that namespace
+				if id.Name == "" && id.Namespace != "" {
+					for _, mapping := range mappings {
+						if mapping.Namespace == id.Namespace {
+							if err := consume(mapping); err != nil {
+								return err
+							}
+						}
+					}
+					return nil
+				}
+
+				// Otherwise, look for the port mapping by exact key
 				if mapping, ok := mappings[id.Key()]; ok {
 					if err := consume(mapping); err != nil {
 						return err
@@ -105,10 +234,30 @@ func (r *reader) ListAddressGroupPortMappings(ctx context.Context, consume func(
 }
 
 func (r *reader) ListRuleS2S(ctx context.Context, consume func(models.RuleS2S) error, scope ports.Scope) error {
-	rules := r.registry.db.GetRuleS2S()
+	var rules map[string]models.RuleS2S
+
+	// Use data from writer if available
+	if r.writer != nil && r.writer.ruleS2S != nil {
+		rules = r.writer.ruleS2S
+	} else {
+		rules = r.registry.db.GetRuleS2S()
+	}
 	if scope != nil && !scope.IsEmpty() {
 		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && !ris.IsEmpty() {
 			for _, id := range ris.Identifiers {
+				// If only namespace is set, return all rules in that namespace
+				if id.Name == "" && id.Namespace != "" {
+					for _, rule := range rules {
+						if rule.Namespace == id.Namespace {
+							if err := consume(rule); err != nil {
+								return err
+							}
+						}
+					}
+					return nil
+				}
+
+				// Otherwise, look for the rule by exact key
 				if rule, ok := rules[id.Key()]; ok {
 					if err := consume(rule); err != nil {
 						return err
@@ -127,10 +276,30 @@ func (r *reader) ListRuleS2S(ctx context.Context, consume func(models.RuleS2S) e
 }
 
 func (r *reader) ListServiceAliases(ctx context.Context, consume func(models.ServiceAlias) error, scope ports.Scope) error {
-	aliases := r.registry.db.GetServiceAliases()
+	var aliases map[string]models.ServiceAlias
+
+	// Use data from writer if available
+	if r.writer != nil && r.writer.serviceAliases != nil {
+		aliases = r.writer.serviceAliases
+	} else {
+		aliases = r.registry.db.GetServiceAliases()
+	}
 	if scope != nil && !scope.IsEmpty() {
 		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && !ris.IsEmpty() {
 			for _, id := range ris.Identifiers {
+				// If only namespace is set, return all aliases in that namespace
+				if id.Name == "" && id.Namespace != "" {
+					for _, alias := range aliases {
+						if alias.Namespace == id.Namespace {
+							if err := consume(alias); err != nil {
+								return err
+							}
+						}
+					}
+					return nil
+				}
+
+				// Otherwise, look for the alias by exact key
 				if alias, ok := aliases[id.Key()]; ok {
 					if err := consume(alias); err != nil {
 						return err
@@ -155,16 +324,53 @@ func (r *reader) GetSyncStatus(ctx context.Context) (*models.SyncStatus, error) 
 
 // GetServiceByID gets a service by ID
 func (r *reader) GetServiceByID(ctx context.Context, id models.ResourceIdentifier) (*models.Service, error) {
-	services := r.registry.db.GetServices()
+	var services map[string]models.Service
+	var bindings map[string]models.AddressGroupBinding
+
+	// Use data from writer if available
+	if r.writer != nil && r.writer.services != nil {
+		services = r.writer.services
+	} else {
+		services = r.registry.db.GetServices()
+	}
+
 	if service, ok := services[id.Key()]; ok {
-		return &service, nil
+		// Create a copy of the service to avoid modifying the original
+		serviceCopy := service
+
+		// Clear the address groups to avoid duplicates
+		serviceCopy.AddressGroups = []models.AddressGroupRef{}
+
+		// Get all bindings to populate the address groups
+		if r.writer != nil && r.writer.addressGroupBindings != nil {
+			bindings = r.writer.addressGroupBindings
+		} else {
+			bindings = r.registry.db.GetAddressGroupBindings()
+		}
+		for _, binding := range bindings {
+			// Check if the binding is for this service
+			if binding.ServiceRef.Key() == id.Key() {
+				// Add the address group to the service
+				serviceCopy.AddressGroups = append(serviceCopy.AddressGroups, binding.AddressGroupRef)
+			}
+		}
+
+		return &serviceCopy, nil
 	}
 	return nil, ports.ErrNotFound
 }
 
 // GetAddressGroupByID gets an address group by ID
 func (r *reader) GetAddressGroupByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroup, error) {
-	addressGroups := r.registry.db.GetAddressGroups()
+	var addressGroups map[string]models.AddressGroup
+
+	// Use data from writer if available
+	if r.writer != nil && r.writer.addressGroups != nil {
+		addressGroups = r.writer.addressGroups
+	} else {
+		addressGroups = r.registry.db.GetAddressGroups()
+	}
+
 	if addressGroup, ok := addressGroups[id.Key()]; ok {
 		return &addressGroup, nil
 	}
@@ -173,7 +379,15 @@ func (r *reader) GetAddressGroupByID(ctx context.Context, id models.ResourceIden
 
 // GetAddressGroupBindingByID gets an address group binding by ID
 func (r *reader) GetAddressGroupBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBinding, error) {
-	bindings := r.registry.db.GetAddressGroupBindings()
+	var bindings map[string]models.AddressGroupBinding
+
+	// Use data from writer if available
+	if r.writer != nil && r.writer.addressGroupBindings != nil {
+		bindings = r.writer.addressGroupBindings
+	} else {
+		bindings = r.registry.db.GetAddressGroupBindings()
+	}
+
 	if binding, ok := bindings[id.Key()]; ok {
 		return &binding, nil
 	}
@@ -182,7 +396,15 @@ func (r *reader) GetAddressGroupBindingByID(ctx context.Context, id models.Resou
 
 // GetAddressGroupPortMappingByID gets an address group port mapping by ID
 func (r *reader) GetAddressGroupPortMappingByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupPortMapping, error) {
-	mappings := r.registry.db.GetAddressGroupPortMappings()
+	var mappings map[string]models.AddressGroupPortMapping
+
+	// Use data from writer if available
+	if r.writer != nil && r.writer.addressGroupPortMappings != nil {
+		mappings = r.writer.addressGroupPortMappings
+	} else {
+		mappings = r.registry.db.GetAddressGroupPortMappings()
+	}
+
 	if mapping, ok := mappings[id.Key()]; ok {
 		return &mapping, nil
 	}
@@ -191,7 +413,15 @@ func (r *reader) GetAddressGroupPortMappingByID(ctx context.Context, id models.R
 
 // GetRuleS2SByID gets a rule s2s by ID
 func (r *reader) GetRuleS2SByID(ctx context.Context, id models.ResourceIdentifier) (*models.RuleS2S, error) {
-	rules := r.registry.db.GetRuleS2S()
+	var rules map[string]models.RuleS2S
+
+	// Use data from writer if available
+	if r.writer != nil && r.writer.ruleS2S != nil {
+		rules = r.writer.ruleS2S
+	} else {
+		rules = r.registry.db.GetRuleS2S()
+	}
+
 	if rule, ok := rules[id.Key()]; ok {
 		return &rule, nil
 	}
@@ -200,7 +430,15 @@ func (r *reader) GetRuleS2SByID(ctx context.Context, id models.ResourceIdentifie
 
 // GetServiceAliasByID gets a service alias by ID
 func (r *reader) GetServiceAliasByID(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error) {
-	aliases := r.registry.db.GetServiceAliases()
+	var aliases map[string]models.ServiceAlias
+
+	// Use data from writer if available
+	if r.writer != nil && r.writer.serviceAliases != nil {
+		aliases = r.writer.serviceAliases
+	} else {
+		aliases = r.registry.db.GetServiceAliases()
+	}
+
 	if alias, ok := aliases[id.Key()]; ok {
 		return &alias, nil
 	}
@@ -208,10 +446,30 @@ func (r *reader) GetServiceAliasByID(ctx context.Context, id models.ResourceIden
 }
 
 func (r *reader) ListAddressGroupBindingPolicies(ctx context.Context, consume func(models.AddressGroupBindingPolicy) error, scope ports.Scope) error {
-	policies := r.registry.db.GetAddressGroupBindingPolicies()
+	var policies map[string]models.AddressGroupBindingPolicy
+
+	// Use data from writer if available
+	if r.writer != nil && r.writer.addressGroupBindingPolicies != nil {
+		policies = r.writer.addressGroupBindingPolicies
+	} else {
+		policies = r.registry.db.GetAddressGroupBindingPolicies()
+	}
 	if scope != nil && !scope.IsEmpty() {
 		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && !ris.IsEmpty() {
 			for _, id := range ris.Identifiers {
+				// Если установлен только namespace, возвращаем все политики в этом namespace
+				if id.Name == "" && id.Namespace != "" {
+					for _, policy := range policies {
+						if policy.Namespace == id.Namespace {
+							if err := consume(policy); err != nil {
+								return err
+							}
+						}
+					}
+					return nil
+				}
+
+				// Иначе ищем политику по точному ключу
 				if policy, ok := policies[id.Key()]; ok {
 					if err := consume(policy); err != nil {
 						return err
@@ -230,7 +488,15 @@ func (r *reader) ListAddressGroupBindingPolicies(ctx context.Context, consume fu
 }
 
 func (r *reader) GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
-	policies := r.registry.db.GetAddressGroupBindingPolicies()
+	var policies map[string]models.AddressGroupBindingPolicy
+
+	// Use data from writer if available
+	if r.writer != nil && r.writer.addressGroupBindingPolicies != nil {
+		policies = r.writer.addressGroupBindingPolicies
+	} else {
+		policies = r.registry.db.GetAddressGroupBindingPolicies()
+	}
+
 	if policy, ok := policies[id.Key()]; ok {
 		return &policy, nil
 	}
@@ -238,10 +504,30 @@ func (r *reader) GetAddressGroupBindingPolicyByID(ctx context.Context, id models
 }
 
 func (r *reader) ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAgRule) error, scope ports.Scope) error {
-	rules := r.registry.db.GetIEAgAgRules()
+	var rules map[string]models.IEAgAgRule
+
+	// Use data from writer if available
+	if r.writer != nil && r.writer.ieAgAgRules != nil {
+		rules = r.writer.ieAgAgRules
+	} else {
+		rules = r.registry.db.GetIEAgAgRules()
+	}
 	if scope != nil && !scope.IsEmpty() {
 		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && !ris.IsEmpty() {
 			for _, id := range ris.Identifiers {
+				// If only namespace is set, return all rules in that namespace
+				if id.Name == "" && id.Namespace != "" {
+					for _, rule := range rules {
+						if rule.Namespace == id.Namespace {
+							if err := consume(rule); err != nil {
+								return err
+							}
+						}
+					}
+					return nil
+				}
+
+				// Otherwise, look for the rule by exact key
 				if rule, ok := rules[id.Key()]; ok {
 					if err := consume(rule); err != nil {
 						return err
@@ -260,7 +546,15 @@ func (r *reader) ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAg
 }
 
 func (r *reader) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
-	rules := r.registry.db.GetIEAgAgRules()
+	var rules map[string]models.IEAgAgRule
+
+	// Use data from writer if available
+	if r.writer != nil && r.writer.ieAgAgRules != nil {
+		rules = r.writer.ieAgAgRules
+	} else {
+		rules = r.registry.db.GetIEAgAgRules()
+	}
+
 	if rule, ok := rules[id.Key()]; ok {
 		return &rule, nil
 	}

@@ -347,6 +347,87 @@ func TestCreateService(t *testing.T) {
 	}
 }
 
+// TestGetServiceByID тестирует метод GetServiceByID
+func TestGetServiceByID(t *testing.T) {
+	ctx := context.Background()
+	mockRegistry := NewMockRegistry()
+
+	// Создаем сервис для тестирования
+	service := models.Service{
+		SelfRef: models.NewSelfRef(models.NewResourceIdentifier("test-service")),
+		IngressPorts: []models.IngressPort{
+			{Protocol: models.TCP, Port: "80"},
+		},
+	}
+	mockRegistry.reader.AddService(service)
+
+	netguardService := services.NewNetguardService(mockRegistry)
+
+	// Тест успешного получения
+	retrievedService, err := netguardService.GetServiceByID(ctx, models.NewResourceIdentifier("test-service"))
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if retrievedService == nil {
+		t.Error("Expected service, got nil")
+	} else if retrievedService.Key() != service.Key() {
+		t.Errorf("Expected service with key %s, got %s", service.Key(), retrievedService.Key())
+	}
+
+	// Тест сервис не найден
+	retrievedService, err = netguardService.GetServiceByID(ctx, models.NewResourceIdentifier("non-existent-service"))
+	if err == nil {
+		t.Error("Expected error, got nil")
+	}
+	if retrievedService != nil {
+		t.Errorf("Expected nil service, got %v", retrievedService)
+	}
+}
+
+// TestGetServices тестирует метод GetServices
+func TestGetServices(t *testing.T) {
+	ctx := context.Background()
+	mockRegistry := NewMockRegistry()
+
+	// Создаем сервисы для тестирования
+	service1 := models.Service{
+		SelfRef: models.NewSelfRef(models.NewResourceIdentifier("test-service-1")),
+		IngressPorts: []models.IngressPort{
+			{Protocol: models.TCP, Port: "80"},
+		},
+	}
+	service2 := models.Service{
+		SelfRef: models.NewSelfRef(models.NewResourceIdentifier("test-service-2")),
+		IngressPorts: []models.IngressPort{
+			{Protocol: models.TCP, Port: "443"},
+		},
+	}
+	mockRegistry.reader.AddService(service1)
+	mockRegistry.reader.AddService(service2)
+
+	netguardService := services.NewNetguardService(mockRegistry)
+
+	// Тест успешного получения
+	svc, err := netguardService.GetServices(ctx, nil)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if len(svc) != 2 {
+		t.Errorf("Expected 2 services, got %d", len(svc))
+	}
+
+	// Тест с пустым результатом
+	emptyRegistry := NewMockRegistry() // Сбрасываем реестр
+	emptyService := services.NewNetguardService(emptyRegistry)
+	emptyResults, err := emptyService.GetServices(ctx, nil)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if len(emptyResults) != 0 {
+		t.Errorf("Expected 0 services, got %d", len(emptyResults))
+	}
+}
+
 // TestUpdateService тестирует метод UpdateService
 func TestUpdateService(t *testing.T) {
 	ctx := context.Background()
@@ -463,4 +544,9 @@ func (m *MockReader) ListAddressGroupBindingPolicies(ctx context.Context, consum
 
 func (m *MockReader) GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
 	return nil, nil
+}
+
+// AddIEAgAgRule adds an IEAgAgRule to the mock reader
+func (m *MockReader) AddIEAgAgRule(rule models.IEAgAgRule) {
+	m.ieAgAgRules[rule.Key()] = rule
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -316,9 +317,77 @@ func (s *NetguardService) syncServices(ctx context.Context, writer ports.Writer,
 		scope = ports.EmptyScope{}
 	}
 
-	// Выполнение операции с указанной опцией
+	// Если это удаление, используем DeleteServicesByIDs для корректного каскадного удаления
+	if syncOp == models.SyncOpDelete {
+		// Собираем ID сервисов
+		var ids []models.ResourceIdentifier
+		for _, service := range services {
+			ids = append(ids, service.ResourceIdentifier)
+		}
+
+		// Используем DeleteServicesByIDs для каскадного удаления сервисов и связанных ресурсов
+		return s.DeleteServicesByIDs(ctx, ids)
+	}
+
+	// Выполнение операции с указанной опцией для не-удаления
 	if err := writer.SyncServices(ctx, services, scope, ports.WithSyncOp(syncOp)); err != nil {
 		return errors.Wrap(err, "failed to sync services")
+	}
+
+	// Если это не удаление, обновляем связанные ресурсы
+	if syncOp != models.SyncOpDelete {
+		// Получаем reader, который видит изменения в текущей транзакции
+		txReader, err := s.registry.ReaderFromWriter(ctx, writer)
+		if err != nil {
+			return errors.Wrap(err, "failed to get transaction reader")
+		}
+		defer txReader.Close()
+
+		// Собираем ID сервисов
+		var serviceIDs []models.ResourceIdentifier
+		for _, service := range services {
+			serviceIDs = append(serviceIDs, service.ResourceIdentifier)
+		}
+
+		// 1. Обновляем IE AG AG правила
+		// Находим все RuleS2S, которые ссылаются на эти сервисы, используя reader из транзакции
+		affectedRules, err := s.findRuleS2SForServicesWithReader(ctx, txReader, serviceIDs)
+		if err != nil {
+			return errors.Wrap(err, "failed to find affected RuleS2S")
+		}
+
+		log.Println("affected Rules", affectedRules)
+
+		// Обновляем IE AG AG правила для затронутых RuleS2S, используя reader из транзакции
+		if len(affectedRules) > 0 {
+			if err = s.updateIEAgAgRulesForRuleS2SWithReader(ctx, writer, txReader, affectedRules, models.SyncOpFullSync); err != nil {
+				return errors.Wrap(err, "failed to update IEAgAgRules for affected RuleS2S")
+			}
+		}
+
+		// 2. Обновляем Port Mapping
+		// Находим все привязки AddressGroupBinding для этих сервисов, используя reader из транзакции
+		var bindings []models.AddressGroupBinding
+		err = txReader.ListAddressGroupBindings(ctx, func(binding models.AddressGroupBinding) error {
+			for _, serviceID := range serviceIDs {
+				if binding.ServiceRef.Key() == serviceID.Key() {
+					bindings = append(bindings, binding)
+					break
+				}
+			}
+			return nil
+		}, nil)
+
+		if err != nil {
+			return errors.Wrap(err, "failed to list address group bindings")
+		}
+
+		// Обновляем Port Mapping для каждой привязки, используя reader из транзакции
+		for _, binding := range bindings {
+			if err := s.SyncAddressGroupPortMappingsWithWriterAndReader(ctx, writer, txReader, binding, models.SyncOpFullSync); err != nil {
+				return errors.Wrapf(err, "failed to sync port mapping for binding %s", binding.Key())
+			}
+		}
 	}
 
 	if err := writer.Commit(); err != nil {
@@ -336,9 +405,14 @@ func (s *NetguardService) findRuleS2SForServices(ctx context.Context, serviceIDs
 	}
 	defer reader.Close()
 
+	return s.findRuleS2SForServicesWithReader(ctx, reader, serviceIDs)
+}
+
+// findRuleS2SForServicesWithReader finds all RuleS2S that reference the given services using the provided reader
+func (s *NetguardService) findRuleS2SForServicesWithReader(ctx context.Context, reader ports.Reader, serviceIDs []models.ResourceIdentifier) ([]models.RuleS2S, error) {
 	// First, find all ServiceAliases that reference these services
 	var serviceAliases []models.ServiceAlias
-	err = reader.ListServiceAliases(ctx, func(alias models.ServiceAlias) error {
+	err := reader.ListServiceAliases(ctx, func(alias models.ServiceAlias) error {
 		for _, serviceID := range serviceIDs {
 			if alias.ServiceRef.Key() == serviceID.Key() {
 				serviceAliases = append(serviceAliases, alias)
@@ -383,13 +457,20 @@ func (s *NetguardService) updateIEAgAgRulesForRuleS2S(ctx context.Context, write
 	if err != nil {
 		return errors.Wrap(err, "failed to get reader")
 	}
+	defer reader.Close()
 
+	return s.updateIEAgAgRulesForRuleS2SWithReader(ctx, writer, reader, rules, syncOp)
+}
+
+// updateIEAgAgRulesForRuleS2SWithReader updates the IEAgAgRules for the given RuleS2S using the provided reader
+// syncOp - операция синхронизации (FullSync, Upsert, Delete)
+func (s *NetguardService) updateIEAgAgRulesForRuleS2SWithReader(ctx context.Context, writer ports.Writer, reader ports.Reader, rules []models.RuleS2S, syncOp models.SyncOp) error {
+	// Get all existing IEAgAgRules to detect obsolete ones
 	existingRules := make(map[string]models.IEAgAgRule)
-	err = reader.ListIEAgAgRules(ctx, func(rule models.IEAgAgRule) error {
+	err := reader.ListIEAgAgRules(ctx, func(rule models.IEAgAgRule) error {
 		existingRules[rule.Key()] = rule
 		return nil
 	}, nil)
-	reader.Close()
 
 	if err != nil {
 		return errors.Wrap(err, "failed to list existing IEAgAgRules")
@@ -401,7 +482,8 @@ func (s *NetguardService) updateIEAgAgRulesForRuleS2S(ctx context.Context, write
 
 	// Generate IEAgAgRules for each RuleS2S
 	for _, rule := range rules {
-		ieAgAgRules, err := s.GenerateIEAgAgRulesFromRuleS2S(ctx, rule)
+		log.Println("rule", rule)
+		ieAgAgRules, err := s.GenerateIEAgAgRulesFromRuleS2SWithReader(ctx, reader, rule)
 		if err != nil {
 			return errors.Wrapf(err, "failed to generate IEAgAgRules for RuleS2S %s", rule.Key())
 		}
@@ -561,7 +643,19 @@ func (s *NetguardService) syncAddressGroups(ctx context.Context, writer ports.Wr
 		scope = ports.EmptyScope{}
 	}
 
-	// Выполнение операции с указанной опцией
+	// Если это удаление, используем DeleteAddressGroupsByIDs для корректного каскадного удаления
+	if syncOp == models.SyncOpDelete {
+		// Собираем ID групп адресов
+		var ids []models.ResourceIdentifier
+		for _, addressGroup := range addressGroups {
+			ids = append(ids, addressGroup.ResourceIdentifier)
+		}
+
+		// Используем DeleteAddressGroupsByIDs для каскадного удаления групп адресов и связанных ресурсов
+		return s.DeleteAddressGroupsByIDs(ctx, ids)
+	}
+
+	// Выполнение операции с указанной опцией для не-удаления
 	if err := writer.SyncAddressGroups(ctx, addressGroups, scope, ports.WithSyncOp(syncOp)); err != nil {
 		return errors.Wrap(err, "failed to sync address groups")
 	}
@@ -745,7 +839,19 @@ func (s *NetguardService) syncAddressGroupBindings(ctx context.Context, writer p
 		scope = ports.EmptyScope{}
 	}
 
-	// Выполнение операции с указанной опцией
+	// Если это удаление, используем DeleteAddressGroupBindingsByIDs для корректного каскадного удаления
+	if syncOp == models.SyncOpDelete {
+		// Собираем ID привязок групп адресов
+		var ids []models.ResourceIdentifier
+		for _, binding := range bindings {
+			ids = append(ids, binding.ResourceIdentifier)
+		}
+
+		// Используем DeleteAddressGroupBindingsByIDs для каскадного удаления привязок и связанных ресурсов
+		return s.DeleteAddressGroupBindingsByIDs(ctx, ids)
+	}
+
+	// Выполнение операции с указанной опцией для не-удаления
 	if err := writer.SyncAddressGroupBindings(ctx, bindings, scope, ports.WithSyncOp(syncOp)); err != nil {
 		return errors.Wrap(err, "failed to sync address group bindings")
 	}
@@ -775,6 +881,14 @@ func (s *NetguardService) SyncAddressGroupPortMappingsWithWriter(ctx context.Con
 	}
 	defer reader.Close()
 
+	return s.SyncAddressGroupPortMappingsWithWriterAndReader(ctx, writer, reader, binding, syncOp)
+}
+
+// SyncAddressGroupPortMappingsWithWriterAndReader обеспечивает синхронизацию port mapping для binding
+// writer - существующий открытый writer для транзакции
+// reader - существующий открытый reader, который может видеть изменения в текущей транзакции
+// syncOp - операция синхронизации (FullSync, Upsert, Delete)
+func (s *NetguardService) SyncAddressGroupPortMappingsWithWriterAndReader(ctx context.Context, writer ports.Writer, reader ports.Reader, binding models.AddressGroupBinding, syncOp models.SyncOp) error {
 	// Получаем сервис для доступа к его портам
 	service, err := reader.GetServiceByID(ctx, binding.ServiceRef.ResourceIdentifier)
 	if err == ports.ErrNotFound {
@@ -1049,6 +1163,8 @@ func (s *NetguardService) syncRuleS2S(ctx context.Context, writer ports.Writer, 
 		}
 	}
 
+	log.Println("rules from scope", rules)
+
 	// Определение scope
 	var scope ports.Scope
 	if len(rules) > 0 {
@@ -1061,9 +1177,107 @@ func (s *NetguardService) syncRuleS2S(ctx context.Context, writer ports.Writer, 
 		scope = ports.EmptyScope{}
 	}
 
-	// Выполнение операции с указанной опцией
+	// Если это удаление, используем DeleteRuleS2SByIDs для корректного удаления связанных IE AG AG правил
+	if syncOp == models.SyncOpDelete {
+		// Собираем ID правил
+		var ids []models.ResourceIdentifier
+		for _, rule := range rules {
+			ids = append(ids, rule.ResourceIdentifier)
+		}
+
+		// Используем DeleteRuleS2SByIDs для удаления правил и связанных IE AG AG правил
+		return s.DeleteRuleS2SByIDs(ctx, ids)
+	}
+
+	// Выполнение операции с указанной опцией для не-удаления
 	if err := writer.SyncRuleS2S(ctx, rules, scope, ports.WithSyncOp(syncOp)); err != nil {
 		return errors.Wrap(err, "failed to sync rule s2s")
+	}
+
+	// Генерация AG AG правил
+	// Получаем reader, который видит изменения в текущей транзакции
+	txReader, err := s.registry.ReaderFromWriter(ctx, writer)
+	if err != nil {
+		return errors.Wrap(err, "failed to get transaction reader")
+	}
+	defer txReader.Close()
+
+	// Создаем карту ожидаемых правил после обновления
+	expectedRules := make(map[string]bool)
+	var allNewRules []models.IEAgAgRule
+
+	// Генерируем IEAgAgRules для каждого RuleS2S
+	for i := range rules {
+		ieAgAgRules, err := s.GenerateIEAgAgRulesFromRuleS2SWithReader(ctx, txReader, rules[i])
+		if err != nil {
+			return errors.Wrapf(err, "failed to generate IEAgAgRules for RuleS2S %s", rules[i].Key())
+		}
+
+		// Сохраняем ссылки на созданные правила в RuleS2S
+		rules[i].IEAgAgRuleRefs = make([]models.ResourceIdentifier, len(ieAgAgRules))
+
+		// Добавляем сгенерированные правила в карту ожидаемых правил и собираем все новые правила
+		for j, ieRule := range ieAgAgRules {
+			rules[i].IEAgAgRuleRefs[j] = ieRule.ResourceIdentifier
+			expectedRules[ieRule.Key()] = true
+			allNewRules = append(allNewRules, ieRule)
+		}
+	}
+
+	// Обновляем RuleS2S с новыми ссылками на IE AG AG правила
+	if err := writer.SyncRuleS2S(ctx, rules, scope, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
+		return errors.Wrap(err, "failed to update RuleS2S with IEAgAgRule references")
+	}
+
+	log.Println("expectedRules", expectedRules)
+	log.Println("allNewRules", allNewRules)
+
+	// Получаем существующие IE AG AG правила по сохраненным ссылкам
+	existingRules := make(map[string]models.IEAgAgRule)
+
+	// Для каждого RuleS2S получаем связанные с ним IE AG AG правила по сохраненным ссылкам
+	for _, rule := range rules {
+		// Если у правила есть сохраненные ссылки на IE AG AG правила
+		for _, ref := range rule.IEAgAgRuleRefs {
+			// Получаем IE AG AG правило по ссылке
+			ieRule, err := txReader.GetIEAgAgRuleByID(ctx, ref)
+			if err == nil {
+				// Если правило найдено, добавляем его в карту существующих правил
+				existingRules[ieRule.Key()] = *ieRule
+			} else if err != ports.ErrNotFound {
+				// Если произошла ошибка, отличная от "не найдено", возвращаем ее
+				return errors.Wrapf(err, "failed to get IE AG AG rule %s", ref.Key())
+			}
+			// Если правило не найдено, просто пропускаем его
+		}
+	}
+
+	log.Println("existing IE AG AG rules from references", existingRules)
+
+	// Синхронизируем все новые правила за один раз
+	if len(allNewRules) > 0 {
+		if err = writer.SyncIEAgAgRules(ctx, allNewRules, nil, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
+			return errors.Wrap(err, "failed to sync new IEAgAgRules")
+		}
+	}
+
+	// Находим и удаляем устаревшие правила, но только те, которые связаны с текущими RuleS2S
+	var obsoleteRules []models.IEAgAgRule
+	for key, rule := range existingRules {
+		if !expectedRules[key] {
+			obsoleteRules = append(obsoleteRules, rule)
+		}
+	}
+
+	if len(obsoleteRules) > 0 {
+		var obsoleteRuleIDs []models.ResourceIdentifier
+		for _, rule := range obsoleteRules {
+			obsoleteRuleIDs = append(obsoleteRuleIDs, rule.ResourceIdentifier)
+		}
+
+		if err = writer.DeleteIEAgAgRulesByIDs(ctx, obsoleteRuleIDs); err != nil {
+			return errors.Wrap(err, "failed to delete obsolete IEAgAgRules")
+		}
 	}
 
 	if err := writer.Commit(); err != nil {
@@ -1611,7 +1825,7 @@ func (s *NetguardService) GetAddressGroupBindingPoliciesByIDs(ctx context.Contex
 	return policies, nil
 }
 
-// DeleteServicesByIDs deletes services by IDs
+// DeleteServicesByIDs deletes services by IDs with cascade deletion of dependencies
 func (s *NetguardService) DeleteServicesByIDs(ctx context.Context, ids []models.ResourceIdentifier) error {
 	reader, err := s.registry.Reader(ctx)
 	if err != nil {
@@ -1619,15 +1833,85 @@ func (s *NetguardService) DeleteServicesByIDs(ctx context.Context, ids []models.
 	}
 	defer reader.Close()
 
-	// Create validator
+	// Create validator for aliases
 	validator := validation.NewDependencyValidator(reader)
-	serviceValidator := validator.GetServiceValidator()
+	aliasValidator := validator.GetServiceAliasValidator()
 
-	// Check dependencies for each service
+	// For each service, check its aliases
 	for _, id := range ids {
-		if err := serviceValidator.CheckDependencies(ctx, id); err != nil {
-			return err
+		// Find all aliases of the service
+		var serviceAliases []models.ServiceAlias
+		err = reader.ListServiceAliases(ctx, func(alias models.ServiceAlias) error {
+			if alias.ServiceRef.Key() == id.Key() {
+				serviceAliases = append(serviceAliases, alias)
+			}
+			return nil
+		}, nil)
+
+		if err != nil {
+			return errors.Wrap(err, "failed to list service aliases")
 		}
+
+		// If the service has aliases, check if they have related rules s2s
+		for _, alias := range serviceAliases {
+			// Check alias dependencies
+			if err := aliasValidator.CheckDependencies(ctx, alias.ResourceIdentifier); err != nil {
+				// If the alias has dependencies (rules s2s), return an error
+				return errors.Wrapf(err, "service %s has alias %s with dependencies", id.Key(), alias.Key())
+			}
+		}
+	}
+
+	// Get all bindings related to the services being deleted
+	var bindingsToDelete []models.ResourceIdentifier
+	err = reader.ListAddressGroupBindings(ctx, func(binding models.AddressGroupBinding) error {
+		for _, id := range ids {
+			if binding.ServiceRef.Key() == id.Key() {
+				bindingsToDelete = append(bindingsToDelete, binding.ResourceIdentifier)
+				break
+			}
+		}
+		return nil
+	}, nil)
+	if err != nil {
+		return errors.Wrap(err, "failed to list address group bindings")
+	}
+
+	// Get all service aliases related to the services being deleted
+	var serviceAliases []models.ServiceAlias
+	err = reader.ListServiceAliases(ctx, func(alias models.ServiceAlias) error {
+		for _, id := range ids {
+			if alias.ServiceRef.Key() == id.Key() {
+				serviceAliases = append(serviceAliases, alias)
+				break
+			}
+		}
+		return nil
+	}, nil)
+	if err != nil {
+		return errors.Wrap(err, "failed to list service aliases")
+	}
+
+	// Get alias IDs
+	var aliasIDs []models.ResourceIdentifier
+	for _, alias := range serviceAliases {
+		aliasIDs = append(aliasIDs, alias.ResourceIdentifier)
+	}
+
+	// Get all RuleS2S rules related to aliases of the services being deleted
+	var rulesToDelete []models.ResourceIdentifier
+	err = reader.ListRuleS2S(ctx, func(rule models.RuleS2S) error {
+		for _, alias := range serviceAliases {
+			if rule.ServiceLocalRef.Key() == alias.ResourceIdentifier.Key() ||
+				rule.ServiceRef.Key() == alias.ResourceIdentifier.Key() {
+				rulesToDelete = append(rulesToDelete, rule.ResourceIdentifier)
+				break
+			}
+		}
+		return nil
+	}, nil)
+	if err != nil {
+		return errors.Wrap(err, "failed to list rules s2s")
 	}
 
 	writer, err := s.registry.Writer(ctx)
@@ -1640,16 +1924,44 @@ func (s *NetguardService) DeleteServicesByIDs(ctx context.Context, ids []models.
 		}
 	}()
 
+	// 1. Delete bindings
+	if len(bindingsToDelete) > 0 {
+		log.Println("Deleting", len(bindingsToDelete), "bindings for services")
+		if err = s.DeleteAddressGroupBindingsByIDs(ctx, bindingsToDelete); err != nil {
+			return errors.Wrap(err, "failed to delete address group bindings")
+		}
+	}
+
+	// 2. Delete RuleS2S rules and related IEAGAG rules
+	if len(rulesToDelete) > 0 {
+		log.Println("Deleting", len(rulesToDelete), "RuleS2S for services")
+		if err = s.DeleteRuleS2SByIDs(ctx, rulesToDelete); err != nil {
+			return errors.Wrap(err, "failed to delete rules s2s")
+		}
+	}
+
+	// 3. Delete service aliases
+	if len(aliasIDs) > 0 {
+		log.Println("Deleting", len(aliasIDs), "service aliases")
+		if err = writer.DeleteServiceAliasesByIDs(ctx, aliasIDs); err != nil {
+			return errors.Wrap(err, "failed to delete service aliases")
+		}
+	}
+
+	// 4. Delete services
+	log.Println("Deleting", len(ids), "services")
 	if err = writer.DeleteServicesByIDs(ctx, ids); err != nil {
 		return errors.Wrap(err, "failed to delete services")
 	}
+
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
+
 	return nil
 }
 
-// DeleteAddressGroupsByIDs deletes address groups by IDs
+// DeleteAddressGroupsByIDs deletes address groups by IDs with cascade deletion of dependencies
 func (s *NetguardService) DeleteAddressGroupsByIDs(ctx context.Context, ids []models.ResourceIdentifier) error {
 	reader, err := s.registry.Reader(ctx)
 	if err != nil {
@@ -1657,17 +1969,82 @@ func (s *NetguardService) DeleteAddressGroupsByIDs(ctx context.Context, ids []mo
 	}
 	defer reader.Close()
 
-	// Create validator
-	validator := validation.NewDependencyValidator(reader)
-	addressGroupValidator := validator.GetAddressGroupValidator()
+	// Note: We're not checking dependencies here as we're handling them with cascade deletion
 
-	// Check dependencies for each address group
+	// Get address groups that will be deleted
+	var addressGroups []models.AddressGroup
 	for _, id := range ids {
-		if err := addressGroupValidator.CheckDependencies(ctx, id); err != nil {
-			return err
+		ag, err := reader.GetAddressGroupByID(ctx, id)
+		if err != nil {
+			continue // Skip if group doesn't exist
 		}
+		addressGroups = append(addressGroups, *ag)
 	}
 
+	// Get all bindings related to the address groups being deleted
+	var bindingsToDelete []models.ResourceIdentifier
+	err = reader.ListAddressGroupBindings(ctx, func(binding models.AddressGroupBinding) error {
+		for _, ag := range addressGroups {
+			if binding.AddressGroupRef.Key() == ag.ResourceIdentifier.Key() {
+				bindingsToDelete = append(bindingsToDelete, binding.ResourceIdentifier)
+				break
+			}
+		}
+		return nil
+	}, nil)
+	if err != nil {
+		return errors.Wrap(err, "failed to list address group bindings")
+	}
+
+	// Get all services that reference the address groups being deleted
+	var servicesToUpdate []models.Service
+	err = reader.ListServices(ctx, func(service models.Service) error {
+		serviceUpdated := false
+		updatedAGs := make([]models.AddressGroupRef, 0, len(service.AddressGroups))
+
+		// Filter address groups, keeping only those that won't be deleted
+		for _, agRef := range service.AddressGroups {
+			shouldKeep := true
+			for _, id := range ids {
+				if agRef.Key() == id.Key() {
+					shouldKeep = false
+					serviceUpdated = true
+					break
+				}
+			}
+			if shouldKeep {
+				updatedAGs = append(updatedAGs, agRef)
+			}
+		}
+
+		if serviceUpdated {
+			updatedService := service
+			updatedService.AddressGroups = updatedAGs
+			servicesToUpdate = append(servicesToUpdate, updatedService)
+		}
+
+		return nil
+	}, nil)
+	if err != nil {
+		return errors.Wrap(err, "failed to list services")
+	}
+
+	// Get all IE AG AG rules that reference the address groups being deleted
+	var ieRulesToDelete []models.ResourceIdentifier
+	err = reader.ListIEAgAgRules(ctx, func(rule models.IEAgAgRule) error {
+		for _, id := range ids {
+			if rule.AddressGroupLocal.Key() == id.Key() || rule.AddressGroup.Key() == id.Key() {
+				ieRulesToDelete = append(ieRulesToDelete, rule.ResourceIdentifier)
+				break
+			}
+		}
+		return nil
+	}, nil)
+	if err != nil {
+		return errors.Wrap(err, "failed to list IE AG AG rules")
+	}
+
+	// Start transaction for all operations
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get writer")
@@ -1678,16 +2055,45 @@ func (s *NetguardService) DeleteAddressGroupsByIDs(ctx context.Context, ids []mo
 		}
 	}()
 
+	// 1. Delete bindings
+	if len(bindingsToDelete) > 0 {
+		log.Println("Deleting", len(bindingsToDelete), "bindings for address groups")
+		if err = writer.DeleteAddressGroupBindingsByIDs(ctx, bindingsToDelete); err != nil {
+			return errors.Wrap(err, "failed to delete address group bindings")
+		}
+	}
+
+	// 2. Update services, removing references to deleted address groups
+	if len(servicesToUpdate) > 0 {
+		log.Println("Updating", len(servicesToUpdate), "services to remove references to deleted address groups")
+		if err = writer.SyncServices(ctx, servicesToUpdate, nil, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
+			return errors.Wrap(err, "failed to update services")
+		}
+	}
+
+	// 3. Delete IE AG AG rules related to the address groups being deleted
+	if len(ieRulesToDelete) > 0 {
+		log.Println("Deleting", len(ieRulesToDelete), "IE AG AG rules for address groups")
+		if err = writer.DeleteIEAgAgRulesByIDs(ctx, ieRulesToDelete); err != nil {
+			return errors.Wrap(err, "failed to delete IE AG AG rules")
+		}
+	}
+
+	// 4. Delete address groups
+	log.Println("Deleting", len(ids), "address groups")
 	if err = writer.DeleteAddressGroupsByIDs(ctx, ids); err != nil {
 		return errors.Wrap(err, "failed to delete address groups")
 	}
+
+	// Commit transaction
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
+
 	return nil
 }
 
-// DeleteAddressGroupBindingsByIDs deletes address group bindings by IDs
+// DeleteAddressGroupBindingsByIDs deletes address group bindings by IDs with cascade deletion of dependencies
 func (s *NetguardService) DeleteAddressGroupBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier) error {
 	reader, err := s.registry.Reader(ctx)
 	if err != nil {
@@ -1695,14 +2101,49 @@ func (s *NetguardService) DeleteAddressGroupBindingsByIDs(ctx context.Context, i
 	}
 	defer reader.Close()
 
-	// Получаем bindings, которые будут удалены
+	// Get bindings that will be deleted
 	var bindings []models.AddressGroupBinding
 	for _, id := range ids {
 		binding, err := reader.GetAddressGroupBindingByID(ctx, id)
 		if err != nil {
-			continue // Пропускаем, если binding не существует
+			continue // Skip if binding doesn't exist
 		}
 		bindings = append(bindings, *binding)
+	}
+
+	// Get services that need to be updated
+	var serviceIDs = make(map[string]models.ResourceIdentifier)
+	for _, binding := range bindings {
+		serviceIDs[binding.ServiceRef.Key()] = binding.ServiceRef.ResourceIdentifier
+	}
+
+	// Get all RuleS2S related to services from bindings
+	var serviceAliasIDs []models.ResourceIdentifier
+	err = reader.ListServiceAliases(ctx, func(alias models.ServiceAlias) error {
+		for _, serviceID := range serviceIDs {
+			if alias.ServiceRef.Key() == serviceID.Key() {
+				serviceAliasIDs = append(serviceAliasIDs, alias.ResourceIdentifier)
+				break
+			}
+		}
+		return nil
+	}, nil)
+	if err != nil {
+		return errors.Wrap(err, "failed to list service aliases")
+	}
+
+	var rulesToUpdate []models.RuleS2S
+	err = reader.ListRuleS2S(ctx, func(rule models.RuleS2S) error {
+		for _, aliasID := range serviceAliasIDs {
+			if rule.ServiceLocalRef.Key() == aliasID.Key() || rule.ServiceRef.Key() == aliasID.Key() {
+				rulesToUpdate = append(rulesToUpdate, rule)
+				break
+			}
+		}
+		return nil
+	}, nil)
+	if err != nil {
+		return errors.Wrap(err, "failed to list rules s2s")
 	}
 
 	writer, err := s.registry.Writer(ctx)
@@ -1715,14 +2156,14 @@ func (s *NetguardService) DeleteAddressGroupBindingsByIDs(ctx context.Context, i
 		}
 	}()
 
-	// Удаляем bindings
+	// Delete bindings
 	if err = writer.DeleteAddressGroupBindingsByIDs(ctx, ids); err != nil {
 		return errors.Wrap(err, "failed to delete address group bindings")
 	}
 
-	// Обновляем port mappings для каждого удаленного binding
+	// Update port mappings for each deleted binding
 	for _, binding := range bindings {
-		// Проверяем, есть ли другие bindings для той же address group
+		// Check if there are other bindings for the same address group
 		hasOtherBindings := false
 		err = reader.ListAddressGroupBindings(ctx, func(b models.AddressGroupBinding) error {
 			if b.AddressGroupRef.Key() == binding.AddressGroupRef.Key() && b.Key() != binding.Key() {
@@ -1735,22 +2176,22 @@ func (s *NetguardService) DeleteAddressGroupBindingsByIDs(ctx context.Context, i
 			return errors.Wrap(err, "failed to check for other bindings")
 		}
 
-		// Если нет других bindings, удаляем port mapping
+		// If there are no other bindings, delete port mapping
 		if !hasOtherBindings {
 			if err = writer.DeleteAddressGroupPortMappingsByIDs(ctx, []models.ResourceIdentifier{binding.AddressGroupRef.ResourceIdentifier}); err != nil {
 				return errors.Wrap(err, "failed to delete address group port mappings")
 			}
 		} else {
-			// Иначе обновляем port mapping, удаляя сервис
+			// Otherwise update port mapping, removing the service
 			portMapping, err := reader.GetAddressGroupPortMappingByID(ctx, binding.AddressGroupRef.ResourceIdentifier)
 			if err != nil {
-				continue // Пропускаем, если port mapping не существует
+				continue // Skip if port mapping doesn't exist
 			}
 
-			// Удаляем сервис из port mapping
+			// Remove service from port mapping
 			delete(portMapping.AccessPorts, binding.ServiceRef)
 
-			// Обновляем port mapping
+			// Update port mapping
 			if err = writer.SyncAddressGroupPortMappings(
 				ctx,
 				[]models.AddressGroupPortMapping{*portMapping},
@@ -1762,9 +2203,24 @@ func (s *NetguardService) DeleteAddressGroupBindingsByIDs(ctx context.Context, i
 		}
 	}
 
+	// Update RuleS2S and related IEAGAG rules
+	if len(rulesToUpdate) > 0 {
+		// Get reader that can see changes in the current transaction
+		txReader, err := s.registry.ReaderFromWriter(ctx, writer)
+		if err != nil {
+			return errors.Wrap(err, "failed to get transaction reader")
+		}
+		defer txReader.Close()
+
+		if err = s.updateIEAgAgRulesForRuleS2SWithReader(ctx, writer, txReader, rulesToUpdate, models.SyncOpUpsert); err != nil {
+			return errors.Wrap(err, "failed to update IE AG AG rules")
+		}
+	}
+
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
+
 	return nil
 }
 
@@ -1797,37 +2253,30 @@ func (s *NetguardService) DeleteRuleS2SByIDs(ctx context.Context, ids []models.R
 	// Note: Rules don't have dependencies, so we don't need to check for them
 	// However, we could add validation to ensure the rules exist before deleting them
 
-	// First, get the RuleS2S objects to generate IEAgAgRules for deletion
+	// Get a reader to fetch RuleS2S objects
 	reader, err := s.registry.Reader(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get reader")
 	}
+	defer reader.Close()
 
 	// Collect all IEAgAgRule IDs that need to be deleted
 	var ieAgAgRuleIDs []models.ResourceIdentifier
 
-	// For each RuleS2S, generate and collect IEAgAgRules for deletion
+	// For each RuleS2S, get the associated IE AG AG rules from IEAgAgRuleRefs
 	for _, id := range ids {
 		ruleS2S, err := reader.GetRuleS2SByID(ctx, id)
 		if err != nil || ruleS2S == nil {
 			// Skip if rule not found
+			log.Println("RuleS2S not found or error:", id.Key(), err)
 			continue
 		}
 
-		// Generate IEAgAgRules for this RuleS2S
-		ieAgAgRules, err := s.GenerateIEAgAgRulesFromRuleS2S(ctx, *ruleS2S)
-		if err != nil {
-			reader.Close()
-			return errors.Wrapf(err, "failed to generate IEAgAgRules for RuleS2S %s", id.Key())
-		}
+		log.Println("Deleting RuleS2S:", ruleS2S.Key(), "with", len(ruleS2S.IEAgAgRuleRefs), "associated IE AG AG rules")
 
-		// Collect IDs of generated IEAgAgRules
-		for _, rule := range ieAgAgRules {
-			ieAgAgRuleIDs = append(ieAgAgRuleIDs, rule.ResourceIdentifier)
-		}
+		// Add all IE AG AG rule references from RuleS2S
+		ieAgAgRuleIDs = append(ieAgAgRuleIDs, ruleS2S.IEAgAgRuleRefs...)
 	}
-
-	reader.Close()
 
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
@@ -1841,19 +2290,31 @@ func (s *NetguardService) DeleteRuleS2SByIDs(ctx context.Context, ids []models.R
 
 	// First delete the associated IEAgAgRules if any were found
 	if len(ieAgAgRuleIDs) > 0 {
+		log.Println("Deleting", len(ieAgAgRuleIDs), "associated IE AG AG rules")
 		if err = writer.DeleteIEAgAgRulesByIDs(ctx, ieAgAgRuleIDs); err != nil {
+			log.Println("Failed to delete associated IE AG AG rules:", err)
 			return errors.Wrap(err, "failed to delete associated IEAgAgRules")
 		}
+		log.Println("Successfully deleted associated IE AG AG rules")
+	} else {
+		log.Println("No associated IE AG AG rules to delete")
 	}
 
 	// Then delete the RuleS2S objects
+	log.Println("Deleting", len(ids), "RuleS2S objects")
 	if err = writer.DeleteRuleS2SByIDs(ctx, ids); err != nil {
+		log.Println("Failed to delete RuleS2S objects:", err)
 		return errors.Wrap(err, "failed to delete rules s2s")
 	}
+	log.Println("Successfully deleted RuleS2S objects")
 
+	// Commit the transaction
+	log.Println("Committing transaction")
 	if err = writer.Commit(); err != nil {
+		log.Println("Failed to commit transaction:", err)
 		return errors.Wrap(err, "failed to commit")
 	}
+	log.Println("Successfully committed transaction")
 	return nil
 }
 
@@ -2102,6 +2563,11 @@ func (s *NetguardService) GenerateIEAgAgRulesFromRuleS2S(ctx context.Context, ru
 	}
 	defer reader.Close()
 
+	return s.GenerateIEAgAgRulesFromRuleS2SWithReader(ctx, reader, ruleS2S)
+}
+
+// GenerateIEAgAgRulesFromRuleS2SWithReader генерирует правила IEAgAgRule на основе RuleS2S, используя переданный reader
+func (s *NetguardService) GenerateIEAgAgRulesFromRuleS2SWithReader(ctx context.Context, reader ports.Reader, ruleS2S models.RuleS2S) ([]models.IEAgAgRule, error) {
 	// Получаем сервисы по ссылкам
 	localServiceAlias, err := reader.GetServiceAliasByID(ctx, ruleS2S.ServiceLocalRef.ResourceIdentifier)
 	if err != nil {
@@ -2134,6 +2600,8 @@ func (s *NetguardService) GenerateIEAgAgRulesFromRuleS2S(ctx context.Context, ru
 	} else {
 		ports = targetService.IngressPorts
 	}
+
+	log.Println("ports", ports)
 
 	// Создаем правила IEAgAgRule
 	var result []models.IEAgAgRule

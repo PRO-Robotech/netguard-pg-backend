@@ -27,17 +27,19 @@ func CreateNewPortMapping(addressGroupID models.ResourceIdentifier, service mode
 
 	// Convert service ingress ports to port ranges
 	for _, ingressPort := range service.IngressPorts {
-		portRange, err := ParsePortRange(ingressPort.Port)
+		portRanges, err := ParsePortRanges(ingressPort.Port)
 		if err != nil {
 			// Skip invalid ports
 			continue
 		}
 
-		// Add port range to the appropriate protocol
-		servicePorts.Ports[ingressPort.Protocol] = append(
-			servicePorts.Ports[ingressPort.Protocol],
-			portRange,
-		)
+		// Add port ranges to the appropriate protocol
+		for _, portRange := range portRanges {
+			servicePorts.Ports[ingressPort.Protocol] = append(
+				servicePorts.Ports[ingressPort.Protocol],
+				portRange,
+			)
+		}
 	}
 
 	// Add the service ports to the mapping
@@ -67,17 +69,19 @@ func UpdatePortMapping(
 
 	// Convert service ingress ports to port ranges
 	for _, ingressPort := range service.IngressPorts {
-		portRange, err := ParsePortRange(ingressPort.Port)
+		portRanges, err := ParsePortRanges(ingressPort.Port)
 		if err != nil {
 			// Skip invalid ports
 			continue
 		}
 
-		// Add port range to the appropriate protocol
-		servicePorts.Ports[ingressPort.Protocol] = append(
-			servicePorts.Ports[ingressPort.Protocol],
-			portRange,
-		)
+		// Add port ranges to the appropriate protocol
+		for _, portRange := range portRanges {
+			servicePorts.Ports[ingressPort.Protocol] = append(
+				servicePorts.Ports[ingressPort.Protocol],
+				portRange,
+			)
+		}
 	}
 
 	// Update the service ports in the mapping
@@ -92,11 +96,11 @@ func CheckPortOverlaps(service models.Service, portMapping models.AddressGroupPo
 	// Create a map of service ports by protocol
 	servicePorts := make(map[models.TransportProtocol][]models.PortRange)
 	for _, ingressPort := range service.IngressPorts {
-		portRange, err := ParsePortRange(ingressPort.Port)
+		portRanges, err := ParsePortRanges(ingressPort.Port)
 		if err != nil {
 			return fmt.Errorf("invalid port in service %s: %w", service.Key(), err)
 		}
-		servicePorts[ingressPort.Protocol] = append(servicePorts[ingressPort.Protocol], portRange)
+		servicePorts[ingressPort.Protocol] = append(servicePorts[ingressPort.Protocol], portRanges...)
 	}
 
 	// Check for overlaps with existing services in the port mapping

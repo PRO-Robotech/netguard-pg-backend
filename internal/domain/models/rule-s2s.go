@@ -6,6 +6,7 @@ type RuleS2S struct {
 	Traffic         Traffic
 	ServiceLocalRef ServiceAliasRef
 	ServiceRef      ServiceAliasRef
+	IEAgAgRuleRefs  []ResourceIdentifier // Ссылки на созданные IEAGAG правила
 }
 
 // RuleS2SRef represents a reference to a RuleS2S

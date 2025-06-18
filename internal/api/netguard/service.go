@@ -163,6 +163,23 @@ func (s *NetguardServiceServer) Sync(ctx context.Context, req *netguardpb.SyncRe
 			return nil, errors.Wrap(err, "failed to sync IEAgAgRules")
 		}
 
+	case *netguardpb.SyncReq_AddressGroupBindingPolicies:
+		if subject.AddressGroupBindingPolicies == nil || len(subject.AddressGroupBindingPolicies.AddressGroupBindingPolicies) == 0 {
+			return &emptypb.Empty{}, nil
+		}
+
+		// Конвертируем политики привязки групп адресов
+		policies := make([]models.AddressGroupBindingPolicy, 0, len(subject.AddressGroupBindingPolicies.AddressGroupBindingPolicies))
+		for _, p := range subject.AddressGroupBindingPolicies.AddressGroupBindingPolicies {
+			policies = append(policies, convertAddressGroupBindingPolicy(p))
+		}
+
+		// Синхронизируем политики привязки групп адресов с указанной операцией
+		err = s.service.Sync(ctx, syncOp, policies)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to sync address group binding policies")
+		}
+
 	default:
 		return nil, errors.New("subject not specified")
 	}
@@ -522,7 +539,14 @@ func convertAddressGroupPortMapping(m *netguardpb.AddressGroupPortMapping) model
 func convertRuleS2S(r *netguardpb.RuleS2S) models.RuleS2S {
 	result := models.RuleS2S{
 		SelfRef: models.NewSelfRef(getSelfRef(r.GetSelfRef())),
-		Traffic: models.Traffic(r.Traffic.String()),
+	}
+
+	// Правильная конвертация Traffic
+	switch r.Traffic {
+	case commonpb.Traffic_Ingress:
+		result.Traffic = models.INGRESS
+	case commonpb.Traffic_Egress:
+		result.Traffic = models.EGRESS
 	}
 
 	// Convert ServiceLocalRef
@@ -833,4 +857,80 @@ func convertIEAgAgRule(rule *netguardpb.IEAgAgRule) models.IEAgAgRule {
 	}
 
 	return result
+}
+
+func convertAddressGroupBindingPolicy(policy *netguardpb.AddressGroupBindingPolicy) models.AddressGroupBindingPolicy {
+	result := models.AddressGroupBindingPolicy{
+		SelfRef: models.NewSelfRef(getSelfRef(policy.GetSelfRef())),
+	}
+
+	// Convert ServiceRef
+	result.ServiceRef = models.NewServiceRef(policy.GetServiceRef().GetIdentifier().GetName(),
+		models.WithNamespace(policy.GetServiceRef().GetIdentifier().GetNamespace()))
+
+	// Convert AddressGroupRef
+	result.AddressGroupRef = models.NewAddressGroupRef(policy.GetAddressGroupRef().GetIdentifier().GetName(),
+		models.WithNamespace(policy.GetAddressGroupRef().GetIdentifier().GetNamespace()))
+
+	return result
+}
+
+func convertAddressGroupBindingPolicyToPB(policy models.AddressGroupBindingPolicy) *netguardpb.AddressGroupBindingPolicy {
+	return &netguardpb.AddressGroupBindingPolicy{
+		SelfRef: &netguardpb.ResourceIdentifier{
+			Name:      policy.Name,
+			Namespace: policy.Namespace,
+		},
+		ServiceRef: &netguardpb.ServiceRef{
+			Identifier: &netguardpb.ResourceIdentifier{
+				Name:      policy.ServiceRef.Name,
+				Namespace: policy.ServiceRef.Namespace,
+			},
+		},
+		AddressGroupRef: &netguardpb.AddressGroupRef{
+			Identifier: &netguardpb.ResourceIdentifier{
+				Name:      policy.AddressGroupRef.Name,
+				Namespace: policy.AddressGroupRef.Namespace,
+			},
+		},
+	}
+}
+
+// ListAddressGroupBindingPolicies gets list of address group binding policies
+func (s *NetguardServiceServer) ListAddressGroupBindingPolicies(ctx context.Context, req *netguardpb.ListAddressGroupBindingPoliciesReq) (*netguardpb.ListAddressGroupBindingPoliciesResp, error) {
+	var scope ports.Scope = ports.EmptyScope{}
+	if len(req.Identifiers) > 0 {
+		identifiers := make([]models.ResourceIdentifier, 0, len(req.Identifiers))
+		for _, id := range req.Identifiers {
+			identifiers = append(identifiers, models.NewResourceIdentifier(id.Name, models.WithNamespace(id.Namespace)))
+		}
+		scope = ports.NewResourceIdentifierScope(identifiers...)
+	}
+
+	policies, err := s.service.GetAddressGroupBindingPolicies(ctx, scope)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get address group binding policies")
+	}
+
+	items := make([]*netguardpb.AddressGroupBindingPolicy, 0, len(policies))
+	for _, policy := range policies {
+		items = append(items, convertAddressGroupBindingPolicyToPB(policy))
+	}
+
+	return &netguardpb.ListAddressGroupBindingPoliciesResp{
+		Items: items,
+	}, nil
+}
+
+// GetAddressGroupBindingPolicy gets a specific address group binding policy by ID
+func (s *NetguardServiceServer) GetAddressGroupBindingPolicy(ctx context.Context, req *netguardpb.GetAddressGroupBindingPolicyReq) (*netguardpb.GetAddressGroupBindingPolicyResp, error) {
+	id := idFromReq(req.GetIdentifier())
+	policy, err := s.service.GetAddressGroupBindingPolicyByID(ctx, id)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get address group binding policy")
+	}
+
+	return &netguardpb.GetAddressGroupBindingPolicyResp{
+		AddressGroupBindingPolicy: convertAddressGroupBindingPolicyToPB(*policy),
+	}, nil
 }

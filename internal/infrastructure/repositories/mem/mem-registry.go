@@ -56,6 +56,26 @@ func (r *Registry) Reader(ctx context.Context) (ports.Reader, error) {
 	}, nil
 }
 
+// ReaderFromWriter returns a reader that can see changes made in the current transaction
+func (r *Registry) ReaderFromWriter(ctx context.Context, w ports.Writer) (ports.Reader, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.closed {
+		return nil, errors.New("registry is closed")
+	}
+
+	memWriter, ok := w.(*writer)
+	if !ok {
+		return nil, errors.New("writer is not a memory writer")
+	}
+
+	return &reader{
+		registry: r,
+		ctx:      ctx,
+		writer:   memWriter,
+	}, nil
+}
+
 // Close closes the registry
 func (r *Registry) Close() error {
 	r.mu.Lock()

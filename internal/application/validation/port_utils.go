@@ -8,55 +8,87 @@ import (
 	"netguard-pg-backend/internal/domain/models"
 )
 
-// ParsePortRange преобразует строковое представление порта в PortRange
-func ParsePortRange(port string) (models.PortRange, error) {
+// ParsePortRanges преобразует строковое представление портов в слайс PortRange
+// Поддерживает одиночные порты, диапазоны портов и списки портов через запятую
+func ParsePortRanges(port string) ([]models.PortRange, error) {
 	if port == "" {
-		return models.PortRange{}, fmt.Errorf("port cannot be empty")
+		return nil, fmt.Errorf("port cannot be empty")
 	}
 
-	// Проверяем, является ли это диапазоном портов (формат: "start-end")
-	if strings.Contains(port, "-") && !strings.HasPrefix(port, "-") {
-		parts := strings.Split(port, "-")
-		if len(parts) != 2 {
-			return models.PortRange{}, fmt.Errorf("invalid port range format '%s', expected format is 'start-end'", port)
+	var result []models.PortRange
+
+	// Разбиваем по запятой для обработки списка портов/диапазонов
+	portItems := strings.Split(port, ",")
+	for _, item := range portItems {
+		item = strings.TrimSpace(item)
+
+		// Пропускаем пустые элементы
+		if item == "" {
+			continue
 		}
 
-		start, err := strconv.Atoi(parts[0])
-		if err != nil {
-			return models.PortRange{}, fmt.Errorf("invalid start port '%s': must be a number between 0 and 65535", parts[0])
-		}
+		// Проверяем, является ли это диапазоном портов (формат: "start-end")
+		if strings.Contains(item, "-") && !strings.HasPrefix(item, "-") {
+			parts := strings.Split(item, "-")
+			if len(parts) != 2 {
+				return nil, fmt.Errorf("invalid port range format '%s', expected format is 'start-end'", item)
+			}
 
-		end, err := strconv.Atoi(parts[1])
-		if err != nil {
-			return models.PortRange{}, fmt.Errorf("invalid end port '%s': must be a number between 0 and 65535", parts[1])
-		}
+			start, err := strconv.Atoi(parts[0])
+			if err != nil {
+				return nil, fmt.Errorf("invalid start port '%s': must be a number between 0 and 65535", parts[0])
+			}
 
-		if start < 0 || start > 65535 {
-			return models.PortRange{}, fmt.Errorf("start port %d is out of valid range (0-65535)", start)
-		}
+			end, err := strconv.Atoi(parts[1])
+			if err != nil {
+				return nil, fmt.Errorf("invalid end port '%s': must be a number between 0 and 65535", parts[1])
+			}
 
-		if end < 0 || end > 65535 {
-			return models.PortRange{}, fmt.Errorf("end port %d is out of valid range (0-65535)", end)
-		}
+			if start < 0 || start > 65535 {
+				return nil, fmt.Errorf("start port %d is out of valid range (0-65535)", start)
+			}
 
-		if start > end {
-			return models.PortRange{}, fmt.Errorf("start port %d cannot be greater than end port %d", start, end)
-		}
+			if end < 0 || end > 65535 {
+				return nil, fmt.Errorf("end port %d is out of valid range (0-65535)", end)
+			}
 
-		return models.PortRange{Start: start, End: end}, nil
+			if start > end {
+				return nil, fmt.Errorf("start port %d cannot be greater than end port %d", start, end)
+			}
+
+			result = append(result, models.PortRange{Start: start, End: end})
+		} else {
+			// Одиночный порт
+			p, err := strconv.Atoi(item)
+			if err != nil {
+				return nil, fmt.Errorf("invalid port '%s': must be a number between 0 and 65535", item)
+			}
+
+			if p < 0 || p > 65535 {
+				return nil, fmt.Errorf("port %d is out of valid range (0-65535)", p)
+			}
+
+			result = append(result, models.PortRange{Start: p, End: p})
+		}
 	}
 
-	// Одиночный порт
-	p, err := strconv.Atoi(port)
+	if len(result) == 0 {
+		return nil, fmt.Errorf("no valid ports found in list '%s'", port)
+	}
+
+	return result, nil
+}
+
+// ParsePortRange преобразует строковое представление порта в PortRange
+// Для обратной совместимости возвращает только первый порт из списка
+func ParsePortRange(port string) (models.PortRange, error) {
+	ranges, err := ParsePortRanges(port)
 	if err != nil {
-		return models.PortRange{}, fmt.Errorf("invalid port '%s': must be a number between 0 and 65535", port)
+		return models.PortRange{}, err
 	}
 
-	if p < 0 || p > 65535 {
-		return models.PortRange{}, fmt.Errorf("port %d is out of valid range (0-65535)", p)
-	}
-
-	return models.PortRange{Start: p, End: p}, nil
+	// Возвращаем первый порт из списка
+	return ranges[0], nil
 }
 
 // DoPortRangesOverlap проверяет, перекрываются ли два диапазона портов

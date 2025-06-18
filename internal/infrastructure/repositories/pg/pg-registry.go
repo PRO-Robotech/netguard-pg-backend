@@ -112,6 +112,29 @@ package pg
 //	}, nil
 //}
 //
+//// ReaderFromWriter returns a reader that can see changes made in the current transaction
+//func (r *Registry) ReaderFromWriter(ctx context.Context, w ports.Writer) (ports.Reader, error) {
+//	r.mu.RLock()
+//	defer r.mu.RUnlock()
+//
+//	if r.closed {
+//		return nil, errors.New("registry is closed")
+//	}
+//
+//	pgWriter, ok := w.(*writer)
+//	if !ok {
+//		return nil, errors.New("writer is not a PostgreSQL writer")
+//	}
+//
+//	// Create a reader that uses the same transaction as the writer
+//	return &reader{
+//		registry: r,
+//		conn:     pgWriter.conn,
+//		tx:       pgWriter.tx, // Use the same transaction as the writer
+//		ctx:      ctx,
+//	}, nil
+//}
+//
 //// Close closes the registry
 //func (r *Registry) Close() error {
 //	r.mu.Lock()

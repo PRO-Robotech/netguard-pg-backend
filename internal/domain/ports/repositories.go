@@ -78,6 +78,8 @@ type (
 		Subject() patterns.Subject
 		Writer(ctx context.Context) (Writer, error)
 		Reader(ctx context.Context) (Reader, error)
+		// ReaderFromWriter returns a reader that can see changes made in the current transaction
+		ReaderFromWriter(ctx context.Context, writer Writer) (Reader, error)
 		Close() error
 	}
 )
