@@ -159,7 +159,7 @@ func (r *reader) GetServiceByID(ctx context.Context, id models.ResourceIdentifie
 	if service, ok := services[id.Key()]; ok {
 		return &service, nil
 	}
-	return nil, nil
+	return nil, ports.ErrNotFound
 }
 
 // GetAddressGroupByID gets an address group by ID
@@ -168,7 +168,7 @@ func (r *reader) GetAddressGroupByID(ctx context.Context, id models.ResourceIden
 	if addressGroup, ok := addressGroups[id.Key()]; ok {
 		return &addressGroup, nil
 	}
-	return nil, nil
+	return nil, ports.ErrNotFound
 }
 
 // GetAddressGroupBindingByID gets an address group binding by ID
@@ -177,7 +177,7 @@ func (r *reader) GetAddressGroupBindingByID(ctx context.Context, id models.Resou
 	if binding, ok := bindings[id.Key()]; ok {
 		return &binding, nil
 	}
-	return nil, nil
+	return nil, ports.ErrNotFound
 }
 
 // GetAddressGroupPortMappingByID gets an address group port mapping by ID
@@ -186,7 +186,7 @@ func (r *reader) GetAddressGroupPortMappingByID(ctx context.Context, id models.R
 	if mapping, ok := mappings[id.Key()]; ok {
 		return &mapping, nil
 	}
-	return nil, nil
+	return nil, ports.ErrNotFound
 }
 
 // GetRuleS2SByID gets a rule s2s by ID
@@ -195,7 +195,7 @@ func (r *reader) GetRuleS2SByID(ctx context.Context, id models.ResourceIdentifie
 	if rule, ok := rules[id.Key()]; ok {
 		return &rule, nil
 	}
-	return nil, nil
+	return nil, ports.ErrNotFound
 }
 
 // GetServiceAliasByID gets a service alias by ID
@@ -204,7 +204,7 @@ func (r *reader) GetServiceAliasByID(ctx context.Context, id models.ResourceIden
 	if alias, ok := aliases[id.Key()]; ok {
 		return &alias, nil
 	}
-	return nil, nil
+	return nil, ports.ErrNotFound
 }
 
 func (r *reader) ListAddressGroupBindingPolicies(ctx context.Context, consume func(models.AddressGroupBindingPolicy) error, scope ports.Scope) error {
@@ -234,5 +234,35 @@ func (r *reader) GetAddressGroupBindingPolicyByID(ctx context.Context, id models
 	if policy, ok := policies[id.Key()]; ok {
 		return &policy, nil
 	}
-	return nil, nil
+	return nil, ports.ErrNotFound
+}
+
+func (r *reader) ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAgRule) error, scope ports.Scope) error {
+	rules := r.registry.db.GetIEAgAgRules()
+	if scope != nil && !scope.IsEmpty() {
+		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && !ris.IsEmpty() {
+			for _, id := range ris.Identifiers {
+				if rule, ok := rules[id.Key()]; ok {
+					if err := consume(rule); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		}
+	}
+	for _, rule := range rules {
+		if err := consume(rule); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *reader) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
+	rules := r.registry.db.GetIEAgAgRules()
+	if rule, ok := rules[id.Key()]; ok {
+		return &rule, nil
+	}
+	return nil, ports.ErrNotFound
 }

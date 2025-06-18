@@ -20,6 +20,14 @@ func (m *MockReader) GetAddressGroupBindingPolicyByID(ctx context.Context, id mo
 	return nil, nil
 }
 
+func (m *MockReader) ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAgRule) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReader) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
+	return nil, nil
+}
+
 func (m *MockReader) Close() error {
 	return nil
 }

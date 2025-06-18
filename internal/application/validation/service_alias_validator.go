@@ -28,6 +28,9 @@ func (v *ServiceAliasValidator) ValidateReferences(ctx context.Context, alias mo
 	if err != nil {
 		return errors.Wrapf(err, "failed to get service for namespace validation in service alias %s", alias.Key())
 	}
+	if service == nil {
+		return fmt.Errorf("service not found or is nil for service alias %s", alias.Key())
+	}
 
 	// Проверяем соответствие namespace, если он указан в алиасе
 	if alias.Namespace != "" && alias.Namespace != service.Namespace {
@@ -50,6 +53,9 @@ func (v *ServiceAliasValidator) ValidateForCreation(ctx context.Context, alias *
 	service, err := v.reader.GetServiceByID(ctx, alias.ServiceRef.ResourceIdentifier)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get service for namespace validation in service alias %s", alias.Key())
+	}
+	if service == nil {
+		return fmt.Errorf("service not found or is nil for service alias %s", alias.Key())
 	}
 
 	// Если namespace не указан, берем его из сервиса

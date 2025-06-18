@@ -36,6 +36,8 @@ const (
 	NetguardService_GetServiceAlias_FullMethodName                 = "/netguard.v1.NetguardService/GetServiceAlias"
 	NetguardService_ListAddressGroupBindingPolicies_FullMethodName = "/netguard.v1.NetguardService/ListAddressGroupBindingPolicies"
 	NetguardService_GetAddressGroupBindingPolicy_FullMethodName    = "/netguard.v1.NetguardService/GetAddressGroupBindingPolicy"
+	NetguardService_ListIEAgAgRules_FullMethodName                 = "/netguard.v1.NetguardService/ListIEAgAgRules"
+	NetguardService_GetIEAgAgRule_FullMethodName                   = "/netguard.v1.NetguardService/GetIEAgAgRule"
 )
 
 // NetguardServiceClient is the client API for NetguardService service.
@@ -76,6 +78,10 @@ type NetguardServiceClient interface {
 	ListAddressGroupBindingPolicies(ctx context.Context, in *ListAddressGroupBindingPoliciesReq, opts ...grpc.CallOption) (*ListAddressGroupBindingPoliciesResp, error)
 	// GetAddressGroupBindingPolicy - gets a specific address group binding policy by ID
 	GetAddressGroupBindingPolicy(ctx context.Context, in *GetAddressGroupBindingPolicyReq, opts ...grpc.CallOption) (*GetAddressGroupBindingPolicyResp, error)
+	// ListIEAgAgRules - gets list of IEAgAgRules
+	ListIEAgAgRules(ctx context.Context, in *ListIEAgAgRulesReq, opts ...grpc.CallOption) (*ListIEAgAgRulesResp, error)
+	// GetIEAgAgRule - gets a specific IEAgAgRule by ID
+	GetIEAgAgRule(ctx context.Context, in *GetIEAgAgRuleReq, opts ...grpc.CallOption) (*GetIEAgAgRuleResp, error)
 }
 
 type netguardServiceClient struct {
@@ -246,6 +252,26 @@ func (c *netguardServiceClient) GetAddressGroupBindingPolicy(ctx context.Context
 	return out, nil
 }
 
+func (c *netguardServiceClient) ListIEAgAgRules(ctx context.Context, in *ListIEAgAgRulesReq, opts ...grpc.CallOption) (*ListIEAgAgRulesResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListIEAgAgRulesResp)
+	err := c.cc.Invoke(ctx, NetguardService_ListIEAgAgRules_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *netguardServiceClient) GetIEAgAgRule(ctx context.Context, in *GetIEAgAgRuleReq, opts ...grpc.CallOption) (*GetIEAgAgRuleResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetIEAgAgRuleResp)
+	err := c.cc.Invoke(ctx, NetguardService_GetIEAgAgRule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // NetguardServiceServer is the server API for NetguardService service.
 // All implementations must embed UnimplementedNetguardServiceServer
 // for forward compatibility.
@@ -284,6 +310,10 @@ type NetguardServiceServer interface {
 	ListAddressGroupBindingPolicies(context.Context, *ListAddressGroupBindingPoliciesReq) (*ListAddressGroupBindingPoliciesResp, error)
 	// GetAddressGroupBindingPolicy - gets a specific address group binding policy by ID
 	GetAddressGroupBindingPolicy(context.Context, *GetAddressGroupBindingPolicyReq) (*GetAddressGroupBindingPolicyResp, error)
+	// ListIEAgAgRules - gets list of IEAgAgRules
+	ListIEAgAgRules(context.Context, *ListIEAgAgRulesReq) (*ListIEAgAgRulesResp, error)
+	// GetIEAgAgRule - gets a specific IEAgAgRule by ID
+	GetIEAgAgRule(context.Context, *GetIEAgAgRuleReq) (*GetIEAgAgRuleResp, error)
 	mustEmbedUnimplementedNetguardServiceServer()
 }
 
@@ -341,6 +371,12 @@ func (UnimplementedNetguardServiceServer) ListAddressGroupBindingPolicies(contex
 }
 func (UnimplementedNetguardServiceServer) GetAddressGroupBindingPolicy(context.Context, *GetAddressGroupBindingPolicyReq) (*GetAddressGroupBindingPolicyResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetAddressGroupBindingPolicy not implemented")
+}
+func (UnimplementedNetguardServiceServer) ListIEAgAgRules(context.Context, *ListIEAgAgRulesReq) (*ListIEAgAgRulesResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListIEAgAgRules not implemented")
+}
+func (UnimplementedNetguardServiceServer) GetIEAgAgRule(context.Context, *GetIEAgAgRuleReq) (*GetIEAgAgRuleResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetIEAgAgRule not implemented")
 }
 func (UnimplementedNetguardServiceServer) mustEmbedUnimplementedNetguardServiceServer() {}
 func (UnimplementedNetguardServiceServer) testEmbeddedByValue()                         {}
@@ -651,6 +687,42 @@ func _NetguardService_GetAddressGroupBindingPolicy_Handler(srv interface{}, ctx 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NetguardService_ListIEAgAgRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListIEAgAgRulesReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).ListIEAgAgRules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_ListIEAgAgRules_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).ListIEAgAgRules(ctx, req.(*ListIEAgAgRulesReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NetguardService_GetIEAgAgRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetIEAgAgRuleReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).GetIEAgAgRule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_GetIEAgAgRule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).GetIEAgAgRule(ctx, req.(*GetIEAgAgRuleReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // NetguardService_ServiceDesc is the grpc.ServiceDesc for NetguardService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -721,6 +793,14 @@ var NetguardService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetAddressGroupBindingPolicy",
 			Handler:    _NetguardService_GetAddressGroupBindingPolicy_Handler,
+		},
+		{
+			MethodName: "ListIEAgAgRules",
+			Handler:    _NetguardService_ListIEAgAgRules_Handler,
+		},
+		{
+			MethodName: "GetIEAgAgRule",
+			Handler:    _NetguardService_GetIEAgAgRule_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

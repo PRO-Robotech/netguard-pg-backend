@@ -767,3 +767,179 @@ package pg
 //		UpdatedAt: status.UpdatedAt,
 //	}, nil
 //}
+//
+//// ListIEAgAgRules lists IEAgAgRules
+//func (r *reader) ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAgRule) error, scope ports.Scope) error {
+//	query := `
+//		SELECT name, namespace, transport, traffic, 
+//			   address_group_local_name, address_group_local_namespace,
+//			   address_group_name, address_group_namespace,
+//			   ports, action, logs, priority
+//		FROM netguard.tbl_ieagag_rule
+//	`
+//
+//	// Add scope conditions if needed
+//	args := []interface{}{}
+//	if scope != nil && !scope.IsEmpty() {
+//		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && !ris.IsEmpty() {
+//			pairs := make([][]string, 0, len(ris.Identifiers))
+//			for _, id := range ris.Identifiers {
+//				pairs = append(pairs, []string{id.Name, id.Namespace})
+//			}
+//
+//			query += ` WHERE (name, namespace) = ANY($1)`
+//			args = append(args, pairs)
+//		}
+//	}
+//
+//	rows, err := r.conn.Query(ctx, query, args...)
+//	if err != nil {
+//		return errors.Wrap(err, "failed to query IEAgAgRules")
+//	}
+//	defer rows.Close()
+//
+//	for rows.Next() {
+//		var rule IEAgAgRule
+//		var portsJSON []byte
+//
+//		if err := rows.Scan(
+//			&rule.Name,
+//			&rule.Namespace,
+//			&rule.Transport,
+//			&rule.Traffic,
+//			&rule.AddressGroupLocalName,
+//			&rule.AddressGroupLocalNamespace,
+//			&rule.AddressGroupName,
+//			&rule.AddressGroupNamespace,
+//			&portsJSON,
+//			&rule.Action,
+//			&rule.Logs,
+//			&rule.Priority,
+//		); err != nil {
+//			return errors.Wrap(err, "failed to scan IEAgAgRule")
+//		}
+//
+//		// Parse ports from JSON
+//		var ports []struct {
+//			Source      string `json:"source"`
+//			Destination string `json:"destination"`
+//		}
+//
+//		if len(portsJSON) > 0 {
+//			if err := json.Unmarshal(portsJSON, &ports); err != nil {
+//				return errors.Wrap(err, "failed to unmarshal ports")
+//			}
+//		}
+//
+//		// Convert to domain model
+//		domainRule := models.IEAgAgRule{
+//			SelfRef: models.SelfRef{
+//				ResourceIdentifier: models.NewResourceIdentifier(rule.Name, rule.Namespace),
+//			},
+//			Transport: models.TransportProtocol(rule.Transport),
+//			Traffic:   models.Traffic(rule.Traffic),
+//			AddressGroupLocal: models.AddressGroupRef{
+//				ResourceIdentifier: models.NewResourceIdentifier(rule.AddressGroupLocalName, rule.AddressGroupLocalNamespace),
+//			},
+//			AddressGroup: models.AddressGroupRef{
+//				ResourceIdentifier: models.NewResourceIdentifier(rule.AddressGroupName, rule.AddressGroupNamespace),
+//			},
+//			Action:   models.RuleAction(rule.Action),
+//			Logs:     rule.Logs,
+//			Priority: rule.Priority,
+//		}
+//
+//		// Add ports
+//		for _, p := range ports {
+//			domainRule.Ports = append(domainRule.Ports, models.PortSpec{
+//				Source:      p.Source,
+//				Destination: p.Destination,
+//			})
+//		}
+//
+//		if err := consume(domainRule); err != nil {
+//			return err
+//		}
+//	}
+//
+//	if err := rows.Err(); err != nil {
+//		return errors.Wrap(err, "error iterating IEAgAgRules")
+//	}
+//
+//	return nil
+//}
+//
+//// GetIEAgAgRuleByID gets an IEAgAgRule by ID
+//func (r *reader) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
+//	query := `
+//		SELECT name, namespace, transport, traffic, 
+//			   address_group_local_name, address_group_local_namespace,
+//			   address_group_name, address_group_namespace,
+//			   ports, action, logs, priority
+//		FROM netguard.tbl_ieagag_rule
+//		WHERE name = $1 AND namespace = $2
+//	`
+//
+//	var rule IEAgAgRule
+//	var portsJSON []byte
+//
+//	if err := r.conn.QueryRow(ctx, query, id.Name, id.Namespace).Scan(
+//		&rule.Name,
+//		&rule.Namespace,
+//		&rule.Transport,
+//		&rule.Traffic,
+//		&rule.AddressGroupLocalName,
+//		&rule.AddressGroupLocalNamespace,
+//		&rule.AddressGroupName,
+//		&rule.AddressGroupNamespace,
+//		&portsJSON,
+//		&rule.Action,
+//		&rule.Logs,
+//		&rule.Priority,
+//	); err != nil {
+//		if errors.Is(err, pgx.ErrNoRows) {
+//			return nil, nil // Return nil if not found
+//		}
+//		return nil, errors.Wrap(err, "failed to get IEAgAgRule")
+//	}
+//
+//	// Parse ports from JSON
+//	var ports []struct {
+//		Source      string `json:"source"`
+//		Destination string `json:"destination"`
+//	}
+//
+//	if len(portsJSON) > 0 {
+//		if err := json.Unmarshal(portsJSON, &ports); err != nil {
+//			return nil, errors.Wrap(err, "failed to unmarshal ports")
+//		}
+//	}
+//
+//	// Convert to domain model
+//	domainRule := models.IEAgAgRule{
+//		SelfRef: models.SelfRef{
+//			ResourceIdentifier: models.NewResourceIdentifier(rule.Name, rule.Namespace),
+//		},
+//		Transport: models.TransportProtocol(rule.Transport),
+//		Traffic:   models.Traffic(rule.Traffic),
+//		AddressGroupLocal: models.AddressGroupRef{
+//			ResourceIdentifier: models.NewResourceIdentifier(rule.AddressGroupLocalName, rule.AddressGroupLocalNamespace),
+//		},
+//		AddressGroup: models.AddressGroupRef{
+//			ResourceIdentifier: models.NewResourceIdentifier(rule.AddressGroupName, rule.AddressGroupNamespace),
+//		},
+//		Action:   models.RuleAction(rule.Action),
+//		Logs:     rule.Logs,
+//		Priority: rule.Priority,
+//	}
+//
+//	// Add ports
+//	for _, p := range ports {
+//		domainRule.Ports = append(domainRule.Ports, models.PortSpec{
+//			Source:      p.Source,
+//			Destination: p.Destination,
+//		})
+//	}
+//
+//	return &domainRule, nil
+//}

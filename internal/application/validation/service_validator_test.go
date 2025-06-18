@@ -114,10 +114,30 @@ func (m *MockReaderForServiceValidator) ListServices(ctx context.Context, consum
 }
 
 func (m *MockReaderForServiceValidator) ListAddressGroups(ctx context.Context, consume func(models.AddressGroup) error, scope ports.Scope) error {
+	if m.addressGroups == nil {
+		return nil
+	}
+
+	for _, ag := range m.addressGroups {
+		if err := consume(ag); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 func (m *MockReaderForServiceValidator) ListAddressGroupBindings(ctx context.Context, consume func(models.AddressGroupBinding) error, scope ports.Scope) error {
+	// If we have bindings in the slice, use them
+	if len(m.addressGroupBindings) > 0 {
+		for _, binding := range m.addressGroupBindings {
+			if err := consume(binding); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// For backward compatibility with existing tests
 	if m.hasBindings {
 		binding := models.AddressGroupBinding{
 			SelfRef: models.SelfRef{
@@ -458,12 +478,44 @@ func TestServiceValidator_CheckBindingsPortOverlaps(t *testing.T) {
 	}
 
 	// Тест 2: Сервис с перекрывающимися портами
+	// Создаем новый сервис с портом, который перекрывается с портом other-service
 	serviceWithOverlap := models.Service{
-		SelfRef: models.NewSelfRef(models.NewResourceIdentifier("test-service")),
+		SelfRef: models.NewSelfRef(models.NewResourceIdentifier("test-service-overlap")),
 		IngressPorts: []models.IngressPort{
 			{Protocol: models.TCP, Port: "80"}, // Перекрывается с other-service
 		},
 	}
+	mockReader.AddService(serviceWithOverlap)
+
+	// Создаем AddressGroupBinding, связывающий test-service-overlap с test-ag
+	bindingOverlap := models.AddressGroupBinding{
+		SelfRef:         models.NewSelfRef(models.NewResourceIdentifier("test-binding-overlap")),
+		ServiceRef:      models.NewServiceRef("test-service-overlap"),
+		AddressGroupRef: models.NewAddressGroupRef("test-ag"),
+	}
+
+	// Создаем еще одно AddressGroupBinding, связывающий other-service с test-ag
+	// Это нужно для проверки перекрытия портов
+	bindingOtherService := models.AddressGroupBinding{
+		SelfRef:         models.NewSelfRef(models.NewResourceIdentifier("test-binding-other")),
+		ServiceRef:      models.NewServiceRef("other-service"),
+		AddressGroupRef: models.NewAddressGroupRef("test-ag"),
+	}
+
+	// Добавляем bindings в mock reader
+	mockReader.addressGroupBindings = append(mockReader.addressGroupBindings, bindingOverlap)
+	mockReader.addressGroupBindings = append(mockReader.addressGroupBindings, bindingOtherService)
+
+	// Добавляем порты test-service-overlap в AddressGroupPortMapping
+	overlapServicePorts := models.ServicePorts{
+		Ports: models.ProtocolPorts{
+			models.TCP: []models.PortRange{{Start: 80, End: 80}},
+		},
+	}
+	agpm.AccessPorts[models.NewServiceRef("test-service-overlap")] = overlapServicePorts
+	mockReader.AddAddressGroupPortMapping(agpm)
+
+	// Проверяем перекрытие портов
 	err = validator.CheckBindingsPortOverlaps(ctx, serviceWithOverlap)
 	if err == nil {
 		t.Errorf("Expected error for service with overlapping ports, but got nil")
@@ -580,4 +632,14 @@ func (m *MockReaderForServiceValidator) ListAddressGroupBindingPolicies(ctx cont
 
 func (m *MockReaderForServiceValidator) GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
 	return nil, nil
+}
+
+func (m *MockReaderForServiceValidator) ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAgRule) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReaderForServiceValidator) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
+	// Since this mock is for ServiceValidator tests, we don't expect this method to be called
+	// But we still return a proper error instead of nil, nil
+	return nil, validation.NewEntityNotFoundError("IEAgAgRule", id.Key())
 }

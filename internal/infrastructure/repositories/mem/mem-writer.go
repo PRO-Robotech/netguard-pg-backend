@@ -18,6 +18,7 @@ type writer struct {
 	addressGroupBindingPolicies map[string]models.AddressGroupBindingPolicy
 	ruleS2S                    map[string]models.RuleS2S
 	serviceAliases             map[string]models.ServiceAlias
+	ieAgAgRules                map[string]models.IEAgAgRule
 }
 
 func (w *writer) SyncServices(ctx context.Context, services []models.Service, scope ports.Scope, opts ...ports.Option) error {
@@ -61,6 +62,7 @@ func (w *writer) SyncServices(ctx context.Context, services []models.Service, sc
 					// Проверяем, входит ли сервис в область видимости
 					serviceKey := v.Key()
 					if !scopeIds[serviceKey] {
+						// Сохраняем сервисы, которые не входят в область видимости
 						tempServices[k] = v
 					}
 				}
@@ -593,6 +595,9 @@ func (w *writer) Commit() error {
 	if w.ruleS2S != nil {
 		w.registry.db.SetRuleS2S(w.ruleS2S)
 	}
+	if w.ieAgAgRules != nil {
+		w.registry.db.SetIEAgAgRules(w.ieAgAgRules)
+	}
 	w.registry.db.SetSyncStatus(models.SyncStatus{
 		UpdatedAt: time.Now(),
 	})
@@ -718,6 +723,102 @@ func (w *writer) DeleteAddressGroupBindingPoliciesByIDs(ctx context.Context, ids
 	return nil
 }
 
+// SyncIEAgAgRules синхронизирует правила IEAgAgRule
+func (w *writer) SyncIEAgAgRules(ctx context.Context, rules []models.IEAgAgRule, scope ports.Scope, opts ...ports.Option) error {
+	// Определение операции (по умолчанию FullSync)
+	syncOp := models.SyncOpFullSync
+
+	// Извлечение опций
+	for _, opt := range opts {
+		if so, ok := opt.(ports.SyncOption); ok {
+			syncOp = so.Operation
+		}
+	}
+
+	// Инициализация карты, если она еще не создана
+	if w.ieAgAgRules == nil {
+		w.ieAgAgRules = make(map[string]models.IEAgAgRule)
+		// Всегда копируем существующие правила, чтобы иметь полную карту для работы
+		for k, v := range w.registry.db.GetIEAgAgRules() {
+			w.ieAgAgRules[k] = v
+		}
+	}
+
+	// Обработка в зависимости от типа операции
+	switch syncOp {
+	case models.SyncOpFullSync:
+		// Если scope не пустой, удаляем только правила в указанной области
+		if scope != nil && !scope.IsEmpty() {
+			// Проверяем, что scope имеет тип ResourceIdentifierScope
+			if ris, ok := scope.(ports.ResourceIdentifierScope); ok && !ris.IsEmpty() {
+				// Создаем временную карту для хранения правил вне области видимости
+				tempRules := make(map[string]models.IEAgAgRule)
+
+				// Создаем карту идентификаторов в области видимости для быстрого поиска
+				scopeIds := make(map[string]bool)
+				for _, id := range ris.Identifiers {
+					scopeIds[id.Key()] = true
+				}
+
+				// Сохраняем правила вне области видимости
+				for k, v := range w.ieAgAgRules {
+					if !scopeIds[k] {
+						tempRules[k] = v
+					}
+				}
+
+				// Очищаем карту и восстанавливаем правила вне области видимости
+				w.ieAgAgRules = make(map[string]models.IEAgAgRule)
+				for k, v := range tempRules {
+					w.ieAgAgRules[k] = v
+				}
+			} else {
+				// Если scope не ResourceIdentifierScope, но не пустой,
+				// то мы не знаем, как его обрабатывать, поэтому не удаляем ничего
+			}
+		} else {
+			// Если область пуста, очищаем всю карту
+			w.ieAgAgRules = make(map[string]models.IEAgAgRule)
+		}
+
+		// Добавляем новые правила
+		for _, rule := range rules {
+			w.ieAgAgRules[rule.Key()] = rule
+		}
+
+	case models.SyncOpUpsert:
+		// Только добавление и обновление
+		for _, rule := range rules {
+			w.ieAgAgRules[rule.Key()] = rule
+		}
+
+	case models.SyncOpDelete:
+		// Только удаление
+		for _, rule := range rules {
+			delete(w.ieAgAgRules, rule.Key())
+		}
+	}
+
+	return nil
+}
+
+// DeleteIEAgAgRulesByIDs deletes IEAgAgRules by IDs
+func (w *writer) DeleteIEAgAgRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	if w.ieAgAgRules == nil {
+		w.ieAgAgRules = make(map[string]models.IEAgAgRule)
+		// Copy existing IEAgAgRules
+		for k, v := range w.registry.db.GetIEAgAgRules() {
+			w.ieAgAgRules[k] = v
+		}
+	}
+
+	for _, id := range ids {
+		delete(w.ieAgAgRules, id.Key())
+	}
+
+	return nil
+}
+
 func (w *writer) Abort() {
 	w.services = nil
 	w.addressGroups = nil
@@ -726,4 +827,5 @@ func (w *writer) Abort() {
 	w.addressGroupBindingPolicies = nil
 	w.ruleS2S = nil
 	w.serviceAliases = nil
+	w.ieAgAgRules = nil
 }

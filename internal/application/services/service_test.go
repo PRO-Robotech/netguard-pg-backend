@@ -62,6 +62,7 @@ type MockReader struct {
 	services                 map[string]models.Service
 	addressGroups            map[string]models.AddressGroup
 	addressGroupPortMappings map[string]models.AddressGroupPortMapping
+	ieAgAgRules              map[string]models.IEAgAgRule
 }
 
 func NewMockReader() *MockReader {
@@ -69,6 +70,7 @@ func NewMockReader() *MockReader {
 		services:                 make(map[string]models.Service),
 		addressGroups:            make(map[string]models.AddressGroup),
 		addressGroupPortMappings: make(map[string]models.AddressGroupPortMapping),
+		ieAgAgRules:              make(map[string]models.IEAgAgRule),
 	}
 }
 
@@ -149,6 +151,23 @@ func (m *MockReader) GetRuleS2SByID(ctx context.Context, id models.ResourceIdent
 
 func (m *MockReader) GetServiceAliasByID(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error) {
 	return nil, nil
+}
+
+func (m *MockReader) ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAgRule) error, scope ports.Scope) error {
+	for _, rule := range m.ieAgAgRules {
+		if err := consume(rule); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *MockReader) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
+	rule, ok := m.ieAgAgRules[id.Key()]
+	if !ok {
+		return nil, errors.New("IEAgAgRule not found")
+	}
+	return &rule, nil
 }
 
 // Вспомогательные методы для настройки мока
@@ -237,6 +256,14 @@ func (m *MockWriter) DeleteRuleS2SByIDs(ctx context.Context, ids []models.Resour
 }
 
 func (m *MockWriter) DeleteServiceAliasesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	return nil
+}
+
+func (m *MockWriter) SyncIEAgAgRules(ctx context.Context, rules []models.IEAgAgRule, scope ports.Scope, opts ...ports.Option) error {
+	return nil
+}
+
+func (m *MockWriter) DeleteIEAgAgRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
 	return nil
 }
 

@@ -65,3 +65,59 @@ func DoPortRangesOverlap(a, b models.PortRange) bool {
 	// и конец одного больше или равен началу другого
 	return a.Start <= b.End && a.End >= b.Start
 }
+
+// validatePort проверяет корректность строкового представления порта
+func validatePort(port string) error {
+	// Разрешаем пустую строку порта
+	if port == "" {
+		return nil
+	}
+
+	// Разбиваем по запятой для обработки списка портов/диапазонов
+	portItems := strings.Split(port, ",")
+	for _, item := range portItems {
+		item = strings.TrimSpace(item)
+
+		// Проверяем, является ли это диапазоном портов (формат: "start-end")
+		if strings.Contains(item, "-") && !strings.HasPrefix(item, "-") {
+			parts := strings.Split(item, "-")
+			if len(parts) != 2 {
+				return fmt.Errorf("invalid port range format")
+			}
+
+			start, err := strconv.Atoi(parts[0])
+			if err != nil {
+				return fmt.Errorf("invalid start port")
+			}
+
+			end, err := strconv.Atoi(parts[1])
+			if err != nil {
+				return fmt.Errorf("invalid end port")
+			}
+
+			if start < 0 || start > 65535 {
+				return fmt.Errorf("start port must be between 0 and 65535")
+			}
+
+			if end < 0 || end > 65535 {
+				return fmt.Errorf("end port must be between 0 and 65535")
+			}
+
+			if start > end {
+				return fmt.Errorf("start port must be less than or equal to end port")
+			}
+		} else {
+			// Проверяем, является ли это одиночным портом
+			p, err := strconv.Atoi(item)
+			if err != nil {
+				return fmt.Errorf("invalid port")
+			}
+
+			if p < 0 || p > 65535 {
+				return fmt.Errorf("port must be between 0 and 65535")
+			}
+		}
+	}
+
+	return nil
+}

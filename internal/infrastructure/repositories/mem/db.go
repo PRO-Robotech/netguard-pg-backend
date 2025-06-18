@@ -15,6 +15,7 @@ type MemDB struct {
 	addressGroupPortMappings   map[string]models.AddressGroupPortMapping
 	addressGroupBindingPolicies map[string]models.AddressGroupBindingPolicy
 	ruleS2S                    map[string]models.RuleS2S
+	ieAgAgRules                map[string]models.IEAgAgRule
 	syncStatus                 models.SyncStatus
 	mu                         sync.RWMutex
 }
@@ -29,6 +30,7 @@ func NewMemDB() *MemDB {
 		addressGroupPortMappings:   make(map[string]models.AddressGroupPortMapping),
 		addressGroupBindingPolicies: make(map[string]models.AddressGroupBindingPolicy),
 		ruleS2S:                    make(map[string]models.RuleS2S),
+		ieAgAgRules:                make(map[string]models.IEAgAgRule),
 	}
 }
 
@@ -170,4 +172,22 @@ func (db *MemDB) SetAddressGroupBindingPolicies(policies map[string]models.Addre
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	db.addressGroupBindingPolicies = policies
+}
+
+// GetIEAgAgRules returns all IEAgAgRules
+func (db *MemDB) GetIEAgAgRules() map[string]models.IEAgAgRule {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	result := make(map[string]models.IEAgAgRule, len(db.ieAgAgRules))
+	for k, v := range db.ieAgAgRules {
+		result[k] = v
+	}
+	return result
+}
+
+// SetIEAgAgRules sets the IEAgAgRules
+func (db *MemDB) SetIEAgAgRules(rules map[string]models.IEAgAgRule) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.ieAgAgRules = rules
 }

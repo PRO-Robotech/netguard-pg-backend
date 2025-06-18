@@ -2,6 +2,7 @@ package validation_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"netguard-pg-backend/internal/application/validation"
@@ -80,6 +81,145 @@ func TestAddressGroupPortMappingValidator_ValidateReferences(t *testing.T) {
 	}
 }
 
+// TestAddressGroupPortMappingValidator_CheckInternalPortOverlaps tests the CheckInternalPortOverlaps method
+func TestAddressGroupPortMappingValidator_CheckInternalPortOverlaps(t *testing.T) {
+	tests := []struct {
+		name    string
+		mapping models.AddressGroupPortMapping
+		wantErr bool
+	}{
+		{
+			name: "No overlaps",
+			mapping: models.AddressGroupPortMapping{
+				SelfRef: models.SelfRef{
+					ResourceIdentifier: models.NewResourceIdentifier("test-mapping"),
+				},
+				AccessPorts: map[models.ServiceRef]models.ServicePorts{
+					models.ServiceRef{
+						ResourceIdentifier: models.NewResourceIdentifier("service1"),
+					}: {
+						Ports: models.ProtocolPorts{
+							models.TCP: []models.PortRange{
+								{Start: 80, End: 80},
+								{Start: 443, End: 443},
+							},
+						},
+					},
+					models.ServiceRef{
+						ResourceIdentifier: models.NewResourceIdentifier("service2"),
+					}: {
+						Ports: models.ProtocolPorts{
+							models.TCP: []models.PortRange{
+								{Start: 8080, End: 8080},
+								{Start: 8443, End: 8443},
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "TCP port overlap",
+			mapping: models.AddressGroupPortMapping{
+				SelfRef: models.SelfRef{
+					ResourceIdentifier: models.NewResourceIdentifier("test-mapping"),
+				},
+				AccessPorts: map[models.ServiceRef]models.ServicePorts{
+					models.ServiceRef{
+						ResourceIdentifier: models.NewResourceIdentifier("service1"),
+					}: {
+						Ports: models.ProtocolPorts{
+							models.TCP: []models.PortRange{
+								{Start: 80, End: 90},
+							},
+						},
+					},
+					models.ServiceRef{
+						ResourceIdentifier: models.NewResourceIdentifier("service2"),
+					}: {
+						Ports: models.ProtocolPorts{
+							models.TCP: []models.PortRange{
+								{Start: 85, End: 95},
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "UDP port overlap",
+			mapping: models.AddressGroupPortMapping{
+				SelfRef: models.SelfRef{
+					ResourceIdentifier: models.NewResourceIdentifier("test-mapping"),
+				},
+				AccessPorts: map[models.ServiceRef]models.ServicePorts{
+					models.ServiceRef{
+						ResourceIdentifier: models.NewResourceIdentifier("service1"),
+					}: {
+						Ports: models.ProtocolPorts{
+							models.UDP: []models.PortRange{
+								{Start: 53, End: 53},
+							},
+						},
+					},
+					models.ServiceRef{
+						ResourceIdentifier: models.NewResourceIdentifier("service2"),
+					}: {
+						Ports: models.ProtocolPorts{
+							models.UDP: []models.PortRange{
+								{Start: 53, End: 53},
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "Different protocols, no overlap",
+			mapping: models.AddressGroupPortMapping{
+				SelfRef: models.SelfRef{
+					ResourceIdentifier: models.NewResourceIdentifier("test-mapping"),
+				},
+				AccessPorts: map[models.ServiceRef]models.ServicePorts{
+					models.ServiceRef{
+						ResourceIdentifier: models.NewResourceIdentifier("service1"),
+					}: {
+						Ports: models.ProtocolPorts{
+							models.TCP: []models.PortRange{
+								{Start: 80, End: 80},
+							},
+						},
+					},
+					models.ServiceRef{
+						ResourceIdentifier: models.NewResourceIdentifier("service2"),
+					}: {
+						Ports: models.ProtocolPorts{
+							models.UDP: []models.PortRange{
+								{Start: 80, End: 80},
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockReader := &MockReaderForAddressGroupPortMappingValidator{}
+			validator := validation.NewAddressGroupPortMappingValidator(mockReader)
+			err := validator.CheckInternalPortOverlaps(tt.mapping)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("CheckInternalPortOverlaps() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 // MockReaderForAddressGroupPortMappingValidator is a specialized mock for testing AddressGroupPortMappingValidator
 type MockReaderForAddressGroupPortMappingValidator struct {
 	mappingExists bool
@@ -136,27 +276,52 @@ func (m *MockReaderForAddressGroupPortMappingValidator) GetSyncStatus(ctx contex
 }
 
 func (m *MockReaderForAddressGroupPortMappingValidator) GetServiceByID(ctx context.Context, id models.ResourceIdentifier) (*models.Service, error) {
-	return nil, nil
+	if m.serviceExists && id.Key() == m.serviceID {
+		return &models.Service{
+			SelfRef: models.SelfRef{
+				ResourceIdentifier: models.NewResourceIdentifier(m.serviceID),
+			},
+		}, nil
+	}
+	return nil, fmt.Errorf("service not found")
 }
 
 func (m *MockReaderForAddressGroupPortMappingValidator) GetAddressGroupByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroup, error) {
-	return nil, nil
+	return nil, fmt.Errorf("address group not found")
 }
 
 func (m *MockReaderForAddressGroupPortMappingValidator) GetAddressGroupBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBinding, error) {
-	return nil, nil
+	return nil, fmt.Errorf("address group binding not found")
 }
 
 func (m *MockReaderForAddressGroupPortMappingValidator) GetAddressGroupPortMappingByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupPortMapping, error) {
-	return nil, nil
+	if m.mappingExists && id.Key() == m.mappingID {
+		// Create a port mapping with a service reference
+		accessPorts := make(map[models.ServiceRef]models.ServicePorts)
+		accessPorts[models.ServiceRef{
+			ResourceIdentifier: models.NewResourceIdentifier(m.serviceID),
+		}] = models.ServicePorts{
+			Ports: models.ProtocolPorts{
+				models.TCP: []models.PortRange{{Start: 80, End: 80}},
+			},
+		}
+
+		return &models.AddressGroupPortMapping{
+			SelfRef: models.SelfRef{
+				ResourceIdentifier: models.NewResourceIdentifier(m.mappingID),
+			},
+			AccessPorts: accessPorts,
+		}, nil
+	}
+	return nil, fmt.Errorf("address group port mapping not found")
 }
 
 func (m *MockReaderForAddressGroupPortMappingValidator) GetRuleS2SByID(ctx context.Context, id models.ResourceIdentifier) (*models.RuleS2S, error) {
-	return nil, nil
+	return nil, fmt.Errorf("rule s2s not found")
 }
 
 func (m *MockReaderForAddressGroupPortMappingValidator) GetServiceAliasByID(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error) {
-	return nil, nil
+	return nil, fmt.Errorf("service alias not found")
 }
 
 func (m *MockReaderForAddressGroupPortMappingValidator) ListAddressGroups(ctx context.Context, consume func(models.AddressGroup) error, scope ports.Scope) error {
@@ -172,7 +337,17 @@ func (m *MockReaderForAddressGroupPortMappingValidator) ListAddressGroupBindingP
 }
 
 func (m *MockReaderForAddressGroupPortMappingValidator) GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
-	return nil, nil
+	return nil, fmt.Errorf("address group binding policy not found")
+}
+
+func (m *MockReaderForAddressGroupPortMappingValidator) ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAgRule) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReaderForAddressGroupPortMappingValidator) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
+	// Since this mock is for AddressGroupPortMappingValidator tests, we don't expect this method to be called
+	// But we still return a proper error instead of nil, nil
+	return nil, fmt.Errorf("IEAgAgRule not found")
 }
 
 func (m *MockReaderForAddressGroupPortMappingValidator) Close() error {

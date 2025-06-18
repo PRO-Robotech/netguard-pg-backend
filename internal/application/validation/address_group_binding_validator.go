@@ -81,7 +81,8 @@ func UpdatePortMapping(
 	}
 
 	// Update the service ports in the mapping
-	updatedMapping.AccessPorts[serviceRef] = servicePorts
+	// Use the service's ResourceIdentifier to ensure the namespace is preserved
+	updatedMapping.AccessPorts[models.ServiceRef{ResourceIdentifier: service.ResourceIdentifier}] = servicePorts
 
 	return &updatedMapping
 }
@@ -198,6 +199,9 @@ func (v *AddressGroupBindingValidator) ValidateForCreation(ctx context.Context, 
 	if err != nil {
 		return errors.Wrapf(err, "failed to get address group for namespace validation in binding %s", binding.Key())
 	}
+	if addressGroup == nil {
+		return fmt.Errorf("address group not found or is nil for binding %s", binding.Key())
+	}
 
 	// Если AddressGroup находится в другом namespace, чем Binding/Service
 	if addressGroup.Namespace != binding.Namespace {
@@ -271,6 +275,9 @@ func (v *AddressGroupBindingValidator) ValidateForUpdate(ctx context.Context, ol
 	if err != nil {
 		return errors.Wrapf(err, "failed to get address group for namespace validation in binding %s", newBinding.Key())
 	}
+	if addressGroup == nil {
+		return fmt.Errorf("address group not found or is nil for binding %s", newBinding.Key())
+	}
 
 	// Если AddressGroup находится в другом namespace, чем Binding/Service
 	if addressGroup.Namespace != newBinding.Namespace {
@@ -309,6 +316,9 @@ func (v *AddressGroupBindingValidator) ValidateForUpdate(ctx context.Context, ol
 	service, err := v.reader.GetServiceByID(ctx, newBinding.ServiceRef.ResourceIdentifier)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get service for port mapping in binding %s", newBinding.Key())
+	}
+	if service == nil {
+		return fmt.Errorf("service not found or is nil for binding %s", newBinding.Key())
 	}
 
 	// Check if there's an existing port mapping for this address group

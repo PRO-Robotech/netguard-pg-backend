@@ -106,3 +106,39 @@ func (v *AddressGroupBindingPolicyValidator) ValidateForUpdate(ctx context.Conte
 
 	return nil
 }
+
+// CheckDependencies проверяет зависимости перед удалением политики привязки группы адресов
+func (v *AddressGroupBindingPolicyValidator) CheckDependencies(ctx context.Context, id models.ResourceIdentifier) error {
+	// Получаем политику по ID
+	policy, err := v.reader.GetAddressGroupBindingPolicyByID(ctx, id)
+	if err != nil {
+		return errors.Wrap(err, "failed to get policy")
+	}
+	if policy == nil {
+		return fmt.Errorf("policy not found")
+	}
+
+	// Проверяем, есть ли активные привязки, связанные с этой политикой
+	hasBindings := false
+	err = v.reader.ListAddressGroupBindings(ctx, func(binding models.AddressGroupBinding) error {
+		// Проверяем, ссылается ли привязка на тот же сервис и группу адресов, что и политика
+		if binding.ServiceRef.Key() == policy.ServiceRef.Key() &&
+			binding.AddressGroupRef.Key() == policy.AddressGroupRef.Key() {
+			hasBindings = true
+			return fmt.Errorf("binding found") // Используем ошибку для прерывания цикла
+		}
+		return nil
+	}, nil)
+
+	// Если ошибка не связана с найденной привязкой, возвращаем её
+	if err != nil && !hasBindings {
+		return errors.Wrap(err, "failed to check address group bindings")
+	}
+
+	// Если найдены привязки, возвращаем ошибку
+	if hasBindings {
+		return NewDependencyExistsError("address_group_binding_policy", id.Key(), "address_group_binding")
+	}
+
+	return nil
+}

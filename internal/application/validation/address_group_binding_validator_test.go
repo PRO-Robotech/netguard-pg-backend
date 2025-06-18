@@ -42,12 +42,21 @@ func TestAddressGroupBindingValidator_ValidateForCreation(t *testing.T) {
 		t.Errorf("Expected no error, got %v", err)
 	}
 
-	// Test when port mapping exists (should check for overlaps)
+	// Test when port mapping exists with non-overlapping ports (should pass validation)
 	mockReader.portMappingExists = true
+	mockReader.useOverlappingPorts = false
 
 	err = validator.ValidateForCreation(context.Background(), binding)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
+	}
+
+	// Test when port mapping exists with overlapping ports (should fail validation)
+	mockReader.useOverlappingPorts = true
+
+	err = validator.ValidateForCreation(context.Background(), binding)
+	if err == nil {
+		t.Error("Expected error for overlapping ports, got nil")
 	}
 
 	// Test with namespace mismatch
@@ -151,12 +160,21 @@ func TestAddressGroupBindingValidator_ValidateForUpdate(t *testing.T) {
 		t.Errorf("Expected no error, got %v", err)
 	}
 
-	// Test when port mapping exists (should check for overlaps)
+	// Test when port mapping exists with non-overlapping ports (should pass validation)
 	mockReader.portMappingExists = true
+	mockReader.useOverlappingPorts = false
 
 	err = validator.ValidateForUpdate(context.Background(), oldBinding, newBinding)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
+	}
+
+	// Test when port mapping exists with overlapping ports (should fail validation)
+	mockReader.useOverlappingPorts = true
+
+	err = validator.ValidateForUpdate(context.Background(), oldBinding, newBinding)
+	if err == nil {
+		t.Error("Expected error for overlapping ports, got nil")
 	}
 
 	// Test with changed service reference (should return error)
@@ -261,15 +279,16 @@ func TestAddressGroupBindingValidator_ValidateReferences(t *testing.T) {
 
 // MockReaderForAddressGroupBindingValidator is a specialized mock for testing AddressGroupBindingValidator
 type MockReaderForAddressGroupBindingValidator struct {
-	bindingExists      bool
-	bindingID          string
-	serviceExists      bool
-	serviceID          string
-	serviceNamespace   string
-	addressGroupExists bool
-	addressGroupID     string
-	portMappingExists  bool
-	portMappingID      string
+	bindingExists       bool
+	bindingID           string
+	serviceExists       bool
+	serviceID           string
+	serviceNamespace    string
+	addressGroupExists  bool
+	addressGroupID      string
+	portMappingExists   bool
+	portMappingID       string
+	useOverlappingPorts bool
 }
 
 func (m *MockReaderForAddressGroupBindingValidator) Close() error {
@@ -350,11 +369,31 @@ func (m *MockReaderForAddressGroupBindingValidator) GetServiceByID(ctx context.C
 }
 
 func (m *MockReaderForAddressGroupBindingValidator) GetAddressGroupByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroup, error) {
-	return nil, nil
+	if m.addressGroupExists && id.Key() == m.addressGroupID {
+		return &models.AddressGroup{
+			SelfRef: models.SelfRef{
+				ResourceIdentifier: models.NewResourceIdentifier(m.addressGroupID, models.WithNamespace(m.serviceNamespace)),
+			},
+		}, nil
+	}
+	return nil, fmt.Errorf("address group not found")
 }
 
 func (m *MockReaderForAddressGroupBindingValidator) GetAddressGroupBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBinding, error) {
-	return nil, nil
+	if m.bindingExists && id.Key() == m.bindingID {
+		return &models.AddressGroupBinding{
+			SelfRef: models.SelfRef{
+				ResourceIdentifier: models.NewResourceIdentifier(m.bindingID, models.WithNamespace(m.serviceNamespace)),
+			},
+			ServiceRef: models.ServiceRef{
+				ResourceIdentifier: models.NewResourceIdentifier(m.serviceID),
+			},
+			AddressGroupRef: models.AddressGroupRef{
+				ResourceIdentifier: models.NewResourceIdentifier(m.addressGroupID),
+			},
+		}, nil
+	}
+	return nil, fmt.Errorf("address group binding not found")
 }
 
 func (m *MockReaderForAddressGroupBindingValidator) GetAddressGroupPortMappingByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupPortMapping, error) {
@@ -369,19 +408,36 @@ func (m *MockReaderForAddressGroupBindingValidator) GetAddressGroupPortMappingBy
 
 		// Add some existing service ports for a different service
 		// Use a service name that is different from the one we're testing with
-		existingServiceRef := models.ServiceRef{
-			ResourceIdentifier: models.NewResourceIdentifier("different-service"),
+		var existingServiceRef models.ServiceRef
+		if m.useOverlappingPorts {
+			// Use a different service name but with the same port to cause an overlap
+			existingServiceRef = models.ServiceRef{
+				ResourceIdentifier: models.NewResourceIdentifier("different-service"),
+			}
+		} else {
+			// Use a different service name to avoid overlap
+			existingServiceRef = models.ServiceRef{
+				ResourceIdentifier: models.NewResourceIdentifier("different-service"),
+			}
 		}
 
 		existingServicePorts := models.ServicePorts{
 			Ports: make(models.ProtocolPorts),
 		}
 
-		// Add TCP port 8080 (different from the test service's port 80)
-		existingServicePorts.Ports[models.TCP] = append(
-			existingServicePorts.Ports[models.TCP],
-			models.PortRange{Start: 8080, End: 8080},
-		)
+		if m.useOverlappingPorts {
+			// Add TCP port 80 (same as the test service's port 80) - this will cause an overlap
+			existingServicePorts.Ports[models.TCP] = append(
+				existingServicePorts.Ports[models.TCP],
+				models.PortRange{Start: 80, End: 80},
+			)
+		} else {
+			// Add TCP port 8080 (different from the test service's port 80)
+			existingServicePorts.Ports[models.TCP] = append(
+				existingServicePorts.Ports[models.TCP],
+				models.PortRange{Start: 8080, End: 8080},
+			)
+		}
 
 		// Add UDP port range 1000-2000 (different from the test service's port 53)
 		existingServicePorts.Ports[models.UDP] = append(
@@ -397,17 +453,31 @@ func (m *MockReaderForAddressGroupBindingValidator) GetAddressGroupPortMappingBy
 }
 
 func (m *MockReaderForAddressGroupBindingValidator) GetRuleS2SByID(ctx context.Context, id models.ResourceIdentifier) (*models.RuleS2S, error) {
-	return nil, nil
+	// Since this mock is for AddressGroupBindingValidator tests, we don't expect this method to be called
+	// But we still return a proper error instead of nil, nil
+	return nil, fmt.Errorf("rule s2s not found")
 }
 
 func (m *MockReaderForAddressGroupBindingValidator) GetServiceAliasByID(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error) {
-	return nil, nil
+	// Since this mock is for AddressGroupBindingValidator tests, we don't expect this method to be called
+	// But we still return a proper error instead of nil, nil
+	return nil, fmt.Errorf("service alias not found")
 }
 
 func (m *MockReaderForAddressGroupBindingValidator) ListAddressGroupBindingPolicies(ctx context.Context, consume func(models.AddressGroupBindingPolicy) error, scope ports.Scope) error {
 	return nil
 }
 
+func (m *MockReaderForAddressGroupBindingValidator) ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAgRule) error, scope ports.Scope) error {
+	return nil
+}
+
 func (m *MockReaderForAddressGroupBindingValidator) GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
 	return nil, nil
+}
+
+func (m *MockReaderForAddressGroupBindingValidator) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
+	// Since this mock is for AddressGroupBindingValidator tests, we don't expect this method to be called
+	// But we still return a proper error instead of nil, nil
+	return nil, fmt.Errorf("IEAgAgRule not found")
 }

@@ -2,6 +2,7 @@ package validation_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"netguard-pg-backend/internal/application/validation"
@@ -84,6 +85,102 @@ func TestRuleS2SValidator_ValidateReferences(t *testing.T) {
 	}
 }
 
+// TestRuleS2SValidator_ValidateNamespaceRules tests the ValidateNamespaceRules method of RuleS2SValidator
+func TestRuleS2SValidator_ValidateNamespaceRules(t *testing.T) {
+	// Test case 1: ServiceLocalRef in different namespace than rule
+	t.Run("ServiceLocalRef in different namespace", func(t *testing.T) {
+		mockReader := &MockReaderForRuleS2SValidator{
+			serviceLocalAliasExists: true,
+			serviceLocalAliasID:     "test-local-alias",
+			serviceAliasExists:      true,
+			serviceAliasID:          "test-alias",
+		}
+
+		validator := validation.NewRuleS2SValidator(mockReader)
+		rule := models.RuleS2S{
+			SelfRef: models.SelfRef{
+				ResourceIdentifier: models.NewResourceIdentifier("test-rule", models.WithNamespace("namespace1")),
+			},
+			ServiceLocalRef: models.ServiceAliasRef{
+				ResourceIdentifier: models.NewResourceIdentifier("test-local-alias", models.WithNamespace("namespace2")),
+			},
+			ServiceRef: models.ServiceAliasRef{
+				ResourceIdentifier: models.NewResourceIdentifier("test-alias"),
+			},
+		}
+
+		err := validator.ValidateNamespaceRules(context.Background(), rule)
+		if err == nil {
+			t.Error("Expected error for ServiceLocalRef in different namespace, got nil")
+		}
+	})
+
+	// Test case 2: ServiceRef with no namespace, but rule has namespace
+	t.Run("ServiceRef with no namespace", func(t *testing.T) {
+		// Case 2.1: ServiceRef exists in rule's namespace
+		mockReader := &MockReaderForRuleS2SValidator{
+			serviceLocalAliasExists: true,
+			serviceLocalAliasID:     "test-local-alias",
+			serviceAliasExists:      true,
+			serviceAliasID:          "test-alias",
+			serviceAliasNamespace:   "namespace1", // Same as rule's namespace
+		}
+
+		validator := validation.NewRuleS2SValidator(mockReader)
+		rule := models.RuleS2S{
+			SelfRef: models.SelfRef{
+				ResourceIdentifier: models.NewResourceIdentifier("test-rule", models.WithNamespace("namespace1")),
+			},
+			ServiceLocalRef: models.ServiceAliasRef{
+				ResourceIdentifier: models.NewResourceIdentifier("test-local-alias", models.WithNamespace("namespace1")),
+			},
+			ServiceRef: models.ServiceAliasRef{
+				ResourceIdentifier: models.NewResourceIdentifier("test-alias"), // No namespace
+			},
+		}
+
+		err := validator.ValidateNamespaceRules(context.Background(), rule)
+		if err != nil {
+			t.Errorf("Expected no error when ServiceRef exists in rule's namespace, got %v", err)
+		}
+
+		// Case 2.2: ServiceRef does not exist in rule's namespace
+		mockReader.serviceAliasExists = false
+		err = validator.ValidateNamespaceRules(context.Background(), rule)
+		if err == nil {
+			t.Error("Expected error when ServiceRef does not exist in rule's namespace, got nil")
+		}
+	})
+
+	// Test case 3: Valid namespaces
+	t.Run("Valid namespaces", func(t *testing.T) {
+		mockReader := &MockReaderForRuleS2SValidator{
+			serviceLocalAliasExists: true,
+			serviceLocalAliasID:     "test-local-alias",
+			serviceAliasExists:      true,
+			serviceAliasID:          "test-alias",
+		}
+
+		validator := validation.NewRuleS2SValidator(mockReader)
+		rule := models.RuleS2S{
+			SelfRef: models.SelfRef{
+				ResourceIdentifier: models.NewResourceIdentifier("test-rule", models.WithNamespace("namespace1")),
+			},
+			ServiceLocalRef: models.ServiceAliasRef{
+				ResourceIdentifier: models.NewResourceIdentifier("test-local-alias", models.WithNamespace("namespace1")),
+			},
+			ServiceRef: models.ServiceAliasRef{
+				ResourceIdentifier: models.NewResourceIdentifier("test-alias", models.WithNamespace("namespace2")),
+			},
+		}
+
+		err := validator.ValidateNamespaceRules(context.Background(), rule)
+		if err != nil {
+			t.Errorf("Expected no error for valid namespaces, got %v", err)
+		}
+	})
+}
+
 // MockReaderForRuleS2SValidator is a specialized mock for testing RuleS2SValidator
 type MockReaderForRuleS2SValidator struct {
 	ruleExists              bool
@@ -92,16 +189,25 @@ type MockReaderForRuleS2SValidator struct {
 	serviceLocalAliasID     string
 	serviceAliasExists      bool
 	serviceAliasID          string
+	serviceAliasNamespace   string
 }
 
 func (m *MockReaderForRuleS2SValidator) ListAddressGroupBindingPolicies(ctx context.Context, consume func(models.AddressGroupBindingPolicy) error, scope ports.Scope) error {
-	//TODO implement me
-	panic("implement me")
+	return nil
+}
+
+func (m *MockReaderForRuleS2SValidator) ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAgRule) error, scope ports.Scope) error {
+	return nil
 }
 
 func (m *MockReaderForRuleS2SValidator) GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
-	//TODO implement me
-	panic("implement me")
+	return nil, fmt.Errorf("address group binding policy not found")
+}
+
+func (m *MockReaderForRuleS2SValidator) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
+	// Since this mock is for RuleS2SValidator tests, we don't expect this method to be called
+	// But we still return a proper error instead of nil, nil
+	return nil, fmt.Errorf("IEAgAgRule not found")
 }
 
 func (m *MockReaderForRuleS2SValidator) Close() error {
@@ -141,6 +247,7 @@ func (m *MockReaderForRuleS2SValidator) ListServiceAliases(ctx context.Context, 
 	if scope != nil && !scope.IsEmpty() {
 		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && !ris.IsEmpty() {
 			for _, id := range ris.Identifiers {
+				// Check for service local alias
 				if id.Key() == m.serviceLocalAliasID && m.serviceLocalAliasExists {
 					alias := models.ServiceAlias{
 						SelfRef: models.SelfRef{
@@ -149,13 +256,26 @@ func (m *MockReaderForRuleS2SValidator) ListServiceAliases(ctx context.Context, 
 					}
 					return consume(alias)
 				}
-				if id.Key() == m.serviceAliasID && m.serviceAliasExists {
-					alias := models.ServiceAlias{
-						SelfRef: models.SelfRef{
-							ResourceIdentifier: models.NewResourceIdentifier(m.serviceAliasID),
-						},
+
+				// Check for service alias
+				if m.serviceAliasExists {
+					// If namespace is specified in the ID, check it matches
+					if id.Namespace != "" && m.serviceAliasNamespace != "" && id.Namespace != m.serviceAliasNamespace {
+						continue
 					}
-					return consume(alias)
+
+					// Check if the name matches
+					if id.Name == m.serviceAliasID {
+						alias := models.ServiceAlias{
+							SelfRef: models.SelfRef{
+								ResourceIdentifier: models.ResourceIdentifier{
+									Name:      m.serviceAliasID,
+									Namespace: m.serviceAliasNamespace,
+								},
+							},
+						}
+						return consume(alias)
+					}
 				}
 			}
 		}
@@ -168,25 +288,43 @@ func (m *MockReaderForRuleS2SValidator) GetSyncStatus(ctx context.Context) (*mod
 }
 
 func (m *MockReaderForRuleS2SValidator) GetServiceByID(ctx context.Context, id models.ResourceIdentifier) (*models.Service, error) {
-	return nil, nil
+	return nil, fmt.Errorf("service not found")
 }
 
 func (m *MockReaderForRuleS2SValidator) GetAddressGroupByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroup, error) {
-	return nil, nil
+	return nil, fmt.Errorf("address group not found")
 }
 
 func (m *MockReaderForRuleS2SValidator) GetAddressGroupBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBinding, error) {
-	return nil, nil
+	return nil, fmt.Errorf("address group binding not found")
 }
 
 func (m *MockReaderForRuleS2SValidator) GetAddressGroupPortMappingByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupPortMapping, error) {
-	return nil, nil
+	return nil, fmt.Errorf("address group port mapping not found")
 }
 
 func (m *MockReaderForRuleS2SValidator) GetRuleS2SByID(ctx context.Context, id models.ResourceIdentifier) (*models.RuleS2S, error) {
-	return nil, nil
+	if m.ruleExists && id.Key() == m.ruleID {
+		return &models.RuleS2S{
+			SelfRef: models.SelfRef{
+				ResourceIdentifier: models.NewResourceIdentifier(m.ruleID),
+			},
+		}, nil
+	}
+	return nil, fmt.Errorf("rule s2s not found")
 }
 
 func (m *MockReaderForRuleS2SValidator) GetServiceAliasByID(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error) {
-	return nil, nil
+	if (m.serviceLocalAliasExists && id.Key() == m.serviceLocalAliasID) ||
+		(m.serviceAliasExists && id.Name == m.serviceAliasID) {
+		return &models.ServiceAlias{
+			SelfRef: models.SelfRef{
+				ResourceIdentifier: models.ResourceIdentifier{
+					Name:      id.Name,
+					Namespace: m.serviceAliasNamespace,
+				},
+			},
+		}, nil
+	}
+	return nil, fmt.Errorf("service alias not found")
 }

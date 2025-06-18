@@ -60,6 +60,11 @@ func (v *DependencyValidator) GetAddressGroupBindingPolicyValidator() *AddressGr
 	return NewAddressGroupBindingPolicyValidator(v.reader)
 }
 
+// GetIEAgAgRuleValidator returns a validator for IEAgAgRule
+func (v *DependencyValidator) GetIEAgAgRuleValidator() *IEAgAgRuleValidator {
+	return NewIEAgAgRuleValidator(v.reader)
+}
+
 // ServiceValidator provides methods for validating services
 type ServiceValidator struct {
 	reader        ports.Reader

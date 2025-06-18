@@ -2,6 +2,7 @@ package validation_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"netguard-pg-backend/internal/application/validation"
@@ -156,27 +157,34 @@ func (m *MockReaderForAddressGroupValidator) GetSyncStatus(ctx context.Context) 
 }
 
 func (m *MockReaderForAddressGroupValidator) GetServiceByID(ctx context.Context, id models.ResourceIdentifier) (*models.Service, error) {
-	return nil, nil
+	return nil, fmt.Errorf("service not found")
 }
 
 func (m *MockReaderForAddressGroupValidator) GetAddressGroupByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroup, error) {
-	return nil, nil
+	if m.addressGroupExists && id.Key() == m.addressGroupID {
+		return &models.AddressGroup{
+			SelfRef: models.SelfRef{
+				ResourceIdentifier: models.NewResourceIdentifier(m.addressGroupID),
+			},
+		}, nil
+	}
+	return nil, fmt.Errorf("address group not found")
 }
 
 func (m *MockReaderForAddressGroupValidator) GetAddressGroupBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBinding, error) {
-	return nil, nil
+	return nil, fmt.Errorf("address group binding not found")
 }
 
 func (m *MockReaderForAddressGroupValidator) GetAddressGroupPortMappingByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupPortMapping, error) {
-	return nil, nil
+	return nil, fmt.Errorf("address group port mapping not found")
 }
 
 func (m *MockReaderForAddressGroupValidator) GetRuleS2SByID(ctx context.Context, id models.ResourceIdentifier) (*models.RuleS2S, error) {
-	return nil, nil
+	return nil, fmt.Errorf("rule s2s not found")
 }
 
 func (m *MockReaderForAddressGroupValidator) GetServiceAliasByID(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error) {
-	return nil, nil
+	return nil, fmt.Errorf("service alias not found")
 }
 
 func (m *MockReaderForAddressGroupValidator) ListAddressGroupBindingPolicies(ctx context.Context, consume func(models.AddressGroupBindingPolicy) error, scope ports.Scope) error {
@@ -184,5 +192,15 @@ func (m *MockReaderForAddressGroupValidator) ListAddressGroupBindingPolicies(ctx
 }
 
 func (m *MockReaderForAddressGroupValidator) GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
-	return nil, nil
+	return nil, fmt.Errorf("address group binding policy not found")
+}
+
+func (m *MockReaderForAddressGroupValidator) ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAgRule) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReaderForAddressGroupValidator) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
+	// Since this mock is for AddressGroupValidator tests, we don't expect this method to be called
+	// But we still return a proper error instead of nil, nil
+	return nil, fmt.Errorf("IEAgAgRule not found")
 }

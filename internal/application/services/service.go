@@ -2,7 +2,9 @@ package services
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
+	"strings"
 
 	"github.com/pkg/errors"
 	"netguard-pg-backend/internal/application/validation"
@@ -281,23 +283,30 @@ func (s *NetguardService) syncServices(ctx context.Context, writer ports.Writer,
 
 		for _, service := range services {
 			existingService, err := reader.GetServiceByID(ctx, service.ResourceIdentifier)
-			if err == nil && existingService != nil && syncOp != models.SyncOpDelete {
+			if err == nil && syncOp != models.SyncOpDelete {
 				// Сервис существует - используем ValidateForUpdate
 				if err := serviceValidator.ValidateForUpdate(ctx, *existingService, service); err != nil {
 					return err
 				}
-			} else if syncOp != models.SyncOpDelete {
-				// Сервис новый или не найден - используем ValidateForCreation
+			} else if err == ports.ErrNotFound && syncOp != models.SyncOpDelete {
+				// Сервис новый - используем ValidateForCreation
 				if err := serviceValidator.ValidateForCreation(ctx, service); err != nil {
 					return err
 				}
+			} else if err != nil && err != ports.ErrNotFound {
+				// Произошла другая ошибка
+				return errors.Wrap(err, "failed to get service")
 			}
 		}
 	}
 
 	// Определение scope
 	var scope ports.Scope
-	if len(services) > 0 {
+	if syncOp == models.SyncOpFullSync {
+		// При операции FullSync используем пустую область видимости,
+		// чтобы удалить все сервисы, а затем добавить только новые
+		scope = ports.EmptyScope{}
+	} else if len(services) > 0 {
 		var ids []models.ResourceIdentifier
 		for _, service := range services {
 			ids = append(ids, service.ResourceIdentifier)
@@ -314,6 +323,120 @@ func (s *NetguardService) syncServices(ctx context.Context, writer ports.Writer,
 
 	if err := writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
+	}
+
+	return nil
+}
+
+// findRuleS2SForServices finds all RuleS2S that reference the given services
+func (s *NetguardService) findRuleS2SForServices(ctx context.Context, serviceIDs []models.ResourceIdentifier) ([]models.RuleS2S, error) {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// First, find all ServiceAliases that reference these services
+	var serviceAliases []models.ServiceAlias
+	err = reader.ListServiceAliases(ctx, func(alias models.ServiceAlias) error {
+		for _, serviceID := range serviceIDs {
+			if alias.ServiceRef.Key() == serviceID.Key() {
+				serviceAliases = append(serviceAliases, alias)
+				break
+			}
+		}
+		return nil
+	}, nil)
+
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to list service aliases")
+	}
+
+	// Create a map of service alias IDs for quick lookup
+	serviceAliasMap := make(map[string]bool)
+	for _, alias := range serviceAliases {
+		serviceAliasMap[alias.Key()] = true
+	}
+
+	// Now find all RuleS2S that reference these service aliases
+	var rules []models.RuleS2S
+	err = reader.ListRuleS2S(ctx, func(rule models.RuleS2S) error {
+		// Check if the rule references any of the service aliases
+		if serviceAliasMap[rule.ServiceLocalRef.Key()] || serviceAliasMap[rule.ServiceRef.Key()] {
+			rules = append(rules, rule)
+		}
+		return nil
+	}, nil)
+
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to list rules")
+	}
+
+	return rules, nil
+}
+
+// updateIEAgAgRulesForRuleS2S updates the IEAgAgRules for the given RuleS2S
+// syncOp - операция синхронизации (FullSync, Upsert, Delete)
+func (s *NetguardService) updateIEAgAgRulesForRuleS2S(ctx context.Context, writer ports.Writer, rules []models.RuleS2S, syncOp models.SyncOp) error {
+	// Get all existing IEAgAgRules to detect obsolete ones
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+
+	existingRules := make(map[string]models.IEAgAgRule)
+	err = reader.ListIEAgAgRules(ctx, func(rule models.IEAgAgRule) error {
+		existingRules[rule.Key()] = rule
+		return nil
+	}, nil)
+	reader.Close()
+
+	if err != nil {
+		return errors.Wrap(err, "failed to list existing IEAgAgRules")
+	}
+
+	// Create a map of expected rules after the update
+	expectedRules := make(map[string]bool)
+	var allNewRules []models.IEAgAgRule
+
+	// Generate IEAgAgRules for each RuleS2S
+	for _, rule := range rules {
+		ieAgAgRules, err := s.GenerateIEAgAgRulesFromRuleS2S(ctx, rule)
+		if err != nil {
+			return errors.Wrapf(err, "failed to generate IEAgAgRules for RuleS2S %s", rule.Key())
+		}
+
+		// Add generated rules to the expected rules map and collect all new rules
+		for _, ieRule := range ieAgAgRules {
+			expectedRules[ieRule.Key()] = true
+			allNewRules = append(allNewRules, ieRule)
+		}
+	}
+
+	// Sync all new rules at once
+	if len(allNewRules) > 0 {
+		if err = writer.SyncIEAgAgRules(ctx, allNewRules, nil, ports.WithSyncOp(syncOp)); err != nil {
+			return errors.Wrap(err, "failed to sync new IEAgAgRules")
+		}
+	}
+
+	// Find and delete obsolete rules
+	var obsoleteRules []models.IEAgAgRule
+	for key, rule := range existingRules {
+		if !expectedRules[key] {
+			obsoleteRules = append(obsoleteRules, rule)
+		}
+	}
+
+	if len(obsoleteRules) > 0 {
+		var obsoleteRuleIDs []models.ResourceIdentifier
+		for _, rule := range obsoleteRules {
+			obsoleteRuleIDs = append(obsoleteRuleIDs, rule.ResourceIdentifier)
+		}
+
+		if err = writer.DeleteIEAgAgRulesByIDs(ctx, obsoleteRuleIDs); err != nil {
+			return errors.Wrap(err, "failed to delete obsolete IEAgAgRules")
+		}
 	}
 
 	return nil
@@ -361,6 +484,29 @@ func (s *NetguardService) SyncServices(ctx context.Context, services []models.Se
 	if err = writer.SyncServices(ctx, services, scope, ports.WithSyncOp(models.SyncOpFullSync)); err != nil {
 		return errors.Wrap(err, "failed to sync services")
 	}
+
+	// After successfully syncing services, update related IEAgAgRules
+	// Collect service IDs
+	var serviceIDs []models.ResourceIdentifier
+	for _, service := range services {
+		serviceIDs = append(serviceIDs, service.ResourceIdentifier)
+	}
+
+	// Find all RuleS2S that reference these services
+	affectedRules, err := s.findRuleS2SForServices(ctx, serviceIDs)
+	if err != nil {
+		writer.Abort()
+		return errors.Wrap(err, "failed to find affected RuleS2S")
+	}
+
+	// Update IEAgAgRules for affected RuleS2S
+	if len(affectedRules) > 0 {
+		if err = s.updateIEAgAgRulesForRuleS2S(ctx, writer, affectedRules, models.SyncOpFullSync); err != nil {
+			writer.Abort()
+			return errors.Wrap(err, "failed to update IEAgAgRules for affected RuleS2S")
+		}
+	}
+
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
@@ -387,18 +533,25 @@ func (s *NetguardService) syncAddressGroups(ctx context.Context, writer ports.Wr
 				if err := addressGroupValidator.ValidateForUpdate(ctx, *existingAddressGroup, addressGroup); err != nil {
 					return err
 				}
-			} else if syncOp != models.SyncOpDelete {
+			} else if err == ports.ErrNotFound && syncOp != models.SyncOpDelete {
 				// Группа адресов новая - используем ValidateForCreation
 				if err := addressGroupValidator.ValidateForCreation(ctx, addressGroup); err != nil {
 					return err
 				}
+			} else if err != nil && err != ports.ErrNotFound {
+				// Произошла другая ошибка
+				return errors.Wrap(err, "failed to get address group")
 			}
 		}
 	}
 
 	// Определение scope
 	var scope ports.Scope
-	if len(addressGroups) > 0 {
+	if syncOp == models.SyncOpFullSync {
+		// При операции FullSync используем пустую область видимости,
+		// чтобы удалить все группы адресов, а затем добавить только новые
+		scope = ports.EmptyScope{}
+	} else if len(addressGroups) > 0 {
 		var ids []models.ResourceIdentifier
 		for _, addressGroup := range addressGroups {
 			ids = append(ids, addressGroup.ResourceIdentifier)
@@ -418,6 +571,40 @@ func (s *NetguardService) syncAddressGroups(ctx context.Context, writer ports.Wr
 	}
 
 	return nil
+}
+
+// findServicesForAddressGroups finds all Services that reference the given address groups
+func (s *NetguardService) findServicesForAddressGroups(ctx context.Context, addressGroupIDs []models.ResourceIdentifier) ([]models.Service, error) {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Create a map of address group IDs for quick lookup
+	addressGroupMap := make(map[string]bool)
+	for _, id := range addressGroupIDs {
+		addressGroupMap[id.Key()] = true
+	}
+
+	// Find all Services that reference these address groups
+	var services []models.Service
+	err = reader.ListServices(ctx, func(service models.Service) error {
+		// Check if the service references any of the address groups
+		for _, ag := range service.AddressGroups {
+			if addressGroupMap[ag.Key()] {
+				services = append(services, service)
+				break
+			}
+		}
+		return nil
+	}, nil)
+
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to list services")
+	}
+
+	return services, nil
 }
 
 // SyncAddressGroups syncs address groups
@@ -441,11 +628,14 @@ func (s *NetguardService) SyncAddressGroups(ctx context.Context, addressGroups [
 			if err := addressGroupValidator.ValidateForUpdate(ctx, *existingAddressGroup, addressGroup); err != nil {
 				return err
 			}
-		} else {
+		} else if err == ports.ErrNotFound {
 			// Address group is new - use ValidateForCreation
 			if err := addressGroupValidator.ValidateForCreation(ctx, addressGroup); err != nil {
 				return err
 			}
+		} else {
+			// Other error occurred
+			return errors.Wrap(err, "failed to get address group")
 		}
 	}
 
@@ -462,6 +652,42 @@ func (s *NetguardService) SyncAddressGroups(ctx context.Context, addressGroups [
 	if err = writer.SyncAddressGroups(ctx, addressGroups, scope, ports.WithSyncOp(models.SyncOpFullSync)); err != nil {
 		return errors.Wrap(err, "failed to sync address groups")
 	}
+
+	// After successfully syncing address groups, update related IEAgAgRules
+	// Collect address group IDs
+	var addressGroupIDs []models.ResourceIdentifier
+	for _, ag := range addressGroups {
+		addressGroupIDs = append(addressGroupIDs, ag.ResourceIdentifier)
+	}
+
+	// Find all Services that reference these address groups
+	affectedServices, err := s.findServicesForAddressGroups(ctx, addressGroupIDs)
+	if err != nil {
+		writer.Abort()
+		return errors.Wrap(err, "failed to find affected Services")
+	}
+
+	// Collect service IDs
+	var serviceIDs []models.ResourceIdentifier
+	for _, service := range affectedServices {
+		serviceIDs = append(serviceIDs, service.ResourceIdentifier)
+	}
+
+	// Find all RuleS2S that reference these services
+	affectedRules, err := s.findRuleS2SForServices(ctx, serviceIDs)
+	if err != nil {
+		writer.Abort()
+		return errors.Wrap(err, "failed to find affected RuleS2S")
+	}
+
+	// Update IEAgAgRules for affected RuleS2S
+	if len(affectedRules) > 0 {
+		if err = s.updateIEAgAgRulesForRuleS2S(ctx, writer, affectedRules, models.SyncOpFullSync); err != nil {
+			writer.Abort()
+			return errors.Wrap(err, "failed to update IEAgAgRules for affected RuleS2S")
+		}
+	}
+
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
@@ -491,18 +717,25 @@ func (s *NetguardService) syncAddressGroupBindings(ctx context.Context, writer p
 				if err := bindingValidator.ValidateForUpdate(ctx, *existingBinding, binding); err != nil {
 					return err
 				}
-			} else if syncOp != models.SyncOpDelete {
+			} else if err == ports.ErrNotFound && syncOp != models.SyncOpDelete {
 				// Привязка новая - используем ValidateForCreation
 				if err := bindingValidator.ValidateForCreation(ctx, binding); err != nil {
 					return err
 				}
+			} else if err != nil && err != ports.ErrNotFound {
+				// Произошла другая ошибка
+				return errors.Wrap(err, "failed to get address group binding")
 			}
 		}
 	}
 
 	// Определение scope
 	var scope ports.Scope
-	if len(bindings) > 0 {
+	if syncOp == models.SyncOpFullSync {
+		// При операции FullSync используем пустую область видимости,
+		// чтобы удалить все привязки групп адресов, а затем добавить только новые
+		scope = ports.EmptyScope{}
+	} else if len(bindings) > 0 {
 		var ids []models.ResourceIdentifier
 		for _, binding := range bindings {
 			ids = append(ids, binding.ResourceIdentifier)
@@ -521,7 +754,7 @@ func (s *NetguardService) syncAddressGroupBindings(ctx context.Context, writer p
 	if syncOp != models.SyncOpDelete {
 		for _, binding := range bindings {
 			// Игнорируем ошибки при синхронизации port mappings, чтобы не блокировать основную операцию
-			_ = s.SyncAddressGroupPortMappings(ctx, binding)
+			_ = s.SyncAddressGroupPortMappingsWithSyncOp(ctx, binding, syncOp)
 		}
 	}
 
@@ -534,7 +767,8 @@ func (s *NetguardService) syncAddressGroupBindings(ctx context.Context, writer p
 
 // SyncAddressGroupPortMappingsWithWriter обеспечивает синхронизацию port mapping для binding
 // writer - существующий открытый writer для транзакции
-func (s *NetguardService) SyncAddressGroupPortMappingsWithWriter(ctx context.Context, writer ports.Writer, binding models.AddressGroupBinding) error {
+// syncOp - операция синхронизации (FullSync, Upsert, Delete)
+func (s *NetguardService) SyncAddressGroupPortMappingsWithWriter(ctx context.Context, writer ports.Writer, binding models.AddressGroupBinding, syncOp models.SyncOp) error {
 	reader, err := s.registry.Reader(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get reader")
@@ -543,7 +777,9 @@ func (s *NetguardService) SyncAddressGroupPortMappingsWithWriter(ctx context.Con
 
 	// Получаем сервис для доступа к его портам
 	service, err := reader.GetServiceByID(ctx, binding.ServiceRef.ResourceIdentifier)
-	if err != nil {
+	if err == ports.ErrNotFound {
+		return errors.New("service not found for port mapping")
+	} else if err != nil {
 		return errors.Wrapf(err, "failed to get service for port mapping")
 	}
 
@@ -552,9 +788,12 @@ func (s *NetguardService) SyncAddressGroupPortMappingsWithWriter(ctx context.Con
 
 	var updatedMapping models.AddressGroupPortMapping
 
-	if err != nil {
+	if err == ports.ErrNotFound {
 		// Port mapping не существует - создаем новый
 		updatedMapping = *validation.CreateNewPortMapping(binding.AddressGroupRef.ResourceIdentifier, *service)
+	} else if err != nil {
+		// Произошла другая ошибка
+		return errors.Wrap(err, "failed to get address group port mapping")
 	} else {
 		// Port mapping существует - обновляем его
 		updatedMapping = *validation.UpdatePortMapping(*portMapping, binding.ServiceRef, *service)
@@ -570,7 +809,7 @@ func (s *NetguardService) SyncAddressGroupPortMappingsWithWriter(ctx context.Con
 		ctx,
 		[]models.AddressGroupPortMapping{updatedMapping},
 		ports.NewResourceIdentifierScope(updatedMapping.ResourceIdentifier),
-		ports.WithSyncOp(models.SyncOpUpsert),
+		ports.WithSyncOp(syncOp),
 	); err != nil {
 		return errors.Wrap(err, "failed to sync address group port mappings")
 	}
@@ -579,8 +818,14 @@ func (s *NetguardService) SyncAddressGroupPortMappingsWithWriter(ctx context.Con
 }
 
 // SyncAddressGroupPortMappings обеспечивает синхронизацию port mapping для binding
-// с созданием собственной транзакции
+// с созданием собственной транзакции, используя операцию Upsert
 func (s *NetguardService) SyncAddressGroupPortMappings(ctx context.Context, binding models.AddressGroupBinding) error {
+	return s.SyncAddressGroupPortMappingsWithSyncOp(ctx, binding, models.SyncOpUpsert)
+}
+
+// SyncAddressGroupPortMappingsWithSyncOp обеспечивает синхронизацию port mapping для binding
+// с созданием собственной транзакции и указанной операцией синхронизации
+func (s *NetguardService) SyncAddressGroupPortMappingsWithSyncOp(ctx context.Context, binding models.AddressGroupBinding, syncOp models.SyncOp) error {
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get writer")
@@ -591,7 +836,7 @@ func (s *NetguardService) SyncAddressGroupPortMappings(ctx context.Context, bind
 		}
 	}()
 
-	if err = s.SyncAddressGroupPortMappingsWithWriter(ctx, writer, binding); err != nil {
+	if err = s.SyncAddressGroupPortMappingsWithWriter(ctx, writer, binding, syncOp); err != nil {
 		return err
 	}
 
@@ -651,7 +896,7 @@ func (s *NetguardService) SyncAddressGroupBindings(ctx context.Context, bindings
 
 	// Синхронизируем port mappings для каждого binding в той же транзакции
 	for _, binding := range bindings {
-		if err := s.SyncAddressGroupPortMappingsWithWriter(ctx, writer, binding); err != nil {
+		if err := s.SyncAddressGroupPortMappingsWithWriter(ctx, writer, binding, models.SyncOpFullSync); err != nil {
 			return errors.Wrapf(err, "failed to sync port mapping for binding %s", binding.Key())
 		}
 	}
@@ -684,11 +929,14 @@ func (s *NetguardService) syncAddressGroupPortMappings(ctx context.Context, writ
 				if err := mappingValidator.ValidateForUpdate(ctx, *existingMapping, mapping); err != nil {
 					return err
 				}
-			} else if syncOp != models.SyncOpDelete {
+			} else if err == ports.ErrNotFound && syncOp != models.SyncOpDelete {
 				// Маппинг новый - используем ValidateForCreation
 				if err := mappingValidator.ValidateForCreation(ctx, mapping); err != nil {
 					return err
 				}
+			} else if err != nil && err != ports.ErrNotFound {
+				// Произошла другая ошибка
+				return errors.Wrap(err, "failed to get address group port mapping")
 			}
 		}
 	}
@@ -736,11 +984,14 @@ func (s *NetguardService) SyncMultipleAddressGroupPortMappings(ctx context.Conte
 			if err := mappingValidator.ValidateForUpdate(ctx, *existingMapping, mapping); err != nil {
 				return err
 			}
-		} else {
+		} else if err == ports.ErrNotFound {
 			// Mapping is new - use ValidateForCreation
 			if err := mappingValidator.ValidateForCreation(ctx, mapping); err != nil {
 				return err
 			}
+		} else {
+			// Other error occurred
+			return errors.Wrap(err, "failed to get address group port mapping")
 		}
 	}
 
@@ -786,11 +1037,14 @@ func (s *NetguardService) syncRuleS2S(ctx context.Context, writer ports.Writer, 
 				if err := ruleValidator.ValidateForUpdate(ctx, *existingRule, rule); err != nil {
 					return err
 				}
-			} else if syncOp != models.SyncOpDelete {
+			} else if err == ports.ErrNotFound && syncOp != models.SyncOpDelete {
 				// Правило новое - используем ValidateForCreation
 				if err := ruleValidator.ValidateForCreation(ctx, rule); err != nil {
 					return err
 				}
+			} else if err != nil && err != ports.ErrNotFound {
+				// Произошла другая ошибка
+				return errors.Wrap(err, "failed to get rule s2s")
 			}
 		}
 	}
@@ -840,11 +1094,14 @@ func (s *NetguardService) SyncRuleS2S(ctx context.Context, rules []models.RuleS2
 			if err := ruleValidator.ValidateForUpdate(ctx, *existingRule, rule); err != nil {
 				return err
 			}
-		} else {
+		} else if err == ports.ErrNotFound {
 			// Rule is new - use ValidateForCreation
 			if err := ruleValidator.ValidateForCreation(ctx, rule); err != nil {
 				return err
 			}
+		} else {
+			// Other error occurred
+			return errors.Wrap(err, "failed to get rule s2s")
 		}
 	}
 
@@ -861,6 +1118,56 @@ func (s *NetguardService) SyncRuleS2S(ctx context.Context, rules []models.RuleS2
 	if err = writer.SyncRuleS2S(ctx, rules, scope, ports.WithSyncOp(models.SyncOpFullSync)); err != nil {
 		return errors.Wrap(err, "failed to sync rule s2s")
 	}
+
+	// Get all existing IEAgAgRules to detect obsolete ones
+	existingRules, err := s.GetIEAgAgRules(ctx, nil)
+	if err != nil {
+		writer.Abort()
+		return errors.Wrap(err, "failed to get existing IEAgAgRules")
+	}
+
+	// Create a map of expected rules after the sync operation
+	expectedRules := make(map[string]bool)
+	var allNewRules []models.IEAgAgRule
+
+	// After successfully syncing RuleS2S, update related IEAgAgRules
+	for _, rule := range rules {
+		ieAgAgRules, err := s.GenerateIEAgAgRulesFromRuleS2S(ctx, rule)
+		if err != nil {
+			writer.Abort()
+			return errors.Wrapf(err, "failed to generate IEAgAgRules for RuleS2S %s", rule.Key())
+		}
+
+		// Add generated rules to the expected rules map and collect all new rules
+		for _, ieRule := range ieAgAgRules {
+			expectedRules[ieRule.Key()] = true
+			allNewRules = append(allNewRules, ieRule)
+		}
+	}
+
+	// Sync all new rules at once
+	if len(allNewRules) > 0 {
+		if err = writer.SyncIEAgAgRules(ctx, allNewRules, nil, ports.WithSyncOp(models.SyncOpFullSync)); err != nil {
+			writer.Abort()
+			return errors.Wrap(err, "failed to sync new IEAgAgRules")
+		}
+	}
+
+	// Find and delete obsolete rules
+	var obsoleteRuleIDs []models.ResourceIdentifier
+	for _, existingRule := range existingRules {
+		if !expectedRules[existingRule.Key()] {
+			obsoleteRuleIDs = append(obsoleteRuleIDs, existingRule.ResourceIdentifier)
+		}
+	}
+
+	if len(obsoleteRuleIDs) > 0 {
+		if err = writer.DeleteIEAgAgRulesByIDs(ctx, obsoleteRuleIDs); err != nil {
+			writer.Abort()
+			return errors.Wrap(err, "failed to delete obsolete IEAgAgRules")
+		}
+	}
+
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
@@ -890,11 +1197,14 @@ func (s *NetguardService) syncServiceAliases(ctx context.Context, writer ports.W
 				if err := aliasValidator.ValidateForUpdate(ctx, *existingAlias, *alias); err != nil {
 					return err
 				}
-			} else if syncOp != models.SyncOpDelete {
+			} else if err == ports.ErrNotFound && syncOp != models.SyncOpDelete {
 				// Алиас новый - используем ValidateForCreation
 				if err := aliasValidator.ValidateForCreation(ctx, alias); err != nil {
 					return err
 				}
+			} else if err != nil && err != ports.ErrNotFound {
+				// Произошла другая ошибка
+				return errors.Wrap(err, "failed to get service alias")
 			}
 		}
 	}
@@ -923,6 +1233,37 @@ func (s *NetguardService) syncServiceAliases(ctx context.Context, writer ports.W
 	return nil
 }
 
+// findRuleS2SForServiceAliases finds all RuleS2S that reference the given service aliases
+func (s *NetguardService) findRuleS2SForServiceAliases(ctx context.Context, aliasIDs []models.ResourceIdentifier) ([]models.RuleS2S, error) {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Create a map of service alias IDs for quick lookup
+	aliasMap := make(map[string]bool)
+	for _, id := range aliasIDs {
+		aliasMap[id.Key()] = true
+	}
+
+	// Find all RuleS2S that reference these service aliases
+	var rules []models.RuleS2S
+	err = reader.ListRuleS2S(ctx, func(rule models.RuleS2S) error {
+		// Check if the rule references any of the service aliases
+		if aliasMap[rule.ServiceLocalRef.Key()] || aliasMap[rule.ServiceRef.Key()] {
+			rules = append(rules, rule)
+		}
+		return nil
+	}, nil)
+
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to list rules")
+	}
+
+	return rules, nil
+}
+
 // SyncServiceAliases syncs service aliases
 func (s *NetguardService) SyncServiceAliases(ctx context.Context, aliases []models.ServiceAlias, scope ports.Scope) error {
 	reader, err := s.registry.Reader(ctx)
@@ -947,11 +1288,14 @@ func (s *NetguardService) SyncServiceAliases(ctx context.Context, aliases []mode
 			if err := aliasValidator.ValidateForUpdate(ctx, *existingAlias, *alias); err != nil {
 				return err
 			}
-		} else {
+		} else if err == ports.ErrNotFound {
 			// Alias is new - use ValidateForCreation
 			if err := aliasValidator.ValidateForCreation(ctx, alias); err != nil {
 				return err
 			}
+		} else {
+			// Other error occurred
+			return errors.Wrap(err, "failed to get service alias")
 		}
 	}
 
@@ -968,6 +1312,29 @@ func (s *NetguardService) SyncServiceAliases(ctx context.Context, aliases []mode
 	if err = writer.SyncServiceAliases(ctx, aliases, scope, ports.WithSyncOp(models.SyncOpFullSync)); err != nil {
 		return errors.Wrap(err, "failed to sync service aliases")
 	}
+
+	// After successfully syncing service aliases, update related IEAgAgRules
+	// Collect service alias IDs
+	var aliasIDs []models.ResourceIdentifier
+	for _, alias := range aliases {
+		aliasIDs = append(aliasIDs, alias.ResourceIdentifier)
+	}
+
+	// Find all RuleS2S that reference these service aliases
+	affectedRules, err := s.findRuleS2SForServiceAliases(ctx, aliasIDs)
+	if err != nil {
+		writer.Abort()
+		return errors.Wrap(err, "failed to find affected RuleS2S")
+	}
+
+	// Update IEAgAgRules for affected RuleS2S
+	if len(affectedRules) > 0 {
+		if err = s.updateIEAgAgRulesForRuleS2S(ctx, writer, affectedRules, models.SyncOpFullSync); err != nil {
+			writer.Abort()
+			return errors.Wrap(err, "failed to update IEAgAgRules for affected RuleS2S")
+		}
+	}
+
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
@@ -1430,6 +1797,38 @@ func (s *NetguardService) DeleteRuleS2SByIDs(ctx context.Context, ids []models.R
 	// Note: Rules don't have dependencies, so we don't need to check for them
 	// However, we could add validation to ensure the rules exist before deleting them
 
+	// First, get the RuleS2S objects to generate IEAgAgRules for deletion
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+
+	// Collect all IEAgAgRule IDs that need to be deleted
+	var ieAgAgRuleIDs []models.ResourceIdentifier
+
+	// For each RuleS2S, generate and collect IEAgAgRules for deletion
+	for _, id := range ids {
+		ruleS2S, err := reader.GetRuleS2SByID(ctx, id)
+		if err != nil || ruleS2S == nil {
+			// Skip if rule not found
+			continue
+		}
+
+		// Generate IEAgAgRules for this RuleS2S
+		ieAgAgRules, err := s.GenerateIEAgAgRulesFromRuleS2S(ctx, *ruleS2S)
+		if err != nil {
+			reader.Close()
+			return errors.Wrapf(err, "failed to generate IEAgAgRules for RuleS2S %s", id.Key())
+		}
+
+		// Collect IDs of generated IEAgAgRules
+		for _, rule := range ieAgAgRules {
+			ieAgAgRuleIDs = append(ieAgAgRuleIDs, rule.ResourceIdentifier)
+		}
+	}
+
+	reader.Close()
+
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get writer")
@@ -1440,9 +1839,18 @@ func (s *NetguardService) DeleteRuleS2SByIDs(ctx context.Context, ids []models.R
 		}
 	}()
 
+	// First delete the associated IEAgAgRules if any were found
+	if len(ieAgAgRuleIDs) > 0 {
+		if err = writer.DeleteIEAgAgRulesByIDs(ctx, ieAgAgRuleIDs); err != nil {
+			return errors.Wrap(err, "failed to delete associated IEAgAgRules")
+		}
+	}
+
+	// Then delete the RuleS2S objects
 	if err = writer.DeleteRuleS2SByIDs(ctx, ids); err != nil {
 		return errors.Wrap(err, "failed to delete rules s2s")
 	}
+
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
@@ -1510,11 +1918,14 @@ func (s *NetguardService) syncAddressGroupBindingPolicies(ctx context.Context, w
 				if err := policyValidator.ValidateForUpdate(ctx, *existingPolicy, policy); err != nil {
 					return err
 				}
-			} else if syncOp != models.SyncOpDelete {
+			} else if err == ports.ErrNotFound && syncOp != models.SyncOpDelete {
 				// Политика новая - используем ValidateForCreation
 				if err := policyValidator.ValidateForCreation(ctx, policy); err != nil {
 					return err
 				}
+			} else if err != nil && err != ports.ErrNotFound {
+				// Произошла другая ошибка
+				return errors.Wrap(err, "failed to get address group binding policy")
 			}
 		}
 	}
@@ -1567,11 +1978,14 @@ func (s *NetguardService) SyncAddressGroupBindingPolicies(ctx context.Context, p
 			if err := policyValidator.ValidateForUpdate(ctx, *existingPolicy, policy); err != nil {
 				return err
 			}
-		} else {
+		} else if err == ports.ErrNotFound {
 			// Policy is new - use ValidateForCreation
 			if err := policyValidator.ValidateForCreation(ctx, policy); err != nil {
 				return err
 			}
+		} else {
+			// Other error occurred
+			return errors.Wrap(err, "failed to get address group binding policy")
 		}
 	}
 
@@ -1594,6 +2008,339 @@ func (s *NetguardService) SyncAddressGroupBindingPolicies(ctx context.Context, p
 	return nil
 }
 
+// GetIEAgAgRules returns a list of IEAgAgRules
+func (s *NetguardService) GetIEAgAgRules(ctx context.Context, scope ports.Scope) ([]models.IEAgAgRule, error) {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	var result []models.IEAgAgRule
+
+	err = reader.ListIEAgAgRules(ctx, func(rule models.IEAgAgRule) error {
+		result = append(result, rule)
+		return nil
+	}, scope)
+
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to list IEAgAgRules")
+	}
+
+	return result, nil
+}
+
+// GetIEAgAgRuleByID returns a IEAgAgRule by ID
+func (s *NetguardService) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	return reader.GetIEAgAgRuleByID(ctx, id)
+}
+
+// syncIEAgAgRules синхронизирует правила IEAgAgRule с указанной операцией
+func (s *NetguardService) syncIEAgAgRules(ctx context.Context, writer ports.Writer, rules []models.IEAgAgRule, syncOp models.SyncOp) error {
+	// Валидация в зависимости от операции
+	if syncOp != models.SyncOpDelete {
+		reader, err := s.registry.Reader(ctx)
+		if err != nil {
+			return errors.Wrap(err, "failed to get reader")
+		}
+		defer reader.Close()
+
+		validator := validation.NewDependencyValidator(reader)
+		ruleValidator := validator.GetIEAgAgRuleValidator()
+
+		for _, rule := range rules {
+			existingRule, err := reader.GetIEAgAgRuleByID(ctx, rule.ResourceIdentifier)
+			if err == nil && syncOp != models.SyncOpDelete {
+				// Правило существует - используем ValidateForUpdate
+				if err := ruleValidator.ValidateForUpdate(ctx, *existingRule, rule); err != nil {
+					return err
+				}
+			} else if syncOp != models.SyncOpDelete {
+				// Правило новое - используем ValidateForCreation
+				if err := ruleValidator.ValidateForCreation(ctx, rule); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	// Определение scope
+	var scope ports.Scope
+	if len(rules) > 0 {
+		var ids []models.ResourceIdentifier
+		for _, rule := range rules {
+			ids = append(ids, rule.ResourceIdentifier)
+		}
+		scope = ports.NewResourceIdentifierScope(ids...)
+	} else {
+		scope = ports.EmptyScope{}
+	}
+
+	// Выполнение операции с указанной опцией
+	if err := writer.SyncIEAgAgRules(ctx, rules, scope, ports.WithSyncOp(syncOp)); err != nil {
+		return errors.Wrap(err, "failed to sync IEAgAgRules")
+	}
+
+	if err := writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+
+	return nil
+}
+
+// GenerateIEAgAgRulesFromRuleS2S генерирует правила IEAgAgRule на основе RuleS2S
+func (s *NetguardService) GenerateIEAgAgRulesFromRuleS2S(ctx context.Context, ruleS2S models.RuleS2S) ([]models.IEAgAgRule, error) {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Получаем сервисы по ссылкам
+	localServiceAlias, err := reader.GetServiceAliasByID(ctx, ruleS2S.ServiceLocalRef.ResourceIdentifier)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to get local service alias %s", ruleS2S.ServiceLocalRef.Key())
+	}
+
+	targetServiceAlias, err := reader.GetServiceAliasByID(ctx, ruleS2S.ServiceRef.ResourceIdentifier)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to get target service alias %s", ruleS2S.ServiceRef.Key())
+	}
+
+	localService, err := reader.GetServiceByID(ctx, localServiceAlias.ServiceRef.ResourceIdentifier)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to get local service %s", localServiceAlias.ServiceRef.Key())
+	}
+
+	targetService, err := reader.GetServiceByID(ctx, targetServiceAlias.ServiceRef.ResourceIdentifier)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to get target service %s", targetServiceAlias.ServiceRef.Key())
+	}
+
+	// Получаем группы адресов
+	localAddressGroups := localService.AddressGroups
+	targetAddressGroups := targetService.AddressGroups
+
+	// Определяем порты в зависимости от направления трафика
+	var ports []models.IngressPort
+	if ruleS2S.Traffic == models.INGRESS {
+		ports = localService.IngressPorts
+	} else {
+		ports = targetService.IngressPorts
+	}
+
+	// Создаем правила IEAgAgRule
+	var result []models.IEAgAgRule
+
+	// Группируем порты по протоколу
+	tcpPorts := []string{}
+	udpPorts := []string{}
+
+	for _, port := range ports {
+		if port.Protocol == models.TCP {
+			tcpPorts = append(tcpPorts, port.Port)
+		} else if port.Protocol == models.UDP {
+			udpPorts = append(udpPorts, port.Port)
+		}
+	}
+
+	// Создаем правила для каждой комбинации групп адресов и протоколов
+	for _, localAG := range localAddressGroups {
+		for _, targetAG := range targetAddressGroups {
+			// Создаем TCP правило
+			if len(tcpPorts) > 0 {
+				tcpRule := models.IEAgAgRule{
+					SelfRef: models.SelfRef{
+						ResourceIdentifier: models.NewResourceIdentifier(
+							generateRuleName(string(ruleS2S.Traffic), localAG.Name, targetAG.Name, string(models.TCP)),
+							models.WithNamespace(determineRuleNamespace(ruleS2S, localAG, targetAG)),
+						),
+					},
+					Transport:         models.TCP,
+					Traffic:           ruleS2S.Traffic,
+					AddressGroupLocal: localAG,
+					AddressGroup:      targetAG,
+					Ports: []models.PortSpec{
+						{
+							Destination: strings.Join(tcpPorts, ","),
+						},
+					},
+					Action:   models.ActionAccept,
+					Logs:     true,
+					Priority: 100,
+				}
+				result = append(result, tcpRule)
+			}
+
+			// Создаем UDP правило
+			if len(udpPorts) > 0 {
+				udpRule := models.IEAgAgRule{
+					SelfRef: models.SelfRef{
+						ResourceIdentifier: models.NewResourceIdentifier(
+							generateRuleName(string(ruleS2S.Traffic), localAG.Name, targetAG.Name, string(models.UDP)),
+							models.WithNamespace(determineRuleNamespace(ruleS2S, localAG, targetAG)),
+						),
+					},
+					Transport:         models.UDP,
+					Traffic:           ruleS2S.Traffic,
+					AddressGroupLocal: localAG,
+					AddressGroup:      targetAG,
+					Ports: []models.PortSpec{
+						{
+							Destination: strings.Join(udpPorts, ","),
+						},
+					},
+					Action:   models.ActionAccept,
+					Logs:     true,
+					Priority: 100,
+				}
+				result = append(result, udpRule)
+			}
+		}
+	}
+
+	return result, nil
+}
+
+// generateRuleName создает детерминированное имя правила
+func generateRuleName(trafficDirection, localAGName, targetAGName, protocol string) string {
+	input := fmt.Sprintf("%s-%s-%s-%s",
+		strings.ToLower(trafficDirection),
+		localAGName,
+		targetAGName,
+		strings.ToLower(protocol))
+
+	h := sha256.New()
+	h.Write([]byte(input))
+	hash := h.Sum(nil)
+
+	// Форматируем первые 16 байт как UUID v5
+	uuid := fmt.Sprintf("%x-%x-%x-%x-%x",
+		hash[0:4], hash[4:6], hash[6:8], hash[8:10], hash[10:16])
+
+	// Используем префикс направления трафика и UUID
+	return fmt.Sprintf("%s-%s",
+		strings.ToLower(trafficDirection)[:3],
+		uuid)
+}
+
+// determineRuleNamespace определяет пространство имен для правила
+func determineRuleNamespace(ruleS2S models.RuleS2S, localAG, targetAG models.AddressGroupRef) string {
+	if ruleS2S.Traffic == models.INGRESS {
+		// Для входящего трафика правило размещается в пространстве имен локальной группы адресов
+		if localAG.Namespace != "" {
+			return localAG.Namespace
+		}
+		return ruleS2S.Namespace
+	} else {
+		// Для исходящего трафика правило размещается в пространстве имен целевой группы адресов
+		if targetAG.Namespace != "" {
+			return targetAG.Namespace
+		}
+		return ruleS2S.Namespace
+	}
+}
+
+// SyncIEAgAgRules синхронизирует правила IEAgAgRule
+func (s *NetguardService) SyncIEAgAgRules(ctx context.Context, rules []models.IEAgAgRule, scope ports.Scope) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Create validator
+	validator := validation.NewDependencyValidator(reader)
+	ruleValidator := validator.GetIEAgAgRuleValidator()
+
+	// Validate all rules
+	for _, rule := range rules {
+		// Check if rule exists
+		existingRule, err := reader.GetIEAgAgRuleByID(ctx, rule.ResourceIdentifier)
+		if err == nil {
+			// Rule exists - use ValidateForUpdate
+			if err := ruleValidator.ValidateForUpdate(ctx, *existingRule, rule); err != nil {
+				return err
+			}
+		} else {
+			// Rule is new - use ValidateForCreation
+			if err := ruleValidator.ValidateForCreation(ctx, rule); err != nil {
+				return err
+			}
+		}
+	}
+
+	writer, err := s.registry.Writer(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get writer")
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	if err = writer.SyncIEAgAgRules(ctx, rules, scope, ports.WithSyncOp(models.SyncOpFullSync)); err != nil {
+		return errors.Wrap(err, "failed to sync IEAgAgRules")
+	}
+	if err = writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+	return nil
+}
+
+// DeleteIEAgAgRulesByIDs deletes IEAgAgRules by IDs
+func (s *NetguardService) DeleteIEAgAgRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier) error {
+	writer, err := s.registry.Writer(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get writer")
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	if err = writer.DeleteIEAgAgRulesByIDs(ctx, ids); err != nil {
+		return errors.Wrap(err, "failed to delete IEAgAgRules")
+	}
+
+	if err = writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+
+	return nil
+}
+
+// GetIEAgAgRulesByIDs returns a list of IEAgAgRules by IDs
+func (s *NetguardService) GetIEAgAgRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier) ([]models.IEAgAgRule, error) {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	var result []models.IEAgAgRule
+
+	for _, id := range ids {
+		rule, err := reader.GetIEAgAgRuleByID(ctx, id)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to get IEAgAgRule %s", id.Key())
+		}
+		if rule != nil {
+			result = append(result, *rule)
+		}
+	}
+
+	return result, nil
+}
+
 // DeleteAddressGroupBindingPoliciesByIDs deletes address group binding policies by IDs
 func (s *NetguardService) DeleteAddressGroupBindingPoliciesByIDs(ctx context.Context, ids []models.ResourceIdentifier) error {
 	reader, err := s.registry.Reader(ctx)
@@ -1602,39 +2349,13 @@ func (s *NetguardService) DeleteAddressGroupBindingPoliciesByIDs(ctx context.Con
 	}
 	defer reader.Close()
 
-	// Get policies to be deleted
-	var policies []models.AddressGroupBindingPolicy
+	// Create validator
+	validator := validation.NewAddressGroupBindingPolicyValidator(reader)
+
+	// Check dependencies for each policy
 	for _, id := range ids {
-		policy, err := reader.GetAddressGroupBindingPolicyByID(ctx, id)
-		if err != nil {
-			continue // Skip if policy doesn't exist
-		}
-		policies = append(policies, *policy)
-	}
-
-	// Check for active bindings that depend on these policies
-	for _, policy := range policies {
-		// Check for bindings that might be using this policy
-		var bindingsFound bool
-		err = reader.ListAddressGroupBindings(ctx, func(binding models.AddressGroupBinding) error {
-			// If binding references the same AddressGroup and Service as the policy,
-			// and binding is in a different namespace than AddressGroup
-			if binding.AddressGroupRef.Key() == policy.AddressGroupRef.Key() &&
-				binding.ServiceRef.Key() == policy.ServiceRef.Key() &&
-				binding.Namespace != policy.Namespace {
-				bindingsFound = true
-				return fmt.Errorf("binding found") // Use error to break the loop
-			}
-			return nil
-		}, nil)
-
-		// Ignore "binding found" error as it's not a real error
-		if err != nil && err.Error() != "binding found" {
-			return errors.Wrap(err, "failed to check for active bindings")
-		}
-
-		if bindingsFound {
-			return fmt.Errorf("cannot delete policy %s while active AddressGroupBindings exist", policy.Key())
+		if err := validator.CheckDependencies(ctx, id); err != nil {
+			return err
 		}
 	}
 

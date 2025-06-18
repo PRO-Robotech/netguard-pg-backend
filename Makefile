@@ -1,6 +1,5 @@
 .PHONY: test
-test: test-unit test-integration
-#test-e2e
+test: test-unit test-integration test-e2e
 
 .PHONY: test-unit
 test-unit:
@@ -21,6 +20,7 @@ test-pg:
 test-e2e:
 	go test -v ./internal/api/...
 	go test -v ./internal/app/...
+	go test -v ./internal/application/...
 
 .PHONY: test-coverage
 test-coverage:

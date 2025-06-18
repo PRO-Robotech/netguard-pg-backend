@@ -81,6 +81,12 @@ const (
 	// NetguardServiceGetAddressGroupBindingPolicyProcedure is the fully-qualified name of the
 	// NetguardService's GetAddressGroupBindingPolicy RPC.
 	NetguardServiceGetAddressGroupBindingPolicyProcedure = "/netguard.v1.NetguardService/GetAddressGroupBindingPolicy"
+	// NetguardServiceListIEAgAgRulesProcedure is the fully-qualified name of the NetguardService's
+	// ListIEAgAgRules RPC.
+	NetguardServiceListIEAgAgRulesProcedure = "/netguard.v1.NetguardService/ListIEAgAgRules"
+	// NetguardServiceGetIEAgAgRuleProcedure is the fully-qualified name of the NetguardService's
+	// GetIEAgAgRule RPC.
+	NetguardServiceGetIEAgAgRuleProcedure = "/netguard.v1.NetguardService/GetIEAgAgRule"
 )
 
 // NetguardServiceClient is a client for the netguard.v1.NetguardService service.
@@ -117,6 +123,10 @@ type NetguardServiceClient interface {
 	ListAddressGroupBindingPolicies(context.Context, *connect.Request[netguard.ListAddressGroupBindingPoliciesReq]) (*connect.Response[netguard.ListAddressGroupBindingPoliciesResp], error)
 	// GetAddressGroupBindingPolicy - gets a specific address group binding policy by ID
 	GetAddressGroupBindingPolicy(context.Context, *connect.Request[netguard.GetAddressGroupBindingPolicyReq]) (*connect.Response[netguard.GetAddressGroupBindingPolicyResp], error)
+	// ListIEAgAgRules - gets list of IEAgAgRules
+	ListIEAgAgRules(context.Context, *connect.Request[netguard.ListIEAgAgRulesReq]) (*connect.Response[netguard.ListIEAgAgRulesResp], error)
+	// GetIEAgAgRule - gets a specific IEAgAgRule by ID
+	GetIEAgAgRule(context.Context, *connect.Request[netguard.GetIEAgAgRuleReq]) (*connect.Response[netguard.GetIEAgAgRuleResp], error)
 }
 
 // NewNetguardServiceClient constructs a client for the netguard.v1.NetguardService service. By
@@ -226,6 +236,18 @@ func NewNetguardServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(netguardServiceMethods.ByName("GetAddressGroupBindingPolicy")),
 			connect.WithClientOptions(opts...),
 		),
+		listIEAgAgRules: connect.NewClient[netguard.ListIEAgAgRulesReq, netguard.ListIEAgAgRulesResp](
+			httpClient,
+			baseURL+NetguardServiceListIEAgAgRulesProcedure,
+			connect.WithSchema(netguardServiceMethods.ByName("ListIEAgAgRules")),
+			connect.WithClientOptions(opts...),
+		),
+		getIEAgAgRule: connect.NewClient[netguard.GetIEAgAgRuleReq, netguard.GetIEAgAgRuleResp](
+			httpClient,
+			baseURL+NetguardServiceGetIEAgAgRuleProcedure,
+			connect.WithSchema(netguardServiceMethods.ByName("GetIEAgAgRule")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -247,6 +269,8 @@ type netguardServiceClient struct {
 	getServiceAlias                 *connect.Client[netguard.GetServiceAliasReq, netguard.GetServiceAliasResp]
 	listAddressGroupBindingPolicies *connect.Client[netguard.ListAddressGroupBindingPoliciesReq, netguard.ListAddressGroupBindingPoliciesResp]
 	getAddressGroupBindingPolicy    *connect.Client[netguard.GetAddressGroupBindingPolicyReq, netguard.GetAddressGroupBindingPolicyResp]
+	listIEAgAgRules                 *connect.Client[netguard.ListIEAgAgRulesReq, netguard.ListIEAgAgRulesResp]
+	getIEAgAgRule                   *connect.Client[netguard.GetIEAgAgRuleReq, netguard.GetIEAgAgRuleResp]
 }
 
 // Sync calls netguard.v1.NetguardService.Sync.
@@ -330,6 +354,16 @@ func (c *netguardServiceClient) GetAddressGroupBindingPolicy(ctx context.Context
 	return c.getAddressGroupBindingPolicy.CallUnary(ctx, req)
 }
 
+// ListIEAgAgRules calls netguard.v1.NetguardService.ListIEAgAgRules.
+func (c *netguardServiceClient) ListIEAgAgRules(ctx context.Context, req *connect.Request[netguard.ListIEAgAgRulesReq]) (*connect.Response[netguard.ListIEAgAgRulesResp], error) {
+	return c.listIEAgAgRules.CallUnary(ctx, req)
+}
+
+// GetIEAgAgRule calls netguard.v1.NetguardService.GetIEAgAgRule.
+func (c *netguardServiceClient) GetIEAgAgRule(ctx context.Context, req *connect.Request[netguard.GetIEAgAgRuleReq]) (*connect.Response[netguard.GetIEAgAgRuleResp], error) {
+	return c.getIEAgAgRule.CallUnary(ctx, req)
+}
+
 // NetguardServiceHandler is an implementation of the netguard.v1.NetguardService service.
 type NetguardServiceHandler interface {
 	// Sync - syncs data in DB
@@ -364,6 +398,10 @@ type NetguardServiceHandler interface {
 	ListAddressGroupBindingPolicies(context.Context, *connect.Request[netguard.ListAddressGroupBindingPoliciesReq]) (*connect.Response[netguard.ListAddressGroupBindingPoliciesResp], error)
 	// GetAddressGroupBindingPolicy - gets a specific address group binding policy by ID
 	GetAddressGroupBindingPolicy(context.Context, *connect.Request[netguard.GetAddressGroupBindingPolicyReq]) (*connect.Response[netguard.GetAddressGroupBindingPolicyResp], error)
+	// ListIEAgAgRules - gets list of IEAgAgRules
+	ListIEAgAgRules(context.Context, *connect.Request[netguard.ListIEAgAgRulesReq]) (*connect.Response[netguard.ListIEAgAgRulesResp], error)
+	// GetIEAgAgRule - gets a specific IEAgAgRule by ID
+	GetIEAgAgRule(context.Context, *connect.Request[netguard.GetIEAgAgRuleReq]) (*connect.Response[netguard.GetIEAgAgRuleResp], error)
 }
 
 // NewNetguardServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -469,6 +507,18 @@ func NewNetguardServiceHandler(svc NetguardServiceHandler, opts ...connect.Handl
 		connect.WithSchema(netguardServiceMethods.ByName("GetAddressGroupBindingPolicy")),
 		connect.WithHandlerOptions(opts...),
 	)
+	netguardServiceListIEAgAgRulesHandler := connect.NewUnaryHandler(
+		NetguardServiceListIEAgAgRulesProcedure,
+		svc.ListIEAgAgRules,
+		connect.WithSchema(netguardServiceMethods.ByName("ListIEAgAgRules")),
+		connect.WithHandlerOptions(opts...),
+	)
+	netguardServiceGetIEAgAgRuleHandler := connect.NewUnaryHandler(
+		NetguardServiceGetIEAgAgRuleProcedure,
+		svc.GetIEAgAgRule,
+		connect.WithSchema(netguardServiceMethods.ByName("GetIEAgAgRule")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/netguard.v1.NetguardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case NetguardServiceSyncProcedure:
@@ -503,6 +553,10 @@ func NewNetguardServiceHandler(svc NetguardServiceHandler, opts ...connect.Handl
 			netguardServiceListAddressGroupBindingPoliciesHandler.ServeHTTP(w, r)
 		case NetguardServiceGetAddressGroupBindingPolicyProcedure:
 			netguardServiceGetAddressGroupBindingPolicyHandler.ServeHTTP(w, r)
+		case NetguardServiceListIEAgAgRulesProcedure:
+			netguardServiceListIEAgAgRulesHandler.ServeHTTP(w, r)
+		case NetguardServiceGetIEAgAgRuleProcedure:
+			netguardServiceGetIEAgAgRuleHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -574,4 +628,12 @@ func (UnimplementedNetguardServiceHandler) ListAddressGroupBindingPolicies(conte
 
 func (UnimplementedNetguardServiceHandler) GetAddressGroupBindingPolicy(context.Context, *connect.Request[netguard.GetAddressGroupBindingPolicyReq]) (*connect.Response[netguard.GetAddressGroupBindingPolicyResp], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetAddressGroupBindingPolicy is not implemented"))
+}
+
+func (UnimplementedNetguardServiceHandler) ListIEAgAgRules(context.Context, *connect.Request[netguard.ListIEAgAgRulesReq]) (*connect.Response[netguard.ListIEAgAgRulesResp], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.ListIEAgAgRules is not implemented"))
+}
+
+func (UnimplementedNetguardServiceHandler) GetIEAgAgRule(context.Context, *connect.Request[netguard.GetIEAgAgRuleReq]) (*connect.Response[netguard.GetIEAgAgRuleResp], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetIEAgAgRule is not implemented"))
 }

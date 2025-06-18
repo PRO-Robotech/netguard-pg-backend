@@ -529,3 +529,127 @@ package pg
 //	w.tx.Rollback(w.ctx)
 //	w.conn.Release()
 //}
+//
+//// SyncIEAgAgRules syncs IEAgAgRules
+//func (w *writer) SyncIEAgAgRules(ctx context.Context, rules []models.IEAgAgRule, scope ports.Scope, opts ...ports.Option) error {
+//	// Determine sync operation (default is FullSync)
+//	syncOp := models.SyncOpFullSync
+//	for _, opt := range opts {
+//		if so, ok := opt.(ports.SyncOption); ok {
+//			syncOp = so.Operation
+//		}
+//	}
+//
+//	// Handle different sync operations
+//	switch syncOp {
+//	case models.SyncOpFullSync:
+//		// If scope is not empty, delete existing records within scope
+//		if !scope.IsEmpty() {
+//			if rs, ok := scope.(ports.ResourceIdentifierScope); ok && len(rs.Identifiers) > 0 {
+//				// Create array of name-namespace pairs
+//				pairs := make([][]string, 0, len(rs.Identifiers))
+//				for _, id := range rs.Identifiers {
+//					pairs = append(pairs, []string{id.Name, id.Namespace})
+//				}
+//
+//				query := `DELETE FROM netguard.tbl_ieagag_rule WHERE (name, namespace) = ANY($1)`
+//				result, err := w.tx.Exec(ctx, query, pairs)
+//				if err != nil {
+//					return errors.Wrap(err, "failed to delete IEAgAgRules")
+//				}
+//				w.totalAffectedRows += result.RowsAffected()
+//			}
+//		}
+//
+//		// Insert or update rules
+//		for _, rule := range rules {
+//			if err := w.upsertIEAgAgRule(ctx, rule); err != nil {
+//				return err
+//			}
+//		}
+//
+//	case models.SyncOpUpsert:
+//		// Only insert or update
+//		for _, rule := range rules {
+//			if err := w.upsertIEAgAgRule(ctx, rule); err != nil {
+//				return err
+//			}
+//		}
+//
+//	case models.SyncOpDelete:
+//		// Only delete
+//		for _, rule := range rules {
+//			query := `DELETE FROM netguard.tbl_ieagag_rule WHERE name = $1 AND namespace = $2`
+//			result, err := w.tx.Exec(ctx, query, rule.Name, rule.Namespace)
+//			if err != nil {
+//				return errors.Wrapf(err, "failed to delete IEAgAgRule %s/%s", rule.Namespace, rule.Name)
+//			}
+//			w.totalAffectedRows += result.RowsAffected()
+//		}
+//	}
+//
+//	return nil
+//}
+//
+//// upsertIEAgAgRule inserts or updates an IEAgAgRule
+//func (w *writer) upsertIEAgAgRule(ctx context.Context, rule models.IEAgAgRule) error {
+//	// Convert ports to JSON
+//	ports := make([]map[string]interface{}, 0, len(rule.Ports))
+//	for _, p := range rule.Ports {
+//		ports = append(ports, map[string]interface{}{
+//			"source":      p.Source,
+//			"destination": p.Destination,
+//		})
+//	}
+//
+//	portsJSON, err := json.Marshal(ports)
+//	if err != nil {
+//		return errors.Wrap(err, "failed to marshal ports")
+//	}
+//
+//	// Insert or update rule
+//	query := `
+//		INSERT INTO netguard.tbl_ieagag_rule (
+//			name, namespace, transport, traffic,
+//			address_group_local_name, address_group_local_namespace,
+//			address_group_name, address_group_namespace,
+//			ports, action, logs, priority
+//		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+//		ON CONFLICT (name, namespace) DO UPDATE
+//		SET transport = $3, traffic = $4,
+//			address_group_local_name = $5, address_group_local_namespace = $6,
+//			address_group_name = $7, address_group_namespace = $8,
+//			ports = $9, action = $10, logs = $11, priority = $12
+//	`
+//
+//	result, err := w.tx.Exec(ctx, query,
+//		rule.Name, rule.Namespace, string(rule.Transport), string(rule.Traffic),
+//		rule.AddressGroupLocal.Name, rule.AddressGroupLocal.Namespace,
+//		rule.AddressGroup.Name, rule.AddressGroup.Namespace,
+//		portsJSON, string(rule.Action), rule.Logs, rule.Priority,
+//	)
+//	if err != nil {
+//		return errors.Wrapf(err, "failed to upsert IEAgAgRule %s/%s", rule.Namespace, rule.Name)
+//	}
+//	w.totalAffectedRows += result.RowsAffected()
+//
+//	return nil
+//}
+//
+//// DeleteIEAgAgRulesByIDs deletes IEAgAgRules by IDs
+//func (w *writer) DeleteIEAgAgRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+//	// Create array of name-namespace pairs
+//	pairs := make([][]string, 0, len(ids))
+//	for _, id := range ids {
+//		pairs = append(pairs, []string{id.Name, id.Namespace})
+//	}
+//
+//	query := `DELETE FROM netguard.tbl_ieagag_rule WHERE (name, namespace) = ANY($1)`
+//	result, err := w.tx.Exec(ctx, query, pairs)
+//	if err != nil {
+//		return errors.Wrap(err, "failed to delete IEAgAgRules")
+//	}
+//	w.totalAffectedRows += result.RowsAffected()
+//
+//	return nil
+//}

@@ -272,23 +272,33 @@ func (m *MockReaderForServiceAliasValidator) GetServiceByID(ctx context.Context,
 }
 
 func (m *MockReaderForServiceAliasValidator) GetAddressGroupByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroup, error) {
-	return nil, nil
+	return nil, fmt.Errorf("address group not found")
 }
 
 func (m *MockReaderForServiceAliasValidator) GetAddressGroupBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBinding, error) {
-	return nil, nil
+	return nil, fmt.Errorf("address group binding not found")
 }
 
 func (m *MockReaderForServiceAliasValidator) GetAddressGroupPortMappingByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupPortMapping, error) {
-	return nil, nil
+	return nil, fmt.Errorf("address group port mapping not found")
 }
 
 func (m *MockReaderForServiceAliasValidator) GetRuleS2SByID(ctx context.Context, id models.ResourceIdentifier) (*models.RuleS2S, error) {
-	return nil, nil
+	return nil, fmt.Errorf("rule s2s not found")
 }
 
 func (m *MockReaderForServiceAliasValidator) GetServiceAliasByID(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error) {
-	return nil, nil
+	if m.aliasExists && id.Key() == m.aliasID {
+		return &models.ServiceAlias{
+			SelfRef: models.SelfRef{
+				ResourceIdentifier: models.NewResourceIdentifier(m.aliasID),
+			},
+			ServiceRef: models.ServiceRef{
+				ResourceIdentifier: models.NewResourceIdentifier(m.serviceID),
+			},
+		}, nil
+	}
+	return nil, fmt.Errorf("service alias not found")
 }
 
 func (m *MockReaderForServiceAliasValidator) ListAddressGroupBindingPolicies(ctx context.Context, consume func(models.AddressGroupBindingPolicy) error, scope ports.Scope) error {
@@ -296,5 +306,15 @@ func (m *MockReaderForServiceAliasValidator) ListAddressGroupBindingPolicies(ctx
 }
 
 func (m *MockReaderForServiceAliasValidator) GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
-	return nil, nil
+	return nil, fmt.Errorf("address group binding policy not found")
+}
+
+func (m *MockReaderForServiceAliasValidator) ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAgRule) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReaderForServiceAliasValidator) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
+	// Since this mock is for ServiceAliasValidator tests, we don't expect this method to be called
+	// But we still return a proper error instead of nil, nil
+	return nil, fmt.Errorf("IEAgAgRule not found")
 }

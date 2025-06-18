@@ -171,8 +171,8 @@ func (v *ServiceValidator) CheckBindingsPortOverlaps(ctx context.Context, servic
 	// Проверяем перекрытие портов в каждом AddressGroupPortMapping
 	for _, agID := range addressGroupIDs {
 		portMapping, err := v.reader.GetAddressGroupPortMappingByID(ctx, agID)
-		if err != nil {
-			// Если портмаппинг не найден, пропускаем проверку для этой AddressGroup
+		if err != nil || portMapping == nil {
+			// Если портмаппинг не найден или nil, пропускаем проверку для этой AddressGroup
 			continue
 		}
 
@@ -180,9 +180,9 @@ func (v *ServiceValidator) CheckBindingsPortOverlaps(ctx context.Context, servic
 		tempMapping := *portMapping
 
 		// Удаляем текущий сервис из временной копии
-		if tempMapping.AccessPorts != nil {
-			delete(tempMapping.AccessPorts, models.ServiceRef{ResourceIdentifier: service.ResourceIdentifier})
-		}
+		//if tempMapping.AccessPorts != nil {
+		//	delete(tempMapping.AccessPorts, models.ServiceRef{ResourceIdentifier: service.ResourceIdentifier})
+		//}
 
 		// Проверяем перекрытие портов
 		if err := CheckPortOverlaps(service, tempMapping); err != nil {

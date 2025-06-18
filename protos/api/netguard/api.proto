@@ -151,6 +151,30 @@ message RuleS2S {
   ServiceRef service_ref = 4;
 }
 
+// IEAgAgRule - rule between two address groups
+message IEAgAgRule {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      required: ["self_ref", "transport", "traffic", "address_group_local", "address_group", "action"]
+    }
+  };
+  ResourceIdentifier self_ref = 1;
+  common.Networks.NetIP.Transport transport = 2;
+  common.Traffic traffic = 3;
+  AddressGroupRef address_group_local = 4;
+  AddressGroupRef address_group = 5;
+  repeated PortSpec ports = 6;
+  string action = 7;
+  bool logs = 8;
+  int32 priority = 9;
+}
+
+// PortSpec - port specification
+message PortSpec {
+  string source = 1;
+  string destination = 2;
+}
+
 // SyncStatusResp - sync status
 message SyncStatusResp {
   google.protobuf.Timestamp updated_at = 1;
@@ -204,6 +228,11 @@ message SyncServiceAliases {
 // SyncAddressGroupBindingPolicies - subject of Address Group Binding Policies to sync
 message SyncAddressGroupBindingPolicies {
   repeated AddressGroupBindingPolicy address_group_binding_policies = 1;
+}
+
+// SyncIEAgAgRules - subject of IEAgAgRules to sync
+message SyncIEAgAgRules {
+  repeated IEAgAgRule ieagag_rules = 1;
 }
 
 // Requests and responses for API methods
@@ -348,6 +377,26 @@ message GetAddressGroupBindingPolicyResp {
   AddressGroupBindingPolicy address_group_binding_policy = 1;
 }
 
+// ListIEAgAgRulesReq - request to list IEAgAgRules
+message ListIEAgAgRulesReq {
+  repeated ResourceIdentifier identifiers = 1;
+}
+
+// ListIEAgAgRulesResp - response with list of IEAgAgRules
+message ListIEAgAgRulesResp {
+  repeated IEAgAgRule items = 1;
+}
+
+// GetIEAgAgRuleReq - request to get a specific IEAgAgRule
+message GetIEAgAgRuleReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetIEAgAgRuleResp - response with a specific IEAgAgRule
+message GetIEAgAgRuleResp {
+  IEAgAgRule ieagag_rule = 1;
+}
+
 // SyncReq - request to sync
 message SyncReq {
   // Sync operation to apply
@@ -375,6 +424,9 @@ message SyncReq {
 
     // Subject of Address Group Binding Policies
     SyncAddressGroupBindingPolicies address_group_binding_policies = 8;
+
+    // Subject of IEAgAgRules
+    SyncIEAgAgRules ieagag_rules = 9;
   }
 }
 
@@ -542,6 +594,26 @@ service NetguardService {
     };
     option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
       description: "GetAddressGroupBindingPolicy: gets a specific address group binding policy by ID";
+    };
+  }
+
+  // ListIEAgAgRules - gets list of IEAgAgRules
+  rpc ListIEAgAgRules(ListIEAgAgRulesReq) returns (ListIEAgAgRulesResp) {
+    option (google.api.http) = {
+      get: "/v1/ieagag-rules"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "ListIEAgAgRules: gets list of IEAgAgRules";
+    };
+  }
+
+  // GetIEAgAgRule - gets a specific IEAgAgRule by ID
+  rpc GetIEAgAgRule(GetIEAgAgRuleReq) returns (GetIEAgAgRuleResp) {
+    option (google.api.http) = {
+      get: "/v1/ieagag-rules/{identifier.namespace}/{identifier.name}"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "GetIEAgAgRule: gets a specific IEAgAgRule by ID";
     };
   }
 }

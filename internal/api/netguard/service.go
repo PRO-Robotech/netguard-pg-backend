@@ -146,6 +146,23 @@ func (s *NetguardServiceServer) Sync(ctx context.Context, req *netguardpb.SyncRe
 			return nil, errors.Wrap(err, "failed to sync service aliases")
 		}
 
+	case *netguardpb.SyncReq_IeagagRules:
+		if subject.IeagagRules == nil || len(subject.IeagagRules.IeagagRules) == 0 {
+			return &emptypb.Empty{}, nil
+		}
+
+		// Convert IEAgAgRules
+		rules := make([]models.IEAgAgRule, 0, len(subject.IeagagRules.IeagagRules))
+		for _, r := range subject.IeagagRules.IeagagRules {
+			rules = append(rules, convertIEAgAgRule(r))
+		}
+
+		// Sync IEAgAgRules with the specified operation
+		err = s.service.Sync(ctx, syncOp, rules)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to sync IEAgAgRules")
+		}
+
 	default:
 		return nil, errors.New("subject not specified")
 	}
@@ -696,4 +713,124 @@ func convertServiceAlias(a *netguardpb.ServiceAlias) models.ServiceAlias {
 			ResourceIdentifier: models.NewResourceIdentifier(a.GetServiceRef().GetIdentifier().GetName(), models.WithNamespace(a.GetServiceRef().GetIdentifier().GetNamespace())),
 		},
 	}
+}
+
+// ListIEAgAgRules gets list of IEAgAgRules
+func (s *NetguardServiceServer) ListIEAgAgRules(ctx context.Context, req *netguardpb.ListIEAgAgRulesReq) (*netguardpb.ListIEAgAgRulesResp, error) {
+	var scope ports.Scope = ports.EmptyScope{}
+	if len(req.Identifiers) > 0 {
+		identifiers := make([]models.ResourceIdentifier, 0, len(req.Identifiers))
+		for _, id := range req.Identifiers {
+			identifiers = append(identifiers, models.NewResourceIdentifier(id.Name, models.WithNamespace(id.Namespace)))
+		}
+		scope = ports.NewResourceIdentifierScope(identifiers...)
+	}
+
+	rules, err := s.service.GetIEAgAgRules(ctx, scope)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get IEAgAgRules")
+	}
+
+	items := make([]*netguardpb.IEAgAgRule, 0, len(rules))
+	for _, rule := range rules {
+		items = append(items, convertIEAgAgRuleToPB(rule))
+	}
+
+	return &netguardpb.ListIEAgAgRulesResp{
+		Items: items,
+	}, nil
+}
+
+// GetIEAgAgRule gets a specific IEAgAgRule by ID
+func (s *NetguardServiceServer) GetIEAgAgRule(ctx context.Context, req *netguardpb.GetIEAgAgRuleReq) (*netguardpb.GetIEAgAgRuleResp, error) {
+	id := idFromReq(req.GetIdentifier())
+	rule, err := s.service.GetIEAgAgRuleByID(ctx, id)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get IEAgAgRule")
+	}
+
+	return &netguardpb.GetIEAgAgRuleResp{
+		IeagagRule: convertIEAgAgRuleToPB(*rule),
+	}, nil
+}
+
+func convertIEAgAgRuleToPB(rule models.IEAgAgRule) *netguardpb.IEAgAgRule {
+	var transport commonpb.Networks_NetIP_Transport
+	switch rule.Transport {
+	case models.TCP:
+		transport = commonpb.Networks_NetIP_TCP
+	case models.UDP:
+		transport = commonpb.Networks_NetIP_UDP
+	}
+
+	var traffic commonpb.Traffic
+	switch rule.Traffic {
+	case models.INGRESS:
+		traffic = commonpb.Traffic_Ingress
+	case models.EGRESS:
+		traffic = commonpb.Traffic_Egress
+	}
+
+	result := &netguardpb.IEAgAgRule{
+		SelfRef: &netguardpb.ResourceIdentifier{
+			Name:      rule.ResourceIdentifier.Name,
+			Namespace: rule.ResourceIdentifier.Namespace,
+		},
+		Transport: transport,
+		Traffic:   traffic,
+		AddressGroupLocal: &netguardpb.AddressGroupRef{
+			Identifier: &netguardpb.ResourceIdentifier{
+				Name:      rule.AddressGroupLocal.ResourceIdentifier.Name,
+				Namespace: rule.AddressGroupLocal.ResourceIdentifier.Namespace,
+			},
+		},
+		AddressGroup: &netguardpb.AddressGroupRef{
+			Identifier: &netguardpb.ResourceIdentifier{
+				Name:      rule.AddressGroup.ResourceIdentifier.Name,
+				Namespace: rule.AddressGroup.ResourceIdentifier.Namespace,
+			},
+		},
+		Action:   string(rule.Action),
+		Logs:     rule.Logs,
+		Priority: rule.Priority,
+	}
+
+	// Convert ports
+	for _, p := range rule.Ports {
+		result.Ports = append(result.Ports, &netguardpb.PortSpec{
+			Source:      p.Source,
+			Destination: p.Destination,
+		})
+	}
+
+	return result
+}
+
+func convertIEAgAgRule(rule *netguardpb.IEAgAgRule) models.IEAgAgRule {
+	result := models.IEAgAgRule{
+		SelfRef:   models.NewSelfRef(getSelfRef(rule.GetSelfRef())),
+		Transport: models.TransportProtocol(rule.Transport.String()),
+		Traffic:   models.Traffic(rule.Traffic.String()),
+		AddressGroupLocal: models.AddressGroupRef{
+			ResourceIdentifier: models.NewResourceIdentifier(rule.GetAddressGroupLocal().GetIdentifier().GetName(),
+				models.WithNamespace(rule.GetAddressGroupLocal().GetIdentifier().GetNamespace())),
+		},
+		AddressGroup: models.AddressGroupRef{
+			ResourceIdentifier: models.NewResourceIdentifier(rule.GetAddressGroup().GetIdentifier().GetName(),
+				models.WithNamespace(rule.GetAddressGroup().GetIdentifier().GetNamespace())),
+		},
+		Action:   models.RuleAction(rule.Action),
+		Logs:     rule.Logs,
+		Priority: rule.Priority,
+	}
+
+	// Convert ports
+	for _, p := range rule.Ports {
+		result.Ports = append(result.Ports, models.PortSpec{
+			Source:      p.Source,
+			Destination: p.Destination,
+		})
+	}
+
+	return result
 }

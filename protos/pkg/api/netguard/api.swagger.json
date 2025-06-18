@@ -268,6 +268,68 @@
         ]
       }
     },
+    "/v1/ieagag-rules": {
+      "get": {
+        "summary": "ListIEAgAgRules - gets list of IEAgAgRules",
+        "description": "ListIEAgAgRules: gets list of IEAgAgRules",
+        "operationId": "NetguardService_ListIEAgAgRules",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListIEAgAgRulesResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/ieagag-rules/{identifier.namespace}/{identifier.name}": {
+      "get": {
+        "summary": "GetIEAgAgRule - gets a specific IEAgAgRule by ID",
+        "description": "GetIEAgAgRule: gets a specific IEAgAgRule by ID",
+        "operationId": "NetguardService_GetIEAgAgRule",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetIEAgAgRuleResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "identifier.namespace",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "identifier.name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
     "/v1/rule-s2s": {
       "get": {
         "summary": "ListRuleS2S - gets list of rule s2s",
@@ -709,6 +771,15 @@
       },
       "title": "GetAddressGroupResp - response with a specific address group"
     },
+    "v1GetIEAgAgRuleResp": {
+      "type": "object",
+      "properties": {
+        "ieagagRule": {
+          "$ref": "#/definitions/v1IEAgAgRule"
+        }
+      },
+      "title": "GetIEAgAgRuleResp - response with a specific IEAgAgRule"
+    },
     "v1GetRuleS2SResp": {
       "type": "object",
       "properties": {
@@ -735,6 +806,52 @@
         }
       },
       "title": "GetServiceResp - response with a specific service"
+    },
+    "v1IEAgAgRule": {
+      "type": "object",
+      "properties": {
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
+        },
+        "transport": {
+          "$ref": "#/definitions/NetIPTransport"
+        },
+        "traffic": {
+          "$ref": "#/definitions/commonTraffic"
+        },
+        "addressGroupLocal": {
+          "$ref": "#/definitions/v1AddressGroupRef"
+        },
+        "addressGroup": {
+          "$ref": "#/definitions/v1AddressGroupRef"
+        },
+        "ports": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1PortSpec"
+          }
+        },
+        "action": {
+          "type": "string"
+        },
+        "logs": {
+          "type": "boolean"
+        },
+        "priority": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "title": "IEAgAgRule - rule between two address groups",
+      "required": [
+        "selfRef",
+        "transport",
+        "traffic",
+        "addressGroupLocal",
+        "addressGroup",
+        "action"
+      ]
     },
     "v1IngressPort": {
       "type": "object",
@@ -803,6 +920,19 @@
       },
       "title": "ListAddressGroupsResp - response with list of address groups"
     },
+    "v1ListIEAgAgRulesResp": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IEAgAgRule"
+          }
+        }
+      },
+      "title": "ListIEAgAgRulesResp - response with list of IEAgAgRules"
+    },
     "v1ListRuleS2SResp": {
       "type": "object",
       "properties": {
@@ -854,6 +984,18 @@
         }
       },
       "title": "PortRanges - list of port ranges"
+    },
+    "v1PortSpec": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "destination": {
+          "type": "string"
+        }
+      },
+      "title": "PortSpec - port specification"
     },
     "v1ProtocolPorts": {
       "type": "object",
@@ -1023,6 +1165,19 @@
       },
       "title": "SyncAddressGroups - subject of Address Groups to sync"
     },
+    "v1SyncIEAgAgRules": {
+      "type": "object",
+      "properties": {
+        "ieagagRules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IEAgAgRule"
+          }
+        }
+      },
+      "title": "SyncIEAgAgRules - subject of IEAgAgRules to sync"
+    },
     "v1SyncOp": {
       "type": "string",
       "enum": [
@@ -1069,6 +1224,10 @@
         "addressGroupBindingPolicies": {
           "$ref": "#/definitions/v1SyncAddressGroupBindingPolicies",
           "title": "Subject of Address Group Binding Policies"
+        },
+        "ieagagRules": {
+          "$ref": "#/definitions/v1SyncIEAgAgRules",
+          "title": "Subject of IEAgAgRules"
         }
       },
       "title": "SyncReq - request to sync"
