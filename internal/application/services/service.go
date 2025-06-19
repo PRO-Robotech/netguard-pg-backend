@@ -1015,6 +1015,56 @@ func (s *NetguardService) SyncAddressGroupBindings(ctx context.Context, bindings
 		}
 	}
 
+	// Получаем сервисы, которые нужно обновить
+	var serviceIDs = make(map[string]models.ResourceIdentifier)
+	for _, binding := range bindings {
+		serviceIDs[binding.ServiceRef.Key()] = binding.ServiceRef.ResourceIdentifier
+	}
+
+	// Получаем все ServiceAlias, связанные с сервисами из bindings
+	var serviceAliasIDs []models.ResourceIdentifier
+	err = reader.ListServiceAliases(ctx, func(alias models.ServiceAlias) error {
+		for _, serviceID := range serviceIDs {
+			if alias.ServiceRef.Key() == serviceID.Key() {
+				serviceAliasIDs = append(serviceAliasIDs, alias.ResourceIdentifier)
+				break
+			}
+		}
+		return nil
+	}, nil)
+	if err != nil {
+		return errors.Wrap(err, "failed to list service aliases")
+	}
+
+	// Получаем все RuleS2S, связанные с найденными ServiceAlias
+	var rulesToUpdate []models.RuleS2S
+	err = reader.ListRuleS2S(ctx, func(rule models.RuleS2S) error {
+		for _, aliasID := range serviceAliasIDs {
+			if rule.ServiceLocalRef.Key() == aliasID.Key() || rule.ServiceRef.Key() == aliasID.Key() {
+				rulesToUpdate = append(rulesToUpdate, rule)
+				break
+			}
+		}
+		return nil
+	}, nil)
+	if err != nil {
+		return errors.Wrap(err, "failed to list rules s2s")
+	}
+
+	// Обновляем IE AG AG правила
+	if len(rulesToUpdate) > 0 {
+		// Получаем reader, который может видеть изменения в текущей транзакции
+		txReader, err := s.registry.ReaderFromWriter(ctx, writer)
+		if err != nil {
+			return errors.Wrap(err, "failed to get transaction reader")
+		}
+		defer txReader.Close()
+
+		if err = s.updateIEAgAgRulesForRuleS2SWithReader(ctx, writer, txReader, rulesToUpdate, models.SyncOpUpsert); err != nil {
+			return errors.Wrap(err, "failed to update IE AG AG rules")
+		}
+	}
+
 	// Фиксируем все изменения в одной транзакции
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
