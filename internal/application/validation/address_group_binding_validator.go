@@ -169,6 +169,43 @@ func (v *AddressGroupBindingValidator) ValidateReferences(ctx context.Context, b
 	return nil
 }
 
+// ValidateNoDuplicateBindings проверяет, что нет существующего биндинга между тем же сервисом и той же адресной группой
+func (v *AddressGroupBindingValidator) ValidateNoDuplicateBindings(ctx context.Context, binding models.AddressGroupBinding) error {
+	// Создаем флаг для отслеживания наличия дубликата
+	duplicateFound := false
+
+	// Получаем все существующие биндинги
+	err := v.reader.ListAddressGroupBindings(ctx, func(existingBinding models.AddressGroupBinding) error {
+		// Пропускаем сравнение с самим собой (для случая обновления)
+		if existingBinding.Key() == binding.Key() {
+			return nil
+		}
+
+		// Проверяем, есть ли биндинг с тем же сервисом и той же адресной группой
+		if existingBinding.ServiceRef.Key() == binding.ServiceRef.Key() &&
+			existingBinding.AddressGroupRef.Key() == binding.AddressGroupRef.Key() {
+			duplicateFound = true
+			// Возвращаем ошибку для прерывания цикла
+			return fmt.Errorf("duplicate found")
+		}
+
+		return nil
+	}, nil)
+
+	// Игнорируем ошибку "duplicate found", так как это не настоящая ошибка, а способ прервать цикл
+	if err != nil && err.Error() != "duplicate found" {
+		return errors.Wrap(err, "failed to check for duplicate bindings")
+	}
+
+	// Если найден дубликат, возвращаем ошибку
+	if duplicateFound {
+		return fmt.Errorf("duplicate binding found: a binding between service '%s' and address group '%s' already exists",
+			binding.ServiceRef.Key(), binding.AddressGroupRef.Key())
+	}
+
+	return nil
+}
+
 // ValidateForCreation validates an address group binding before creation
 func (v *AddressGroupBindingValidator) ValidateForCreation(ctx context.Context, binding *models.AddressGroupBinding) error {
 	// Проверяем существование сервиса
@@ -181,6 +218,11 @@ func (v *AddressGroupBindingValidator) ValidateForCreation(ctx context.Context, 
 	service, err := v.reader.GetServiceByID(ctx, binding.ServiceRef.ResourceIdentifier)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get service for namespace validation in binding %s", binding.Key())
+	}
+
+	// Проверяем наличие дубликатов биндингов
+	if err := v.ValidateNoDuplicateBindings(ctx, *binding); err != nil {
+		return err
 	}
 
 	// Если namespace не указан, берем его из сервиса
