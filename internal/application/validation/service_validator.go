@@ -37,10 +37,20 @@ func (v *ServiceValidator) ValidateNoDuplicatePorts(ingressPorts []models.Ingres
 	udpRanges := []models.PortRange{}
 
 	for _, port := range ingressPorts {
-		// Парсим строку порта в PortRange
-		portRange, err := ParsePortRange(port.Port)
+		// Парсим строку порта в несколько PortRange
+		portRanges, err := ParsePortRanges(port.Port)
 		if err != nil {
 			return fmt.Errorf("invalid port %s: %w", port.Port, err)
+		}
+
+		// Проверяем на перекрытия внутри текущего набора портов
+		for i, range1 := range portRanges {
+			for j, range2 := range portRanges {
+				if i != j && DoPortRangesOverlap(range1, range2) {
+					return fmt.Errorf("port conflict detected within port specification: %s port %s has overlapping ranges %d-%d and %d-%d",
+						port.Protocol, port.Port, range1.Start, range1.End, range2.Start, range2.End)
+				}
+			}
 		}
 
 		// Проверяем на перекрытия с существующими портами того же протокола
@@ -51,18 +61,20 @@ func (v *ServiceValidator) ValidateNoDuplicatePorts(ingressPorts []models.Ingres
 			existingRanges = udpRanges
 		}
 
-		for _, existingRange := range existingRanges {
-			if DoPortRangesOverlap(portRange, existingRange) {
-				return fmt.Errorf("port conflict detected: %s port range %s overlaps with existing port range %d-%d",
-					port.Protocol, port.Port, existingRange.Start, existingRange.End)
+		for _, newRange := range portRanges {
+			for _, existingRange := range existingRanges {
+				if DoPortRangesOverlap(newRange, existingRange) {
+					return fmt.Errorf("port conflict detected: %s port range %d-%d overlaps with existing port range %d-%d",
+						port.Protocol, newRange.Start, newRange.End, existingRange.Start, existingRange.End)
+				}
 			}
 		}
 
-		// Добавляем этот диапазон портов в соответствующий слайс
+		// Добавляем эти диапазоны портов в соответствующий слайс
 		if port.Protocol == models.TCP {
-			tcpRanges = append(tcpRanges, portRange)
+			tcpRanges = append(tcpRanges, portRanges...)
 		} else if port.Protocol == models.UDP {
-			udpRanges = append(udpRanges, portRange)
+			udpRanges = append(udpRanges, portRanges...)
 		}
 	}
 

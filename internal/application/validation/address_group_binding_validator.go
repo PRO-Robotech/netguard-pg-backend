@@ -95,12 +95,36 @@ func UpdatePortMapping(
 func CheckPortOverlaps(service models.Service, portMapping models.AddressGroupPortMapping) error {
 	// Create a map of service ports by protocol
 	servicePorts := make(map[models.TransportProtocol][]models.PortRange)
+
 	for _, ingressPort := range service.IngressPorts {
 		portRanges, err := ParsePortRanges(ingressPort.Port)
 		if err != nil {
 			return fmt.Errorf("invalid port in service %s: %w", service.Key(), err)
 		}
+
+		// Проверяем на перекрытия внутри текущего набора портов
+		for i, range1 := range portRanges {
+			for j, range2 := range portRanges {
+				if i != j && DoPortRangesOverlap(range1, range2) {
+					return fmt.Errorf("port conflict detected within port specification: %s port %s has overlapping ranges %d-%d and %d-%d",
+						ingressPort.Protocol, ingressPort.Port, range1.Start, range1.End, range2.Start, range2.End)
+				}
+			}
+		}
+
 		servicePorts[ingressPort.Protocol] = append(servicePorts[ingressPort.Protocol], portRanges...)
+	}
+
+	// Проверяем на перекрытия внутри одного протокола для сервиса
+	for protocol, ranges := range servicePorts {
+		for i, range1 := range ranges {
+			for j, range2 := range ranges {
+				if i != j && DoPortRangesOverlap(range1, range2) {
+					return fmt.Errorf("port conflict detected within service %s: %s port ranges %d-%d and %d-%d overlap",
+						service.Key(), protocol, range1.Start, range1.End, range2.Start, range2.End)
+				}
+			}
+		}
 	}
 
 	// Check for overlaps with existing services in the port mapping
