@@ -1,0 +1,102 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: netguard-apiserver
+  namespace: default
+  labels:
+    app: netguard-apiserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: netguard-apiserver
+  template:
+    metadata:
+      labels:
+        app: netguard-apiserver
+    spec:
+      containers:
+      - name: apiserver
+        image: netguard/k8s-apiserver:latest
+        imagePullPolicy: IfNotPresent
+        command: ["/root/k8s-apiserver"]
+        args:
+        - --config=/etc/netguard/config.yaml
+        ports:
+        - containerPort: 8443
+          name: https
+        env:
+        - name: BACKEND_ENDPOINT
+          value: "netguard-backend:9090"
+        volumeMounts:
+        - name: config
+          mountPath: /etc/netguard
+        - name: certs
+          mountPath: /etc/certs
+          readOnly: true
+        livenessProbe:
+          httpGet:
+            path: /livez
+            port: 8443
+            scheme: HTTPS
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8443
+            scheme: HTTPS
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: config
+        configMap:
+          name: netguard-apiserver-config
+      - name: certs
+        secret:
+          secretName: netguard-apiserver-certs
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: netguard-apiserver
+  namespace: netguard-system
+  labels:
+    app.kubernetes.io/name: netguard-apiserver
+    app.kubernetes.io/component: aggregated-api
+    app.kubernetes.io/part-of: netguard
+spec:
+  type: ClusterIP
+  ports:
+  - name: https
+    port: 443
+    targetPort: https
+    protocol: TCP
+  - name: http
+    port: 80
+    targetPort: http
+    protocol: TCP
+  selector:
+    app.kubernetes.io/name: netguard-apiserver
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: netguard-apiserver-webhook
+  namespace: netguard-system
+  labels:
+    app.kubernetes.io/name: netguard-apiserver
+    app.kubernetes.io/component: admission-webhook
+    app.kubernetes.io/part-of: netguard
+spec:
+  type: ClusterIP
+  ports:
+  - name: webhook
+    port: 443
+    targetPort: 8443
+    protocol: TCP
+  selector:
+    app.kubernetes.io/name: netguard-apiserver 

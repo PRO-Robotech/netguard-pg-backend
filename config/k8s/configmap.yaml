@@ -1,0 +1,111 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: netguard-apiserver-config
+  namespace: default
+  labels:
+    app.kubernetes.io/name: netguard-apiserver
+    app.kubernetes.io/component: aggregated-api
+    app.kubernetes.io/part-of: netguard
+data:
+  config.yaml: |
+    bind_address: "0.0.0.0"
+    secure_port: 8443
+    insecure_port: 0  # Отключаем insecure port для Kubernetes
+    
+    # Logging
+    log_level: "info"
+    log_format: "json"
+    
+    # Health Checks
+    health_check_timeout: "5s"
+    shutdown_timeout: "30s"
+    
+    # Backend Client Configuration
+    backend_client:
+      endpoint: "netguard-backend:9090"
+      max_retries: 3
+      connect_timeout: "10s"
+      request_timeout: "30s"
+      rate_limit: 100.0
+      rate_burst: 200
+      cb_max_requests: 5
+      cb_interval: "60s"
+      cb_timeout: "60s"
+      cb_failure_threshold: 5
+      cache_default_ttl: "5m"
+      cache_cleanup_interval: "10m"
+    
+    # Watch Configuration
+    watch:
+      mode: "polling"
+      streaming_enabled: false
+      polling_interval: "5s"
+      stream_reconnect_delay: "1s"
+    
+    # Authn - твой стиль конфигурации!
+    authn:
+      type: "tls"  # По умолчанию TLS для Kubernetes
+      tls:
+        cert-file: "/etc/certs/tls.crt"
+        key-file: "/etc/certs/tls.key"
+        client:
+          verify: "skip"  # Для самоподписанных сертификатов
+          ca-files: []
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: netguard-apiserver-config-dev
+  namespace: netguard-system
+  labels:
+    app.kubernetes.io/name: netguard-apiserver
+    app.kubernetes.io/component: aggregated-api
+    app.kubernetes.io/part-of: netguard
+    app.kubernetes.io/environment: development
+data:
+  apiserver.yaml: |
+    # Server настройки
+    bind_address: "0.0.0.0"
+    secure_port: 8443
+    insecure_port: 0  # Отключен для корректной работы
+
+    # TLS включен для корректной работы API Server
+    tls_enabled: true
+    cert_file: "/etc/certs/tls.crt"
+    key_file: "/etc/certs/tls.key"
+    ca_file: ""
+
+    # Logging
+    log_level: "info"
+    log_format: "json"
+
+    # Health Checks
+    health_check_timeout: "5s"
+
+    # Graceful Shutdown
+    shutdown_timeout: "30s"
+
+    # Backend Client Configuration (заглушка для тестирования)
+    backend_client:
+      endpoint: "httpbin.org:80"  # Публичный сервис для тестирования
+      max_retries: 3
+      connect_timeout: "10s"
+      request_timeout: "30s"
+      rate_limit: 100.0
+      rate_burst: 200
+      cb_max_requests: 5
+      cb_interval: "60s"
+      cb_timeout: "60s"
+      cb_failure_threshold: 5
+      cache_default_ttl: "5m"
+      cache_cleanup_interval: "10m"
+
+    # Watch Configuration
+    watch:
+      mode: "polling"
+      streaming_enabled: false
+      polling_interval: "5s"
+      stream_reconnect_delay: "1s" 

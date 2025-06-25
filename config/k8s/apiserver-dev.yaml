@@ -1,0 +1,43 @@
+# Development configuration for Netguard K8s API Server
+# Server настройки для development
+bind_address: "0.0.0.0"
+secure_port: 8443
+insecure_port: 8080  # Используем insecure для разработки
+
+# TLS отключен для development
+tls_enabled: false
+cert_file: ""
+key_file: ""
+ca_file: ""
+
+# Logging
+log_level: "info"
+log_format: "json"
+
+# Health Checks
+health_check_timeout: "5s"
+
+# Graceful Shutdown
+shutdown_timeout: "30s"
+
+# Backend Client Configuration
+backend_client:
+  endpoint: "localhost:8080"
+  max_retries: 3
+  connect_timeout: "10s"
+  request_timeout: "30s"
+  rate_limit: 100.0
+  rate_burst: 200
+  cb_max_requests: 5
+  cb_interval: "60s"
+  cb_timeout: "60s"
+  cb_failure_threshold: 5
+  cache_default_ttl: "5m"
+  cache_cleanup_interval: "10m"
+
+# Watch Configuration
+watch:
+  mode: "polling"  # polling, streaming, auto
+  streaming_enabled: false
+  polling_interval: "5s"
+  stream_reconnect_delay: "1s" 

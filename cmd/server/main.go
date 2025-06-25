@@ -10,12 +10,16 @@ import (
 	"os/signal"
 	"syscall"
 
-	"google.golang.org/grpc"
 	"netguard-pg-backend/internal/api/netguard"
 	"netguard-pg-backend/internal/app/server"
 	"netguard-pg-backend/internal/application/services"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/infrastructure/repositories/mem"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/health/grpc_health_v1"
+
 	//"netguard-pg-backend/internal/infrastructure/repositories/pg"
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
 )
@@ -78,6 +82,11 @@ func main() {
 	grpcServer := grpc.NewServer()
 	netguardServer := netguard.NewNetguardServiceServer(netguardService)
 	netguardpb.RegisterNetguardServiceServer(grpcServer, netguardServer)
+
+	// Register gRPC health check service
+	healthServer := health.NewServer()
+	grpc_health_v1.RegisterHealthServer(grpcServer, healthServer)
+	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
 
 	// Start gRPC server
 	lis, err := net.Listen("tcp", *grpcAddr)

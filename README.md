@@ -180,3 +180,131 @@ netguard-pg-backend/
 ├── copy-swagger.sh
 └── go.mod
 ```
+
+# Netguard Aggregated API Server: План реализации и тестирования
+
+Этот документ описывает шаги для сборки, тестирования и деплоя `netguard-k8s-apiserver` и его зависимостей.
+
+## 1. Архитектура
+
+Система состоит из двух основных компонентов:
+- **`netguard-pg-backend`**: Backend сервер, который хранит данные в PostgreSQL (или в in-memory для тестирования).
+- **`netguard-k8s-apiserver`**: Aggregated API Server, который предоставляет Kubernetes-совместимый API и общается с backend'ом по gRPC.
+
+## 2. Сборка Docker образов
+
+Для сборки образов используются два Dockerfile:
+- `Dockerfile.backend` - для `netguard-pg-backend`
+- `Dockerfile.apiserver` - для `netguard-k8s-apiserver`
+
+Сборка образов производится командой:
+```bash
+# Собираем backend
+docker build -f Dockerfile.backend -t netguard/pg-backend:latest .
+
+# Собираем API server
+docker build -f Dockerfile.apiserver -t netguard/k8s-apiserver:latest .
+```
+
+## 3. Локальное тестирование
+
+Для локального тестирования нам нужно:
+1. Сгенерировать TLS сертификаты
+2. Запустить backend сервер
+3. Запустить API server
+4. Проверить API через `curl`
+
+### 3.1. Генерация TLS сертификатов
+```bash
+chmod +x scripts/generate-certs.sh
+./scripts/generate-certs.sh
+```
+
+### 3.2. Запуск backend сервера
+```bash
+go run ./cmd/server --memory --grpc-addr ":9090" --http-addr ":8080"
+```
+
+### 3.3. Запуск API server
+Создайте файл `local-config.yaml` с конфигурацией для локального тестирования:
+```yaml
+bind_address: "127.0.0.1"
+secure_port: 8443
+insecure_port: 0
+
+authn:
+  type: "tls"
+  tls:
+    cert-file: "certs/tls.crt"
+    key-file: "certs/tls.key"
+    client:
+      verify: "skip"
+
+backend_client:
+  endpoint: "localhost:9090"
+```
+
+Запустите API server:
+```bash
+go run ./cmd/k8s-apiserver --config local-config.yaml
+```
+
+### 3.4. Тестирование API
+```bash
+# Проверяем health check
+curl -k https://localhost:8443/healthz
+
+# Проверяем API discovery
+curl -k https://localhost:8443/apis/netguard.sgroups.io/v1beta1 | jq
+```
+
+## 4. Деплой в Kubernetes
+
+### 4.1. Загрузка образов в кластер
+Для локальных кластеров (minikube, kind):
+```bash
+# Для minikube
+minikube image load netguard/pg-backend:latest
+minikube image load netguard/k8s-apiserver:latest
+
+# Для kind
+kind load docker-image netguard/pg-backend:latest
+kind load docker-image netguard/k8s-apiserver:latest
+```
+Для удаленных кластеров нужно запушить образы в registry.
+
+### 4.2. Создание Kubernetes ресурсов
+Все манифесты находятся в директории `config/k8s/`.
+
+1. **Создаем Secret с сертификатами**:
+   ```bash
+   kubectl create secret tls netguard-apiserver-certs --cert=certs/tls.crt --key=certs/tls.key
+   ```
+2. **Применяем манифесты**:
+   ```bash
+   kubectl apply -f config/k8s/
+   ```
+
+### 4.3. Проверка деплоймента
+```bash
+# Проверяем статус подов
+kubectl get pods -l app=netguard-apiserver
+kubectl get pods -l app=netguard-backend
+
+# Проверяем доступность API
+kubectl api-resources --api-group=netguard.sgroups.io
+
+# Проверяем создание ресурса
+kubectl apply -f - <<EOF
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Service
+metadata:
+  name: test-service
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+EOF
+
+kubectl get services.v1beta1.netguard.sgroups.io
+```
