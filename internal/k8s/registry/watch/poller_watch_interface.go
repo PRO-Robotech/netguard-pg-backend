@@ -1,23 +1,10 @@
-/*
-Copyright 2024 The Netguard Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package watch
 
 import (
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/klog/v2"
 )
 
 // PollerWatchInterface реализует watch.Interface для shared poller
@@ -26,20 +13,34 @@ type PollerWatchInterface struct {
 	poller *SharedPoller
 }
 
-// NewPollerWatchInterface создает новый PollerWatchInterface
-func NewPollerWatchInterface(client *WatchClient, poller *SharedPoller) *PollerWatchInterface {
-	return &PollerWatchInterface{
-		client: client,
-		poller: poller,
-	}
-}
-
-// ResultChan возвращает канал для получения событий
+// ResultChan возвращает канал с событиями
 func (w *PollerWatchInterface) ResultChan() <-chan watch.Event {
-	return w.client.eventChan
+	// Создаем новый канал, который будет возвращать Unstructured
+	unstructuredChan := make(chan watch.Event)
+
+	go func() {
+		defer close(unstructuredChan)
+		for event := range w.client.eventChan {
+			// Конвертируем в Unstructured
+			unstructuredObj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(event.Object)
+			if err != nil {
+				klog.Errorf("failed to convert object to unstructured: %v", err)
+				continue
+			}
+
+			// Создаем новое событие с Unstructured объектом
+			unstructuredEvent := watch.Event{
+				Type:   event.Type,
+				Object: &unstructured.Unstructured{Object: unstructuredObj},
+			}
+			unstructuredChan <- unstructuredEvent
+		}
+	}()
+
+	return unstructuredChan
 }
 
-// Stop останавливает watch и удаляет клиента из поллера
+// Stop останавливает watch
 func (w *PollerWatchInterface) Stop() {
 	close(w.client.done)
 	w.poller.RemoveClient(w.client.id)

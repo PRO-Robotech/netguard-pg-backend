@@ -16,4 +16,10 @@ import (
 	_ "connectrpc.com/connect"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	_ "github.com/grpc-ecosystem/grpc-gateway/v2/utilities"
+	_ "k8s.io/code-generator/cmd/client-gen"
+	_ "k8s.io/code-generator/cmd/conversion-gen"
+	_ "k8s.io/code-generator/cmd/deepcopy-gen"
+	_ "k8s.io/code-generator/cmd/informer-gen"
+	_ "k8s.io/code-generator/cmd/lister-gen"
+	_ "k8s.io/kube-openapi/cmd/openapi-gen"
 )
