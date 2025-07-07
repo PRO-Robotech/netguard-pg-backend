@@ -1,0 +1,345 @@
+package client
+
+import (
+	"context"
+	"fmt"
+
+	"netguard-pg-backend/internal/application/validation"
+	"netguard-pg-backend/internal/domain/models"
+	"netguard-pg-backend/internal/domain/ports"
+)
+
+// MockBackendClient с реальными тестовыми данными
+type MockBackendClient struct {
+	services             []models.Service
+	addressGroups        []models.AddressGroup
+	addressGroupBindings []models.AddressGroupBinding
+}
+
+func NewMockBackendClient() *MockBackendClient {
+	return &MockBackendClient{
+		services: []models.Service{
+			{
+				SelfRef: models.SelfRef{
+					ResourceIdentifier: models.NewResourceIdentifier(
+						"test-service-1",
+						models.WithNamespace("netguard-test"),
+					),
+				},
+				Description: "Test Service 1",
+				IngressPorts: []models.IngressPort{
+					{
+						Protocol:    models.TCP,
+						Port:        "80",
+						Description: "HTTP port",
+					},
+				},
+			},
+			{
+				SelfRef: models.SelfRef{
+					ResourceIdentifier: models.NewResourceIdentifier(
+						"test-service-2",
+						models.WithNamespace("netguard-test"),
+					),
+				},
+				Description: "Test Service 2",
+				IngressPorts: []models.IngressPort{
+					{
+						Protocol:    models.TCP,
+						Port:        "443",
+						Description: "HTTPS port",
+					},
+				},
+			},
+		},
+		addressGroups: []models.AddressGroup{
+			{
+				SelfRef: models.SelfRef{
+					ResourceIdentifier: models.NewResourceIdentifier(
+						"test-addressgroup-1",
+						models.WithNamespace("netguard-test"),
+					),
+				},
+				Description: "Test Address Group 1",
+				Addresses:   []string{"192.168.1.0/24", "10.0.0.1/32"},
+			},
+			{
+				SelfRef: models.SelfRef{
+					ResourceIdentifier: models.NewResourceIdentifier(
+						"test-addressgroup-2",
+						models.WithNamespace("netguard-test"),
+					),
+				},
+				Description: "Test Address Group 2",
+				Addresses:   []string{"172.16.0.0/16", "10.1.1.1/32"},
+			},
+		},
+		addressGroupBindings: []models.AddressGroupBinding{
+			{
+				SelfRef: models.SelfRef{
+					ResourceIdentifier: models.NewResourceIdentifier(
+						"test-binding-1",
+						models.WithNamespace("netguard-test"),
+					),
+				},
+			},
+		},
+	}
+}
+
+// Service operations
+func (m *MockBackendClient) GetService(ctx context.Context, id models.ResourceIdentifier) (*models.Service, error) {
+	for _, service := range m.services {
+		if service.ResourceIdentifier.Key() == id.Key() {
+			return &service, nil
+		}
+	}
+	return nil, fmt.Errorf("service not found: %s", id.Key())
+}
+
+func (m *MockBackendClient) ListServices(ctx context.Context, scope ports.Scope) ([]models.Service, error) {
+	return m.services, nil
+}
+
+func (m *MockBackendClient) CreateService(ctx context.Context, service *models.Service) error {
+	m.services = append(m.services, *service)
+	return nil
+}
+
+func (m *MockBackendClient) UpdateService(ctx context.Context, service *models.Service) error {
+	for i, svc := range m.services {
+		if svc.ResourceIdentifier.Key() == service.ResourceIdentifier.Key() {
+			m.services[i] = *service
+			return nil
+		}
+	}
+	return fmt.Errorf("service not found for update: %s", service.ResourceIdentifier.Key())
+}
+
+func (m *MockBackendClient) DeleteService(ctx context.Context, id models.ResourceIdentifier) error {
+	for i, service := range m.services {
+		if service.ResourceIdentifier.Key() == id.Key() {
+			m.services = append(m.services[:i], m.services[i+1:]...)
+			return nil
+		}
+	}
+	return fmt.Errorf("service not found for delete: %s", id.Key())
+}
+
+// AddressGroup operations
+func (m *MockBackendClient) GetAddressGroup(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroup, error) {
+	for _, group := range m.addressGroups {
+		if group.ResourceIdentifier.Key() == id.Key() {
+			return &group, nil
+		}
+	}
+	return nil, fmt.Errorf("address group not found: %s", id.Key())
+}
+
+func (m *MockBackendClient) ListAddressGroups(ctx context.Context, scope ports.Scope) ([]models.AddressGroup, error) {
+	return m.addressGroups, nil
+}
+
+func (m *MockBackendClient) CreateAddressGroup(ctx context.Context, group *models.AddressGroup) error {
+	m.addressGroups = append(m.addressGroups, *group)
+	return nil
+}
+
+func (m *MockBackendClient) UpdateAddressGroup(ctx context.Context, group *models.AddressGroup) error {
+	for i, ag := range m.addressGroups {
+		if ag.ResourceIdentifier.Key() == group.ResourceIdentifier.Key() {
+			m.addressGroups[i] = *group
+			return nil
+		}
+	}
+	return fmt.Errorf("address group not found for update: %s", group.ResourceIdentifier.Key())
+}
+
+func (m *MockBackendClient) DeleteAddressGroup(ctx context.Context, id models.ResourceIdentifier) error {
+	for i, group := range m.addressGroups {
+		if group.ResourceIdentifier.Key() == id.Key() {
+			m.addressGroups = append(m.addressGroups[:i], m.addressGroups[i+1:]...)
+			return nil
+		}
+	}
+	return fmt.Errorf("address group not found for delete: %s", id.Key())
+}
+
+// AddressGroupBinding operations
+func (m *MockBackendClient) GetAddressGroupBinding(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBinding, error) {
+	for _, binding := range m.addressGroupBindings {
+		if binding.ResourceIdentifier.Key() == id.Key() {
+			return &binding, nil
+		}
+	}
+	return nil, fmt.Errorf("binding not found: %s", id.Key())
+}
+
+func (m *MockBackendClient) ListAddressGroupBindings(ctx context.Context, scope ports.Scope) ([]models.AddressGroupBinding, error) {
+	return m.addressGroupBindings, nil
+}
+
+func (m *MockBackendClient) CreateAddressGroupBinding(ctx context.Context, binding *models.AddressGroupBinding) error {
+	m.addressGroupBindings = append(m.addressGroupBindings, *binding)
+	return nil
+}
+
+func (m *MockBackendClient) UpdateAddressGroupBinding(ctx context.Context, binding *models.AddressGroupBinding) error {
+	for i, b := range m.addressGroupBindings {
+		if b.ResourceIdentifier.Key() == binding.ResourceIdentifier.Key() {
+			m.addressGroupBindings[i] = *binding
+			return nil
+		}
+	}
+	return fmt.Errorf("binding not found for update: %s", binding.ResourceIdentifier.Key())
+}
+
+func (m *MockBackendClient) DeleteAddressGroupBinding(ctx context.Context, id models.ResourceIdentifier) error {
+	for i, binding := range m.addressGroupBindings {
+		if binding.ResourceIdentifier.Key() == id.Key() {
+			m.addressGroupBindings = append(m.addressGroupBindings[:i], m.addressGroupBindings[i+1:]...)
+			return nil
+		}
+	}
+	return fmt.Errorf("binding not found for delete: %s", id.Key())
+}
+
+// Stubs for other operations
+func (m *MockBackendClient) GetAddressGroupPortMapping(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupPortMapping, error) {
+	return nil, fmt.Errorf("not implemented in mock")
+}
+
+func (m *MockBackendClient) ListAddressGroupPortMappings(ctx context.Context, scope ports.Scope) ([]models.AddressGroupPortMapping, error) {
+	return nil, nil
+}
+
+func (m *MockBackendClient) CreateAddressGroupPortMapping(ctx context.Context, mapping *models.AddressGroupPortMapping) error {
+	return nil
+}
+
+func (m *MockBackendClient) UpdateAddressGroupPortMapping(ctx context.Context, mapping *models.AddressGroupPortMapping) error {
+	return nil
+}
+
+func (m *MockBackendClient) DeleteAddressGroupPortMapping(ctx context.Context, id models.ResourceIdentifier) error {
+	return nil
+}
+
+func (m *MockBackendClient) GetRuleS2S(ctx context.Context, id models.ResourceIdentifier) (*models.RuleS2S, error) {
+	return nil, fmt.Errorf("not implemented in mock")
+}
+
+func (m *MockBackendClient) ListRuleS2S(ctx context.Context, scope ports.Scope) ([]models.RuleS2S, error) {
+	return nil, nil
+}
+
+func (m *MockBackendClient) CreateRuleS2S(ctx context.Context, rule *models.RuleS2S) error {
+	return nil
+}
+
+func (m *MockBackendClient) UpdateRuleS2S(ctx context.Context, rule *models.RuleS2S) error {
+	return nil
+}
+
+func (m *MockBackendClient) DeleteRuleS2S(ctx context.Context, id models.ResourceIdentifier) error {
+	return nil
+}
+
+func (m *MockBackendClient) GetServiceAlias(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error) {
+	return nil, fmt.Errorf("not implemented in mock")
+}
+
+func (m *MockBackendClient) ListServiceAliases(ctx context.Context, scope ports.Scope) ([]models.ServiceAlias, error) {
+	return nil, nil
+}
+
+func (m *MockBackendClient) CreateServiceAlias(ctx context.Context, alias *models.ServiceAlias) error {
+	return nil
+}
+
+func (m *MockBackendClient) UpdateServiceAlias(ctx context.Context, alias *models.ServiceAlias) error {
+	return nil
+}
+
+func (m *MockBackendClient) DeleteServiceAlias(ctx context.Context, id models.ResourceIdentifier) error {
+	return nil
+}
+
+func (m *MockBackendClient) GetAddressGroupBindingPolicy(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
+	return nil, fmt.Errorf("not implemented in mock")
+}
+
+func (m *MockBackendClient) ListAddressGroupBindingPolicies(ctx context.Context, scope ports.Scope) ([]models.AddressGroupBindingPolicy, error) {
+	return nil, nil
+}
+
+func (m *MockBackendClient) CreateAddressGroupBindingPolicy(ctx context.Context, policy *models.AddressGroupBindingPolicy) error {
+	return nil
+}
+
+func (m *MockBackendClient) UpdateAddressGroupBindingPolicy(ctx context.Context, policy *models.AddressGroupBindingPolicy) error {
+	return nil
+}
+
+func (m *MockBackendClient) DeleteAddressGroupBindingPolicy(ctx context.Context, id models.ResourceIdentifier) error {
+	return nil
+}
+
+func (m *MockBackendClient) GetIEAgAgRule(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
+	return nil, fmt.Errorf("not implemented in mock")
+}
+
+func (m *MockBackendClient) ListIEAgAgRules(ctx context.Context, scope ports.Scope) ([]models.IEAgAgRule, error) {
+	return nil, nil
+}
+
+func (m *MockBackendClient) CreateIEAgAgRule(ctx context.Context, rule *models.IEAgAgRule) error {
+	return nil
+}
+
+func (m *MockBackendClient) UpdateIEAgAgRule(ctx context.Context, rule *models.IEAgAgRule) error {
+	return nil
+}
+
+func (m *MockBackendClient) DeleteIEAgAgRule(ctx context.Context, id models.ResourceIdentifier) error {
+	return nil
+}
+
+func (m *MockBackendClient) Sync(ctx context.Context, syncOp models.SyncOp, resources interface{}) error {
+	return nil
+}
+
+func (m *MockBackendClient) GetSyncStatus(ctx context.Context) (*models.SyncStatus, error) {
+	return &models.SyncStatus{}, nil
+}
+
+func (m *MockBackendClient) GetDependencyValidator() *validation.DependencyValidator {
+	return validation.NewDependencyValidator(nil)
+}
+
+func (m *MockBackendClient) GetReader(ctx context.Context) (ports.Reader, error) {
+	return nil, fmt.Errorf("not implemented in mock")
+}
+
+func (m *MockBackendClient) HealthCheck(ctx context.Context) error {
+	return nil
+}
+
+func (m *MockBackendClient) Close() error {
+	return nil
+}
+
+// Создаем mock клиент вместо реального grpc
+func createMockGRPCBackendClient(config BackendClientConfig) (BackendClient, error) {
+	return NewMockBackendClient(), nil
+}
+
+// Пропускает circuit breaker для mock
+func createMockCircuitBreakerClient(client BackendClient, config BackendClientConfig) BackendClient {
+	return client
+}
+
+// Пропускает cache для mock
+func createMockCachedBackendClient(client BackendClient, config BackendClientConfig) BackendClient {
+	return client
+}

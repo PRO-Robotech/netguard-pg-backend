@@ -42,7 +42,7 @@ build-k8s-apiserver:
 
 .PHONY: docker-build-k8s-apiserver
 docker-build-k8s-apiserver:
-	docker build -f config/docker/Dockerfile.k8s-apiserver -t netguard/k8s-apiserver:latest .
+	docker build -f Dockerfile.apiserver -t netguard/k8s-apiserver:latest .
 
 .PHONY: docker-push-k8s-apiserver
 docker-push-k8s-apiserver:
@@ -108,3 +108,24 @@ docker-compose-down:
 clean:
 	rm -rf bin
 	rm -f coverage.out coverage.html
+
+# Build targets
+.PHONY: build-apiserver
+build-apiserver: ## Build API server binary
+	@echo "🔨 Building API server..."
+	go build -o bin/k8s-apiserver ./cmd/k8s-apiserver/
+
+.PHONY: run-apiserver
+run-apiserver: build-apiserver ## Build and run API server locally
+	@echo "🚀 Starting API server..."
+	./bin/k8s-apiserver --help
+
+.PHONY: test-apiserver
+test-apiserver: build-apiserver ## Build and test API server with basic flags
+	@echo "🧪 Testing API server..."
+	./bin/k8s-apiserver --logtostderr=true --v=2 --secure-port=8443 --cert-dir=/tmp
+
+# Backend image
+.PHONY: docker-build-pg-backend
+docker-build-pg-backend:
+	docker build -f Dockerfile.backend -t netguard/pg-backend:latest .

@@ -2,6 +2,8 @@ package mem
 
 import (
 	"context"
+	"fmt"
+	"log"
 	"time"
 
 	"netguard-pg-backend/internal/domain/models"
@@ -9,16 +11,16 @@ import (
 )
 
 type writer struct {
-	registry                   *Registry
-	ctx                        context.Context
-	services                   map[string]models.Service
-	addressGroups              map[string]models.AddressGroup
-	addressGroupBindings       map[string]models.AddressGroupBinding
-	addressGroupPortMappings   map[string]models.AddressGroupPortMapping
+	registry                    *Registry
+	ctx                         context.Context
+	services                    map[string]models.Service
+	addressGroups               map[string]models.AddressGroup
+	addressGroupBindings        map[string]models.AddressGroupBinding
+	addressGroupPortMappings    map[string]models.AddressGroupPortMapping
 	addressGroupBindingPolicies map[string]models.AddressGroupBindingPolicy
-	ruleS2S                    map[string]models.RuleS2S
-	serviceAliases             map[string]models.ServiceAlias
-	ieAgAgRules                map[string]models.IEAgAgRule
+	ruleS2S                     map[string]models.RuleS2S
+	serviceAliases              map[string]models.ServiceAlias
+	ieAgAgRules                 map[string]models.IEAgAgRule
 }
 
 func (w *writer) SyncServices(ctx context.Context, services []models.Service, scope ports.Scope, opts ...ports.Option) error {
@@ -82,14 +84,33 @@ func (w *writer) SyncServices(ctx context.Context, services []models.Service, sc
 		}
 
 		// Добавляем новые сервисы
-		for _, service := range services {
-			w.services[service.Key()] = service
+		for _, svc := range services {
+			if existing, ok := w.services[svc.Key()]; ok {
+				if svc.Meta.CreationTS.IsZero() {
+					svc.Meta.CreationTS = existing.Meta.CreationTS
+				}
+				if svc.Meta.UID == "" {
+					svc.Meta.UID = existing.Meta.UID
+				}
+			}
+			ensureMetaFill(&svc.Meta)
+			w.services[svc.Key()] = svc
 		}
 
 	case models.SyncOpUpsert:
 		// Только добавление и обновление
-		for _, service := range services {
-			w.services[service.Key()] = service
+		for _, svc := range services {
+			if existing, ok := w.services[svc.Key()]; ok {
+				if svc.Meta.CreationTS.IsZero() {
+					svc.Meta.CreationTS = existing.Meta.CreationTS
+				}
+				if svc.Meta.UID == "" {
+					svc.Meta.UID = existing.Meta.UID
+				}
+			}
+			ensureMetaFill(&svc.Meta)
+			log.Printf("mem.writer SyncOpUpsert Service key=%s uid=%s gen=%d rv=%s", svc.Key(), svc.Meta.UID, svc.Meta.Generation, svc.Meta.ResourceVersion)
+			w.services[svc.Key()] = svc
 		}
 
 	case models.SyncOpDelete:
@@ -161,12 +182,31 @@ func (w *writer) SyncAddressGroups(ctx context.Context, addressGroups []models.A
 
 		// Добавляем новые группы адресов
 		for _, addressGroup := range addressGroups {
-			w.addressGroups[addressGroup.Key()] = addressGroup
+			key := addressGroup.Key()
+			if existing, ok := w.addressGroups[key]; ok {
+				if addressGroup.Meta.CreationTS.IsZero() {
+					addressGroup.Meta.CreationTS = existing.Meta.CreationTS
+				}
+				if addressGroup.Meta.UID == "" {
+					addressGroup.Meta.UID = existing.Meta.UID
+				}
+			}
+			ensureMetaFill(&addressGroup.Meta)
+			w.addressGroups[key] = addressGroup
 		}
 
 	case models.SyncOpUpsert:
 		// Только добавление и обновление
 		for _, addressGroup := range addressGroups {
+			if existing, ok := w.addressGroups[addressGroup.Key()]; ok {
+				if addressGroup.Meta.CreationTS.IsZero() {
+					addressGroup.Meta.CreationTS = existing.Meta.CreationTS
+				}
+				if addressGroup.Meta.UID == "" {
+					addressGroup.Meta.UID = existing.Meta.UID
+				}
+			}
+			ensureMetaFill(&addressGroup.Meta)
 			w.addressGroups[addressGroup.Key()] = addressGroup
 		}
 
@@ -240,6 +280,15 @@ func (w *writer) SyncAddressGroupBindings(ctx context.Context, bindings []models
 		// Добавляем новые привязки групп адресов
 		for _, binding := range bindings {
 			key := binding.Key()
+			if existing, ok := w.addressGroupBindings[key]; ok {
+				if binding.Meta.CreationTS.IsZero() {
+					binding.Meta.CreationTS = existing.Meta.CreationTS
+				}
+				if binding.Meta.UID == "" {
+					binding.Meta.UID = existing.Meta.UID
+				}
+			}
+			ensureMetaFill(&binding.Meta)
 			w.addressGroupBindings[key] = binding
 		}
 
@@ -247,6 +296,15 @@ func (w *writer) SyncAddressGroupBindings(ctx context.Context, bindings []models
 		// Только добавление и обновление
 		for _, binding := range bindings {
 			key := binding.Key()
+			if existing, ok := w.addressGroupBindings[key]; ok {
+				if binding.Meta.CreationTS.IsZero() {
+					binding.Meta.CreationTS = existing.Meta.CreationTS
+				}
+				if binding.Meta.UID == "" {
+					binding.Meta.UID = existing.Meta.UID
+				}
+			}
+			ensureMetaFill(&binding.Meta)
 			w.addressGroupBindings[key] = binding
 		}
 
@@ -320,13 +378,33 @@ func (w *writer) SyncAddressGroupPortMappings(ctx context.Context, mappings []mo
 
 		// Добавляем новые маппинги портов групп адресов
 		for _, mapping := range mappings {
-			w.addressGroupPortMappings[mapping.Key()] = mapping
+			key := mapping.Key()
+			if existing, ok := w.addressGroupPortMappings[key]; ok {
+				if mapping.Meta.CreationTS.IsZero() {
+					mapping.Meta.CreationTS = existing.Meta.CreationTS
+				}
+				if mapping.Meta.UID == "" {
+					mapping.Meta.UID = existing.Meta.UID
+				}
+			}
+			ensureMetaFill(&mapping.Meta)
+			w.addressGroupPortMappings[key] = mapping
 		}
 
 	case models.SyncOpUpsert:
 		// Только добавление и обновление
 		for _, mapping := range mappings {
-			w.addressGroupPortMappings[mapping.Key()] = mapping
+			key := mapping.Key()
+			if existing, ok := w.addressGroupPortMappings[key]; ok {
+				if mapping.Meta.CreationTS.IsZero() {
+					mapping.Meta.CreationTS = existing.Meta.CreationTS
+				}
+				if mapping.Meta.UID == "" {
+					mapping.Meta.UID = existing.Meta.UID
+				}
+			}
+			ensureMetaFill(&mapping.Meta)
+			w.addressGroupPortMappings[key] = mapping
 		}
 
 	case models.SyncOpDelete:
@@ -398,13 +476,33 @@ func (w *writer) SyncRuleS2S(ctx context.Context, rules []models.RuleS2S, scope 
 
 		// Добавляем новые правила
 		for _, rule := range rules {
-			w.ruleS2S[rule.Key()] = rule
+			key := rule.Key()
+			if existing, ok := w.ruleS2S[key]; ok {
+				if rule.Meta.CreationTS.IsZero() {
+					rule.Meta.CreationTS = existing.Meta.CreationTS
+				}
+				if rule.Meta.UID == "" {
+					rule.Meta.UID = existing.Meta.UID
+				}
+			}
+			ensureMetaFill(&rule.Meta)
+			w.ruleS2S[key] = rule
 		}
 
 	case models.SyncOpUpsert:
 		// Только добавление и обновление
 		for _, rule := range rules {
-			w.ruleS2S[rule.Key()] = rule
+			key := rule.Key()
+			if existing, ok := w.ruleS2S[key]; ok {
+				if rule.Meta.CreationTS.IsZero() {
+					rule.Meta.CreationTS = existing.Meta.CreationTS
+				}
+				if rule.Meta.UID == "" {
+					rule.Meta.UID = existing.Meta.UID
+				}
+			}
+			ensureMetaFill(&rule.Meta)
+			w.ruleS2S[key] = rule
 		}
 
 	case models.SyncOpDelete:
@@ -476,12 +574,31 @@ func (w *writer) SyncServiceAliases(ctx context.Context, aliases []models.Servic
 
 		// Добавляем новые алиасы сервисов
 		for _, alias := range aliases {
+			if existing, ok := w.serviceAliases[alias.Key()]; ok {
+				if alias.Meta.CreationTS.IsZero() {
+					alias.Meta.CreationTS = existing.Meta.CreationTS
+				}
+				if alias.Meta.UID == "" {
+					alias.Meta.UID = existing.Meta.UID
+				}
+			}
+			ensureMetaFill(&alias.Meta)
 			w.serviceAliases[alias.Key()] = alias
 		}
 
 	case models.SyncOpUpsert:
 		// Только добавление и обновление
 		for _, alias := range aliases {
+			if existing, ok := w.serviceAliases[alias.Key()]; ok {
+				if alias.Meta.CreationTS.IsZero() {
+					alias.Meta.CreationTS = existing.Meta.CreationTS
+				}
+				if alias.Meta.UID == "" {
+					alias.Meta.UID = existing.Meta.UID
+				}
+			}
+			ensureMetaFill(&alias.Meta)
+			log.Printf("mem.writer SyncOpUpsert ServiceAlias key=%s uid=%s gen=%d rv=%s", alias.Key(), alias.Meta.UID, alias.Meta.Generation, alias.Meta.ResourceVersion)
 			w.serviceAliases[alias.Key()] = alias
 		}
 
@@ -553,8 +670,18 @@ func (w *writer) SyncAddressGroupBindingPolicies(ctx context.Context, policies [
 		}
 
 		// Добавляем новые политики
-		for _, policy := range policies {
-			w.addressGroupBindingPolicies[policy.Key()] = policy
+		for i := range policies {
+			p := policies[i]
+			if p.Meta.UID == "" {
+				p.Meta.TouchOnCreate()
+			}
+			if p.Meta.ResourceVersion == "" {
+				p.Meta.ResourceVersion = fmt.Sprintf("%d", time.Now().UnixNano())
+			}
+			if p.Meta.Generation == 0 {
+				p.Meta.Generation = 1
+			}
+			w.addressGroupBindingPolicies[p.Key()] = p
 		}
 
 	case models.SyncOpUpsert:
@@ -783,13 +910,33 @@ func (w *writer) SyncIEAgAgRules(ctx context.Context, rules []models.IEAgAgRule,
 
 		// Добавляем новые правила
 		for _, rule := range rules {
-			w.ieAgAgRules[rule.Key()] = rule
+			key := rule.Key()
+			if existing, ok := w.ieAgAgRules[key]; ok {
+				if rule.Meta.CreationTS.IsZero() {
+					rule.Meta.CreationTS = existing.Meta.CreationTS
+				}
+				if rule.Meta.UID == "" {
+					rule.Meta.UID = existing.Meta.UID
+				}
+			}
+			ensureMetaFill(&rule.Meta)
+			w.ieAgAgRules[key] = rule
 		}
 
 	case models.SyncOpUpsert:
 		// Только добавление и обновление
 		for _, rule := range rules {
-			w.ieAgAgRules[rule.Key()] = rule
+			key := rule.Key()
+			if existing, ok := w.ieAgAgRules[key]; ok {
+				if rule.Meta.CreationTS.IsZero() {
+					rule.Meta.CreationTS = existing.Meta.CreationTS
+				}
+				if rule.Meta.UID == "" {
+					rule.Meta.UID = existing.Meta.UID
+				}
+			}
+			ensureMetaFill(&rule.Meta)
+			w.ieAgAgRules[key] = rule
 		}
 
 	case models.SyncOpDelete:

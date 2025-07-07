@@ -4,6 +4,7 @@ package models
 type AddressGroupPortMapping struct {
 	SelfRef
 	AccessPorts map[ServiceRef]ServicePorts
+	Meta        Meta
 }
 
 // AddressGroupPortMappingRef represents a reference to a Service

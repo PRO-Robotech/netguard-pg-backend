@@ -15,6 +15,8 @@ import (
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
+
+	"k8s.io/klog/v2"
 )
 
 // GRPCBackendClient базовый gRPC клиент
@@ -35,11 +37,10 @@ func NewGRPCBackendClient(config BackendClientConfig) (*GRPCBackendClient, error
 	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
-			Time:                10 * time.Second,
+			Time:                5 * time.Minute,
 			Timeout:             3 * time.Second,
-			PermitWithoutStream: true,
+			PermitWithoutStream: false,
 		}),
-		grpc.WithBlock(),
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), config.ConnectTimeout)
@@ -140,6 +141,16 @@ func (c *GRPCBackendClient) syncService(ctx context.Context, syncOp models.SyncO
 	}
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
+
+	// DEBUG: логируем содержимое ingressPorts, чтобы отследить пустые порты
+	for _, s := range services {
+		var parts []string
+		for _, p := range s.IngressPorts {
+			parts = append(parts, fmt.Sprintf("%s:%s", p.Protocol, p.Port))
+		}
+		klog.V(2).Infof("syncService op=%s ns=%q name=%q ports=%v", syncOp.String(), s.Namespace, s.Name, parts)
+	}
+
 	protoServices := make([]*netguardpb.Service, 0, len(services))
 	for _, svc := range services {
 		protoServices = append(protoServices, convertServiceToProto(*svc))
@@ -163,15 +174,19 @@ func (c *GRPCBackendClient) syncService(ctx context.Context, syncOp models.SyncO
 			},
 		},
 	}
+	klog.V(2).Infof("GRPCBackendClient.syncService sending Sync len=%d op=%s", len(services), syncOp.String())
 	_, err := c.client.Sync(ctx, req)
 	if err != nil {
+		klog.V(2).Infof("GRPCBackendClient.syncService error: %v", err)
 		return fmt.Errorf("failed to sync services: %w", err)
 	}
+	klog.V(2).Infof("GRPCBackendClient.syncService OK op=%s", syncOp.String())
 	return nil
 }
 
 // --- AddressGroup ---
 func (c *GRPCBackendClient) GetAddressGroup(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroup, error) {
+	klog.V(4).Infof("GRPCBackendClient.GetAddressGroup ns=%q name=%q", id.Namespace, id.Name)
 	if !c.limiter.Allow() {
 		return nil, fmt.Errorf("rate limit exceeded")
 	}
@@ -185,6 +200,7 @@ func (c *GRPCBackendClient) GetAddressGroup(ctx context.Context, id models.Resou
 	}
 	resp, err := c.client.GetAddressGroup(ctx, req)
 	if err != nil {
+		klog.V(2).Infof("GRPC GetAddressGroup returned error: %v", err)
 		return nil, fmt.Errorf("failed to get address group: %w", err)
 	}
 	addressGroup := convertAddressGroupFromProto(resp.AddressGroup)
@@ -678,9 +694,12 @@ func (c *GRPCBackendClient) syncServiceAlias(ctx context.Context, syncOp models.
 			},
 		},
 	}
+	klog.V(2).Infof("GRPCBackendClient.syncServiceAlias sending Sync len=%d op=%s", len(aliases), syncOp.String())
 	_, err := c.client.Sync(ctx, req)
 	if err != nil {
-		return fmt.Errorf("failed to sync service aliases: %w", err)
+		klog.V(2).Infof("GRPCBackendClient.syncServiceAlias error: %v", err)
+	} else {
+		klog.V(2).Infof("GRPCBackendClient.syncServiceAlias OK op=%s", syncOp.String())
 	}
 	return nil
 }
@@ -891,8 +910,36 @@ func (c *GRPCBackendClient) syncIEAgAgRule(ctx context.Context, syncOp models.Sy
 	return nil
 }
 
+// Sync implements generic sync for known slice types. Currently supports AddressGroup.
 func (c *GRPCBackendClient) Sync(ctx context.Context, syncOp models.SyncOp, resources interface{}) error {
-	return fmt.Errorf("generic sync not implemented - use resource-specific methods")
+	switch res := resources.(type) {
+	case []models.AddressGroup:
+		ptrs := make([]*models.AddressGroup, 0, len(res))
+		for i := range res {
+			ptrs = append(ptrs, &res[i])
+		}
+		return c.syncAddressGroup(ctx, syncOp, ptrs)
+	case []models.Service:
+		ptrs := make([]*models.Service, 0, len(res))
+		for i := range res {
+			ptrs = append(ptrs, &res[i])
+		}
+		return c.syncService(ctx, syncOp, ptrs)
+	case []models.ServiceAlias:
+		ptrs := make([]*models.ServiceAlias, 0, len(res))
+		for i := range res {
+			ptrs = append(ptrs, &res[i])
+		}
+		return c.syncServiceAlias(ctx, syncOp, ptrs)
+	case []models.AddressGroupBindingPolicy:
+		ptrs := make([]*models.AddressGroupBindingPolicy, 0, len(res))
+		for i := range res {
+			ptrs = append(ptrs, &res[i])
+		}
+		return c.syncAddressGroupBindingPolicy(ctx, syncOp, ptrs)
+	default:
+		return fmt.Errorf("generic sync not implemented for %T", resources)
+	}
 }
 
 func (c *GRPCBackendClient) GetSyncStatus(ctx context.Context) (*models.SyncStatus, error) {

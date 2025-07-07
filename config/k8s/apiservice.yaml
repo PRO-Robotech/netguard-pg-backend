@@ -19,8 +19,8 @@ spec:
   # Ссылка на наш API Server service
   service:
     name: netguard-apiserver
-    namespace: default
-    port: 8443
+    namespace: netguard-test
+    port: 443
   
   # CA bundle для TLS (будет заполнен cert-manager или вручную)
   caBundle: ""

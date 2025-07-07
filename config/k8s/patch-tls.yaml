@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: netguard-apiserver
+  namespace: netguard-test
+spec:
+  template:
+    spec:
+      volumes:
+        - name: webhook-tls
+          secret:
+            secretName: netguard-webhook-tls        # ← secret из Certificate
+      containers:
+        - name: apiserver                           # имя контейнера внутри Pod
+          volumeMounts:
+            - name: webhook-tls
+              mountPath: /tls                       # куда монтируем ключи
+              readOnly: true
+          args:
+            - --tls-cert-file=/tls/tls.crt
+            - --tls-private-key-file=/tls/tls.key

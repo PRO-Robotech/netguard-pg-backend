@@ -236,8 +236,27 @@ func (c *ServiceAliasConverter) GetResourceKey(resource interface{}) string {
 type AddressGroupBindingPolicyConverter struct{}
 
 func (c *AddressGroupBindingPolicyConverter) ConvertToK8s(resource interface{}) runtime.Object {
-	// TODO: реализовать
-	return nil
+	pol, ok := resource.(models.AddressGroupBindingPolicy)
+	if !ok {
+		return nil
+	}
+	return &netguardv1beta1.AddressGroupBindingPolicy{
+		TypeMeta: metav1.TypeMeta{Kind: "AddressGroupBindingPolicy", APIVersion: "netguard.sgroups.io/v1beta1"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pol.ResourceIdentifier.Name,
+			Namespace: pol.ResourceIdentifier.Namespace,
+		},
+		Spec: netguardv1beta1.AddressGroupBindingPolicySpec{
+			AddressGroupRef: netguardv1beta1.NamespacedObjectReference{
+				ObjectReference: netguardv1beta1.ObjectReference{APIVersion: "netguard.sgroups.io/v1beta1", Kind: "AddressGroup", Name: pol.AddressGroupRef.Name},
+				Namespace:       pol.AddressGroupRef.Namespace,
+			},
+			ServiceRef: netguardv1beta1.NamespacedObjectReference{
+				ObjectReference: netguardv1beta1.ObjectReference{APIVersion: "netguard.sgroups.io/v1beta1", Kind: "Service", Name: pol.ServiceRef.Name},
+				Namespace:       pol.ServiceRef.Namespace,
+			},
+		},
+	}
 }
 
 func (c *AddressGroupBindingPolicyConverter) ListResources(ctx context.Context, backend client.BackendClient) ([]interface{}, error) {

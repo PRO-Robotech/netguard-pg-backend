@@ -1,0 +1,208 @@
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: netguard-mutator
+  labels:
+    app.kubernetes.io/name: netguard-apiserver
+    app.kubernetes.io/component: admission-webhook
+    app.kubernetes.io/part-of: netguard
+webhooks:
+- name: service.netguard.sgroups.io
+  admissionReviewVersions: ["v1", "v1beta1"]
+  
+  # Порядок вызова - 100
+  # order: 100
+  
+  clientConfig:
+    service:
+      name: netguard-apiserver-webhook
+      namespace: netguard-system
+      path: /mutate
+    # CA bundle будет заполнен cert-manager или вручную
+    caBundle: ""
+  
+  rules:
+  - operations: ["CREATE", "UPDATE"]
+    apiGroups: ["netguard.sgroups.io"]
+    apiVersions: ["v1beta1"]
+    resources: ["services"]
+    scope: "Namespaced"
+  
+  # Политика при недоступности webhook
+  failurePolicy: Fail
+  sideEffects: None
+  
+  # Namespace selector (опционально)
+  namespaceSelector: {}
+  
+  # Таймаут
+  timeoutSeconds: 10
+
+- name: addressgroup.netguard.sgroups.io
+  admissionReviewVersions: ["v1", "v1beta1"]
+  # Порядок вызова - 100
+  # order: 100
+  
+  clientConfig:
+    service:
+      name: netguard-apiserver-webhook
+      namespace: netguard-system
+      path: /mutate
+    caBundle: ""
+  
+  rules:
+  - operations: ["CREATE", "UPDATE"]
+    apiGroups: ["netguard.sgroups.io"]
+    apiVersions: ["v1beta1"]
+    resources: ["addressgroups"]
+    scope: "Namespaced"
+  
+  failurePolicy: Fail
+  sideEffects: None
+  namespaceSelector: {}
+  timeoutSeconds: 10
+
+- name: addressgroupbinding.netguard.sgroups.io
+  admissionReviewVersions: ["v1", "v1beta1"]
+  # Порядок вызова - 100
+  # order: 100
+  
+  clientConfig:
+    service:
+      name: netguard-apiserver-webhook
+      namespace: netguard-system
+      path: /mutate
+    caBundle: ""
+  
+  rules:
+  - operations: ["CREATE", "UPDATE"]
+    apiGroups: ["netguard.sgroups.io"]
+    apiVersions: ["v1beta1"]
+    resources: ["addressgroupbindings"]
+    scope: "Namespaced"
+  
+  failurePolicy: Fail
+  sideEffects: None
+  namespaceSelector: {}
+  timeoutSeconds: 10
+
+- name: addressgroupportmapping.netguard.sgroups.io
+  admissionReviewVersions: ["v1", "v1beta1"]
+  # Порядок вызова - 100
+  # order: 100
+  
+  clientConfig:
+    service:
+      name: netguard-apiserver-webhook
+      namespace: netguard-system
+      path: /mutate
+    caBundle: ""
+  
+  rules:
+  - operations: ["CREATE", "UPDATE"]
+    apiGroups: ["netguard.sgroups.io"]
+    apiVersions: ["v1beta1"]
+    resources: ["addressgroupportmappings"]
+    scope: "Namespaced"
+  
+  failurePolicy: Fail
+  sideEffects: None
+  namespaceSelector: {}
+  timeoutSeconds: 10
+
+- name: rules2s.netguard.sgroups.io
+  admissionReviewVersions: ["v1", "v1beta1"]
+  # Порядок вызова - 100
+  # order: 100
+  
+  clientConfig:
+    service:
+      name: netguard-apiserver-webhook
+      namespace: netguard-system
+      path: /mutate
+    caBundle: ""
+  
+  rules:
+  - operations: ["CREATE", "UPDATE"]
+    apiGroups: ["netguard.sgroups.io"]
+    apiVersions: ["v1beta1"]
+    resources: ["rules2s"]
+    scope: "Namespaced"
+  
+  failurePolicy: Fail
+  sideEffects: None
+  namespaceSelector: {}
+  timeoutSeconds: 10
+
+- name: servicealias.netguard.sgroups.io
+  admissionReviewVersions: ["v1", "v1beta1"]
+  # Порядок вызова - 100
+  # order: 100
+  
+  clientConfig:
+    service:
+      name: netguard-apiserver-webhook
+      namespace: netguard-system
+      path: /mutate
+    caBundle: ""
+  
+  rules:
+  - operations: ["CREATE", "UPDATE"]
+    apiGroups: ["netguard.sgroups.io"]
+    apiVersions: ["v1beta1"]
+    resources: ["servicealiases"]
+    scope: "Namespaced"
+  
+  failurePolicy: Fail
+  sideEffects: None
+  namespaceSelector: {}
+  timeoutSeconds: 10
+
+- name: addressgroupbindingpolicy.netguard.sgroups.io
+  admissionReviewVersions: ["v1", "v1beta1"]
+  # Порядок вызова - 100
+  # order: 100
+  
+  clientConfig:
+    service:
+      name: netguard-apiserver-webhook
+      namespace: netguard-system
+      path: /mutate
+    caBundle: ""
+  
+  rules:
+  - operations: ["CREATE", "UPDATE"]
+    apiGroups: ["netguard.sgroups.io"]
+    apiVersions: ["v1beta1"]
+    resources: ["addressgroupbindingpolicies"]
+    scope: "Namespaced"
+  
+  failurePolicy: Fail
+  sideEffects: None
+  namespaceSelector: {}
+  timeoutSeconds: 10
+
+- name: ieagagrule.netguard.sgroups.io
+  admissionReviewVersions: ["v1", "v1beta1"]
+  # Порядок вызова - 100
+  # order: 100
+  
+  clientConfig:
+    service:
+      name: netguard-apiserver-webhook
+      namespace: netguard-system
+      path: /mutate
+    caBundle: ""
+  
+  rules:
+  - operations: ["CREATE", "UPDATE"]
+    apiGroups: ["netguard.sgroups.io"]
+    apiVersions: ["v1beta1"]
+    resources: ["ieagagrules"]
+    scope: "Namespaced"
+  
+  failurePolicy: Fail
+  sideEffects: None
+  namespaceSelector: {}
+  timeoutSeconds: 10 

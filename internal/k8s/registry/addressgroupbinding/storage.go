@@ -2,11 +2,15 @@ package addressgroupbinding
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/registry/rest"
 
@@ -14,7 +18,10 @@ import (
 	"netguard-pg-backend/internal/domain/ports"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 	"netguard-pg-backend/internal/k8s/client"
+	utils2 "netguard-pg-backend/internal/k8s/registry/utils"
 	watchpkg "netguard-pg-backend/internal/k8s/registry/watch"
+
+	jsonpatch "gopkg.in/evanphx/json-patch.v4"
 )
 
 // AddressGroupBindingStorage implements REST storage for AddressGroupBinding resources
@@ -57,10 +64,7 @@ func (s *AddressGroupBindingStorage) Destroy() {
 // Get retrieves an AddressGroupBinding by name from backend (READ-ONLY, no status changes)
 func (s *AddressGroupBindingStorage) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
 	// Extract namespace from context
-	namespace, ok := ctx.Value("namespace").(string)
-	if !ok || namespace == "" {
-		return nil, fmt.Errorf("namespace is required")
-	}
+	namespace := utils2.NamespaceFrom(ctx)
 
 	// Get from backend
 	resourceID := models.NewResourceIdentifier(name, models.WithNamespace(namespace))
@@ -123,18 +127,24 @@ func (s *AddressGroupBindingStorage) Create(ctx context.Context, obj runtime.Obj
 	// Convert to backend model
 	binding := convertAddressGroupBindingFromK8s(k8sBinding)
 
+	// populate meta
+	binding.Meta.TouchOnCreate()
+
 	// Create via Sync API
-	bindings := []models.AddressGroupBinding{binding}
-	err := s.backendClient.Sync(ctx, models.SyncOpUpsert, bindings)
-	if err != nil {
+	if err := s.backendClient.Sync(ctx, models.SyncOpUpsert, []models.AddressGroupBinding{binding}); err != nil {
 		return nil, fmt.Errorf("failed to create AddressGroupBinding: %w", err)
 	}
 
-	// Set successful status
-	setCondition(k8sBinding, ConditionReady, metav1.ConditionTrue,
+	respModel, err := s.backendClient.GetAddressGroupBinding(ctx, binding.ResourceIdentifier)
+	if err != nil {
+		respModel = &binding
+	}
+	resp := convertAddressGroupBindingToK8s(*respModel)
+
+	setCondition(resp, ConditionReady, metav1.ConditionTrue,
 		ReasonBindingCreated, "AddressGroupBinding successfully created in backend")
 
-	return k8sBinding, nil
+	return resp, nil
 }
 
 // Update updates an existing AddressGroupBinding in backend via Sync API
@@ -237,8 +247,136 @@ func (s *AddressGroupBindingStorage) Watch(ctx context.Context, options *metaint
 
 // GetSupportedVerbs returns the supported verbs for this storage
 func (s *AddressGroupBindingStorage) GetSupportedVerbs() []string {
-	return []string{"get", "list", "create", "update", "delete", "watch"}
+	return []string{"get", "list", "create", "update", "delete", "watch", "patch"}
 }
+
+// Patch is currently not supported for AddressGroupBinding – return explicit error.
+func (s *AddressGroupBindingStorage) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts *metav1.PatchOptions, subresources ...string) (runtime.Object, error) {
+	if len(subresources) > 0 {
+		return nil, apierrors.NewBadRequest("subresources are not supported for AddressGroupBinding")
+	}
+
+	currObj, err := s.Get(ctx, name, &metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	currAGB := currObj.(*netguardv1beta1.AddressGroupBinding)
+	currBytes, _ := json.Marshal(currAGB)
+
+	var patchedBytes []byte
+	switch pt {
+	case types.JSONPatchType:
+		patch, err := jsonpatch.DecodePatch(data)
+		if err != nil {
+			return nil, apierrors.NewBadRequest(fmt.Sprintf("invalid JSON patch: %v", err))
+		}
+		patchedBytes, err = patch.Apply(currBytes)
+		if err != nil {
+			return nil, apierrors.NewBadRequest(fmt.Sprintf("failed to apply JSON patch: %v", err))
+		}
+	case types.MergePatchType, types.ApplyPatchType:
+		patchedBytes, err = jsonpatch.MergePatch(currBytes, data)
+		if err != nil {
+			return nil, apierrors.NewBadRequest(fmt.Sprintf("failed to apply merge patch: %v", err))
+		}
+	default:
+		return nil, apierrors.NewBadRequest("unsupported patch type")
+	}
+
+	var updated netguardv1beta1.AddressGroupBinding
+	if err := json.Unmarshal(patchedBytes, &updated); err != nil {
+		return nil, apierrors.NewBadRequest(fmt.Sprintf("invalid patched object: %v", err))
+	}
+
+	// keep name/ns
+	if updated.Name == "" {
+		updated.Name = currAGB.Name
+	}
+	if updated.Namespace == "" {
+		updated.Namespace = currAGB.Namespace
+	}
+
+	// sync to backend
+	model := convertAddressGroupBindingFromK8s(&updated)
+	if err := s.backendClient.Sync(ctx, models.SyncOpUpsert, []models.AddressGroupBinding{model}); err != nil {
+		return nil, apierrors.NewInternalError(fmt.Errorf("failed to sync patched AddressGroupBinding: %w", err))
+	}
+
+	return convertAddressGroupBindingToK8s(model), nil
+}
+
+// ConvertToTable satisfies the TableConvertor interface used by kubectl printing. Not implemented.
+func (s *AddressGroupBindingStorage) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
+	table := &metav1.Table{
+		ColumnDefinitions: []metav1.TableColumnDefinition{
+			{Name: "Name", Type: "string", Format: "name"},
+			{Name: "Service", Type: "string"},
+			{Name: "AddressGroup", Type: "string"},
+			{Name: "Age", Type: "string"},
+		},
+	}
+
+	addRow := func(obj *netguardv1beta1.AddressGroupBinding) {
+		row := metav1.TableRow{
+			Object: runtime.RawExtension{Object: obj},
+			Cells: []interface{}{
+				obj.Name,
+				obj.Spec.ServiceRef.Name,
+				obj.Spec.AddressGroupRef.Name,
+				translateTimestampSince(obj.CreationTimestamp),
+			},
+		}
+		table.Rows = append(table.Rows, row)
+	}
+
+	switch v := object.(type) {
+	case *netguardv1beta1.AddressGroupBinding:
+		addRow(v)
+	case *netguardv1beta1.AddressGroupBindingList:
+		for i := range v.Items {
+			addRow(&v.Items[i])
+		}
+	default:
+		return nil, fmt.Errorf("unexpected object type %T", object)
+	}
+	return table, nil
+}
+
+// translateTimestampSince helper (copy)
+func translateTimestampSince(ts metav1.Time) string {
+	if ts.IsZero() {
+		return "<unknown>"
+	}
+	return durationShortHumanDuration(time.Since(ts.Time))
+}
+
+func durationShortHumanDuration(d time.Duration) string {
+	if seconds := int(d.Seconds()); seconds < 90 {
+		return fmt.Sprintf("%ds", seconds)
+	}
+	if minutes := int(d.Minutes()); minutes < 90 {
+		return fmt.Sprintf("%dm", minutes)
+	}
+	hours := int(d.Round(time.Hour).Hours())
+	if hours < 48 {
+		return fmt.Sprintf("%dh", hours)
+	}
+	days := hours / 24
+	return fmt.Sprintf("%dd", days)
+}
+
+// Compile-time assertions to ensure we expose required verbs.
+var (
+	_ rest.Storage         = &AddressGroupBindingStorage{}
+	_ rest.Getter          = &AddressGroupBindingStorage{}
+	_ rest.Lister          = &AddressGroupBindingStorage{}
+	_ rest.Watcher         = &AddressGroupBindingStorage{}
+	_ rest.Creater         = &AddressGroupBindingStorage{}
+	_ rest.Updater         = &AddressGroupBindingStorage{}
+	_ rest.GracefulDeleter = &AddressGroupBindingStorage{}
+	_ rest.Patcher         = &AddressGroupBindingStorage{}
+)
 
 // Helper functions for conversion
 

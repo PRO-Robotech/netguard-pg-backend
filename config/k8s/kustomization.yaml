@@ -7,7 +7,7 @@ metadata:
     config.kubernetes.io/local-config: "true"
 
 # Namespace для всех ресурсов
-namespace: netguard-system
+namespace: netguard-test
 
 # Ресурсы в порядке применения
 resources:

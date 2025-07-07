@@ -32,6 +32,7 @@ message Service {
   string description = 3;
   repeated IngressPort ingress_ports = 4;
   repeated AddressGroupRef address_groups = 5;
+  Meta meta = 6;
 }
 
 // IngressPort - defines a port configuration for ingress traffic
@@ -45,6 +46,16 @@ message IngressPort {
 message ResourceIdentifier {
   string name = 1;
   string namespace = 2;
+}
+
+// Meta - kubernetes system metadata stored round-trip.
+message Meta {
+  string uid = 1;
+  string resource_version = 2;
+  int64 generation = 3;
+  google.protobuf.Timestamp creation_ts = 4;
+  map<string,string> labels = 5;
+  map<string,string> annotations = 6;
 }
 
 // AddressGroupRef - reference to an address group
@@ -68,6 +79,7 @@ message AddressGroup {
   string description = 3;
   repeated string addresses = 4;
   repeated ServiceRef services = 5;
+  Meta meta = 6;
 }
 
 // AddressGroupBinding - binding between a service and an address group
@@ -80,6 +92,7 @@ message AddressGroupBinding {
   ResourceIdentifier self_ref = 1;
   ServiceRef service_ref = 3;
   AddressGroupRef address_group_ref = 4;
+  Meta meta = 6;
 }
 
 // ProtocolPorts - mapping of protocols to port ranges
@@ -113,6 +126,7 @@ message AddressGroupPortMapping {
   };
   ResourceIdentifier self_ref = 1;
   repeated ServicePortsRef access_ports = 3;
+  Meta meta = 6;
 }
 
 // ServiceAlias - alias for a service
@@ -124,6 +138,7 @@ message ServiceAlias {
   };
   ResourceIdentifier self_ref = 1;
   ServiceRef service_ref = 2;
+  Meta meta = 6;
 }
 
 // AddressGroupBindingPolicy - policy allowing binding of a service to an address group
@@ -136,6 +151,7 @@ message AddressGroupBindingPolicy {
   ResourceIdentifier self_ref = 1;
   ServiceRef service_ref = 2;
   AddressGroupRef address_group_ref = 3;
+  Meta meta = 6;
 }
 
 // RuleS2S - rule between two services
@@ -149,6 +165,7 @@ message RuleS2S {
   common.Traffic traffic = 2;
   ServiceRef service_local_ref = 3;
   ServiceRef service_ref = 4;
+  Meta meta = 6;
 }
 
 // IEAgAgRule - rule between two address groups
@@ -167,6 +184,7 @@ message IEAgAgRule {
   string action = 7;
   bool logs = 8;
   int32 priority = 9;
+  Meta meta = 10;
 }
 
 // PortSpec - port specification

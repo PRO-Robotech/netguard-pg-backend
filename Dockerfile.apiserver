@@ -1,15 +1,27 @@
 FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
+
+# Копируем только файлы модулей сначала для кеширования
 COPY go.mod go.sum ./
 RUN go mod download
 
-COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o /k8s-apiserver ./cmd/k8s-apiserver/main.go
+# Теперь копируем исходный код
+COPY cmd/ cmd/
+COPY internal/ internal/
+COPY pkg/ pkg/
+COPY protos/ protos/
+
+# Сборка с оптимизациями
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo \
+   -ldflags='-w -s -extldflags "-static"' -o /app/k8s-apiserver ./cmd/k8s-apiserver && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo \
+   -ldflags='-w -s -extldflags "-static"' -o /app/webhook-server ./cmd/webhook-server
 
 FROM alpine:latest
 RUN apk --no-cache add ca-certificates
 WORKDIR /root/
-COPY --from=builder /k8s-apiserver .
-EXPOSE 8443
+COPY --from=builder /app/k8s-apiserver ./k8s-apiserver
+COPY --from=builder /app/webhook-server ./webhook-server
+EXPOSE 8443 9443
 CMD ["/root/k8s-apiserver"] 

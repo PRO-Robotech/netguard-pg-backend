@@ -12,6 +12,9 @@ const GroupName = "netguard.sgroups.io"
 // SchemeGroupVersion is group version used to register these objects
 var SchemeGroupVersion = schema.GroupVersion{Group: GroupName, Version: "v1beta1"}
 
+// HubVersion is the internal hub; we reuse the external Go structs for simplicity.
+var SchemeGroupVersionInternal = schema.GroupVersion{Group: GroupName, Version: runtime.APIVersionInternal}
+
 // Resource takes an unqualified resource and returns a Group qualified GroupResource
 func Resource(resource string) schema.GroupResource {
 	return SchemeGroupVersion.WithResource(resource).GroupResource()
@@ -19,7 +22,7 @@ func Resource(resource string) schema.GroupResource {
 
 var (
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
-	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes)
+	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes, addKnownTypesInternal)
 	// AddToScheme adds the types in this group-version to the given scheme.
 	AddToScheme = SchemeBuilder.AddToScheme
 )
@@ -43,7 +46,38 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&AddressGroupBindingPolicyList{},
 		&IEAgAgRule{},
 		&IEAgAgRuleList{},
+		&AddressGroupsSpec{},
+		&RuleS2SDstOwnRefSpec{},
+		&AccessPortsSpec{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
+	return nil
+}
+
+// addKnownTypesInternal registers the same structs for the internal (hub) version.
+func addKnownTypesInternal(scheme *runtime.Scheme) error {
+	scheme.AddKnownTypes(SchemeGroupVersionInternal,
+		&Service{},
+		&ServiceList{},
+		&AddressGroup{},
+		&AddressGroupList{},
+		&AddressGroupBinding{},
+		&AddressGroupBindingList{},
+		&AddressGroupPortMapping{},
+		&AddressGroupPortMappingList{},
+		&RuleS2S{},
+		&RuleS2SList{},
+		&ServiceAlias{},
+		&ServiceAliasList{},
+		&AddressGroupBindingPolicy{},
+		&AddressGroupBindingPolicyList{},
+		&IEAgAgRule{},
+		&IEAgAgRuleList{},
+		&AddressGroupsSpec{},
+		&RuleS2SDstOwnRefSpec{},
+		&AccessPortsSpec{},
+	)
+	// do NOT call metav1.AddToGroupVersion for internal hub version to avoid
+	// duplicate registration of meta types like WatchEvent.
 	return nil
 }

@@ -1,0 +1,63 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: netguard-apiserver
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+# Namespace для всех ресурсов
+namespace: netguard-system
+
+# Ресурсы в порядке применения
+resources:
+- namespace.yaml
+- rbac.yaml
+- configmap.yaml
+- deployment.yaml
+- apiservice.yaml
+- backend-deployment.yaml
+- validating-webhook.yaml
+- mutating-webhook.yaml
+
+# Общие метки для всех ресурсов (обновлено с commonLabels)
+labels:
+- pairs:
+    app.kubernetes.io/name: netguard-apiserver
+    app.kubernetes.io/part-of: netguard
+    app.kubernetes.io/version: v1.0.0
+
+# Общие аннотации
+commonAnnotations:
+  config.kubernetes.io/origin: |
+    path: config/k8s/kustomization.yaml
+  app.kubernetes.io/managed-by: kustomize
+
+# Префикс для имен ресурсов (опционально)
+# namePrefix: netguard-
+
+# Суффикс для имен ресурсов (опционально)
+# nameSuffix: -v1
+
+# Patches для разных окружений
+patchesStrategicMerge: []
+
+# JSON patches
+patchesJson6902: []
+
+# Генераторы
+configMapGenerator: []
+secretGenerator: []
+
+# Образы
+images:
+- name: netguard/k8s-apiserver
+  newTag: latest
+
+# Переменные
+vars: []
+
+# Replicas (можно переопределить в overlays)
+replicas:
+- name: netguard-apiserver
+  count: 2 

@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: netguard-backend
-  namespace: default
+  namespace: netguard-test
   labels:
     app: netguard-backend
 spec:
@@ -50,7 +50,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: netguard-backend
-  namespace: default
+  namespace: netguard-test
   labels:
     app: netguard-backend
 spec:

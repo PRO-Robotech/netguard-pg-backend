@@ -60,10 +60,10 @@ func (r *SyncREST) Create(ctx context.Context, obj runtime.Object, createValidat
 	}
 
 	// Convert to backend format
-	backendService := convertServiceFromK8s(*currentService)
+	backendService := convertServiceFromK8s(currentService)
 
 	// Trigger sync in backend using Sync API
-	err = r.store.backendClient.Sync(ctx, models.SyncOpUpsert, []*models.Service{&backendService})
+	err = r.store.backendClient.Sync(ctx, models.SyncOpUpsert, []models.Service{backendService})
 	if err != nil {
 		// Set error status
 		setServiceCondition(currentService, "Ready", metav1.ConditionFalse, "SyncFailed", fmt.Sprintf("Manual sync failed: %v", err))

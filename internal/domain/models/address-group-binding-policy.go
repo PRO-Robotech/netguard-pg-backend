@@ -5,6 +5,7 @@ type AddressGroupBindingPolicy struct {
 	SelfRef
 	AddressGroupRef AddressGroupRef
 	ServiceRef      ServiceRef
+	Meta            Meta
 }
 
 // AddressGroupBindingPolicyRef представляет ссылку на AddressGroupBindingPolicy

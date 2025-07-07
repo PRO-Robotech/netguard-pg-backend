@@ -2,7 +2,11 @@ package addressgroupbindingpolicy
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
+	"time"
 
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -14,7 +18,12 @@ import (
 	"netguard-pg-backend/internal/domain/ports"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 	"netguard-pg-backend/internal/k8s/client"
+	utils2 "netguard-pg-backend/internal/k8s/registry/utils"
 	watchpkg "netguard-pg-backend/internal/k8s/registry/watch"
+
+	jsonpatch "gopkg.in/evanphx/json-patch.v4"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // AddressGroupBindingPolicyStorage implements REST storage for AddressGroupBindingPolicy resources
@@ -56,14 +65,14 @@ func (s *AddressGroupBindingPolicyStorage) Destroy() {
 
 // Get retrieves an AddressGroupBindingPolicy by name from backend
 func (s *AddressGroupBindingPolicyStorage) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
-	namespace, ok := ctx.Value("namespace").(string)
-	if !ok || namespace == "" {
-		return nil, fmt.Errorf("namespace is required")
-	}
+	namespace := utils2.NamespaceFrom(ctx)
 
 	resourceID := models.NewResourceIdentifier(name, models.WithNamespace(namespace))
 	policy, err := s.backendClient.GetAddressGroupBindingPolicy(ctx, resourceID)
 	if err != nil {
+		if errors.Is(err, ports.ErrNotFound) || strings.Contains(err.Error(), "entity not found") {
+			return nil, apierrors.NewNotFound(netguardv1beta1.Resource("addressgroupbindingpolicies"), name)
+		}
 		return nil, fmt.Errorf("failed to get AddressGroupBindingPolicy %s/%s: %w", namespace, name, err)
 	}
 
@@ -73,10 +82,7 @@ func (s *AddressGroupBindingPolicyStorage) Get(ctx context.Context, name string,
 
 // List retrieves AddressGroupBindingPolicies from backend with filtering
 func (s *AddressGroupBindingPolicyStorage) List(ctx context.Context, options *metainternalversion.ListOptions) (runtime.Object, error) {
-	var scope ports.Scope
-	if options != nil && options.FieldSelector != nil {
-		scope = ports.NewResourceIdentifierScope()
-	}
+	scope := utils2.ScopeFromContext(ctx)
 
 	policies, err := s.backendClient.ListAddressGroupBindingPolicies(ctx, scope)
 	if err != nil {
@@ -112,15 +118,21 @@ func (s *AddressGroupBindingPolicyStorage) Create(ctx context.Context, obj runti
 	}
 
 	policy := convertAddressGroupBindingPolicyFromK8s(k8sPolicy)
-	err := s.backendClient.CreateAddressGroupBindingPolicy(ctx, &policy)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create AddressGroupBindingPolicy: %w", err)
+	policy.Meta.TouchOnCreate()
+	if err := s.backendClient.Sync(ctx, models.SyncOpUpsert, []models.AddressGroupBindingPolicy{policy}); err != nil {
+		return nil, fmt.Errorf("backend sync failed: %w", err)
 	}
 
-	setCondition(k8sPolicy, ConditionReady, metav1.ConditionTrue,
+	respModel, err := s.backendClient.GetAddressGroupBindingPolicy(ctx, policy.ResourceIdentifier)
+	if err != nil {
+		respModel = &policy
+	}
+	resp := convertAddressGroupBindingPolicyToK8s(*respModel)
+
+	setCondition(resp, ConditionReady, metav1.ConditionTrue,
 		ReasonBindingCreated, "AddressGroupBindingPolicy successfully created in backend")
 
-	return k8sPolicy, nil
+	return resp, nil
 }
 
 // Update updates an existing AddressGroupBindingPolicy in backend
@@ -155,15 +167,20 @@ func (s *AddressGroupBindingPolicyStorage) Update(ctx context.Context, name stri
 	}
 
 	policy := convertAddressGroupBindingPolicyFromK8s(k8sPolicy)
-	err = s.backendClient.UpdateAddressGroupBindingPolicy(ctx, &policy)
-	if err != nil {
-		return nil, false, fmt.Errorf("failed to update AddressGroupBindingPolicy: %w", err)
+	if err := s.backendClient.Sync(ctx, models.SyncOpUpsert, []models.AddressGroupBindingPolicy{policy}); err != nil {
+		return nil, false, fmt.Errorf("backend sync failed: %w", err)
 	}
 
-	setCondition(k8sPolicy, ConditionReady, metav1.ConditionTrue,
+	respModel, err := s.backendClient.GetAddressGroupBindingPolicy(ctx, policy.ResourceIdentifier)
+	if err != nil {
+		respModel = &policy
+	}
+	resp := convertAddressGroupBindingPolicyToK8s(*respModel)
+
+	setCondition(resp, ConditionReady, metav1.ConditionTrue,
 		ReasonBindingCreated, "AddressGroupBindingPolicy successfully updated in backend")
 
-	return k8sPolicy, false, nil
+	return resp, false, nil
 }
 
 // Delete removes an AddressGroupBindingPolicy from backend
@@ -179,15 +196,10 @@ func (s *AddressGroupBindingPolicyStorage) Delete(ctx context.Context, name stri
 		}
 	}
 
-	namespace, ok := ctx.Value("namespace").(string)
-	if !ok || namespace == "" {
-		return nil, false, fmt.Errorf("namespace is required")
-	}
-
+	namespace := utils2.NamespaceFrom(ctx)
 	id := models.NewResourceIdentifier(name, models.WithNamespace(namespace))
-	err = s.backendClient.DeleteAddressGroupBindingPolicy(ctx, id)
-	if err != nil {
-		return nil, false, fmt.Errorf("failed to delete AddressGroupBindingPolicy: %w", err)
+	if err := s.backendClient.Sync(ctx, models.SyncOpDelete, []models.AddressGroupBindingPolicy{{SelfRef: models.SelfRef{ResourceIdentifier: id}}}); err != nil {
+		return nil, false, fmt.Errorf("backend delete sync failed: %w", err)
 	}
 
 	return obj, true, nil
@@ -214,8 +226,14 @@ func convertAddressGroupBindingPolicyToK8s(policy models.AddressGroupBindingPoli
 			Kind:       "AddressGroupBindingPolicy",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      policy.ResourceIdentifier.Name,
-			Namespace: policy.ResourceIdentifier.Namespace,
+			Name:              policy.ResourceIdentifier.Name,
+			Namespace:         policy.ResourceIdentifier.Namespace,
+			UID:               types.UID(policy.Meta.UID),
+			ResourceVersion:   policy.Meta.ResourceVersion,
+			Generation:        policy.Meta.Generation,
+			CreationTimestamp: policy.Meta.CreationTS,
+			Labels:            policy.Meta.Labels,
+			Annotations:       policy.Meta.Annotations,
 		},
 		Spec: netguardv1beta1.AddressGroupBindingPolicySpec{
 			AddressGroupRef: netguardv1beta1.NamespacedObjectReference{
@@ -260,6 +278,14 @@ func convertAddressGroupBindingPolicyFromK8s(k8sPolicy *netguardv1beta1.AddressG
 				models.WithNamespace(k8sPolicy.Spec.AddressGroupRef.Namespace),
 			),
 		},
+		Meta: models.Meta{
+			UID:             string(k8sPolicy.UID),
+			ResourceVersion: k8sPolicy.ResourceVersion,
+			Generation:      k8sPolicy.Generation,
+			CreationTS:      k8sPolicy.CreationTimestamp,
+			Labels:          k8sPolicy.Labels,
+			Annotations:     k8sPolicy.Annotations,
+		},
 	}
 
 	return policy
@@ -279,3 +305,147 @@ const (
 func setCondition(obj runtime.Object, conditionType string, status metav1.ConditionStatus, reason, message string) {
 	// TODO: Implement proper condition setting
 }
+
+// GetSupportedVerbs returns supported verbs for this storage
+func (s *AddressGroupBindingPolicyStorage) GetSupportedVerbs() []string {
+	return []string{"get", "list", "create", "update", "delete", "watch", "patch"}
+}
+
+// Patch applies JSON or Merge patches to an existing AddressGroupBindingPolicy.
+// Strategic merge patches are not supported.
+func (s *AddressGroupBindingPolicyStorage) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts *metav1.PatchOptions, subresources ...string) (runtime.Object, error) {
+	if len(subresources) > 0 {
+		return nil, apierrors.NewBadRequest("subresources are not supported for AddressGroupBindingPolicy")
+	}
+
+	currObj, err := s.Get(ctx, name, &metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	currPolicy, ok := currObj.(*netguardv1beta1.AddressGroupBindingPolicy)
+	if !ok {
+		return nil, apierrors.NewInternalError(fmt.Errorf("unexpected object type %T", currObj))
+	}
+
+	currBytes, err := json.Marshal(currPolicy)
+	if err != nil {
+		return nil, apierrors.NewInternalError(fmt.Errorf("failed to marshal current object: %w", err))
+	}
+
+	var patchedBytes []byte
+	switch pt {
+	case types.JSONPatchType:
+		patch, err := jsonpatch.DecodePatch(data)
+		if err != nil {
+			return nil, apierrors.NewBadRequest(fmt.Sprintf("invalid JSON patch: %v", err))
+		}
+		patchedBytes, err = patch.Apply(currBytes)
+		if err != nil {
+			return nil, apierrors.NewBadRequest(fmt.Sprintf("failed to apply JSON patch: %v", err))
+		}
+	case types.MergePatchType, types.ApplyPatchType:
+		patchedBytes, err = jsonpatch.MergePatch(currBytes, data)
+		if err != nil {
+			return nil, apierrors.NewBadRequest(fmt.Sprintf("failed to apply merge patch: %v", err))
+		}
+	case types.StrategicMergePatchType:
+		return nil, apierrors.NewBadRequest("strategic merge patches are not supported for AddressGroupBindingPolicy")
+	default:
+		return nil, apierrors.NewBadRequest(fmt.Sprintf("unsupported patch type %s", pt))
+	}
+
+	var updated netguardv1beta1.AddressGroupBindingPolicy
+	if err := json.Unmarshal(patchedBytes, &updated); err != nil {
+		return nil, apierrors.NewBadRequest(fmt.Sprintf("invalid patched object: %v", err))
+	}
+
+	if updated.Name == "" {
+		updated.Name = currPolicy.Name
+	}
+	if updated.Namespace == "" {
+		updated.Namespace = currPolicy.Namespace
+	}
+
+	model := convertAddressGroupBindingPolicyFromK8s(&updated)
+	if err := s.backendClient.Sync(ctx, models.SyncOpUpsert, []models.AddressGroupBindingPolicy{model}); err != nil {
+		return nil, apierrors.NewInternalError(fmt.Errorf("failed to sync patched AddressGroupBindingPolicy: %w", err))
+	}
+
+	respModel, err := s.backendClient.GetAddressGroupBindingPolicy(ctx, model.ResourceIdentifier)
+	if err != nil {
+		respModel = &model
+	}
+	return convertAddressGroupBindingPolicyToK8s(*respModel), nil
+}
+
+// ConvertToTable provides a table representation for kubectl printers.
+func (s *AddressGroupBindingPolicyStorage) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
+	table := &metav1.Table{
+		ColumnDefinitions: []metav1.TableColumnDefinition{
+			{Name: "Name", Type: "string", Format: "name"},
+			{Name: "Service", Type: "string"},
+			{Name: "AddressGroup", Type: "string"},
+			{Name: "Age", Type: "string"},
+		},
+	}
+
+	addRow := func(p *netguardv1beta1.AddressGroupBindingPolicy) {
+		row := metav1.TableRow{
+			Object: runtime.RawExtension{Object: p},
+			Cells: []interface{}{
+				p.Name,
+				p.Spec.ServiceRef.Name,
+				p.Spec.AddressGroupRef.Name,
+				translateTimestampSince(p.CreationTimestamp),
+			},
+		}
+		table.Rows = append(table.Rows, row)
+	}
+
+	switch v := object.(type) {
+	case *netguardv1beta1.AddressGroupBindingPolicy:
+		addRow(v)
+	case *netguardv1beta1.AddressGroupBindingPolicyList:
+		for i := range v.Items {
+			addRow(&v.Items[i])
+		}
+	default:
+		return nil, fmt.Errorf("unexpected object type %T", object)
+	}
+	return table, nil
+}
+
+// Helper for age formatting
+func translateTimestampSince(ts metav1.Time) string {
+	if ts.IsZero() {
+		return "<unknown>"
+	}
+	return durationHumanShort(time.Since(ts.Time))
+}
+
+func durationHumanShort(d time.Duration) string {
+	if seconds := int(d.Seconds()); seconds < 90 {
+		return fmt.Sprintf("%ds", seconds)
+	}
+	if minutes := int(d.Minutes()); minutes < 90 {
+		return fmt.Sprintf("%dm", minutes)
+	}
+	h := int(d.Round(time.Hour).Hours())
+	if h < 48 {
+		return fmt.Sprintf("%dh", h)
+	}
+	return fmt.Sprintf("%dd", h/24)
+}
+
+// Compile-time assertions to verify interface conformance
+var (
+	_ rest.Storage         = &AddressGroupBindingPolicyStorage{}
+	_ rest.Getter          = &AddressGroupBindingPolicyStorage{}
+	_ rest.Lister          = &AddressGroupBindingPolicyStorage{}
+	_ rest.Watcher         = &AddressGroupBindingPolicyStorage{}
+	_ rest.Creater         = &AddressGroupBindingPolicyStorage{}
+	_ rest.Updater         = &AddressGroupBindingPolicyStorage{}
+	_ rest.GracefulDeleter = &AddressGroupBindingPolicyStorage{}
+	_ rest.Patcher         = &AddressGroupBindingPolicyStorage{}
+	_ rest.TableConvertor  = &AddressGroupBindingPolicyStorage{}
+)

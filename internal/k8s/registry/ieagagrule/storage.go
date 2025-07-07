@@ -2,12 +2,16 @@ package ieagagrule
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/registry/rest"
 
@@ -16,7 +20,10 @@ import (
 	"netguard-pg-backend/internal/domain/ports"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 	"netguard-pg-backend/internal/k8s/client"
+	utils2 "netguard-pg-backend/internal/k8s/registry/utils"
 	watchpkg "netguard-pg-backend/internal/k8s/registry/watch"
+
+	jsonpatch "gopkg.in/evanphx/json-patch.v4"
 )
 
 // IEAgAgRuleStorage implements REST storage for IEAgAgRule resources
@@ -58,10 +65,7 @@ func (s *IEAgAgRuleStorage) Destroy() {
 
 // Get retrieves an IEAgAgRule by name from backend
 func (s *IEAgAgRuleStorage) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
-	namespace, ok := ctx.Value("namespace").(string)
-	if !ok || namespace == "" {
-		return nil, fmt.Errorf("namespace is required")
-	}
+	namespace := utils2.NamespaceFrom(ctx)
 
 	resourceID := models.NewResourceIdentifier(name, models.WithNamespace(namespace))
 	rule, err := s.backendClient.GetIEAgAgRule(ctx, resourceID)
@@ -107,15 +111,20 @@ func (s *IEAgAgRuleStorage) Create(ctx context.Context, obj runtime.Object, crea
 		return nil, fmt.Errorf("expected IEAgAgRule, got %T", obj)
 	}
 
-	// Convert to backend model
 	rule := convertIEAgAgRuleFromK8s(*k8sRule)
+	rule.Meta.TouchOnCreate()
 
-	// Create via Sync API
 	if err := s.backendClient.Sync(ctx, models.SyncOpUpsert, []models.IEAgAgRule{rule}); err != nil {
 		return nil, fmt.Errorf("failed to create IEAgAgRule via sync: %w", err)
 	}
 
-	return k8sRule, nil
+	respModel, err := s.backendClient.GetIEAgAgRule(ctx, rule.ResourceIdentifier)
+	if err != nil {
+		respModel = &rule
+	}
+	resp := convertIEAgAgRuleToK8s(*respModel)
+
+	return resp, nil
 }
 
 // Update updates an IEAgAgRule in backend via Sync API
@@ -300,3 +309,152 @@ func formatPortRangesToString(ranges []models.PortRange) string {
 	}
 	return strings.Join(parts, ",")
 }
+
+func (s *IEAgAgRuleStorage) GetSupportedVerbs() []string {
+	return []string{"get", "list", "create", "update", "delete", "watch", "patch"}
+}
+
+// Patch applies JSON/MergePatch to IEAgAgRule and syncs backend.
+func (s *IEAgAgRuleStorage) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts *metav1.PatchOptions, subresources ...string) (runtime.Object, error) {
+	if len(subresources) > 0 {
+		return nil, apierrors.NewBadRequest("subresources are not supported for IEAgAgRule")
+	}
+
+	currObj, err := s.Get(ctx, name, &metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	curr := currObj.(*netguardv1beta1.IEAgAgRule)
+	currBytes, _ := json.Marshal(curr)
+
+	var patchedBytes []byte
+	switch pt {
+	case types.JSONPatchType:
+		patch, err := jsonpatch.DecodePatch(data)
+		if err != nil {
+			return nil, apierrors.NewBadRequest(fmt.Sprintf("invalid JSON patch: %v", err))
+		}
+		patchedBytes, err = patch.Apply(currBytes)
+		if err != nil {
+			return nil, apierrors.NewBadRequest(fmt.Sprintf("failed to apply JSON patch: %v", err))
+		}
+	case types.MergePatchType, types.ApplyPatchType:
+		patchedBytes, err = jsonpatch.MergePatch(currBytes, data)
+		if err != nil {
+			return nil, apierrors.NewBadRequest(fmt.Sprintf("failed to apply merge patch: %v", err))
+		}
+	default:
+		return nil, apierrors.NewBadRequest("unsupported patch type")
+	}
+
+	var updated netguardv1beta1.IEAgAgRule
+	if err := json.Unmarshal(patchedBytes, &updated); err != nil {
+		return nil, apierrors.NewBadRequest(fmt.Sprintf("invalid patched object: %v", err))
+	}
+
+	if updated.Name == "" {
+		updated.Name = curr.Name
+	}
+	if updated.Namespace == "" {
+		updated.Namespace = curr.Namespace
+	}
+
+	model := convertIEAgAgRuleFromK8s(updated)
+	if err := s.backendClient.Sync(ctx, models.SyncOpUpsert, []models.IEAgAgRule{model}); err != nil {
+		return nil, apierrors.NewInternalError(fmt.Errorf("failed to sync patched IEAgAgRule: %w", err))
+	}
+
+	return convertIEAgAgRuleToK8s(model), nil
+}
+
+// ConvertToTable provides kubectl columnar output.
+func (s *IEAgAgRuleStorage) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
+	table := &metav1.Table{
+		ColumnDefinitions: []metav1.TableColumnDefinition{
+			{Name: "Name", Type: "string", Format: "name"},
+			{Name: "Dir", Type: "string"},
+			{Name: "Transport", Type: "string"},
+			{Name: "LocalAG", Type: "string"},
+			{Name: "RemoteAG", Type: "string"},
+			{Name: "Ports", Type: "string"},
+			{Name: "Priority", Type: "string"},
+			{Name: "Age", Type: "string"},
+		},
+	}
+
+	formatPorts := func(ps []netguardv1beta1.PortSpec) string {
+		var arr []string
+		for _, p := range ps {
+			if p.Port != 0 {
+				arr = append(arr, fmt.Sprintf("%d", p.Port))
+			} else if p.PortRange != nil {
+				arr = append(arr, fmt.Sprintf("%d-%d", p.PortRange.From, p.PortRange.To))
+			}
+		}
+		return strings.Join(arr, ",")
+	}
+
+	addRow := func(obj *netguardv1beta1.IEAgAgRule) {
+		row := metav1.TableRow{
+			Object: runtime.RawExtension{Object: obj},
+			Cells: []interface{}{
+				obj.Name,
+				obj.Spec.Traffic,
+				obj.Spec.Transport,
+				obj.Spec.AddressGroupLocal.Name,
+				obj.Spec.AddressGroup.Name,
+				formatPorts(obj.Spec.Ports),
+				obj.Spec.Priority,
+				translateTimestampSince(obj.CreationTimestamp),
+			},
+		}
+		table.Rows = append(table.Rows, row)
+	}
+
+	switch v := object.(type) {
+	case *netguardv1beta1.IEAgAgRule:
+		addRow(v)
+	case *netguardv1beta1.IEAgAgRuleList:
+		for i := range v.Items {
+			addRow(&v.Items[i])
+		}
+	default:
+		return nil, fmt.Errorf("unexpected object type %T", object)
+	}
+	return table, nil
+}
+
+// helpers
+func translateTimestampSince(ts metav1.Time) string {
+	if ts.IsZero() {
+		return "<unknown>"
+	}
+	return durationShortHumanDuration(time.Since(ts.Time))
+}
+
+func durationShortHumanDuration(d time.Duration) string {
+	if seconds := int(d.Seconds()); seconds < 90 {
+		return fmt.Sprintf("%ds", seconds)
+	}
+	if minutes := int(d.Minutes()); minutes < 90 {
+		return fmt.Sprintf("%dm", minutes)
+	}
+	hours := int(d.Round(time.Hour).Hours())
+	if hours < 48 {
+		return fmt.Sprintf("%dh", hours)
+	}
+	days := hours / 24
+	return fmt.Sprintf("%dd", days)
+}
+
+var (
+	_ rest.Storage         = &IEAgAgRuleStorage{}
+	_ rest.Getter          = &IEAgAgRuleStorage{}
+	_ rest.Lister          = &IEAgAgRuleStorage{}
+	_ rest.Watcher         = &IEAgAgRuleStorage{}
+	_ rest.Creater         = &IEAgAgRuleStorage{}
+	_ rest.Updater         = &IEAgAgRuleStorage{}
+	_ rest.GracefulDeleter = &IEAgAgRuleStorage{}
+	_ rest.Patcher         = &IEAgAgRuleStorage{}
+)

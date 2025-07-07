@@ -11,6 +11,7 @@ type IEAgAgRule struct {
 	Action            RuleAction
 	Logs              bool
 	Priority          int32
+	Meta              Meta
 }
 
 // PortSpec определяет спецификацию портов

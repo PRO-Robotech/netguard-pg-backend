@@ -7,21 +7,21 @@ RUN apk add --no-cache git ca-certificates tzdata
 # Set working directory
 WORKDIR /workspace
 
-# Copy go mod files
-COPY go.mod go.sum ./
+# Copy everything needed for build from netguard-pg-backend/
+COPY netguard-pg-backend/go.mod netguard-pg-backend/go.sum ./
+COPY netguard-pg-backend/cmd/ cmd/
+COPY netguard-pg-backend/internal/ internal/
+COPY netguard-pg-backend/pkg/ pkg/
 
-# Download dependencies
-RUN go mod download
+# Copy protos (needed for go.mod replace)
+COPY protos/ protos/
 
-# Copy source code
-COPY . .
-
-# Build the binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-    -a -installsuffix cgo \
-    -ldflags='-w -s -extldflags "-static"' \
-    -o k8s-apiserver \
-    ./cmd/k8s-apiserver
+# Download dependencies and build binaries
+RUN go mod download && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo \
+      -ldflags='-w -s -extldflags "-static"' -o k8s-apiserver ./cmd/k8s-apiserver && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo \
+      -ldflags='-w -s -extldflags "-static"' -o webhook-server ./cmd/webhook-server
 
 # Final stage
 FROM scratch
@@ -30,8 +30,9 @@ FROM scratch
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 
-# Copy the binary
+# Copy the binaries
 COPY --from=builder /workspace/k8s-apiserver /k8s-apiserver
+COPY --from=builder /workspace/webhook-server /webhook-server
 
 # Create non-root user
 USER 65534:65534
@@ -39,10 +40,8 @@ USER 65534:65534
 # Expose ports
 EXPOSE 8443 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD ["/k8s-apiserver", "--help"]
+# Health check removed for scratch image
 
-# Run the binary
+# Run the binaries
 ENTRYPOINT ["/k8s-apiserver"]
  

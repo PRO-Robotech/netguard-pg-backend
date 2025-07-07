@@ -4,6 +4,7 @@ package models
 type ServiceAlias struct {
 	SelfRef
 	ServiceRef ServiceRef
+	Meta       Meta
 }
 
 type ServiceAliasRef struct {

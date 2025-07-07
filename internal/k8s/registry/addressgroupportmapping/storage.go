@@ -2,12 +2,16 @@ package addressgroupportmapping
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/registry/rest"
 
@@ -16,7 +20,10 @@ import (
 	"netguard-pg-backend/internal/domain/ports"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 	"netguard-pg-backend/internal/k8s/client"
+	utils2 "netguard-pg-backend/internal/k8s/registry/utils"
 	watchpkg "netguard-pg-backend/internal/k8s/registry/watch"
+
+	jsonpatch "gopkg.in/evanphx/json-patch.v4"
 )
 
 // AddressGroupPortMappingStorage implements REST storage for AddressGroupPortMapping resources
@@ -58,10 +65,7 @@ func (s *AddressGroupPortMappingStorage) Destroy() {
 
 // Get retrieves an AddressGroupPortMapping by name from backend
 func (s *AddressGroupPortMappingStorage) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
-	namespace, ok := ctx.Value("namespace").(string)
-	if !ok || namespace == "" {
-		return nil, fmt.Errorf("namespace is required")
-	}
+	namespace := utils2.NamespaceFrom(ctx)
 
 	resourceID := models.NewResourceIdentifier(name, models.WithNamespace(namespace))
 	mapping, err := s.backendClient.GetAddressGroupPortMapping(ctx, resourceID)
@@ -114,15 +118,22 @@ func (s *AddressGroupPortMappingStorage) Create(ctx context.Context, obj runtime
 	}
 
 	mapping := convertAddressGroupPortMappingFromK8s(k8sMapping)
-	err := s.backendClient.CreateAddressGroupPortMapping(ctx, &mapping)
-	if err != nil {
+	mapping.Meta.TouchOnCreate()
+
+	if err := s.backendClient.Sync(ctx, models.SyncOpUpsert, []models.AddressGroupPortMapping{mapping}); err != nil {
 		return nil, fmt.Errorf("failed to create AddressGroupPortMapping: %w", err)
 	}
 
-	setCondition(k8sMapping, ConditionReady, metav1.ConditionTrue,
+	respModel, err := s.backendClient.GetAddressGroupPortMapping(ctx, mapping.ResourceIdentifier)
+	if err != nil {
+		respModel = &mapping
+	}
+	resp := convertAddressGroupPortMappingToK8s(*respModel)
+
+	setCondition(resp, ConditionReady, metav1.ConditionTrue,
 		ReasonBindingCreated, "AddressGroupPortMapping successfully created in backend")
 
-	return k8sMapping, nil
+	return resp, nil
 }
 
 // Update updates an existing AddressGroupPortMapping in backend
@@ -157,8 +168,9 @@ func (s *AddressGroupPortMappingStorage) Update(ctx context.Context, name string
 	}
 
 	mapping := convertAddressGroupPortMappingFromK8s(k8sMapping)
-	err = s.backendClient.UpdateAddressGroupPortMapping(ctx, &mapping)
-	if err != nil {
+
+	// Use unified Sync API for updates
+	if err := s.backendClient.Sync(ctx, models.SyncOpUpsert, []models.AddressGroupPortMapping{mapping}); err != nil {
 		return nil, false, fmt.Errorf("failed to update AddressGroupPortMapping: %w", err)
 	}
 
@@ -181,11 +193,7 @@ func (s *AddressGroupPortMappingStorage) Delete(ctx context.Context, name string
 		}
 	}
 
-	namespace, ok := ctx.Value("namespace").(string)
-	if !ok || namespace == "" {
-		return nil, false, fmt.Errorf("namespace is required")
-	}
-
+	namespace := utils2.NamespaceFrom(ctx)
 	id := models.NewResourceIdentifier(name, models.WithNamespace(namespace))
 	err = s.backendClient.DeleteAddressGroupPortMapping(ctx, id)
 	if err != nil {
@@ -358,3 +366,132 @@ const (
 func setCondition(obj runtime.Object, conditionType string, status metav1.ConditionStatus, reason, message string) {
 	// TODO: Implement proper condition setting
 }
+
+func (s *AddressGroupPortMappingStorage) GetSupportedVerbs() []string {
+	return []string{"get", "list", "create", "update", "delete", "watch", "patch"}
+}
+
+// Patch applies JSON/Merge patch to AddressGroupPortMapping and syncs backend.
+func (s *AddressGroupPortMappingStorage) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts *metav1.PatchOptions, subresources ...string) (runtime.Object, error) {
+	if len(subresources) > 0 {
+		return nil, apierrors.NewBadRequest("subresources are not supported for AddressGroupPortMapping")
+	}
+
+	currObj, err := s.Get(ctx, name, &metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	curr := currObj.(*netguardv1beta1.AddressGroupPortMapping)
+	currBytes, _ := json.Marshal(curr)
+
+	var patchedBytes []byte
+	switch pt {
+	case types.JSONPatchType:
+		patch, err := jsonpatch.DecodePatch(data)
+		if err != nil {
+			return nil, apierrors.NewBadRequest(fmt.Sprintf("invalid JSON patch: %v", err))
+		}
+		patchedBytes, err = patch.Apply(currBytes)
+		if err != nil {
+			return nil, apierrors.NewBadRequest(fmt.Sprintf("failed to apply JSON patch: %v", err))
+		}
+	case types.MergePatchType, types.ApplyPatchType:
+		patchedBytes, err = jsonpatch.MergePatch(currBytes, data)
+		if err != nil {
+			return nil, apierrors.NewBadRequest(fmt.Sprintf("failed to apply merge patch: %v", err))
+		}
+	default:
+		return nil, apierrors.NewBadRequest("unsupported patch type")
+	}
+
+	var updated netguardv1beta1.AddressGroupPortMapping
+	if err := json.Unmarshal(patchedBytes, &updated); err != nil {
+		return nil, apierrors.NewBadRequest(fmt.Sprintf("invalid patched object: %v", err))
+	}
+
+	if updated.Name == "" {
+		updated.Name = curr.Name
+	}
+	if updated.Namespace == "" {
+		updated.Namespace = curr.Namespace
+	}
+
+	model := convertAddressGroupPortMappingFromK8s(&updated)
+	if err := s.backendClient.Sync(ctx, models.SyncOpUpsert, []models.AddressGroupPortMapping{model}); err != nil {
+		return nil, apierrors.NewInternalError(fmt.Errorf("failed to sync patched AddressGroupPortMapping: %w", err))
+	}
+
+	return convertAddressGroupPortMappingToK8s(model), nil
+}
+
+// ConvertToTable returns minimal columns for kubectl printing.
+func (s *AddressGroupPortMappingStorage) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
+	table := &metav1.Table{
+		ColumnDefinitions: []metav1.TableColumnDefinition{
+			{Name: "Name", Type: "string", Format: "name"},
+			{Name: "Services", Type: "string"},
+			{Name: "Age", Type: "string"},
+		},
+	}
+
+	addRow := func(obj *netguardv1beta1.AddressGroupPortMapping) {
+		svcCount := len(obj.AccessPorts.Items)
+		row := metav1.TableRow{
+			Object: runtime.RawExtension{Object: obj},
+			Cells: []interface{}{
+				obj.Name,
+				fmt.Sprintf("%d", svcCount),
+				translateTimestampSince(obj.CreationTimestamp),
+			},
+		}
+		table.Rows = append(table.Rows, row)
+	}
+
+	switch v := object.(type) {
+	case *netguardv1beta1.AddressGroupPortMapping:
+		addRow(v)
+	case *netguardv1beta1.AddressGroupPortMappingList:
+		for i := range v.Items {
+			addRow(&v.Items[i])
+		}
+	default:
+		return nil, fmt.Errorf("unexpected object type %T", object)
+	}
+	return table, nil
+}
+
+// translateTimestampSince helper
+func translateTimestampSince(ts metav1.Time) string {
+	if ts.IsZero() {
+		return "<unknown>"
+	}
+	return durationShortHumanDuration(time.Since(ts.Time))
+}
+
+func durationShortHumanDuration(d time.Duration) string {
+	if seconds := int(d.Seconds()); seconds < 90 {
+		return fmt.Sprintf("%ds", seconds)
+	}
+	if minutes := int(d.Minutes()); minutes < 90 {
+		return fmt.Sprintf("%dm", minutes)
+	}
+	hours := int(d.Round(time.Hour).Hours())
+	if hours < 48 {
+		return fmt.Sprintf("%dh", hours)
+	}
+	days := hours / 24
+	return fmt.Sprintf("%dd", days)
+}
+
+// Compile-time assertions
+var (
+	_ rest.Storage         = &AddressGroupPortMappingStorage{}
+	_ rest.Getter          = &AddressGroupPortMappingStorage{}
+	_ rest.Lister          = &AddressGroupPortMappingStorage{}
+	_ rest.Watcher         = &AddressGroupPortMappingStorage{}
+	_ rest.Creater         = &AddressGroupPortMappingStorage{}
+	_ rest.Updater         = &AddressGroupPortMappingStorage{}
+	_ rest.GracefulDeleter = &AddressGroupPortMappingStorage{}
+	_ rest.Patcher         = &AddressGroupPortMappingStorage{}
+)

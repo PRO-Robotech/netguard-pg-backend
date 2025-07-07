@@ -6,6 +6,7 @@ type Service struct {
 	Description   string
 	IngressPorts  []IngressPort
 	AddressGroups []AddressGroupRef
+	Meta          Meta
 }
 
 // ServiceRef represents a reference to a Service

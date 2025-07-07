@@ -1,0 +1,9 @@
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroup
+metadata:
+  name: test-addressgroup-watch
+  namespace: netguard-test
+spec:
+  addresses:
+  - "192.168.1.10/32"
+  - "192.168.1.20/32" 

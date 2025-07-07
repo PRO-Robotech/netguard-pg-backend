@@ -29,8 +29,10 @@ subjectAltName = @alt_names
 [alt_names]
 DNS.1 = localhost
 DNS.2 = netguard-apiserver
-DNS.3 = netguard-apiserver.default.svc.cluster.local
-DNS.4 = netguard-apiserver.default.svc
+DNS.3 = netguard-apiserver.netguard-system.svc.cluster.local
+DNS.4 = netguard-apiserver.netguard-system.svc
+DNS.5 = netguard-apiserver.default.svc.cluster.local
+DNS.6 = netguard-apiserver.default.svc
 IP.1 = 127.0.0.1
 EOF
 )
@@ -46,8 +48,10 @@ subjectAltName = @alt_names
 [alt_names]
 DNS.1 = localhost
 DNS.2 = netguard-apiserver
-DNS.3 = netguard-apiserver.default.svc.cluster.local
-DNS.4 = netguard-apiserver.default.svc
+DNS.3 = netguard-apiserver.netguard-system.svc.cluster.local
+DNS.4 = netguard-apiserver.netguard-system.svc
+DNS.5 = netguard-apiserver.default.svc.cluster.local
+DNS.6 = netguard-apiserver.default.svc
 IP.1 = 127.0.0.1
 EOF
 )
@@ -60,7 +64,7 @@ echo "Certificate: certs/tls.crt"
 echo "Private key: certs/tls.key"
 echo ""
 echo "To create Kubernetes secret run:"
-echo "kubectl create secret tls netguard-apiserver-certs --cert=certs/tls.crt --key=certs/tls.key"
+echo "kubectl create secret tls netguard-apiserver-certs --cert=certs/tls.crt --key=certs/tls.key -n netguard-system"
 echo ""
 echo "To verify certificate:"
 echo "openssl x509 -in certs/tls.crt -text -noout" 

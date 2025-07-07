@@ -2,6 +2,7 @@ package mem
 
 import (
 	"context"
+	"log"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -324,6 +325,8 @@ func (r *reader) GetSyncStatus(ctx context.Context) (*models.SyncStatus, error) 
 
 // GetServiceByID gets a service by ID
 func (r *reader) GetServiceByID(ctx context.Context, id models.ResourceIdentifier) (*models.Service, error) {
+	log.Printf("GetServiceByID: looking for ns=%q name=%q key=%s", id.Namespace, id.Name, id.Key())
+
 	var services map[string]models.Service
 	var bindings map[string]models.AddressGroupBinding
 
@@ -334,7 +337,15 @@ func (r *reader) GetServiceByID(ctx context.Context, id models.ResourceIdentifie
 		services = r.registry.db.GetServices()
 	}
 
+	log.Printf("GetServiceByID: services map size=%d", len(services))
+	for k := range services {
+		if k == id.Key() {
+			log.Printf("GetServiceByID: found matching key in map: %s", k)
+		}
+	}
+
 	if service, ok := services[id.Key()]; ok {
+		log.Printf("GetServiceByID: EXACT match found for key=%s meta.uid=%s", id.Key(), service.Meta.UID)
 		// Create a copy of the service to avoid modifying the original
 		serviceCopy := service
 
@@ -357,6 +368,7 @@ func (r *reader) GetServiceByID(ctx context.Context, id models.ResourceIdentifie
 
 		return &serviceCopy, nil
 	}
+	log.Printf("GetServiceByID: NOT FOUND key=%s", id.Key())
 	return nil, ports.ErrNotFound
 }
 

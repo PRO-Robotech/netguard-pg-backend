@@ -1,0 +1,151 @@
+# config/samples/flow/example-flow.yaml
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: application
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: infra
+# ------------------------------------------------------------
+# Services (namespace application)
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Service
+metadata:
+  name: backend
+  namespace: application
+spec:
+  description: "Backend API service"
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Service
+metadata:
+  name: web
+  namespace: application
+spec:
+  description: "Frontend Web service"
+# Services (namespace infra)
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Service
+metadata:
+  name: postgress
+  namespace: infra
+spec:
+  description: "PostgreSQL database"
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Service
+metadata:
+  name: logs
+  namespace: infra
+spec:
+  description: "Centralized logging"
+# ------------------------------------------------------------
+# ServiceAliases (application)
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: ServiceAlias
+metadata:
+  name: alias-backend
+  namespace: application
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: backend
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: ServiceAlias
+metadata:
+  name: alias-web
+  namespace: application
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: web
+# ServiceAliases (infra)
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: ServiceAlias
+metadata:
+  name: alias-postgress
+  namespace: infra
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: postgress
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: ServiceAlias
+metadata:
+  name: alias-logs
+  namespace: infra
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: logs
+# ------------------------------------------------------------
+# AddressGroups (application)
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroup
+metadata:
+  name: ingress-application
+  namespace: application
+spec:
+  description: "Ingress addresses for application"
+  addresses: []
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroup
+metadata:
+  name: egress-application
+  namespace: application
+spec:
+  description: "Egress addresses for application"
+  addresses: []
+# AddressGroups (infra)
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroup
+metadata:
+  name: ingress-infra
+  namespace: infra
+spec:
+  description: "Ingress addresses for infra"
+  addresses: []
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroup
+metadata:
+  name: egress-infra
+  namespace: infra
+spec:
+  description: "Egress addresses for infra"
+  addresses: []
+# ------------------------------------------------------------
+# AddressGroupBindingPolicy
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroupBindingPolicy
+metadata:
+  name: backend-egress-infra
+  namespace: infra
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: backend
+    namespace: application
+  addressGroupRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: egress-infra
+    namespace: infra 

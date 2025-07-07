@@ -1,0 +1,16 @@
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroupBinding
+metadata:
+  name: backend-egress-app
+  namespace: application
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: backend
+  addressGroupRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: egress-application
+    namespace: application 

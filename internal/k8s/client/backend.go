@@ -5,11 +5,11 @@ import (
 	"netguard-pg-backend/internal/application/validation"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
+
+	"k8s.io/klog/v2"
 )
 
 // BackendClient интерфейс для всех операций с backend
-// Реализуется слоями: GRPCBackendClient, CircuitBreakerClient, CachedBackendClient
-
 type BackendClient interface {
 	// CRUD операции для всех ресурсов
 	GetService(ctx context.Context, id models.ResourceIdentifier) (*models.Service, error)
@@ -75,13 +75,26 @@ type BackendClient interface {
 	Close() error
 }
 
-// NewBackendClient создает многослойный клиент: cache → circuit breaker → grpc
+// NewBackendClient создает backend-клиент. Если ENDPOINT == "mock" (или пуст),
+// используется моковый клиент. Иначе создаётся реальный gRPC-клиент.
 func NewBackendClient(config BackendClientConfig) (BackendClient, error) {
-	grpcClient, err := NewGRPCBackendClient(config)
-	if err != nil {
+	// Валидация входных параметров
+	if err := config.Validate(); err != nil {
 		return nil, err
 	}
-	cbClient := NewCircuitBreakerClient(grpcClient, config)
-	cachedClient := NewCachedBackendClient(cbClient, config)
-	return cachedClient, nil
+
+	// Если явно указан mock – возвращаем мок-клиент для локальных тестов.
+	if config.Endpoint == "mock" {
+		return NewMockBackendClient(), nil
+	}
+
+	// Иначе пытаемся установить gRPC-соединение с backend
+	klog.Infof("Dialing backend gRPC %s …", config.Endpoint)
+	grpcClient, err := NewGRPCBackendClient(config)
+	if err != nil {
+		klog.Errorf("backend connection failed: %v", err)
+		return nil, err
+	}
+	klog.Infof("Connected to backend gRPC %s", config.Endpoint)
+	return grpcClient, nil
 }

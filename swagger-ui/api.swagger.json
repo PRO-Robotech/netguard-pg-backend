@@ -660,6 +660,9 @@
             "type": "object",
             "$ref": "#/definitions/v1ServiceRef"
           }
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta"
         }
       },
       "title": "AddressGroup - represents a group of addresses",
@@ -678,6 +681,9 @@
         },
         "addressGroupRef": {
           "$ref": "#/definitions/v1AddressGroupRef"
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta"
         }
       },
       "title": "AddressGroupBinding - binding between a service and an address group",
@@ -698,6 +704,9 @@
         },
         "addressGroupRef": {
           "$ref": "#/definitions/v1AddressGroupRef"
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta"
         }
       },
       "title": "AddressGroupBindingPolicy - policy allowing binding of a service to an address group",
@@ -719,6 +728,9 @@
             "type": "object",
             "$ref": "#/definitions/v1ServicePortsRef"
           }
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta"
         }
       },
       "title": "AddressGroupPortMapping - mapping between an address group and allowed ports",
@@ -841,6 +853,9 @@
         "priority": {
           "type": "integer",
           "format": "int32"
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta"
         }
       },
       "title": "IEAgAgRule - rule between two address groups",
@@ -972,6 +987,38 @@
       },
       "title": "ListServicesResp - response with list of services"
     },
+    "v1Meta": {
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string"
+        },
+        "resourceVersion": {
+          "type": "string"
+        },
+        "generation": {
+          "type": "string",
+          "format": "int64"
+        },
+        "creationTs": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Meta - kubernetes system metadata stored round-trip."
+    },
     "v1PortRanges": {
       "type": "object",
       "properties": {
@@ -1035,6 +1082,9 @@
         },
         "serviceRef": {
           "$ref": "#/definitions/v1ServiceRef"
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta"
         }
       },
       "title": "RuleS2S - rule between two services",
@@ -1068,6 +1118,9 @@
             "type": "object",
             "$ref": "#/definitions/v1AddressGroupRef"
           }
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta"
         }
       },
       "title": "Service - represents a service with ports",
@@ -1083,6 +1136,9 @@
         },
         "serviceRef": {
           "$ref": "#/definitions/v1ServiceRef"
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta"
         }
       },
       "title": "ServiceAlias - alias for a service",

@@ -17,7 +17,7 @@ webhooks:
   clientConfig:
     service:
       name: netguard-apiserver-webhook
-      namespace: netguard-system
+      namespace: netguard-test
       path: /mutate
     # CA bundle будет заполнен cert-manager или вручную
     caBundle: ""
@@ -47,7 +47,7 @@ webhooks:
   clientConfig:
     service:
       name: netguard-apiserver-webhook
-      namespace: netguard-system
+      namespace: netguard-test
       path: /mutate
     caBundle: ""
   
@@ -71,7 +71,7 @@ webhooks:
   clientConfig:
     service:
       name: netguard-apiserver-webhook
-      namespace: netguard-system
+      namespace: netguard-test
       path: /mutate
     caBundle: ""
   
@@ -95,7 +95,7 @@ webhooks:
   clientConfig:
     service:
       name: netguard-apiserver-webhook
-      namespace: netguard-system
+      namespace: netguard-test
       path: /mutate
     caBundle: ""
   
@@ -119,7 +119,7 @@ webhooks:
   clientConfig:
     service:
       name: netguard-apiserver-webhook
-      namespace: netguard-system
+      namespace: netguard-test
       path: /mutate
     caBundle: ""
   
@@ -143,7 +143,7 @@ webhooks:
   clientConfig:
     service:
       name: netguard-apiserver-webhook
-      namespace: netguard-system
+      namespace: netguard-test
       path: /mutate
     caBundle: ""
   
@@ -167,7 +167,7 @@ webhooks:
   clientConfig:
     service:
       name: netguard-apiserver-webhook
-      namespace: netguard-system
+      namespace: netguard-test
       path: /mutate
     caBundle: ""
   
@@ -191,7 +191,7 @@ webhooks:
   clientConfig:
     service:
       name: netguard-apiserver-webhook
-      namespace: netguard-system
+      namespace: netguard-test
       path: /mutate
     caBundle: ""
   

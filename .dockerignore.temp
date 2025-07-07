@@ -1,0 +1,60 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.github
+.travis.yml
+.circleci
+
+# Documentation
+*.md
+docs/
+documentation/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Test coverage
+coverage.out
+coverage.html
+*.test
+
+# Node modules (for documentation)
+node_modules/
+npm-debug.log
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+
+# Kubernetes
+config/k8s/
+helm/
+
+# Development configs
+*.env
+*.local
+.env.*
+
+# Test data
+testdata/
+test/fixtures/
+
+# Examples
+examples/
+samples/ 

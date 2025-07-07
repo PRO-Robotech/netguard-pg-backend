@@ -2,11 +2,15 @@ package rules2s
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/registry/rest"
 
@@ -14,7 +18,10 @@ import (
 	"netguard-pg-backend/internal/domain/ports"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 	"netguard-pg-backend/internal/k8s/client"
+	utils2 "netguard-pg-backend/internal/k8s/registry/utils"
 	watchpkg "netguard-pg-backend/internal/k8s/registry/watch"
+
+	jsonpatch "gopkg.in/evanphx/json-patch.v4"
 )
 
 // RuleS2SStorage implements REST storage for RuleS2S resources
@@ -57,10 +64,7 @@ func (s *RuleS2SStorage) Destroy() {
 // Get retrieves a RuleS2S by name from backend (READ-ONLY, no status changes)
 func (s *RuleS2SStorage) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
 	// Extract namespace from context
-	namespace, ok := ctx.Value("namespace").(string)
-	if !ok || namespace == "" {
-		return nil, fmt.Errorf("namespace is required")
-	}
+	namespace := utils2.NamespaceFrom(ctx)
 
 	// Get from backend
 	resourceID := models.NewResourceIdentifier(name, models.WithNamespace(namespace))
@@ -120,21 +124,23 @@ func (s *RuleS2SStorage) Create(ctx context.Context, obj runtime.Object, createV
 		}
 	}
 
-	// Convert to backend model
 	rule := convertRuleS2SFromK8s(k8sRule)
+	rule.Meta.TouchOnCreate()
 
-	// Create via Sync API
-	rules := []models.RuleS2S{rule}
-	err := s.backendClient.Sync(ctx, models.SyncOpUpsert, rules)
-	if err != nil {
+	if err := s.backendClient.Sync(ctx, models.SyncOpUpsert, []models.RuleS2S{rule}); err != nil {
 		return nil, fmt.Errorf("failed to create RuleS2S: %w", err)
 	}
 
-	// Set successful status
-	setCondition(k8sRule, ConditionReady, metav1.ConditionTrue,
+	respModel, err := s.backendClient.GetRuleS2S(ctx, rule.ResourceIdentifier)
+	if err != nil {
+		respModel = &rule
+	}
+	resp := convertRuleS2SToK8s(*respModel)
+
+	setCondition(resp, ConditionReady, metav1.ConditionTrue,
 		ReasonBindingCreated, "RuleS2S successfully created in backend")
 
-	return k8sRule, nil
+	return resp, nil
 }
 
 // Update updates an existing RuleS2S in backend via Sync API
@@ -237,8 +243,135 @@ func (s *RuleS2SStorage) Watch(ctx context.Context, options *metainternalversion
 
 // GetSupportedVerbs returns the supported verbs for this storage
 func (s *RuleS2SStorage) GetSupportedVerbs() []string {
-	return []string{"get", "list", "create", "update", "delete", "watch"}
+	return []string{"get", "list", "create", "update", "delete", "watch", "patch"}
 }
+
+// Patch applies JSON/Merge patch to RuleS2S and syncs backend.
+func (s *RuleS2SStorage) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts *metav1.PatchOptions, subresources ...string) (runtime.Object, error) {
+	if len(subresources) > 0 {
+		return nil, apierrors.NewBadRequest("subresources are not supported for RuleS2S")
+	}
+
+	currObj, err := s.Get(ctx, name, &metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	curr := currObj.(*netguardv1beta1.RuleS2S)
+	currBytes, _ := json.Marshal(curr)
+
+	var patchedBytes []byte
+	switch pt {
+	case types.JSONPatchType:
+		patch, err := jsonpatch.DecodePatch(data)
+		if err != nil {
+			return nil, apierrors.NewBadRequest(fmt.Sprintf("invalid JSON patch: %v", err))
+		}
+		patchedBytes, err = patch.Apply(currBytes)
+		if err != nil {
+			return nil, apierrors.NewBadRequest(fmt.Sprintf("failed to apply JSON patch: %v", err))
+		}
+	case types.MergePatchType, types.ApplyPatchType:
+		patchedBytes, err = jsonpatch.MergePatch(currBytes, data)
+		if err != nil {
+			return nil, apierrors.NewBadRequest(fmt.Sprintf("failed to apply merge patch: %v", err))
+		}
+	default:
+		return nil, apierrors.NewBadRequest("unsupported patch type")
+	}
+
+	var updated netguardv1beta1.RuleS2S
+	if err := json.Unmarshal(patchedBytes, &updated); err != nil {
+		return nil, apierrors.NewBadRequest(fmt.Sprintf("invalid patched object: %v", err))
+	}
+
+	if updated.Name == "" {
+		updated.Name = curr.Name
+	}
+	if updated.Namespace == "" {
+		updated.Namespace = curr.Namespace
+	}
+
+	model := convertRuleS2SFromK8s(&updated)
+	if err := s.backendClient.Sync(ctx, models.SyncOpUpsert, []models.RuleS2S{model}); err != nil {
+		return nil, apierrors.NewInternalError(fmt.Errorf("failed to sync patched RuleS2S: %w", err))
+	}
+
+	return convertRuleS2SToK8s(model), nil
+}
+
+// ConvertToTable for kubectl printing.
+func (s *RuleS2SStorage) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
+	table := &metav1.Table{
+		ColumnDefinitions: []metav1.TableColumnDefinition{
+			{Name: "Name", Type: "string", Format: "name"},
+			{Name: "Traffic", Type: "string"},
+			{Name: "SrcService", Type: "string"},
+			{Name: "DstService", Type: "string"},
+			{Name: "Age", Type: "string"},
+		},
+	}
+
+	addRow := func(obj *netguardv1beta1.RuleS2S) {
+		row := metav1.TableRow{
+			Object: runtime.RawExtension{Object: obj},
+			Cells: []interface{}{
+				obj.Name,
+				obj.Spec.Traffic,
+				obj.Spec.ServiceLocalRef.Name,
+				obj.Spec.ServiceRef.Name,
+				translateTimestampSince(obj.CreationTimestamp),
+			},
+		}
+		table.Rows = append(table.Rows, row)
+	}
+
+	switch v := object.(type) {
+	case *netguardv1beta1.RuleS2S:
+		addRow(v)
+	case *netguardv1beta1.RuleS2SList:
+		for i := range v.Items {
+			addRow(&v.Items[i])
+		}
+	default:
+		return nil, fmt.Errorf("unexpected object type %T", object)
+	}
+	return table, nil
+}
+
+// Timestamp helpers
+func translateTimestampSince(ts metav1.Time) string {
+	if ts.IsZero() {
+		return "<unknown>"
+	}
+	return durationShortHumanDuration(time.Since(ts.Time))
+}
+
+func durationShortHumanDuration(d time.Duration) string {
+	if seconds := int(d.Seconds()); seconds < 90 {
+		return fmt.Sprintf("%ds", seconds)
+	}
+	if minutes := int(d.Minutes()); minutes < 90 {
+		return fmt.Sprintf("%dm", minutes)
+	}
+	hours := int(d.Round(time.Hour).Hours())
+	if hours < 48 {
+		return fmt.Sprintf("%dh", hours)
+	}
+	days := hours / 24
+	return fmt.Sprintf("%dd", days)
+}
+
+var (
+	_ rest.Storage         = &RuleS2SStorage{}
+	_ rest.Getter          = &RuleS2SStorage{}
+	_ rest.Lister          = &RuleS2SStorage{}
+	_ rest.Watcher         = &RuleS2SStorage{}
+	_ rest.Creater         = &RuleS2SStorage{}
+	_ rest.Updater         = &RuleS2SStorage{}
+	_ rest.GracefulDeleter = &RuleS2SStorage{}
+	_ rest.Patcher         = &RuleS2SStorage{}
+)
 
 // Helper functions for conversion
 

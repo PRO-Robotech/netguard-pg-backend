@@ -3,7 +3,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: netguard-apiserver-config
-  namespace: default
+  namespace: netguard-test
   labels:
     app.kubernetes.io/name: netguard-apiserver
     app.kubernetes.io/component: aggregated-api
@@ -59,7 +59,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: netguard-apiserver-config-dev
-  namespace: netguard-system
+  namespace: netguard-test
   labels:
     app.kubernetes.io/name: netguard-apiserver
     app.kubernetes.io/component: aggregated-api

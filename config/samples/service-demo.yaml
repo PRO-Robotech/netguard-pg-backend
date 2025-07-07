@@ -1,0 +1,11 @@
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Service
+metadata:
+  name: demo-web
+  namespace: netguard-test
+spec:
+  description: Simple demo service
+  ingressPorts:
+    - protocol: TCP
+      port: "80"
+      description: HTTP 

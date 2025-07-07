@@ -4,6 +4,9 @@ import (
 	"netguard-pg-backend/internal/domain/models"
 	commonpb "netguard-pg-backend/protos/pkg/api/common"
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // Service конверторы
@@ -16,6 +19,20 @@ func convertServiceFromProto(protoSvc *netguardpb.Service) models.Service {
 			),
 		},
 		Description: protoSvc.Description,
+	}
+
+	// meta
+	if protoSvc.Meta != nil {
+		service.Meta = models.Meta{
+			UID:             protoSvc.Meta.Uid,
+			ResourceVersion: protoSvc.Meta.ResourceVersion,
+			Generation:      protoSvc.Meta.Generation,
+			Labels:          protoSvc.Meta.Labels,
+			Annotations:     protoSvc.Meta.Annotations,
+		}
+		if protoSvc.Meta.CreationTs != nil {
+			service.Meta.CreationTS = metav1.NewTime(protoSvc.Meta.CreationTs.AsTime())
+		}
 	}
 
 	// Конвертация IngressPorts
@@ -57,6 +74,17 @@ func convertServiceToProto(service models.Service) *netguardpb.Service {
 			Namespace: service.ResourceIdentifier.Namespace,
 		},
 		Description: service.Description,
+		Meta: &netguardpb.Meta{
+			Uid:             service.Meta.UID,
+			ResourceVersion: service.Meta.ResourceVersion,
+			Generation:      service.Meta.Generation,
+			Labels:          service.Meta.Labels,
+			Annotations:     service.Meta.Annotations,
+		},
+	}
+
+	if !service.Meta.CreationTS.IsZero() {
+		protoSvc.Meta.CreationTs = timestamppb.New(service.Meta.CreationTS.Time)
 	}
 
 	// Конвертация IngressPorts
@@ -102,6 +130,20 @@ func convertAddressGroupFromProto(protoAG *netguardpb.AddressGroup) models.Addre
 		},
 		Description: protoAG.Description,
 		Addresses:   protoAG.Addresses,
+		Meta:        models.Meta{},
+	}
+
+	if protoAG.Meta != nil {
+		addressGroup.Meta = models.Meta{
+			UID:             protoAG.Meta.Uid,
+			ResourceVersion: protoAG.Meta.ResourceVersion,
+			Generation:      protoAG.Meta.Generation,
+		}
+		if protoAG.Meta.CreationTs != nil {
+			addressGroup.Meta.CreationTS = metav1.NewTime(protoAG.Meta.CreationTs.AsTime())
+		}
+		addressGroup.Meta.Labels = protoAG.Meta.Labels
+		addressGroup.Meta.Annotations = protoAG.Meta.Annotations
 	}
 
 	// Конвертация Services
@@ -125,6 +167,17 @@ func convertAddressGroupToProto(addressGroup models.AddressGroup) *netguardpb.Ad
 		},
 		Description: addressGroup.Description,
 		Addresses:   addressGroup.Addresses,
+		Meta: &netguardpb.Meta{
+			Uid:             addressGroup.Meta.UID,
+			ResourceVersion: addressGroup.Meta.ResourceVersion,
+			Generation:      addressGroup.Meta.Generation,
+			Labels:          addressGroup.Meta.Labels,
+			Annotations:     addressGroup.Meta.Annotations,
+		},
+	}
+
+	if !addressGroup.Meta.CreationTS.IsZero() {
+		protoAG.Meta.CreationTs = timestamppb.New(addressGroup.Meta.CreationTS.Time)
 	}
 
 	// Конвертация Services
@@ -142,7 +195,7 @@ func convertAddressGroupToProto(addressGroup models.AddressGroup) *netguardpb.Ad
 
 // AddressGroupBinding конверторы
 func convertAddressGroupBindingFromProto(protoBinding *netguardpb.AddressGroupBinding) models.AddressGroupBinding {
-	return models.AddressGroupBinding{
+	binding := models.AddressGroupBinding{
 		SelfRef: models.SelfRef{
 			ResourceIdentifier: models.NewResourceIdentifier(
 				protoBinding.SelfRef.Name,
@@ -162,10 +215,25 @@ func convertAddressGroupBindingFromProto(protoBinding *netguardpb.AddressGroupBi
 			),
 		},
 	}
+
+	if protoBinding.Meta != nil {
+		binding.Meta = models.Meta{
+			UID:             protoBinding.Meta.Uid,
+			ResourceVersion: protoBinding.Meta.ResourceVersion,
+			Generation:      protoBinding.Meta.Generation,
+			Labels:          protoBinding.Meta.Labels,
+			Annotations:     protoBinding.Meta.Annotations,
+		}
+		if protoBinding.Meta.CreationTs != nil {
+			binding.Meta.CreationTS = metav1.NewTime(protoBinding.Meta.CreationTs.AsTime())
+		}
+	}
+
+	return binding
 }
 
 func convertAddressGroupBindingToProto(binding models.AddressGroupBinding) *netguardpb.AddressGroupBinding {
-	return &netguardpb.AddressGroupBinding{
+	protoBinding := &netguardpb.AddressGroupBinding{
 		SelfRef: &netguardpb.ResourceIdentifier{
 			Name:      binding.ResourceIdentifier.Name,
 			Namespace: binding.ResourceIdentifier.Namespace,
@@ -183,6 +251,19 @@ func convertAddressGroupBindingToProto(binding models.AddressGroupBinding) *netg
 			},
 		},
 	}
+
+	if !binding.Meta.CreationTS.IsZero() {
+		protoBinding.Meta = &netguardpb.Meta{
+			Uid:             binding.Meta.UID,
+			ResourceVersion: binding.Meta.ResourceVersion,
+			Generation:      binding.Meta.Generation,
+			Labels:          binding.Meta.Labels,
+			Annotations:     binding.Meta.Annotations,
+		}
+		protoBinding.Meta.CreationTs = timestamppb.New(binding.Meta.CreationTS.Time)
+	}
+
+	return protoBinding
 }
 
 // AddressGroupPortMapping конверторы
@@ -230,6 +311,19 @@ func convertAddressGroupPortMappingFromProto(proto *netguardpb.AddressGroupPortM
 		mapping.AccessPorts[serviceRef] = servicePorts
 	}
 
+	if proto.Meta != nil {
+		mapping.Meta = models.Meta{
+			UID:             proto.Meta.Uid,
+			ResourceVersion: proto.Meta.ResourceVersion,
+			Generation:      proto.Meta.Generation,
+			Labels:          proto.Meta.Labels,
+			Annotations:     proto.Meta.Annotations,
+		}
+		if proto.Meta.CreationTs != nil {
+			mapping.Meta.CreationTS = metav1.NewTime(proto.Meta.CreationTs.AsTime())
+		}
+	}
+
 	return mapping
 }
 
@@ -270,6 +364,17 @@ func convertAddressGroupPortMappingToProto(m models.AddressGroupPortMapping) *ne
 		proto.AccessPorts = append(proto.AccessPorts, protoSPR)
 	}
 
+	if !m.Meta.CreationTS.IsZero() {
+		proto.Meta = &netguardpb.Meta{
+			Uid:             m.Meta.UID,
+			ResourceVersion: m.Meta.ResourceVersion,
+			Generation:      m.Meta.Generation,
+			Labels:          m.Meta.Labels,
+			Annotations:     m.Meta.Annotations,
+		}
+		proto.Meta.CreationTs = timestamppb.New(m.Meta.CreationTS.Time)
+	}
+
 	return proto
 }
 
@@ -296,6 +401,20 @@ func convertRuleS2SFromProto(proto *netguardpb.RuleS2S) models.RuleS2S {
 			),
 		},
 	}
+
+	if proto.Meta != nil {
+		rule.Meta = models.Meta{
+			UID:             proto.Meta.Uid,
+			ResourceVersion: proto.Meta.ResourceVersion,
+			Generation:      proto.Meta.Generation,
+			Labels:          proto.Meta.Labels,
+			Annotations:     proto.Meta.Annotations,
+		}
+		if proto.Meta.CreationTs != nil {
+			rule.Meta.CreationTS = metav1.NewTime(proto.Meta.CreationTs.AsTime())
+		}
+	}
+
 	return rule
 }
 
@@ -311,7 +430,7 @@ func convertRuleS2SToProto(m models.RuleS2S) *netguardpb.RuleS2S {
 		traffic = commonpb.Traffic_Ingress // default
 	}
 
-	return &netguardpb.RuleS2S{
+	proto := &netguardpb.RuleS2S{
 		SelfRef: &netguardpb.ResourceIdentifier{
 			Name:      m.ResourceIdentifier.Name,
 			Namespace: m.ResourceIdentifier.Namespace,
@@ -330,6 +449,19 @@ func convertRuleS2SToProto(m models.RuleS2S) *netguardpb.RuleS2S {
 			},
 		},
 	}
+
+	if !m.Meta.CreationTS.IsZero() {
+		proto.Meta = &netguardpb.Meta{
+			Uid:             m.Meta.UID,
+			ResourceVersion: m.Meta.ResourceVersion,
+			Generation:      m.Meta.Generation,
+			Labels:          m.Meta.Labels,
+			Annotations:     m.Meta.Annotations,
+		}
+		proto.Meta.CreationTs = timestamppb.New(m.Meta.CreationTS.Time)
+	}
+
+	return proto
 }
 
 // ServiceAlias конверторы
@@ -347,12 +479,27 @@ func convertServiceAliasFromProto(proto *netguardpb.ServiceAlias) models.Service
 				models.WithNamespace(proto.ServiceRef.Identifier.Namespace),
 			),
 		},
+		Meta: models.Meta{},
 	}
+
+	if proto.Meta != nil {
+		alias.Meta = models.Meta{
+			UID:             proto.Meta.Uid,
+			ResourceVersion: proto.Meta.ResourceVersion,
+			Generation:      proto.Meta.Generation,
+			Labels:          proto.Meta.Labels,
+			Annotations:     proto.Meta.Annotations,
+		}
+		if proto.Meta.CreationTs != nil {
+			alias.Meta.CreationTS = metav1.NewTime(proto.Meta.CreationTs.AsTime())
+		}
+	}
+
 	return alias
 }
 
 func convertServiceAliasToProto(m models.ServiceAlias) *netguardpb.ServiceAlias {
-	return &netguardpb.ServiceAlias{
+	protoAlias := &netguardpb.ServiceAlias{
 		SelfRef: &netguardpb.ResourceIdentifier{
 			Name:      m.ResourceIdentifier.Name,
 			Namespace: m.ResourceIdentifier.Namespace,
@@ -363,7 +510,18 @@ func convertServiceAliasToProto(m models.ServiceAlias) *netguardpb.ServiceAlias 
 				Namespace: m.ServiceRef.ResourceIdentifier.Namespace,
 			},
 		},
+		Meta: &netguardpb.Meta{
+			Uid:             m.Meta.UID,
+			ResourceVersion: m.Meta.ResourceVersion,
+			Generation:      m.Meta.Generation,
+			Labels:          m.Meta.Labels,
+			Annotations:     m.Meta.Annotations,
+		},
 	}
+	if !m.Meta.CreationTS.IsZero() {
+		protoAlias.Meta.CreationTs = timestamppb.New(m.Meta.CreationTS.Time)
+	}
+	return protoAlias
 }
 
 // AddressGroupBindingPolicy конверторы
@@ -387,12 +545,25 @@ func convertAddressGroupBindingPolicyFromProto(proto *netguardpb.AddressGroupBin
 				models.WithNamespace(proto.AddressGroupRef.Identifier.Namespace),
 			),
 		},
+		Meta: models.Meta{},
+	}
+	if proto.Meta != nil {
+		policy.Meta = models.Meta{
+			UID:             proto.Meta.Uid,
+			ResourceVersion: proto.Meta.ResourceVersion,
+			Generation:      proto.Meta.Generation,
+			Labels:          proto.Meta.Labels,
+			Annotations:     proto.Meta.Annotations,
+		}
+		if proto.Meta.CreationTs != nil {
+			policy.Meta.CreationTS = metav1.NewTime(proto.Meta.CreationTs.AsTime())
+		}
 	}
 	return policy
 }
 
 func convertAddressGroupBindingPolicyToProto(m models.AddressGroupBindingPolicy) *netguardpb.AddressGroupBindingPolicy {
-	return &netguardpb.AddressGroupBindingPolicy{
+	protoPol := &netguardpb.AddressGroupBindingPolicy{
 		SelfRef: &netguardpb.ResourceIdentifier{
 			Name:      m.ResourceIdentifier.Name,
 			Namespace: m.ResourceIdentifier.Namespace,
@@ -409,7 +580,18 @@ func convertAddressGroupBindingPolicyToProto(m models.AddressGroupBindingPolicy)
 				Namespace: m.AddressGroupRef.ResourceIdentifier.Namespace,
 			},
 		},
+		Meta: &netguardpb.Meta{
+			Uid:             m.Meta.UID,
+			ResourceVersion: m.Meta.ResourceVersion,
+			Generation:      m.Meta.Generation,
+			Labels:          m.Meta.Labels,
+			Annotations:     m.Meta.Annotations,
+		},
 	}
+	if !m.Meta.CreationTS.IsZero() {
+		protoPol.Meta.CreationTs = timestamppb.New(m.Meta.CreationTS.Time)
+	}
+	return protoPol
 }
 
 // IEAgAgRule конверторы
@@ -446,6 +628,19 @@ func convertIEAgAgRuleFromProto(proto *netguardpb.IEAgAgRule) models.IEAgAgRule 
 			Source:      portSpec.Source,
 			Destination: portSpec.Destination,
 		})
+	}
+
+	if proto.Meta != nil {
+		rule.Meta = models.Meta{
+			UID:             proto.Meta.Uid,
+			ResourceVersion: proto.Meta.ResourceVersion,
+			Generation:      proto.Meta.Generation,
+			Labels:          proto.Meta.Labels,
+			Annotations:     proto.Meta.Annotations,
+		}
+		if proto.Meta.CreationTs != nil {
+			rule.Meta.CreationTS = metav1.NewTime(proto.Meta.CreationTs.AsTime())
+		}
 	}
 
 	return rule
@@ -504,6 +699,17 @@ func convertIEAgAgRuleToProto(m models.IEAgAgRule) *netguardpb.IEAgAgRule {
 			Source:      portSpec.Source,
 			Destination: portSpec.Destination,
 		})
+	}
+
+	if !m.Meta.CreationTS.IsZero() {
+		proto.Meta = &netguardpb.Meta{
+			Uid:             m.Meta.UID,
+			ResourceVersion: m.Meta.ResourceVersion,
+			Generation:      m.Meta.Generation,
+			Labels:          m.Meta.Labels,
+			Annotations:     m.Meta.Annotations,
+		}
+		proto.Meta.CreationTs = timestamppb.New(m.Meta.CreationTS.Time)
 	}
 
 	return proto

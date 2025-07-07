@@ -7,6 +7,7 @@ type RuleS2S struct {
 	ServiceLocalRef ServiceAliasRef
 	ServiceRef      ServiceAliasRef
 	IEAgAgRuleRefs  []ResourceIdentifier // Ссылки на созданные IEAGAG правила
+	Meta            Meta
 }
 
 // RuleS2SRef represents a reference to a RuleS2S

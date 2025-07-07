@@ -5,6 +5,7 @@ type AddressGroupBinding struct {
 	SelfRef
 	ServiceRef      ServiceRef
 	AddressGroupRef AddressGroupRef
+	Meta            Meta
 }
 
 // AddressGroupBindingRef represents a reference to an AddressGroupBinding

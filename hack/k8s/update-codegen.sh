@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2024 The Netguard Authors.
+# Copyright 2025 The Netguard Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,36 +18,50 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-SCRIPT_ROOT=$(dirname "${BASH_SOURCE[0]}")/../..
-CODEGEN_PKG=${CODEGEN_PKG:-$(cd "${SCRIPT_ROOT}"; ls -d -1 ./vendor/k8s.io/code-generator 2>/dev/null || echo ../code-generator)}
+# Determine script root directory
+SCRIPT_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+cd "${SCRIPT_ROOT}"
 
-# Generate deepcopy functions
-go run k8s.io/code-generator/cmd/deepcopy-gen \
-  --bounding-dirs=netguard-pg-backend/internal/k8s/apis/netguard/v1beta1 \
-  --output-file-base=zz_generated.deepcopy \
-  --go-header-file="${SCRIPT_ROOT}/hack/k8s/boilerplate.go.txt" \
-  netguard-pg-backend/internal/k8s/apis/netguard/v1beta1
+echo "Generating code using kube_codegen.sh for Kubernetes-style API types..."
+echo "Script root: ${SCRIPT_ROOT}"
 
-# Generate clientset
-go run k8s.io/code-generator/cmd/client-gen \
-  --clientset-name=versioned \
-  --input-base="" \
-  --input=netguard-pg-backend/internal/k8s/apis/netguard/v1beta1 \
-  --output-package=netguard-pg-backend/pkg/k8s/clientset \
-  --go-header-file="${SCRIPT_ROOT}/hack/k8s/boilerplate.go.txt"
+# Use the known path to kube_codegen.sh from Go module cache
+CODEGEN_PKG=$(go env GOPATH)/pkg/mod/k8s.io/code-generator@v0.33.2
 
-# Generate listers
-go run k8s.io/code-generator/cmd/lister-gen \
-  --input-dirs=netguard-pg-backend/internal/k8s/apis/netguard/v1beta1 \
-  --output-package=netguard-pg-backend/pkg/k8s/listers \
-  --go-header-file="${SCRIPT_ROOT}/hack/k8s/boilerplate.go.txt"
+if [[ ! -f "${CODEGEN_PKG}/kube_codegen.sh" ]]; then
+    echo "Error: kube_codegen.sh not found at ${CODEGEN_PKG}/kube_codegen.sh"
+    echo "Please check your Go module cache or install code-generator"
+    exit 1
+fi
 
-# Generate informers
-go run k8s.io/code-generator/cmd/informer-gen \
-  --input-dirs=netguard-pg-backend/internal/k8s/apis/netguard/v1beta1 \
-  --versioned-clientset-package=netguard-pg-backend/pkg/k8s/clientset/versioned \
-  --listers-package=netguard-pg-backend/pkg/k8s/listers \
-  --output-package=netguard-pg-backend/pkg/k8s/informers \
-  --go-header-file="${SCRIPT_ROOT}/hack/k8s/boilerplate.go.txt"
+echo "Using code-generator script: ${CODEGEN_PKG}/kube_codegen.sh"
 
-echo "Code generation completed successfully" 
+# Source the kube_codegen.sh script
+source "${CODEGEN_PKG}/kube_codegen.sh"
+
+echo "=== deepcopy / client / lister / informer ==="
+kube::codegen::gen_helpers \
+    --boilerplate "${SCRIPT_ROOT}/hack/k8s/boilerplate.go.txt" \
+    "${SCRIPT_ROOT}/internal/k8s/apis"
+
+kube::codegen::gen_client \
+    --with-watch \
+    --output-dir "${SCRIPT_ROOT}/pkg/k8s" \
+    --output-pkg "netguard-pg-backend/pkg/k8s" \
+    --boilerplate "${SCRIPT_ROOT}/hack/k8s/boilerplate.go.txt" \
+    "${SCRIPT_ROOT}/internal/k8s/apis"
+
+echo "=== OpenAPI definitions ==="
+openapi-gen \
+  --output-dir       "${SCRIPT_ROOT}/internal/k8s/apis/netguard/v1beta1" \
+  --output-pkg       "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1" \
+  --output-file      zz_generated.openapi.go \
+  --go-header-file   "${SCRIPT_ROOT}/hack/k8s/boilerplate.go.txt" \
+  netguard-pg-backend/internal/k8s/apis/netguard/v1beta1 \
+  k8s.io/apimachinery/pkg/apis/meta/v1 \
+  k8s.io/apimachinery/pkg/version \
+  k8s.io/apimachinery/pkg/runtime \
+  k8s.io/apimachinery/pkg/runtime/schema \
+  k8s.io/apimachinery/pkg/api/resource
+
+echo ">>> Code-gen finished" 

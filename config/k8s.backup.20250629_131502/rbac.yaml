@@ -1,0 +1,99 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: netguard-apiserver
+  namespace: netguard-system
+  labels:
+    app.kubernetes.io/name: netguard-apiserver
+    app.kubernetes.io/component: aggregated-api
+    app.kubernetes.io/part-of: netguard
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: netguard-apiserver
+  labels:
+    app.kubernetes.io/name: netguard-apiserver
+    app.kubernetes.io/component: aggregated-api
+    app.kubernetes.io/part-of: netguard
+rules:
+# Права для работы с APIService
+- apiGroups: ["apiregistration.k8s.io"]
+  resources: ["apiservices"]
+  verbs: ["get", "list", "watch"]
+
+# Права для работы с admission webhooks
+- apiGroups: ["admissionregistration.k8s.io"]
+  resources: ["validatingadmissionwebhooks", "mutatingadmissionwebhooks"]
+  verbs: ["get", "list", "watch"]
+
+# Права для работы с собственными ресурсами (если нужно читать CRD для совместимости)
+- apiGroups: ["netguard.sgroups.io"]
+  resources: ["*"]
+  verbs: ["get", "list", "watch"]
+
+# Права для работы с core ресурсами (для health checks)
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get", "list", "watch"]
+
+# Права для работы с events (для логирования)
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: netguard-apiserver
+  labels:
+    app.kubernetes.io/name: netguard-apiserver
+    app.kubernetes.io/component: aggregated-api
+    app.kubernetes.io/part-of: netguard
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: netguard-apiserver
+subjects:
+- kind: ServiceAccount
+  name: netguard-apiserver
+  namespace: netguard-system
+
+---
+# Дополнительная роль для чтения конфигурации в своем namespace
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: netguard-apiserver-config
+  namespace: netguard-system
+  labels:
+    app.kubernetes.io/name: netguard-apiserver
+    app.kubernetes.io/component: aggregated-api
+    app.kubernetes.io/part-of: netguard
+rules:
+# Права для чтения конфигурации
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: netguard-apiserver-config
+  namespace: netguard-system
+  labels:
+    app.kubernetes.io/name: netguard-apiserver
+    app.kubernetes.io/component: aggregated-api
+    app.kubernetes.io/part-of: netguard
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: netguard-apiserver-config
+subjects:
+- kind: ServiceAccount
+  name: netguard-apiserver
+  namespace: netguard-system 

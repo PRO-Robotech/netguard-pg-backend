@@ -6,6 +6,7 @@ type AddressGroup struct {
 	Description string
 	Addresses   []string
 	Services    []ServiceRef
+	Meta        Meta
 }
 
 // AddressGroupRef represents a reference to an AddressGroup
