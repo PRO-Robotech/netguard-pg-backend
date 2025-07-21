@@ -8,7 +8,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/rest"
 
+	"netguard-pg-backend/internal/domain/models"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
+	"netguard-pg-backend/internal/k8s/registry/base"
 )
 
 // StatusREST implements the REST endpoint for Service status subresource
@@ -16,14 +18,11 @@ type StatusREST struct {
 	store *ServiceStorage
 }
 
-// NewStatusREST creates a new StatusREST
-func NewStatusREST(store *ServiceStorage) *StatusREST {
-	return &StatusREST{store: store}
-}
-
-// New returns an empty Service object
-func (r *StatusREST) New() runtime.Object {
-	return &netguardv1beta1.Service{}
+// NewStatusREST creates a new StatusREST using BaseStorage
+func NewStatusREST(store *ServiceStorage) *base.StatusREST[*netguardv1beta1.Service, *models.Service] {
+	return base.NewStatusREST[*netguardv1beta1.Service, *models.Service](
+		store.BaseStorage,
+	)
 }
 
 // Destroy cleans up resources

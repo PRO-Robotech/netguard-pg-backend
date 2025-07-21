@@ -645,29 +645,26 @@
         "selfRef": {
           "$ref": "#/definitions/v1ResourceIdentifier"
         },
-        "description": {
-          "type": "string"
+        "defaultAction": {
+          "$ref": "#/definitions/v1RuleAction",
+          "title": "Default action for the address group (ACCEPT/DROP)"
         },
-        "addresses": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
+        "logs": {
+          "type": "boolean",
+          "title": "Whether to enable logs"
         },
-        "services": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1ServiceRef"
-          }
+        "trace": {
+          "type": "boolean",
+          "title": "Whether to enable trace"
         },
         "meta": {
           "$ref": "#/definitions/v1Meta"
         }
       },
-      "title": "AddressGroup - represents a group of addresses",
+      "title": "AddressGroup - represents an address group configuration for Netguard",
       "required": [
-        "selfRef"
+        "selfRef",
+        "defaultAction"
       ]
     },
     "v1AddressGroupBinding": {
@@ -746,6 +743,32 @@
         }
       },
       "title": "AddressGroupRef - reference to an address group"
+    },
+    "v1Condition": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "observedGeneration": {
+          "type": "string",
+          "format": "int64"
+        },
+        "lastTransitionTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "title": "Condition - kubernetes condition for resource status"
     },
     "v1GetAddressGroupBindingPolicyResp": {
       "type": "object",
@@ -845,7 +868,7 @@
           }
         },
         "action": {
-          "type": "string"
+          "$ref": "#/definitions/v1RuleAction"
         },
         "logs": {
           "type": "boolean"
@@ -1015,6 +1038,18 @@
           "additionalProperties": {
             "type": "string"
           }
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Condition"
+          },
+          "title": "Status management - формируется Backend, отображается в Status клиентам"
+        },
+        "observedGeneration": {
+          "type": "string",
+          "format": "int64"
         }
       },
       "description": "Meta - kubernetes system metadata stored round-trip."
@@ -1067,6 +1102,17 @@
         }
       },
       "title": "ResourceIdentifier - uniquely identifies a resource"
+    },
+    "v1RuleAction": {
+      "type": "string",
+      "enum": [
+        "UNDEFINED",
+        "DROP",
+        "ACCEPT"
+      ],
+      "default": "UNDEFINED",
+      "description": "- UNDEFINED: UNDEFINED - undefined action (should not be used)\n - DROP: DROP - drops network packet\n - ACCEPT: ACCEPT - accepts network packet",
+      "title": "RuleAction - action for rules and address groups"
     },
     "v1RuleS2S": {
       "type": "object",

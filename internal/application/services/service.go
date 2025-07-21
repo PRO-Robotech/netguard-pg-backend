@@ -7,22 +7,26 @@ import (
 	"log"
 	"strings"
 
-	"github.com/pkg/errors"
 	"netguard-pg-backend/internal/application/validation"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
+
+	"github.com/pkg/errors"
 )
 
 // NetguardService provides operations for managing netguard resources
 type NetguardService struct {
-	registry ports.Registry
+	registry         ports.Registry
+	conditionManager *ConditionManager
 }
 
 // NewNetguardService creates a new NetguardService
 func NewNetguardService(registry ports.Registry) *NetguardService {
-	return &NetguardService{
+	s := &NetguardService{
 		registry: registry,
 	}
+	s.conditionManager = NewConditionManager(registry, s)
+	return s
 }
 
 // GetServices returns all services
@@ -191,6 +195,52 @@ func (s *NetguardService) CreateService(ctx context.Context, service models.Serv
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
+	// Обработка conditions
+	s.conditionManager.ProcessServiceConditions(ctx, &service)
+	if err := s.conditionManager.saveResourceConditions(ctx, &service); err != nil {
+		return errors.Wrap(err, "failed to save service conditions")
+	}
+	return nil
+}
+
+// CreateAddressGroup создает новую группу адресов
+func (s *NetguardService) CreateAddressGroup(ctx context.Context, addressGroup models.AddressGroup) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Создаем валидатор
+	validator := validation.NewDependencyValidator(reader)
+	addressGroupValidator := validator.GetAddressGroupValidator()
+
+	// Валидируем группу адресов перед созданием
+	if err := addressGroupValidator.ValidateForCreation(ctx, addressGroup); err != nil {
+		return err
+	}
+
+	writer, err := s.registry.Writer(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get writer")
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	if err = writer.SyncAddressGroups(ctx, []models.AddressGroup{addressGroup}, ports.NewResourceIdentifierScope(addressGroup.ResourceIdentifier)); err != nil {
+		return errors.Wrap(err, "failed to create address group")
+	}
+	if err = writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+	// Обработка conditions
+	s.conditionManager.ProcessAddressGroupConditions(ctx, &addressGroup)
+	if err := s.conditionManager.saveResourceConditions(ctx, &addressGroup); err != nil {
+		return errors.Wrap(err, "failed to save address group conditions")
+	}
 	return nil
 }
 
@@ -233,6 +283,143 @@ func (s *NetguardService) UpdateService(ctx context.Context, service models.Serv
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
+	s.conditionManager.ProcessServiceConditions(ctx, &service)
+	if err := s.conditionManager.saveResourceConditions(ctx, &service); err != nil {
+		return errors.Wrap(err, "failed to save service conditions")
+	}
+	return nil
+}
+
+// UpdateAddressGroup обновляет существующую группу адресов
+func (s *NetguardService) UpdateAddressGroup(ctx context.Context, addressGroup models.AddressGroup) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Получаем старую версию группы адресов
+	oldAddressGroup, err := reader.GetAddressGroupByID(ctx, addressGroup.ResourceIdentifier)
+	if err != nil {
+		return errors.Wrap(err, "failed to get existing address group")
+	}
+
+	// Создаем валидатор
+	validator := validation.NewDependencyValidator(reader)
+	addressGroupValidator := validator.GetAddressGroupValidator()
+
+	// Валидируем группу адресов перед обновлением
+	if err := addressGroupValidator.ValidateForUpdate(ctx, *oldAddressGroup, addressGroup); err != nil {
+		return err
+	}
+
+	writer, err := s.registry.Writer(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get writer")
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	if err = writer.SyncAddressGroups(ctx, []models.AddressGroup{addressGroup}, ports.NewResourceIdentifierScope(addressGroup.ResourceIdentifier)); err != nil {
+		return errors.Wrap(err, "failed to update address group")
+	}
+	if err = writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+	s.conditionManager.ProcessAddressGroupConditions(ctx, &addressGroup)
+	if err := s.conditionManager.saveResourceConditions(ctx, &addressGroup); err != nil {
+		return errors.Wrap(err, "failed to save address group conditions")
+	}
+	return nil
+}
+
+// CreateAddressGroupBinding создает новую привязку группы адресов
+func (s *NetguardService) CreateAddressGroupBinding(ctx context.Context, binding models.AddressGroupBinding) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Создаем валидатор
+	validator := validation.NewDependencyValidator(reader)
+	bindingValidator := validator.GetAddressGroupBindingValidator()
+
+	// Валидируем привязку перед созданием
+	if err := bindingValidator.ValidateForCreation(ctx, &binding); err != nil {
+		return err
+	}
+
+	writer, err := s.registry.Writer(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get writer")
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	if err = writer.SyncAddressGroupBindings(ctx, []models.AddressGroupBinding{binding}, ports.NewResourceIdentifierScope(binding.ResourceIdentifier)); err != nil {
+		return errors.Wrap(err, "failed to create address group binding")
+	}
+	if err = writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+	// Обработка conditions
+	s.conditionManager.ProcessAddressGroupBindingConditions(ctx, &binding)
+	if err := s.conditionManager.saveResourceConditions(ctx, &binding); err != nil {
+		return errors.Wrap(err, "failed to save address group binding conditions")
+	}
+	return nil
+}
+
+// UpdateAddressGroupBinding обновляет существующую привязку группы адресов
+func (s *NetguardService) UpdateAddressGroupBinding(ctx context.Context, binding models.AddressGroupBinding) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Получаем старую версию привязки
+	oldBinding, err := reader.GetAddressGroupBindingByID(ctx, binding.ResourceIdentifier)
+	if err != nil {
+		return errors.Wrap(err, "failed to get existing address group binding")
+	}
+
+	// Создаем валидатор
+	validator := validation.NewDependencyValidator(reader)
+	bindingValidator := validator.GetAddressGroupBindingValidator()
+
+	// Валидируем привязку перед обновлением
+	if err := bindingValidator.ValidateForUpdate(ctx, *oldBinding, &binding); err != nil {
+		return err
+	}
+
+	writer, err := s.registry.Writer(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get writer")
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	if err = writer.SyncAddressGroupBindings(ctx, []models.AddressGroupBinding{binding}, ports.NewResourceIdentifierScope(binding.ResourceIdentifier)); err != nil {
+		return errors.Wrap(err, "failed to update address group binding")
+	}
+	if err = writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+	s.conditionManager.ProcessAddressGroupBindingConditions(ctx, &binding)
+	if err := s.conditionManager.saveResourceConditions(ctx, &binding); err != nil {
+		return errors.Wrap(err, "failed to save address group binding conditions")
+	}
 	return nil
 }
 
@@ -251,22 +438,183 @@ func (s *NetguardService) Sync(ctx context.Context, syncOp models.SyncOp, subjec
 	// Обработка разных типов субъектов
 	switch v := subject.(type) {
 	case []models.Service:
-		return s.syncServices(ctx, writer, v, syncOp)
+		if err := s.syncServices(ctx, writer, v, syncOp); err != nil {
+			return err
+		}
+		// Обработка conditions после успешного commit
+		for i := range v {
+			s.conditionManager.ProcessServiceConditions(ctx, &v[i])
+			if err := s.conditionManager.saveResourceConditions(ctx, &v[i]); err != nil {
+				log.Printf("Failed to save service conditions for %s: %v", v[i].Key(), err)
+			}
+		}
+		return nil
 	case []models.AddressGroup:
-		return s.syncAddressGroups(ctx, writer, v, syncOp)
+		if err := s.syncAddressGroups(ctx, writer, v, syncOp); err != nil {
+			return err
+		}
+		// Обработка conditions после успешного commit
+		for i := range v {
+			s.conditionManager.ProcessAddressGroupConditions(ctx, &v[i])
+			if err := s.conditionManager.saveResourceConditions(ctx, &v[i]); err != nil {
+				log.Printf("Failed to save address group conditions for %s: %v", v[i].Key(), err)
+			}
+		}
+		return nil
 	case []models.AddressGroupBinding:
-		return s.syncAddressGroupBindings(ctx, writer, v, syncOp)
+		if err := s.syncAddressGroupBindings(ctx, writer, v, syncOp); err != nil {
+			return err
+		}
+		// Обработка conditions после успешного commit
+		for i := range v {
+			s.conditionManager.ProcessAddressGroupBindingConditions(ctx, &v[i])
+			if err := s.conditionManager.saveResourceConditions(ctx, &v[i]); err != nil {
+				log.Printf("Failed to save address group binding conditions for %s: %v", v[i].Key(), err)
+			}
+		}
+		return nil
 	case []models.AddressGroupPortMapping:
-		return s.syncAddressGroupPortMappings(ctx, writer, v, syncOp)
+		if err := s.syncAddressGroupPortMappings(ctx, writer, v, syncOp); err != nil {
+			return err
+		}
+		// Commit транзакции
+		if err := writer.Commit(); err != nil {
+			return errors.Wrap(err, "failed to commit")
+		}
+		// Обработка conditions после успешного commit
+		for i := range v {
+			s.conditionManager.ProcessAddressGroupPortMappingConditions(ctx, &v[i])
+			if err := s.conditionManager.saveResourceConditions(ctx, &v[i]); err != nil {
+				log.Printf("Failed to save address group port mapping conditions for %s: %v", v[i].Key(), err)
+			}
+		}
+		return nil
 	case []models.RuleS2S:
-		return s.syncRuleS2S(ctx, writer, v, syncOp)
+		if err := s.syncRuleS2S(ctx, writer, v, syncOp); err != nil {
+			return err
+		}
+		// Обработка conditions после успешного commit
+		for i := range v {
+			s.conditionManager.ProcessRuleS2SConditions(ctx, &v[i])
+			if err := s.conditionManager.saveResourceConditions(ctx, &v[i]); err != nil {
+				log.Printf("Failed to save rule s2s conditions for %s: %v", v[i].Key(), err)
+			}
+		}
+		return nil
 	case []models.ServiceAlias:
-		return s.syncServiceAliases(ctx, writer, v, syncOp)
+		if err := s.syncServiceAliases(ctx, writer, v, syncOp); err != nil {
+			return err
+		}
+		// Обработка conditions после успешного commit
+		for i := range v {
+			s.conditionManager.ProcessServiceAliasConditions(ctx, &v[i])
+			if err := s.conditionManager.saveResourceConditions(ctx, &v[i]); err != nil {
+				log.Printf("Failed to save service alias conditions for %s: %v", v[i].Key(), err)
+			}
+		}
+		return nil
 	case []models.AddressGroupBindingPolicy:
-		return s.syncAddressGroupBindingPolicies(ctx, writer, v, syncOp)
+		if err := s.syncAddressGroupBindingPolicies(ctx, writer, v, syncOp); err != nil {
+			return err
+		}
+		// Обработка conditions после успешного commit
+		for i := range v {
+			s.conditionManager.ProcessAddressGroupBindingPolicyConditions(ctx, &v[i])
+			if err := s.conditionManager.saveResourceConditions(ctx, &v[i]); err != nil {
+				log.Printf("Failed to save address group binding policy conditions for %s: %v", v[i].Key(), err)
+			}
+		}
+		return nil
 	default:
 		return errors.New("unsupported subject type")
 	}
+}
+
+// CreateAddressGroupPortMapping создает новый маппинг портов группы адресов
+func (s *NetguardService) CreateAddressGroupPortMapping(ctx context.Context, mapping models.AddressGroupPortMapping) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Создаем валидатор
+	validator := validation.NewDependencyValidator(reader)
+	mappingValidator := validator.GetAddressGroupPortMappingValidator()
+
+	// Валидируем маппинг перед созданием
+	if err := mappingValidator.ValidateForCreation(ctx, mapping); err != nil {
+		return err
+	}
+
+	writer, err := s.registry.Writer(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get writer")
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	if err = writer.SyncAddressGroupPortMappings(ctx, []models.AddressGroupPortMapping{mapping}, ports.NewResourceIdentifierScope(mapping.ResourceIdentifier)); err != nil {
+		return errors.Wrap(err, "failed to create address group port mapping")
+	}
+	if err = writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+	// Обработка conditions
+	s.conditionManager.ProcessAddressGroupPortMappingConditions(ctx, &mapping)
+	if err := s.conditionManager.saveResourceConditions(ctx, &mapping); err != nil {
+		return errors.Wrap(err, "failed to save address group port mapping conditions")
+	}
+	return nil
+}
+
+// UpdateAddressGroupPortMapping обновляет существующий маппинг портов группы адресов
+func (s *NetguardService) UpdateAddressGroupPortMapping(ctx context.Context, mapping models.AddressGroupPortMapping) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Получаем старую версию маппинга
+	oldMapping, err := reader.GetAddressGroupPortMappingByID(ctx, mapping.ResourceIdentifier)
+	if err != nil {
+		return errors.Wrap(err, "failed to get existing address group port mapping")
+	}
+
+	// Создаем валидатор
+	validator := validation.NewDependencyValidator(reader)
+	mappingValidator := validator.GetAddressGroupPortMappingValidator()
+
+	// Валидируем маппинг перед обновлением
+	if err := mappingValidator.ValidateForUpdate(ctx, *oldMapping, mapping); err != nil {
+		return err
+	}
+
+	writer, err := s.registry.Writer(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get writer")
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	if err = writer.SyncAddressGroupPortMappings(ctx, []models.AddressGroupPortMapping{mapping}, ports.NewResourceIdentifierScope(mapping.ResourceIdentifier)); err != nil {
+		return errors.Wrap(err, "failed to update address group port mapping")
+	}
+	if err = writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+	s.conditionManager.ProcessAddressGroupPortMappingConditions(ctx, &mapping)
+	if err := s.conditionManager.saveResourceConditions(ctx, &mapping); err != nil {
+		return errors.Wrap(err, "failed to save address group port mapping conditions")
+	}
+	return nil
 }
 
 // syncServices синхронизирует сервисы с указанной операцией
@@ -335,6 +683,7 @@ func (s *NetguardService) syncServices(ctx context.Context, writer ports.Writer,
 	}
 
 	// Если это не удаление, обновляем связанные ресурсы
+	var allNewIEAgAgRules []models.IEAgAgRule
 	if syncOp != models.SyncOpDelete {
 		// Получаем reader, который видит изменения в текущей транзакции
 		txReader, err := s.registry.ReaderFromWriter(ctx, writer)
@@ -358,9 +707,19 @@ func (s *NetguardService) syncServices(ctx context.Context, writer ports.Writer,
 
 		log.Println("affected Rules", affectedRules)
 
+		// Собираем информацию о IEAGAG правилах, которые будут созданы
+		for _, rule := range affectedRules {
+			ieAgAgRules, err := s.GenerateIEAgAgRulesFromRuleS2SWithReader(ctx, txReader, rule)
+			if err != nil {
+				return errors.Wrapf(err, "failed to generate IEAgAgRules for RuleS2S %s", rule.Key())
+			}
+			allNewIEAgAgRules = append(allNewIEAgAgRules, ieAgAgRules...)
+		}
+
 		// Обновляем IE AG AG правила для затронутых RuleS2S, используя reader из транзакции
+		// Используем версию без обработки conditions, так как conditions будут обработаны после commit
 		if len(affectedRules) > 0 {
-			if err = s.updateIEAgAgRulesForRuleS2SWithReader(ctx, writer, txReader, affectedRules, models.SyncOpFullSync); err != nil {
+			if err = s.updateIEAgAgRulesForRuleS2SWithReaderNoConditions(ctx, writer, txReader, affectedRules, models.SyncOpFullSync); err != nil {
 				return errors.Wrap(err, "failed to update IEAgAgRules for affected RuleS2S")
 			}
 		}
@@ -394,6 +753,103 @@ func (s *NetguardService) syncServices(ctx context.Context, writer ports.Writer,
 		return errors.Wrap(err, "failed to commit")
 	}
 
+	// Process conditions for IEAGAG rules created during service sync
+	for i := range allNewIEAgAgRules {
+		if err := s.conditionManager.ProcessIEAgAgRuleConditions(ctx, &allNewIEAgAgRules[i]); err != nil {
+			log.Printf("Failed to process IEAgAgRule conditions for %s: %v", allNewIEAgAgRules[i].Key(), err)
+		}
+		if err := s.conditionManager.saveResourceConditions(ctx, &allNewIEAgAgRules[i]); err != nil {
+			log.Printf("Failed to save IEAgAgRule conditions for %s: %v", allNewIEAgAgRules[i].Key(), err)
+		}
+	}
+
+	return nil
+}
+
+// CreateRuleS2S создает новое правило s2s
+func (s *NetguardService) CreateRuleS2S(ctx context.Context, rule models.RuleS2S) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Создаем валидатор
+	validator := validation.NewDependencyValidator(reader)
+	ruleValidator := validator.GetRuleS2SValidator()
+
+	// Валидируем правило перед созданием
+	if err := ruleValidator.ValidateForCreation(ctx, rule); err != nil {
+		return err
+	}
+
+	writer, err := s.registry.Writer(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get writer")
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	if err = writer.SyncRuleS2S(ctx, []models.RuleS2S{rule}, ports.NewResourceIdentifierScope(rule.ResourceIdentifier)); err != nil {
+		return errors.Wrap(err, "failed to create rule s2s")
+	}
+	if err = writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+	// Обработка conditions
+	s.conditionManager.ProcessRuleS2SConditions(ctx, &rule)
+	if err := s.conditionManager.saveResourceConditions(ctx, &rule); err != nil {
+		return errors.Wrap(err, "failed to save rule s2s conditions")
+	}
+	return nil
+}
+
+// UpdateRuleS2S обновляет существующее правило s2s
+func (s *NetguardService) UpdateRuleS2S(ctx context.Context, rule models.RuleS2S) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Получаем старую версию правила
+	oldRule, err := reader.GetRuleS2SByID(ctx, rule.ResourceIdentifier)
+	if err != nil {
+		return errors.Wrap(err, "failed to get existing rule s2s")
+	}
+
+	// Создаем валидатор
+	validator := validation.NewDependencyValidator(reader)
+	ruleValidator := validator.GetRuleS2SValidator()
+
+	// Валидируем правило перед обновлением
+	if err := ruleValidator.ValidateForUpdate(ctx, *oldRule, rule); err != nil {
+		return err
+	}
+
+	writer, err := s.registry.Writer(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get writer")
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	if err = writer.SyncRuleS2S(ctx, []models.RuleS2S{rule}, ports.NewResourceIdentifierScope(rule.ResourceIdentifier)); err != nil {
+		return errors.Wrap(err, "failed to update rule s2s")
+	}
+	if err = writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+	s.conditionManager.ProcessRuleS2SConditions(ctx, &rule)
+	if err := s.conditionManager.saveResourceConditions(ctx, &rule); err != nil {
+		return errors.Wrap(err, "failed to save rule s2s conditions")
+	}
 	return nil
 }
 
@@ -462,6 +918,70 @@ func (s *NetguardService) updateIEAgAgRulesForRuleS2S(ctx context.Context, write
 	return s.updateIEAgAgRulesForRuleS2SWithReader(ctx, writer, reader, rules, syncOp)
 }
 
+// updateIEAgAgRulesForRuleS2SWithReaderNoConditions updates the IEAgAgRules for the given RuleS2S using the provided reader without processing conditions
+// This version is used when conditions will be processed separately (e.g., in syncServices)
+// syncOp - операция синхронизации (FullSync, Upsert, Delete)
+func (s *NetguardService) updateIEAgAgRulesForRuleS2SWithReaderNoConditions(ctx context.Context, writer ports.Writer, reader ports.Reader, rules []models.RuleS2S, syncOp models.SyncOp) error {
+	// Get all existing IEAgAgRules to detect obsolete ones
+	existingRules := make(map[string]models.IEAgAgRule)
+	err := reader.ListIEAgAgRules(ctx, func(rule models.IEAgAgRule) error {
+		existingRules[rule.Key()] = rule
+		return nil
+	}, nil)
+
+	if err != nil {
+		return errors.Wrap(err, "failed to list existing IEAgAgRules")
+	}
+
+	// Create a map of expected rules after the update
+	expectedRules := make(map[string]bool)
+	var allNewRules []models.IEAgAgRule
+
+	// Generate IEAgAgRules for each RuleS2S
+	for _, rule := range rules {
+		log.Println("rule", rule)
+		ieAgAgRules, err := s.GenerateIEAgAgRulesFromRuleS2SWithReader(ctx, reader, rule)
+		if err != nil {
+			return errors.Wrapf(err, "failed to generate IEAgAgRules for RuleS2S %s", rule.Key())
+		}
+
+		// Add generated rules to the expected rules map and collect all new rules
+		for _, ieRule := range ieAgAgRules {
+			expectedRules[ieRule.Key()] = true
+			allNewRules = append(allNewRules, ieRule)
+		}
+	}
+
+	// Sync all new rules at once
+	if len(allNewRules) > 0 {
+		if err = writer.SyncIEAgAgRules(ctx, allNewRules, nil, ports.WithSyncOp(syncOp)); err != nil {
+			return errors.Wrap(err, "failed to sync new IEAgAgRules")
+		}
+		// NOTE: Conditions are NOT processed here - they will be processed by the caller
+	}
+
+	// Find and delete obsolete rules
+	var obsoleteRules []models.IEAgAgRule
+	for key, rule := range existingRules {
+		if !expectedRules[key] {
+			obsoleteRules = append(obsoleteRules, rule)
+		}
+	}
+
+	if len(obsoleteRules) > 0 {
+		var obsoleteRuleIDs []models.ResourceIdentifier
+		for _, rule := range obsoleteRules {
+			obsoleteRuleIDs = append(obsoleteRuleIDs, rule.ResourceIdentifier)
+		}
+
+		if err = writer.DeleteIEAgAgRulesByIDs(ctx, obsoleteRuleIDs); err != nil {
+			return errors.Wrap(err, "failed to delete obsolete IEAgAgRules")
+		}
+	}
+
+	return nil
+}
+
 // updateIEAgAgRulesForRuleS2SWithReader updates the IEAgAgRules for the given RuleS2S using the provided reader
 // syncOp - операция синхронизации (FullSync, Upsert, Delete)
 func (s *NetguardService) updateIEAgAgRulesForRuleS2SWithReader(ctx context.Context, writer ports.Writer, reader ports.Reader, rules []models.RuleS2S, syncOp models.SyncOp) error {
@@ -499,6 +1019,15 @@ func (s *NetguardService) updateIEAgAgRulesForRuleS2SWithReader(ctx context.Cont
 	if len(allNewRules) > 0 {
 		if err = writer.SyncIEAgAgRules(ctx, allNewRules, nil, ports.WithSyncOp(syncOp)); err != nil {
 			return errors.Wrap(err, "failed to sync new IEAgAgRules")
+		}
+		// Process conditions for newly created IEAGAG rules after sync
+		for i := range allNewRules {
+			if err := s.conditionManager.ProcessIEAgAgRuleConditions(ctx, &allNewRules[i]); err != nil {
+				log.Printf("Failed to process IEAgAgRule conditions for %s: %v", allNewRules[i].Key(), err)
+			}
+			if err := s.conditionManager.saveResourceConditions(ctx, &allNewRules[i]); err != nil {
+				log.Printf("Failed to save IEAgAgRule conditions for %s: %v", allNewRules[i].Key(), err)
+			}
 		}
 	}
 
@@ -581,8 +1110,27 @@ func (s *NetguardService) SyncServices(ctx context.Context, services []models.Se
 		return errors.Wrap(err, "failed to find affected RuleS2S")
 	}
 
-	// Update IEAgAgRules for affected RuleS2S
+	// Update IEAgAgRules for affected RuleS2S and collect created rules
+	var allNewIEAgAgRules []models.IEAgAgRule
 	if len(affectedRules) > 0 {
+		// Get reader that can see changes in current transaction
+		txReader, err := s.registry.ReaderFromWriter(ctx, writer)
+		if err != nil {
+			writer.Abort()
+			return errors.Wrap(err, "failed to get transaction reader")
+		}
+		defer txReader.Close()
+
+		// Generate IEAGAG rules for affected RuleS2S to collect them for conditions processing
+		for _, rule := range affectedRules {
+			ieAgAgRules, err := s.GenerateIEAgAgRulesFromRuleS2SWithReader(ctx, txReader, rule)
+			if err != nil {
+				writer.Abort()
+				return errors.Wrapf(err, "failed to generate IEAgAgRules for RuleS2S %s", rule.Key())
+			}
+			allNewIEAgAgRules = append(allNewIEAgAgRules, ieAgAgRules...)
+		}
+
 		if err = s.updateIEAgAgRulesForRuleS2S(ctx, writer, affectedRules, models.SyncOpFullSync); err != nil {
 			writer.Abort()
 			return errors.Wrap(err, "failed to update IEAgAgRules for affected RuleS2S")
@@ -591,6 +1139,24 @@ func (s *NetguardService) SyncServices(ctx context.Context, services []models.Se
 
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
+	}
+
+	// Обработка conditions после успешного commit
+	for i := range services {
+		s.conditionManager.ProcessServiceConditions(ctx, &services[i])
+		if err := s.conditionManager.saveResourceConditions(ctx, &services[i]); err != nil {
+			log.Printf("Failed to save service conditions for %s: %v", services[i].Key(), err)
+		}
+	}
+
+	// Process conditions for IEAGAG rules created during service update
+	for i := range allNewIEAgAgRules {
+		if err := s.conditionManager.ProcessIEAgAgRuleConditions(ctx, &allNewIEAgAgRules[i]); err != nil {
+			log.Printf("Failed to process IEAgAgRule conditions for %s: %v", allNewIEAgAgRules[i].Key(), err)
+		}
+		if err := s.conditionManager.saveResourceConditions(ctx, &allNewIEAgAgRules[i]); err != nil {
+			log.Printf("Failed to save IEAgAgRule conditions for %s: %v", allNewIEAgAgRules[i].Key(), err)
+		}
 	}
 	return nil
 }
@@ -663,7 +1229,6 @@ func (s *NetguardService) syncAddressGroups(ctx context.Context, writer ports.Wr
 	if err := writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
-
 	return nil
 }
 
@@ -958,6 +1523,26 @@ func (s *NetguardService) SyncAddressGroupPortMappingsWithSyncOp(ctx context.Con
 		return errors.Wrap(err, "failed to commit")
 	}
 
+	// Получаем созданный/обновленный mapping для обработки conditions
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		log.Printf("Failed to get reader for conditions processing: %v", err)
+		return nil // Не возвращаем ошибку, так как основная операция успешна
+	}
+	defer reader.Close()
+
+	// Получаем mapping по AddressGroup ID
+	mapping, err := reader.GetAddressGroupPortMappingByID(ctx, binding.AddressGroupRef.ResourceIdentifier)
+	if err != nil {
+		log.Printf("Failed to get port mapping for conditions processing: %v", err)
+		return nil
+	}
+
+	s.conditionManager.ProcessAddressGroupPortMappingConditions(ctx, mapping)
+	if err := s.conditionManager.saveResourceConditions(ctx, mapping); err != nil {
+		log.Printf("Failed to save address group port mapping conditions for %s: %v", mapping.Key(), err)
+	}
+
 	return nil
 }
 
@@ -1069,6 +1654,38 @@ func (s *NetguardService) SyncAddressGroupBindings(ctx context.Context, bindings
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
+
+	// Обработка conditions для bindings
+	for i := range bindings {
+		s.conditionManager.ProcessAddressGroupBindingConditions(ctx, &bindings[i])
+		if err := s.conditionManager.saveResourceConditions(ctx, &bindings[i]); err != nil {
+			log.Printf("Failed to save address group binding conditions for %s: %v", bindings[i].Key(), err)
+		}
+	}
+
+	// Обработка conditions для созданных port mappings
+	// Получаем reader для чтения созданных mappings
+	reader2, err := s.registry.Reader(ctx)
+	if err != nil {
+		log.Printf("Failed to get reader for port mapping conditions processing: %v", err)
+		return nil // Не возвращаем ошибку, так как основная операция успешна
+	}
+	defer reader2.Close()
+
+	// Обрабатываем conditions для каждого port mapping, созданного для bindings
+	for _, binding := range bindings {
+		mapping, err := reader2.GetAddressGroupPortMappingByID(ctx, binding.AddressGroupRef.ResourceIdentifier)
+		if err != nil {
+			log.Printf("Failed to get port mapping for conditions processing for %s: %v", binding.AddressGroupRef.Key(), err)
+			continue
+		}
+
+		s.conditionManager.ProcessAddressGroupPortMappingConditions(ctx, mapping)
+		if err := s.conditionManager.saveResourceConditions(ctx, mapping); err != nil {
+			log.Printf("Failed to save address group port mapping conditions for %s: %v", mapping.Key(), err)
+		}
+	}
+
 	return nil
 }
 
@@ -1177,6 +1794,12 @@ func (s *NetguardService) SyncMultipleAddressGroupPortMappings(ctx context.Conte
 	// Фиксируем транзакцию
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
+	}
+	for i := range mappings {
+		s.conditionManager.ProcessAddressGroupPortMappingConditions(ctx, &mappings[i])
+		if err := s.conditionManager.saveResourceConditions(ctx, &mappings[i]); err != nil {
+			log.Printf("Failed to save address group port mapping conditions for %s: %v", mappings[i].Key(), err)
+		}
 	}
 	return nil
 }
@@ -1334,6 +1957,16 @@ func (s *NetguardService) syncRuleS2S(ctx context.Context, writer ports.Writer, 
 		return errors.Wrap(err, "failed to commit")
 	}
 
+	// Process conditions for newly created IEAGAG rules after successful commit
+	for i := range allNewRules {
+		if err := s.conditionManager.ProcessIEAgAgRuleConditions(ctx, &allNewRules[i]); err != nil {
+			log.Printf("Failed to process IEAgAgRule conditions for %s: %v", allNewRules[i].Key(), err)
+		}
+		if err := s.conditionManager.saveResourceConditions(ctx, &allNewRules[i]); err != nil {
+			log.Printf("Failed to save IEAgAgRule conditions for %s: %v", allNewRules[i].Key(), err)
+		}
+	}
+
 	return nil
 }
 
@@ -1435,6 +2068,17 @@ func (s *NetguardService) SyncRuleS2S(ctx context.Context, rules []models.RuleS2
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
+
+	// Process conditions for newly created IEAGAG rules after successful commit
+	for i := range allNewRules {
+		if err := s.conditionManager.ProcessIEAgAgRuleConditions(ctx, &allNewRules[i]); err != nil {
+			log.Printf("Failed to process IEAgAgRule conditions for %s: %v", allNewRules[i].Key(), err)
+		}
+		if err := s.conditionManager.saveResourceConditions(ctx, &allNewRules[i]); err != nil {
+			log.Printf("Failed to save IEAgAgRule conditions for %s: %v", allNewRules[i].Key(), err)
+		}
+	}
+
 	return nil
 }
 
@@ -1493,7 +2137,93 @@ func (s *NetguardService) syncServiceAliases(ctx context.Context, writer ports.W
 	if err := writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
+	return nil
+}
 
+// CreateServiceAlias создает новый алиас сервиса
+func (s *NetguardService) CreateServiceAlias(ctx context.Context, alias models.ServiceAlias) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Создаем валидатор
+	validator := validation.NewDependencyValidator(reader)
+	aliasValidator := validator.GetServiceAliasValidator()
+
+	// Валидируем алиас перед созданием
+	if err := aliasValidator.ValidateForCreation(ctx, &alias); err != nil {
+		return err
+	}
+
+	writer, err := s.registry.Writer(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get writer")
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	if err = writer.SyncServiceAliases(ctx, []models.ServiceAlias{alias}, ports.NewResourceIdentifierScope(alias.ResourceIdentifier)); err != nil {
+		return errors.Wrap(err, "failed to create service alias")
+	}
+	if err = writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+	// Обработка conditions
+	s.conditionManager.ProcessServiceAliasConditions(ctx, &alias)
+	if err := s.conditionManager.saveResourceConditions(ctx, &alias); err != nil {
+		return errors.Wrap(err, "failed to save service alias conditions")
+	}
+	return nil
+}
+
+// UpdateServiceAlias обновляет существующий алиас сервиса
+func (s *NetguardService) UpdateServiceAlias(ctx context.Context, alias models.ServiceAlias) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Получаем старую версию алиаса
+	oldAlias, err := reader.GetServiceAliasByID(ctx, alias.ResourceIdentifier)
+	if err != nil {
+		return errors.Wrap(err, "failed to get existing service alias")
+	}
+
+	// Создаем валидатор
+	validator := validation.NewDependencyValidator(reader)
+	aliasValidator := validator.GetServiceAliasValidator()
+
+	// Валидируем алиас перед обновлением
+	if err := aliasValidator.ValidateForUpdate(ctx, *oldAlias, alias); err != nil {
+		return err
+	}
+
+	writer, err := s.registry.Writer(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get writer")
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	if err = writer.SyncServiceAliases(ctx, []models.ServiceAlias{alias}, ports.NewResourceIdentifierScope(alias.ResourceIdentifier)); err != nil {
+		return errors.Wrap(err, "failed to update service alias")
+	}
+	if err = writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+	s.conditionManager.ProcessServiceAliasConditions(ctx, &alias)
+	if err := s.conditionManager.saveResourceConditions(ctx, &alias); err != nil {
+		return errors.Wrap(err, "failed to save service alias conditions")
+	}
 	return nil
 }
 
@@ -1601,6 +2331,99 @@ func (s *NetguardService) SyncServiceAliases(ctx context.Context, aliases []mode
 
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
+	}
+	for i := range aliases {
+		s.conditionManager.ProcessServiceAliasConditions(ctx, &aliases[i])
+		if err := s.conditionManager.saveResourceConditions(ctx, &aliases[i]); err != nil {
+			log.Printf("Failed to save service alias conditions for %s: %v", aliases[i].Key(), err)
+		}
+	}
+	return nil
+}
+
+// CreateAddressGroupBindingPolicy создает новую политику привязки группы адресов
+func (s *NetguardService) CreateAddressGroupBindingPolicy(ctx context.Context, policy models.AddressGroupBindingPolicy) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Создаем валидатор
+	validator := validation.NewDependencyValidator(reader)
+	policyValidator := validator.GetAddressGroupBindingPolicyValidator()
+
+	// Валидируем политику перед созданием
+	if err := policyValidator.ValidateForCreation(ctx, &policy); err != nil {
+		return err
+	}
+
+	writer, err := s.registry.Writer(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get writer")
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	if err = writer.SyncAddressGroupBindingPolicies(ctx, []models.AddressGroupBindingPolicy{policy}, ports.NewResourceIdentifierScope(policy.ResourceIdentifier)); err != nil {
+		return errors.Wrap(err, "failed to create address group binding policy")
+	}
+	if err = writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+	// Обработка conditions
+	s.conditionManager.ProcessAddressGroupBindingPolicyConditions(ctx, &policy)
+	if err := s.conditionManager.saveResourceConditions(ctx, &policy); err != nil {
+		return errors.Wrap(err, "failed to save address group binding policy conditions")
+	}
+	return nil
+}
+
+// UpdateAddressGroupBindingPolicy обновляет существующую политику привязки группы адресов
+func (s *NetguardService) UpdateAddressGroupBindingPolicy(ctx context.Context, policy models.AddressGroupBindingPolicy) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Получаем старую версию политики
+	oldPolicy, err := reader.GetAddressGroupBindingPolicyByID(ctx, policy.ResourceIdentifier)
+	if err != nil {
+		return errors.Wrap(err, "failed to get existing address group binding policy")
+	}
+
+	// Создаем валидатор
+	validator := validation.NewDependencyValidator(reader)
+	policyValidator := validator.GetAddressGroupBindingPolicyValidator()
+
+	// Валидируем политику перед обновлением
+	if err := policyValidator.ValidateForUpdate(ctx, *oldPolicy, &policy); err != nil {
+		return err
+	}
+
+	writer, err := s.registry.Writer(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get writer")
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	if err = writer.SyncAddressGroupBindingPolicies(ctx, []models.AddressGroupBindingPolicy{policy}, ports.NewResourceIdentifierScope(policy.ResourceIdentifier)); err != nil {
+		return errors.Wrap(err, "failed to update address group binding policy")
+	}
+	if err = writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+	s.conditionManager.ProcessAddressGroupBindingPolicyConditions(ctx, &policy)
+	if err := s.conditionManager.saveResourceConditions(ctx, &policy); err != nil {
+		return errors.Wrap(err, "failed to save address group binding policy conditions")
 	}
 	return nil
 }
@@ -2461,7 +3284,6 @@ func (s *NetguardService) syncAddressGroupBindingPolicies(ctx context.Context, w
 	if err := writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
-
 	return nil
 }
 
@@ -2515,6 +3337,12 @@ func (s *NetguardService) SyncAddressGroupBindingPolicies(ctx context.Context, p
 	}
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
+	}
+	for i := range policies {
+		s.conditionManager.ProcessAddressGroupBindingPolicyConditions(ctx, &policies[i])
+		if err := s.conditionManager.saveResourceConditions(ctx, &policies[i]); err != nil {
+			log.Printf("Failed to save address group binding policy conditions for %s: %v", policies[i].Key(), err)
+		}
 	}
 	return nil
 }
@@ -2601,7 +3429,12 @@ func (s *NetguardService) syncIEAgAgRules(ctx context.Context, writer ports.Writ
 	if err := writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
-
+	for i := range rules {
+		s.conditionManager.ProcessIEAgAgRuleConditions(ctx, &rules[i])
+		if err := s.conditionManager.saveResourceConditions(ctx, &rules[i]); err != nil {
+			log.Printf("Failed to save IEAgAgRule conditions for %s: %v", rules[i].Key(), err)
+		}
+	}
 	return nil
 }
 

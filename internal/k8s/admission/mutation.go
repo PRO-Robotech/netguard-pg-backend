@@ -119,12 +119,12 @@ func (w *MutationWebhook) mutateAddressGroup(ctx context.Context, req *admission
 	// Add finalizer for graceful deletion
 	patches = append(patches, w.addFinalizer(&addressGroup, "netguard.sgroups.io/backend-sync")...)
 
-	// Set default description if empty
-	if addressGroup.Spec.Description == "" {
+	// Set default action if empty
+	if addressGroup.Spec.DefaultAction == "" {
 		patches = append(patches, map[string]interface{}{
 			"op":    "replace",
-			"path":  "/spec/description",
-			"value": fmt.Sprintf("AddressGroup %s managed by netguard-apiserver", addressGroup.Name),
+			"path":  "/spec/defaultAction",
+			"value": "ACCEPT", // Default to ACCEPT action
 		})
 	}
 

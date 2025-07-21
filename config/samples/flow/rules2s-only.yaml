@@ -1,0 +1,319 @@
+# config/samples/flow/rules2s-only.yaml
+# Тестовый флоу только с RuleS2S правилами
+# IEAGAG правила должны создаваться автоматически системой
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: test-app
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: test-infra
+---
+# Services
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Service
+metadata:
+  name: frontend
+  namespace: test-app
+spec:
+  description: "Frontend web service"
+  ingressPorts:
+    - protocol: TCP
+      port: "80"
+    - protocol: TCP
+      port: "443"
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Service
+metadata:
+  name: api
+  namespace: test-app
+spec:
+  description: "API backend service"
+  ingressPorts:
+    - protocol: TCP
+      port: "8080"
+    - protocol: TCP
+      port: "8081"
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Service
+metadata:
+  name: database
+  namespace: test-infra
+spec:
+  description: "PostgreSQL database service"
+  ingressPorts:
+    - protocol: TCP
+      port: "5432"
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Service
+metadata:
+  name: cache
+  namespace: test-infra
+spec:
+  description: "Redis cache service"
+  ingressPorts:
+    - protocol: TCP
+      port: "6379"
+---
+# ServiceAliases
+apiVersion: netguard.sgroups.io/v1beta1
+kind: ServiceAlias
+metadata:
+  name: frontend-alias
+  namespace: test-app
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: frontend
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: ServiceAlias
+metadata:
+  name: api-alias
+  namespace: test-app
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: api
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: ServiceAlias
+metadata:
+  name: database-alias
+  namespace: test-infra
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: database
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: ServiceAlias
+metadata:
+  name: cache-alias
+  namespace: test-infra
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: cache
+---
+# AddressGroups
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroup
+metadata:
+  name: frontend-ag
+  namespace: test-app
+spec:
+  defaultAction: ACCEPT
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroup
+metadata:
+  name: api-ag
+  namespace: test-app
+spec:
+  defaultAction: ACCEPT
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroup
+metadata:
+  name: database-ag
+  namespace: test-infra
+spec:
+  defaultAction: ACCEPT
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroup
+metadata:
+  name: cache-ag
+  namespace: test-infra
+spec:
+  defaultAction: ACCEPT
+---
+# AddressGroupBindingPolicies
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroupBindingPolicy
+metadata:
+  name: frontend-binding
+  namespace: test-app
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: frontend
+    namespace: test-app
+  addressGroupRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: frontend-ag
+    namespace: test-app
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroupBindingPolicy
+metadata:
+  name: api-binding
+  namespace: test-app
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: api
+    namespace: test-app
+  addressGroupRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: api-ag
+    namespace: test-app
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroupBindingPolicy
+metadata:
+  name: database-binding
+  namespace: test-infra
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: database
+    namespace: test-infra
+  addressGroupRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: database-ag
+    namespace: test-infra
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroupBindingPolicy
+metadata:
+  name: cache-binding
+  namespace: test-infra
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: cache
+    namespace: test-infra
+  addressGroupRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: cache-ag
+    namespace: test-infra
+---
+# RuleS2S - основные правила трафика между сервисами
+# IEAGAG правила будут созданы автоматически на основе этих правил
+apiVersion: netguard.sgroups.io/v1beta1
+kind: RuleS2S
+metadata:
+  name: frontend-to-api-egress
+  namespace: test-app
+spec:
+  traffic: egress
+  serviceLocalRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: ServiceAlias
+    name: frontend-alias
+    namespace: test-app
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: ServiceAlias
+    name: api-alias
+    namespace: test-app
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: RuleS2S
+metadata:
+  name: api-to-frontend-ingress
+  namespace: test-app
+spec:
+  traffic: ingress
+  serviceLocalRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: ServiceAlias
+    name: api-alias
+    namespace: test-app
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: ServiceAlias
+    name: frontend-alias
+    namespace: test-app
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: RuleS2S
+metadata:
+  name: api-to-database-egress
+  namespace: test-app
+spec:
+  traffic: egress
+  serviceLocalRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: ServiceAlias
+    name: api-alias
+    namespace: test-app
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: ServiceAlias
+    name: database-alias
+    namespace: test-infra
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: RuleS2S
+metadata:
+  name: database-to-api-ingress
+  namespace: test-infra
+spec:
+  traffic: ingress
+  serviceLocalRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: ServiceAlias
+    name: database-alias
+    namespace: test-infra
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: ServiceAlias
+    name: api-alias
+    namespace: test-app
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: RuleS2S
+metadata:
+  name: api-to-cache-egress
+  namespace: test-app
+spec:
+  traffic: egress
+  serviceLocalRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: ServiceAlias
+    name: api-alias
+    namespace: test-app
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: ServiceAlias
+    name: cache-alias
+    namespace: test-infra
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: RuleS2S
+metadata:
+  name: cache-to-api-ingress
+  namespace: test-infra
+spec:
+  traffic: ingress
+  serviceLocalRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: ServiceAlias
+    name: cache-alias
+    namespace: test-infra
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: ServiceAlias
+    name: api-alias
+    namespace: test-app

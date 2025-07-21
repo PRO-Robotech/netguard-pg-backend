@@ -8,7 +8,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/rest"
 
+	"netguard-pg-backend/internal/domain/models"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
+	"netguard-pg-backend/internal/k8s/registry/base"
 )
 
 // StatusREST implements the /status subresource for ServiceAlias.
@@ -19,8 +21,11 @@ type StatusREST struct {
 	store *ServiceAliasStorage
 }
 
-func NewStatusREST(store *ServiceAliasStorage) *StatusREST {
-	return &StatusREST{store: store}
+// NewStatusREST creates a new StatusREST using BaseStorage
+func NewStatusREST(store *ServiceAliasStorage) *base.StatusREST[*netguardv1beta1.ServiceAlias, *models.ServiceAlias] {
+	return base.NewStatusREST[*netguardv1beta1.ServiceAlias, *models.ServiceAlias](
+		store.BaseStorage,
+	)
 }
 
 func (r *StatusREST) New() runtime.Object {

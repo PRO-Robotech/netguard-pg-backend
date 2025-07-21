@@ -15,6 +15,16 @@ const (
 	ProtocolUDP TransportProtocol = "UDP"
 )
 
+// RuleAction represents the action to take for a rule
+type RuleAction string
+
+const (
+	// ActionAccept accepts network packets
+	ActionAccept RuleAction = "ACCEPT"
+	// ActionDrop drops network packets
+	ActionDrop RuleAction = "DROP"
+)
+
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -80,16 +90,36 @@ type ServiceStatus struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type AddressGroupsSpec struct {
 	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 	// Items contains the list of address groups
 	Items []NamespacedObjectReference `json:"items,omitempty"`
+}
+
+// AddressGroupsSpecList contains a list of AddressGroupsSpec
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type AddressGroupsSpecList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []AddressGroupsSpec `json:"items"`
 }
 
 // RuleS2SDstOwnRefSpec defines the RuleS2S objects that reference this Service from other namespaces
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type RuleS2SDstOwnRefSpec struct {
 	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 	// Items contains the list of RuleS2S references
 	Items []NamespacedObjectReference `json:"items,omitempty"`
+}
+
+// RuleS2SDstOwnRefSpecList contains a list of RuleS2SDstOwnRefSpec
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type RuleS2SDstOwnRefSpecList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []RuleS2SDstOwnRefSpec `json:"items"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -116,20 +146,18 @@ type AddressGroup struct {
 
 // AddressGroupSpec defines the desired state of AddressGroup
 type AddressGroupSpec struct {
-	// Description of the address group
-	// +optional
-	Description string `json:"description,omitempty"`
+	// Default action for the address group
+	// +kubebuilder:validation:Enum=ACCEPT;DROP
+	// +kubebuilder:validation:Required
+	DefaultAction RuleAction `json:"defaultAction"`
 
-	// Addresses defines the list of addresses in this group
+	// Whether to enable logs
 	// +optional
-	Addresses []Address `json:"addresses,omitempty"`
-}
+	Logs bool `json:"logs,omitempty"`
 
-// Address defines a network address
-type Address struct {
-	// IP address or CIDR
-	// +kubebuilder:validation:Pattern=`^([0-9]{1,3}\.){3}[0-9]{1,3}(\/[0-9]{1,2})?$|^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}(\/[0-9]{1,3})?$`
-	Address string `json:"address"`
+	// Whether to enable trace
+	// +optional
+	Trace bool `json:"trace,omitempty"`
 }
 
 // AddressGroupStatus defines the observed state of AddressGroup
@@ -229,8 +257,18 @@ type ServicePortsRef struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type AccessPortsSpec struct {
 	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ObjectMeta `json:"metadata,omitempty"`
 	// Items contains the list of service ports references
 	Items []ServicePortsRef `json:"items,omitempty"`
+}
+
+// AccessPortsSpecList contains a list of AccessPortsSpec
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type AccessPortsSpecList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []AccessPortsSpec `json:"items"`
 }
 
 // AddressGroupBindingStatus defines the observed state of AddressGroupBinding
@@ -455,10 +493,10 @@ type IEAgAgRuleSpec struct {
 	// +optional
 	Ports []PortSpec `json:"ports,omitempty"`
 
-	// Action for the rule (Allow, Deny)
-	// +kubebuilder:validation:Enum=Allow;Deny
+	// Action for the rule (ACCEPT, DROP)
+	// +kubebuilder:validation:Enum=ACCEPT;DROP
 	// +optional
-	Action string `json:"action,omitempty"`
+	Action RuleAction `json:"action,omitempty"`
 
 	// Priority of the rule
 	// +optional

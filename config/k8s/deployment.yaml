@@ -3,7 +3,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: netguard-apiserver
-  namespace: netguard-test
+  namespace: netguard-system
   labels:
     app: netguard-apiserver
 spec:
@@ -91,7 +91,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: netguard-apiserver
-  namespace: netguard-test
+  namespace: netguard-system
   labels:
     app.kubernetes.io/name: netguard-apiserver
     app.kubernetes.io/component: aggregated-api
@@ -115,7 +115,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: netguard-apiserver-webhook
-  namespace: netguard-test
+  namespace: netguard-system
   labels:
     app.kubernetes.io/name: netguard-apiserver
     app.kubernetes.io/component: admission-webhook

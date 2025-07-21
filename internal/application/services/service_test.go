@@ -4,11 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"github.com/pkg/errors"
 	"netguard-pg-backend/internal/application/services"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/patterns"
+
+	"github.com/pkg/errors"
 )
 
 // MockSubject реализует интерфейс patterns.Subject для тестирования
@@ -51,6 +52,10 @@ func (m *MockRegistry) Writer(ctx context.Context) (ports.Writer, error) {
 
 func (m *MockRegistry) Subject() patterns.Subject {
 	return m.subject
+}
+
+func (m *MockRegistry) ReaderFromWriter(ctx context.Context, writer ports.Writer) (ports.Reader, error) {
+	return m.reader, nil
 }
 
 func (m *MockRegistry) Close() error {
@@ -299,14 +304,14 @@ func TestCreateService(t *testing.T) {
 	netguardService := services.NewNetguardService(mockRegistry)
 
 	// Тест успешного создания сервиса
-	err := netguardService.CreateService(ctx, service)
+	_, err := netguardService.CreateService(ctx, service)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
 	// Тест ошибки при создании сервиса (ошибка в SyncServices)
 	mockRegistry.writer.syncServicesError = errors.New("sync services error")
-	err = netguardService.CreateService(ctx, service)
+	_, err = netguardService.CreateService(ctx, service)
 	if err == nil {
 		t.Error("Expected error, got nil")
 	}
@@ -314,7 +319,7 @@ func TestCreateService(t *testing.T) {
 	// Тест ошибки при создании сервиса (ошибка в Commit)
 	mockRegistry.writer.syncServicesError = nil
 	mockRegistry.writer.commitError = errors.New("commit error")
-	err = netguardService.CreateService(ctx, service)
+	_, err = netguardService.CreateService(ctx, service)
 	if err == nil {
 		t.Error("Expected error, got nil")
 	}
@@ -341,7 +346,7 @@ func TestCreateService(t *testing.T) {
 	mockRegistry.reader.AddAddressGroupPortMapping(agpm)
 
 	// Должна быть ошибка валидации из-за перекрытия портов
-	err = netguardService.CreateService(ctx, service)
+	_, err = netguardService.CreateService(ctx, service)
 	if err == nil {
 		t.Error("Expected validation error, got nil")
 	}
@@ -497,14 +502,14 @@ func TestUpdateService(t *testing.T) {
 	}
 
 	// Тест успешного обновления сервиса
-	err := netguardService.UpdateService(ctx, newService)
+	_, err := netguardService.UpdateService(ctx, newService)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
 	// Тест ошибки при обновлении сервиса (ошибка в SyncServices)
 	mockRegistry.writer.syncServicesError = errors.New("sync services error")
-	err = netguardService.UpdateService(ctx, newService)
+	_, err = netguardService.UpdateService(ctx, newService)
 	if err == nil {
 		t.Error("Expected error, got nil")
 	}
@@ -512,7 +517,7 @@ func TestUpdateService(t *testing.T) {
 	// Тест ошибки при обновлении сервиса (ошибка в Commit)
 	mockRegistry.writer.syncServicesError = nil
 	mockRegistry.writer.commitError = errors.New("commit error")
-	err = netguardService.UpdateService(ctx, newService)
+	_, err = netguardService.UpdateService(ctx, newService)
 	if err == nil {
 		t.Error("Expected error, got nil")
 	}
@@ -532,7 +537,7 @@ func TestUpdateService(t *testing.T) {
 	}
 
 	// Должна быть ошибка валидации из-за перекрытия портов
-	err = netguardService.UpdateService(ctx, newServiceWithOverlap)
+	_, err = netguardService.UpdateService(ctx, newServiceWithOverlap)
 	if err == nil {
 		t.Error("Expected validation error, got nil")
 	}

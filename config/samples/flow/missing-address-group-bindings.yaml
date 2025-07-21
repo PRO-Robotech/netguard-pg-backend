@@ -1,0 +1,222 @@
+# config/samples/flow/missing-address-group-bindings.yaml
+# Недостающие AddressGroupBinding для связи сервисов с адресными группами
+# Эти binding'и необходимы для автоматического создания IEAGAG правил из RuleS2S
+# Используется версия API netguard.sgroups.io/v1beta1 для netguard-backend проекта
+---
+# Binding'и для namespace application
+# web service bindings
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroupBinding
+metadata:
+  name: web-ingress-application
+  namespace: application
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: web
+  addressGroupRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: ingress-application
+    namespace: application
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroupBinding
+metadata:
+  name: web-egress-application
+  namespace: application
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: web
+  addressGroupRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: egress-application
+    namespace: application
+---
+# backend service bindings
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroupBinding
+metadata:
+  name: backend-ingress-application
+  namespace: application
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: backend
+  addressGroupRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: ingress-application
+    namespace: application
+---
+# backend-egress-application уже существует в example-flow-stage2.yaml как backend-egress-app
+# Cross-namespace bindings для backend с infra адресными группами
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroupBinding
+metadata:
+  name: backend-ingress-infra
+  namespace: application
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: backend
+  addressGroupRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: ingress-infra
+    namespace: infra
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroupBinding
+metadata:
+  name: backend-egress-infra
+  namespace: application
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: backend
+  addressGroupRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: egress-infra
+    namespace: infra
+---
+# Binding'и для namespace infra
+# postgress service bindings
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroupBinding
+metadata:
+  name: postgress-ingress-infra
+  namespace: infra
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: postgress
+  addressGroupRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: ingress-infra
+    namespace: infra
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroupBinding
+metadata:
+  name: postgress-egress-infra
+  namespace: infra
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: postgress
+  addressGroupRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: egress-infra
+    namespace: infra
+---
+# Cross-namespace bindings для postgress с application адресными группами
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroupBinding
+metadata:
+  name: postgress-ingress-application
+  namespace: infra
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: postgress
+  addressGroupRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: ingress-application
+    namespace: application
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroupBinding
+metadata:
+  name: postgress-egress-application
+  namespace: infra
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: postgress
+  addressGroupRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: egress-application
+    namespace: application
+---
+# logs service bindings
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroupBinding
+metadata:
+  name: logs-ingress-infra
+  namespace: infra
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: logs
+  addressGroupRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: ingress-infra
+    namespace: infra
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroupBinding
+metadata:
+  name: logs-egress-infra
+  namespace: infra
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: logs
+  addressGroupRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: egress-infra
+    namespace: infra
+---
+# Cross-namespace bindings для logs с application адресными группами
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroupBinding
+metadata:
+  name: logs-ingress-application
+  namespace: infra
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: logs
+  addressGroupRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: ingress-application
+    namespace: application
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroupBinding
+metadata:
+  name: logs-egress-application
+  namespace: infra
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: logs
+  addressGroupRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: egress-application
+    namespace: application

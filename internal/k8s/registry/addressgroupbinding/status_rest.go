@@ -11,7 +11,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/rest"
 
+	"netguard-pg-backend/internal/domain/models"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
+	"netguard-pg-backend/internal/k8s/registry/base"
 )
 
 // StatusREST implements the /status subresource for AddressGroupBinding.
@@ -24,9 +26,11 @@ type StatusREST struct {
 	store *AddressGroupBindingStorage
 }
 
-// NewStatusREST constructs a new StatusREST handler bound to the given store.
-func NewStatusREST(store *AddressGroupBindingStorage) *StatusREST {
-	return &StatusREST{store: store}
+// NewStatusREST creates a new StatusREST using BaseStorage
+func NewStatusREST(store *AddressGroupBindingStorage) *base.StatusREST[*netguardv1beta1.AddressGroupBinding, *models.AddressGroupBinding] {
+	return base.NewStatusREST[*netguardv1beta1.AddressGroupBinding, *models.AddressGroupBinding](
+		store.BaseStorage,
+	)
 }
 
 // New returns a blank CR instance.

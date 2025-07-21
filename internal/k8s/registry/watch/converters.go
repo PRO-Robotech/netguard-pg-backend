@@ -87,16 +87,10 @@ func (c *AddressGroupConverter) ConvertToK8s(resource interface{}) runtime.Objec
 			Namespace: group.ResourceIdentifier.Namespace,
 		},
 		Spec: netguardv1beta1.AddressGroupSpec{
-			Description: group.Description,
+			DefaultAction: netguardv1beta1.RuleAction(group.DefaultAction),
+			Logs:          group.Logs,
+			Trace:         group.Trace,
 		},
-	}
-
-	// Convert Addresses
-	for _, addr := range group.Addresses {
-		k8sAddr := netguardv1beta1.Address{
-			Address: addr,
-		}
-		k8sGroup.Spec.Addresses = append(k8sGroup.Spec.Addresses, k8sAddr)
 	}
 
 	return k8sGroup

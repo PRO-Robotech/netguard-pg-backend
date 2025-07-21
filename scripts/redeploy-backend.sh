@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-NAMESPACE="netguard-test"
+NAMESPACE="netguard-system"
 DEPLOYMENT_NAME="netguard-backend"
 IMAGE_NAME="netguard/pg-backend:latest"
 MINIKUBE_PROFILE="incloud"

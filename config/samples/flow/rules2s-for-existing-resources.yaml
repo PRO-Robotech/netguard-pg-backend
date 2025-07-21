@@ -1,0 +1,118 @@
+# config/samples/flow/rules2s-for-existing-resources.yaml
+# RuleS2S правила для существующих ресурсов из example-flow.yaml
+# IEAGAG правила должны создаваться автоматически системой
+---
+# RuleS2S правила между существующими сервисами
+# web -> backend (egress from web perspective)
+apiVersion: netguard.sgroups.io/v1beta1
+kind: RuleS2S
+metadata:
+  name: web-to-backend-egress
+  namespace: application
+spec:
+  traffic: egress
+  serviceLocalRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: ServiceAlias
+    name: alias-web
+    namespace: application
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: ServiceAlias
+    name: alias-backend
+    namespace: application
+---
+# backend -> web (ingress from backend perspective)
+apiVersion: netguard.sgroups.io/v1beta1
+kind: RuleS2S
+metadata:
+  name: backend-from-web-ingress
+  namespace: application
+spec:
+  traffic: ingress
+  serviceLocalRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: ServiceAlias
+    name: alias-backend
+    namespace: application
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: ServiceAlias
+    name: alias-web
+    namespace: application
+---
+# backend -> postgress (egress from backend perspective, cross-namespace)
+apiVersion: netguard.sgroups.io/v1beta1
+kind: RuleS2S
+metadata:
+  name: backend-to-postgress-egress
+  namespace: application
+spec:
+  traffic: egress
+  serviceLocalRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: ServiceAlias
+    name: alias-backend
+    namespace: application
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: ServiceAlias
+    name: alias-postgress
+    namespace: infra
+---
+# postgress -> backend (ingress from postgress perspective, cross-namespace)
+apiVersion: netguard.sgroups.io/v1beta1
+kind: RuleS2S
+metadata:
+  name: postgress-from-backend-ingress
+  namespace: infra
+spec:
+  traffic: ingress
+  serviceLocalRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: ServiceAlias
+    name: alias-postgress
+    namespace: infra
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: ServiceAlias
+    name: alias-backend
+    namespace: application
+---
+# backend -> logs (egress from backend perspective, cross-namespace)
+apiVersion: netguard.sgroups.io/v1beta1
+kind: RuleS2S
+metadata:
+  name: backend-to-logs-egress
+  namespace: application
+spec:
+  traffic: egress
+  serviceLocalRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: ServiceAlias
+    name: alias-backend
+    namespace: application
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: ServiceAlias
+    name: alias-logs
+    namespace: infra
+---
+# logs -> backend (ingress from logs perspective, cross-namespace)
+apiVersion: netguard.sgroups.io/v1beta1
+kind: RuleS2S
+metadata:
+  name: logs-from-backend-ingress
+  namespace: infra
+spec:
+  traffic: ingress
+  serviceLocalRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: ServiceAlias
+    name: alias-logs
+    namespace: infra
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: ServiceAlias
+    name: alias-backend
+    namespace: application

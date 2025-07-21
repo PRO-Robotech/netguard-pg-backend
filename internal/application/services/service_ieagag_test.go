@@ -4,11 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"github.com/pkg/errors"
 	"netguard-pg-backend/internal/application/services"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/patterns"
+
+	"github.com/pkg/errors"
 )
 
 // MockRegistryForIEAgAgRules extends the MockRegistry to support IEAgAgRules
@@ -36,6 +37,10 @@ func (m *MockRegistryForIEAgAgRules) Writer(ctx context.Context) (ports.Writer, 
 
 func (m *MockRegistryForIEAgAgRules) Subject() patterns.Subject {
 	return m.subject
+}
+
+func (m *MockRegistryForIEAgAgRules) ReaderFromWriter(ctx context.Context, writer ports.Writer) (ports.Reader, error) {
+	return m.reader, nil
 }
 
 func (m *MockRegistryForIEAgAgRules) Close() error {
@@ -186,14 +191,18 @@ func TestGenerateIEAgAgRulesFromRuleS2S(t *testing.T) {
 
 	addressGroupLocalID := models.NewResourceIdentifier("test-ag-local")
 	addressGroupLocal := models.AddressGroup{
-		SelfRef:   models.SelfRef{ResourceIdentifier: addressGroupLocalID},
-		Addresses: []string{"192.168.1.1/32"},
+		SelfRef:       models.SelfRef{ResourceIdentifier: addressGroupLocalID},
+		DefaultAction: models.ActionAccept,
+		Logs:          true,
+		Trace:         false,
 	}
 
 	addressGroupID := models.NewResourceIdentifier("test-ag")
 	addressGroup := models.AddressGroup{
-		SelfRef:   models.SelfRef{ResourceIdentifier: addressGroupID},
-		Addresses: []string{"10.0.0.1/32"},
+		SelfRef:       models.SelfRef{ResourceIdentifier: addressGroupID},
+		DefaultAction: models.ActionAccept,
+		Logs:          true,
+		Trace:         false,
 	}
 
 	service := models.Service{
@@ -334,14 +343,18 @@ func TestSyncRuleS2S_WithIEAgAgRules(t *testing.T) {
 
 	addressGroupLocalID := models.NewResourceIdentifier("test-ag-local")
 	addressGroupLocal := models.AddressGroup{
-		SelfRef:   models.SelfRef{ResourceIdentifier: addressGroupLocalID},
-		Addresses: []string{"192.168.1.1/32"},
+		SelfRef:       models.SelfRef{ResourceIdentifier: addressGroupLocalID},
+		DefaultAction: models.ActionAccept,
+		Logs:          true,
+		Trace:         false,
 	}
 
 	addressGroupID := models.NewResourceIdentifier("test-ag")
 	addressGroup := models.AddressGroup{
-		SelfRef:   models.SelfRef{ResourceIdentifier: addressGroupID},
-		Addresses: []string{"10.0.0.1/32"},
+		SelfRef:       models.SelfRef{ResourceIdentifier: addressGroupID},
+		DefaultAction: models.ActionAccept,
+		Logs:          true,
+		Trace:         false,
 	}
 
 	service := models.Service{
@@ -450,14 +463,18 @@ func TestRuleS2SAndIEAgAgRuleIntegration(t *testing.T) {
 
 	addressGroupLocalID := models.NewResourceIdentifier("test-ag-local")
 	addressGroupLocal := models.AddressGroup{
-		SelfRef:   models.SelfRef{ResourceIdentifier: addressGroupLocalID},
-		Addresses: []string{"192.168.1.1/32"},
+		SelfRef:       models.SelfRef{ResourceIdentifier: addressGroupLocalID},
+		DefaultAction: models.ActionAccept,
+		Logs:          true,
+		Trace:         false,
 	}
 
 	addressGroupID := models.NewResourceIdentifier("test-ag")
 	addressGroup := models.AddressGroup{
-		SelfRef:   models.SelfRef{ResourceIdentifier: addressGroupID},
-		Addresses: []string{"10.0.0.1/32"},
+		SelfRef:       models.SelfRef{ResourceIdentifier: addressGroupID},
+		DefaultAction: models.ActionAccept,
+		Logs:          true,
+		Trace:         false,
 	}
 
 	service := models.Service{
@@ -519,7 +536,9 @@ func TestRuleS2SAndIEAgAgRuleIntegration(t *testing.T) {
 			updateFunc: func(s *services.NetguardService) error {
 				// Update address group with new address
 				updatedAddressGroup := addressGroup
-				updatedAddressGroup.Addresses = []string{"10.0.0.2/32"} // Changed address
+				updatedAddressGroup.DefaultAction = models.ActionAccept
+				updatedAddressGroup.Logs = true
+				updatedAddressGroup.Trace = false
 				return s.SyncAddressGroups(context.Background(), []models.AddressGroup{updatedAddressGroup}, nil)
 			},
 			expectedRuleUpdated: true,

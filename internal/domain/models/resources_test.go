@@ -122,24 +122,22 @@ func TestService(t *testing.T) {
 
 func TestAddressGroup(t *testing.T) {
 	addressGroup := AddressGroup{
-		SelfRef:     NewSelfRef(NewResourceIdentifier("internal", WithNamespace("default"))),
-		Description: "Internal addresses",
-		Addresses:   []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"},
-		Services: []ServiceRef{
-			serviceRefWebDef,
-		},
+		SelfRef:       NewSelfRef(NewResourceIdentifier("internal", WithNamespace("default"))),
+		DefaultAction: ActionAccept,
+		Logs:          true,
+		Trace:         false,
 	}
 
 	if addressGroup.Name != "internal" {
 		t.Errorf("Expected name 'internal', got '%s'", addressGroup.Name)
 	}
 
-	if len(addressGroup.Addresses) != 3 {
-		t.Errorf("Expected 3 addresses, got %d", len(addressGroup.Addresses))
+	if addressGroup.DefaultAction != ActionAccept {
+		t.Errorf("Expected DefaultAction ACCEPT, got %s", addressGroup.DefaultAction)
 	}
 
-	if len(addressGroup.Services) != 1 {
-		t.Errorf("Expected 1 service, got %d", len(addressGroup.Services))
+	if !addressGroup.Logs {
+		t.Errorf("Expected Logs to be true")
 	}
 }
 

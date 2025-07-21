@@ -25,8 +25,10 @@ func (r *reader) ListServices(ctx context.Context, consume func(models.Service) 
 	// Use data from writer if available
 	if r.writer != nil && r.writer.services != nil {
 		services = r.writer.services
+		log.Printf("📋 LIST: using writer data with %d services", len(services))
 	} else {
 		services = r.registry.db.GetServices()
+		log.Printf("📋 LIST: using registry db data with %d services", len(services))
 	}
 
 	// Use data from writer if available
@@ -36,6 +38,15 @@ func (r *reader) ListServices(ctx context.Context, consume func(models.Service) 
 		bindings = r.registry.db.GetAddressGroupBindings()
 	}
 
+	// 🔍 КРАТКАЯ ДИАГНОСТИКА: проверяем только общее количество conditions
+	totalConditions := 0
+	for key, service := range services {
+		condCount := len(service.Meta.Conditions)
+		totalConditions += condCount
+		log.Printf("🔍 LIST_DB_BRIEF: Service[%s] has %d conditions", key, condCount)
+	}
+	log.Printf("🔍 LIST_TOTAL: Found %d services with total %d conditions", len(services), totalConditions)
+
 	if scope != nil && !scope.IsEmpty() {
 		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && !ris.IsEmpty() {
 			for _, id := range ris.Identifiers {
@@ -43,8 +54,12 @@ func (r *reader) ListServices(ctx context.Context, consume func(models.Service) 
 				if id.Name == "" && id.Namespace != "" {
 					for _, service := range services {
 						if service.Namespace == id.Namespace {
+							log.Printf("🔍 COPY_TEST: Before copy - %s has %d conditions", service.Key(), len(service.Meta.Conditions))
+
 							// Create a copy of the service to avoid modifying the original
 							serviceCopy := service
+
+							log.Printf("🔍 COPY_TEST: After copy - %s has %d conditions", serviceCopy.Key(), len(serviceCopy.Meta.Conditions))
 
 							// Clear the address groups to avoid duplicates
 							serviceCopy.AddressGroups = []models.AddressGroupRef{}
@@ -56,9 +71,13 @@ func (r *reader) ListServices(ctx context.Context, consume func(models.Service) 
 								}
 							}
 
+							log.Printf("🔍 CONSUME_TEST: Before consume - %s has %d conditions", serviceCopy.Key(), len(serviceCopy.Meta.Conditions))
+
 							if err := consume(serviceCopy); err != nil {
 								return err
 							}
+
+							log.Printf("✅ CONSUME_OK: After consume - %s processed", serviceCopy.Key())
 						}
 					}
 					return nil
@@ -66,6 +85,8 @@ func (r *reader) ListServices(ctx context.Context, consume func(models.Service) 
 
 				// Otherwise, look for the service by exact key
 				if service, ok := services[id.Key()]; ok {
+					log.Printf("🔍 EXACT_COPY: Service %s has %d conditions", service.Key(), len(service.Meta.Conditions))
+
 					// Create a copy of the service to avoid modifying the original
 					serviceCopy := service
 
@@ -88,6 +109,8 @@ func (r *reader) ListServices(ctx context.Context, consume func(models.Service) 
 		}
 	}
 	for _, service := range services {
+		log.Printf("🔍 ALL_COPY: Service %s has %d conditions", service.Key(), len(service.Meta.Conditions))
+
 		// Create a copy of the service to avoid modifying the original
 		serviceCopy := service
 
@@ -101,9 +124,13 @@ func (r *reader) ListServices(ctx context.Context, consume func(models.Service) 
 			}
 		}
 
+		log.Printf("🔍 ALL_CONSUME: Before consume - %s has %d conditions", serviceCopy.Key(), len(serviceCopy.Meta.Conditions))
+
 		if err := consume(serviceCopy); err != nil {
 			return err
 		}
+
+		log.Printf("✅ ALL_OK: Service %s processed successfully", serviceCopy.Key())
 	}
 	return nil
 }
@@ -333,8 +360,10 @@ func (r *reader) GetServiceByID(ctx context.Context, id models.ResourceIdentifie
 	// Use data from writer if available
 	if r.writer != nil && r.writer.services != nil {
 		services = r.writer.services
+		log.Printf("GetServiceByID: using writer data")
 	} else {
 		services = r.registry.db.GetServices()
+		log.Printf("GetServiceByID: using registry db data")
 	}
 
 	log.Printf("GetServiceByID: services map size=%d", len(services))
@@ -346,8 +375,21 @@ func (r *reader) GetServiceByID(ctx context.Context, id models.ResourceIdentifie
 
 	if service, ok := services[id.Key()]; ok {
 		log.Printf("GetServiceByID: EXACT match found for key=%s meta.uid=%s", id.Key(), service.Meta.UID)
+
+		// 🔍 ДИАГНОСТИКА: логируем что читаем из БД
+		log.Printf("🔍 READER: Service from DB %s has %d conditions", service.Key(), len(service.Meta.Conditions))
+		for i, cond := range service.Meta.Conditions {
+			log.Printf("  🔍 READER: db[%d] Type=%s Status=%s Reason=%s", i, cond.Type, cond.Status, cond.Reason)
+		}
+
 		// Create a copy of the service to avoid modifying the original
 		serviceCopy := service
+
+		// 🔍 ДИАГНОСТИКА: проверяем что скопировано
+		log.Printf("🔍 READER: After copy %s has %d conditions", serviceCopy.Key(), len(serviceCopy.Meta.Conditions))
+		for i, cond := range serviceCopy.Meta.Conditions {
+			log.Printf("  🔍 READER: copy[%d] Type=%s Status=%s Reason=%s", i, cond.Type, cond.Status, cond.Reason)
+		}
 
 		// Clear the address groups to avoid duplicates
 		serviceCopy.AddressGroups = []models.AddressGroupRef{}
@@ -364,6 +406,12 @@ func (r *reader) GetServiceByID(ctx context.Context, id models.ResourceIdentifie
 				// Add the address group to the service
 				serviceCopy.AddressGroups = append(serviceCopy.AddressGroups, binding.AddressGroupRef)
 			}
+		}
+
+		// 🔍 ДИАГНОСТИКА: финальная проверка перед возвратом
+		log.Printf("✅ READER: RETURNING service %s with %d conditions", serviceCopy.Key(), len(serviceCopy.Meta.Conditions))
+		for i, cond := range serviceCopy.Meta.Conditions {
+			log.Printf("  ✅ READER: return[%d] Type=%s Status=%s Reason=%s", i, cond.Type, cond.Status, cond.Reason)
 		}
 
 		return &serviceCopy, nil

@@ -1,12 +1,12 @@
 package models
 
-// AddressGroup represents a group of addresses
+// AddressGroup represents an address group configuration for Netguard
 type AddressGroup struct {
 	SelfRef
-	Description string
-	Addresses   []string
-	Services    []ServiceRef
-	Meta        Meta
+	DefaultAction RuleAction `json:"defaultAction"`   // Default action for the address group (ACCEPT/DROP)
+	Logs          bool       `json:"logs,omitempty"`  // Whether to enable logs
+	Trace         bool       `json:"trace,omitempty"` // Whether to enable trace
+	Meta          Meta
 }
 
 // AddressGroupRef represents a reference to an AddressGroup

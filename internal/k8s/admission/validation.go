@@ -480,12 +480,6 @@ func convertServiceToDomain(k8sService netguardv1beta1.Service) models.Service {
 }
 
 func convertAddressGroupToDomain(k8sGroup netguardv1beta1.AddressGroup) models.AddressGroup {
-	// Конвертация адресов из []Address в []string
-	var addresses []string
-	for _, addr := range k8sGroup.Spec.Addresses {
-		addresses = append(addresses, addr.Address)
-	}
-
 	return models.AddressGroup{
 		SelfRef: models.SelfRef{
 			ResourceIdentifier: models.ResourceIdentifier{
@@ -493,8 +487,9 @@ func convertAddressGroupToDomain(k8sGroup netguardv1beta1.AddressGroup) models.A
 				Namespace: k8sGroup.Namespace,
 			},
 		},
-		Description: k8sGroup.Spec.Description,
-		Addresses:   addresses,
+		DefaultAction: models.RuleAction(k8sGroup.Spec.DefaultAction),
+		Logs:          k8sGroup.Spec.Logs,
+		Trace:         k8sGroup.Spec.Trace,
 	}
 }
 

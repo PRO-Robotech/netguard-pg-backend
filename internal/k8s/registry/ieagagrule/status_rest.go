@@ -11,7 +11,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/registry/rest"
 
+	"netguard-pg-backend/internal/domain/models"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
+	"netguard-pg-backend/internal/k8s/registry/base"
 )
 
 // StatusREST handles the /status subresource for IEAgAgRule.
@@ -21,8 +23,10 @@ type StatusREST struct {
 	store *IEAgAgRuleStorage
 }
 
-func NewStatusREST(store *IEAgAgRuleStorage) *StatusREST {
-	return &StatusREST{store: store}
+func NewStatusREST(store *IEAgAgRuleStorage) *base.StatusREST[*netguardv1beta1.IEAgAgRule, *models.IEAgAgRule] {
+	return base.NewStatusREST[*netguardv1beta1.IEAgAgRule, *models.IEAgAgRule](
+		store.BaseStorage,
+	)
 }
 
 func (r *StatusREST) New() runtime.Object {

@@ -121,3 +121,9 @@ func (s SyncOp) String() string {
 type SyncStatus struct {
 	UpdatedAt time.Time
 }
+
+// ServicePortsRef defines a reference to a Service and its allowed ports
+type ServicePortsRef struct {
+	ServiceRef ServiceRef
+	Ports      ServicePorts
+}

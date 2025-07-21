@@ -71,6 +71,24 @@ type BackendClient interface {
 	// Health check
 	HealthCheck(ctx context.Context) error
 
+	// Ping - простая проверка соединения с backend (быстрее чем HealthCheck)
+	Ping(ctx context.Context) error
+
+	// UpdateMeta методы для обновления metadata всех ресурсов
+	UpdateServiceMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
+	UpdateAddressGroupMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
+	UpdateAddressGroupBindingMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
+	UpdateAddressGroupPortMappingMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
+	UpdateRuleS2SMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
+	UpdateServiceAliasMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
+	UpdateAddressGroupBindingPolicyMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
+	UpdateIEAgAgRuleMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
+
+	// Helper методы для subresources (оптимизированные запросы)
+	ListAddressGroupsForService(ctx context.Context, serviceID models.ResourceIdentifier) ([]models.AddressGroup, error)
+	ListRuleS2SDstOwnRef(ctx context.Context, serviceID models.ResourceIdentifier) ([]models.RuleS2S, error)
+	ListAccessPorts(ctx context.Context, mappingID models.ResourceIdentifier) ([]models.ServicePortsRef, error)
+
 	// Graceful shutdown
 	Close() error
 }

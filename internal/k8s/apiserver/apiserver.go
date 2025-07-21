@@ -163,7 +163,8 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 	apiGroupInfo := server.NewDefaultAPIGroupInfo(netguardv1beta1.GroupName, scheme.Scheme, metav1.ParameterCodec, scheme.Codecs)
 
 	// Shared storage instances
-	svcStore := svcstorage.NewServiceStorage(bClient)
+	agStore := agstorage.NewAddressGroupStorage(bClient)
+	svcStore := svcstorage.NewServiceStorageWithClient(bClient) // Use correct BackendClient approach
 	aliasStore := aliasstorage.NewServiceAliasStorage(bClient)
 	policyStore := policybindingstorage.NewAddressGroupBindingPolicyStorage(bClient)
 	bindingStore := bindingstorage.NewAddressGroupBindingStorage(bClient)
@@ -173,31 +174,28 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 
 	apiGroupInfo.VersionedResourcesStorageMap[netguardv1beta1.SchemeGroupVersion.Version] = map[string]rest.Storage{
 		// Основные ресурсы
-		"addressgroups":               agstorage.NewAddressGroupStorage(bClient),
+		"addressgroups":               agStore,
 		"services":                    svcStore,
 		"servicealiases":              aliasStore,
 		"addressgroupbindingpolicies": policyStore,
+		"addressgroupbindings":        bindingStore,
+		"addressgroupportmappings":    pmStore,
+		"rules2s":                     rules2sStore,
+		"ieagagrules":                 ieagagStore,
 
-		// Subresources Service
+		// Status subresources для всех основных ресурсов
+		"addressgroups/status":               agstorage.NewStatusREST(agStore),
 		"services/status":                    svcstorage.NewStatusREST(svcStore),
 		"servicealiases/status":              aliasstorage.NewStatusREST(aliasStore),
-		"services/addressgroups":             svcstorage.NewAddressGroupsREST(bClient),
-		"services/rules2sdstownref":          svcstorage.NewRuleS2SDstOwnRefREST(bClient),
 		"addressgroupbindingpolicies/status": policybindingstorage.NewStatusREST(policyStore),
+		"addressgroupbindings/status":        bindingstorage.NewStatusREST(bindingStore),
+		"addressgroupportmappings/status":    portmappingstorage.NewStatusREST(pmStore),
+		"rules2s/status":                     rules2sstorage.NewStatusREST(rules2sStore),
+		"ieagagrules/status":                 ieagagstorage.NewStatusREST(ieagagStore),
 
-		// New resources
-		"addressgroupbindings":     bindingStore,
-		"addressgroupportmappings": pmStore,
-		"rules2s":                  rules2sStore,
-		"ieagagrules":              ieagagStore,
-
-		// Status subresources for new kinds
-		"addressgroupbindings/status":     bindingstorage.NewStatusREST(bindingStore),
-		"addressgroupportmappings/status": portmappingstorage.NewStatusREST(pmStore),
-		"rules2s/status":                  rules2sstorage.NewStatusREST(rules2sStore),
-		"ieagagrules/status":              ieagagstorage.NewStatusREST(ieagagStore),
-
-		// Additional subresource on AddressGroupPortMapping
+		// Дополнительные subresources
+		"services/addressgroups":               svcstorage.NewAddressGroupsREST(bClient),
+		"services/rules2sdstownref":            svcstorage.NewRuleS2SDstOwnRefREST(bClient),
 		"addressgroupportmappings/accessports": portmappingstorage.NewAccessPortsREST(bClient),
 	}
 

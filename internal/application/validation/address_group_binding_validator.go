@@ -8,10 +8,14 @@ import (
 	"netguard-pg-backend/internal/domain/ports"
 
 	"github.com/pkg/errors"
+	"k8s.io/klog/v2"
 )
 
 // CreateNewPortMapping creates a new port mapping for an address group and service
 func CreateNewPortMapping(addressGroupID models.ResourceIdentifier, service models.Service) *models.AddressGroupPortMapping {
+	klog.Infof("🔧 CreateNewPortMapping: creating port mapping for address group %s and service %s", addressGroupID.Key(), service.Key())
+	klog.Infof("🔧 Service has %d ingress ports", len(service.IngressPorts))
+
 	// Create a new port mapping with the same ID as the address group
 	portMapping := &models.AddressGroupPortMapping{
 		SelfRef: models.SelfRef{
@@ -26,15 +30,20 @@ func CreateNewPortMapping(addressGroupID models.ResourceIdentifier, service mode
 	}
 
 	// Convert service ingress ports to port ranges
-	for _, ingressPort := range service.IngressPorts {
+	for i, ingressPort := range service.IngressPorts {
+		klog.Infof("🔧 Processing port %d: Protocol=%s, Port=%s", i, ingressPort.Protocol, ingressPort.Port)
+
 		portRanges, err := ParsePortRanges(ingressPort.Port)
 		if err != nil {
-			// Skip invalid ports
+			klog.Errorf("❌ Failed to parse port %s: %v", ingressPort.Port, err)
 			continue
 		}
 
+		klog.Infof("🔧 Parsed %d port ranges for port %s", len(portRanges), ingressPort.Port)
+
 		// Add port ranges to the appropriate protocol
-		for _, portRange := range portRanges {
+		for j, portRange := range portRanges {
+			klog.Infof("🔧 Adding port range %d: %d-%d for protocol %s", j, portRange.Start, portRange.End, ingressPort.Protocol)
 			servicePorts.Ports[ingressPort.Protocol] = append(
 				servicePorts.Ports[ingressPort.Protocol],
 				portRange,
@@ -43,7 +52,16 @@ func CreateNewPortMapping(addressGroupID models.ResourceIdentifier, service mode
 	}
 
 	// Add the service ports to the mapping
-	portMapping.AccessPorts[models.ServiceRef{ResourceIdentifier: service.ResourceIdentifier}] = servicePorts
+	serviceRef := models.ServiceRef{ResourceIdentifier: service.ResourceIdentifier}
+	portMapping.AccessPorts[serviceRef] = servicePorts
+
+	klog.Infof("🔧 Final port mapping has %d service entries", len(portMapping.AccessPorts))
+	for serviceRef, servicePorts := range portMapping.AccessPorts {
+		klog.Infof("🔧 Service %s has %d protocols", serviceRef.Key(), len(servicePorts.Ports))
+		for protocol, ranges := range servicePorts.Ports {
+			klog.Infof("🔧 Protocol %s has %d port ranges", protocol, len(ranges))
+		}
+	}
 
 	return portMapping
 }
@@ -54,6 +72,9 @@ func UpdatePortMapping(
 	serviceRef models.ServiceRef,
 	service models.Service,
 ) *models.AddressGroupPortMapping {
+	klog.Infof("🔧 UpdatePortMapping: updating port mapping for address group %s and service %s", existingMapping.Key(), service.Key())
+	klog.Infof("🔧 Service has %d ingress ports", len(service.IngressPorts))
+
 	// Create a copy of the existing mapping
 	updatedMapping := existingMapping
 
@@ -68,15 +89,20 @@ func UpdatePortMapping(
 	}
 
 	// Convert service ingress ports to port ranges
-	for _, ingressPort := range service.IngressPorts {
+	for i, ingressPort := range service.IngressPorts {
+		klog.Infof("🔧 Processing port %d: Protocol=%s, Port=%s", i, ingressPort.Protocol, ingressPort.Port)
+
 		portRanges, err := ParsePortRanges(ingressPort.Port)
 		if err != nil {
-			// Skip invalid ports
+			klog.Errorf("❌ Failed to parse port %s: %v", ingressPort.Port, err)
 			continue
 		}
 
+		klog.Infof("🔧 Parsed %d port ranges for port %s", len(portRanges), ingressPort.Port)
+
 		// Add port ranges to the appropriate protocol
-		for _, portRange := range portRanges {
+		for j, portRange := range portRanges {
+			klog.Infof("🔧 Adding port range %d: %d-%d for protocol %s", j, portRange.Start, portRange.End, ingressPort.Protocol)
 			servicePorts.Ports[ingressPort.Protocol] = append(
 				servicePorts.Ports[ingressPort.Protocol],
 				portRange,
@@ -87,6 +113,14 @@ func UpdatePortMapping(
 	// Update the service ports in the mapping
 	// Use the service's ResourceIdentifier to ensure the namespace is preserved
 	updatedMapping.AccessPorts[models.ServiceRef{ResourceIdentifier: service.ResourceIdentifier}] = servicePorts
+
+	klog.Infof("🔧 Updated port mapping has %d service entries", len(updatedMapping.AccessPorts))
+	for serviceRef, servicePorts := range updatedMapping.AccessPorts {
+		klog.Infof("🔧 Service %s has %d protocols", serviceRef.Key(), len(servicePorts.Ports))
+		for protocol, ranges := range servicePorts.Ports {
+			klog.Infof("🔧 Protocol %s has %d port ranges", protocol, len(ranges))
+		}
+	}
 
 	return &updatedMapping
 }

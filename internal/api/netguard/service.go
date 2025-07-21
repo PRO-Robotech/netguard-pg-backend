@@ -488,10 +488,11 @@ func convertService(svc *netguardpb.Service) models.Service {
 
 func convertAddressGroup(ag *netguardpb.AddressGroup) models.AddressGroup {
 	result := models.AddressGroup{
-		SelfRef:     models.NewSelfRef(getSelfRef(ag.GetSelfRef())),
-		Description: ag.Description,
-		Addresses:   ag.Addresses,
-		Meta:        models.Meta{},
+		SelfRef:       models.NewSelfRef(getSelfRef(ag.GetSelfRef())),
+		DefaultAction: models.RuleAction(ag.DefaultAction.String()),
+		Logs:          ag.Logs,
+		Trace:         ag.Trace,
+		Meta:          models.Meta{},
 	}
 
 	if ag.Meta != nil {
@@ -505,15 +506,6 @@ func convertAddressGroup(ag *netguardpb.AddressGroup) models.AddressGroup {
 		if ag.Meta.CreationTs != nil {
 			result.Meta.CreationTS = metav1.NewTime(ag.Meta.CreationTs.AsTime())
 		}
-	}
-
-	// Convert services
-	for _, svc := range ag.Services {
-		ref := models.ServiceRef{
-			ResourceIdentifier: models.NewResourceIdentifier(svc.GetIdentifier().GetName(),
-				models.WithNamespace(svc.GetIdentifier().GetNamespace())),
-		}
-		result.Services = append(result.Services, ref)
 	}
 
 	return result
@@ -644,11 +636,13 @@ func convertServiceToPB(svc models.Service) *netguardpb.Service {
 		},
 		Description: svc.Description,
 		Meta: &netguardpb.Meta{
-			Uid:             svc.Meta.UID,
-			ResourceVersion: svc.Meta.ResourceVersion,
-			Generation:      svc.Meta.Generation,
-			Labels:          svc.Meta.Labels,
-			Annotations:     svc.Meta.Annotations,
+			Uid:                svc.Meta.UID,
+			ResourceVersion:    svc.Meta.ResourceVersion,
+			Generation:         svc.Meta.Generation,
+			Labels:             svc.Meta.Labels,
+			Annotations:        svc.Meta.Annotations,
+			Conditions:         models.K8sConditionsToProto(svc.Meta.Conditions), // ✅ ИСПРАВЛЕНО: добавляем conditions
+			ObservedGeneration: svc.Meta.ObservedGeneration,
 		},
 	}
 
@@ -687,34 +681,38 @@ func convertServiceToPB(svc models.Service) *netguardpb.Service {
 }
 
 func convertAddressGroupToPB(ag models.AddressGroup) *netguardpb.AddressGroup {
+	// Конвертация RuleAction string в protobuf enum
+	var defaultAction netguardpb.RuleAction
+	switch ag.DefaultAction {
+	case models.ActionAccept:
+		defaultAction = netguardpb.RuleAction_ACCEPT
+	case models.ActionDrop:
+		defaultAction = netguardpb.RuleAction_DROP
+	default:
+		defaultAction = netguardpb.RuleAction_ACCEPT // default
+	}
+
 	result := &netguardpb.AddressGroup{
 		SelfRef: &netguardpb.ResourceIdentifier{
 			Name:      ag.ResourceIdentifier.Name,
 			Namespace: ag.ResourceIdentifier.Namespace,
 		},
-		Description: ag.Description,
-		Addresses:   ag.Addresses,
+		DefaultAction: defaultAction,
+		Logs:          ag.Logs,
+		Trace:         ag.Trace,
 		Meta: &netguardpb.Meta{
-			Uid:             ag.Meta.UID,
-			ResourceVersion: ag.Meta.ResourceVersion,
-			Generation:      ag.Meta.Generation,
-			Labels:          ag.Meta.Labels,
-			Annotations:     ag.Meta.Annotations,
+			Uid:                ag.Meta.UID,
+			ResourceVersion:    ag.Meta.ResourceVersion,
+			Generation:         ag.Meta.Generation,
+			Labels:             ag.Meta.Labels,
+			Annotations:        ag.Meta.Annotations,
+			Conditions:         models.K8sConditionsToProto(ag.Meta.Conditions), // ✅ ИСПРАВЛЕНО
+			ObservedGeneration: ag.Meta.ObservedGeneration,
 		},
 	}
 
 	if !ag.Meta.CreationTS.IsZero() {
 		result.Meta.CreationTs = timestamppb.New(ag.Meta.CreationTS.Time)
-	}
-
-	// Convert services
-	for _, svc := range ag.Services {
-		result.Services = append(result.Services, &netguardpb.ServiceRef{
-			Identifier: &netguardpb.ResourceIdentifier{
-				Name:      svc.ResourceIdentifier.Name,
-				Namespace: svc.ResourceIdentifier.Namespace,
-			},
-		})
 	}
 
 	return result
@@ -742,11 +740,13 @@ func convertAddressGroupBindingToPB(b models.AddressGroupBinding) *netguardpb.Ad
 
 	// Meta
 	pb.Meta = &netguardpb.Meta{
-		Uid:             b.Meta.UID,
-		ResourceVersion: b.Meta.ResourceVersion,
-		Generation:      b.Meta.Generation,
-		Labels:          b.Meta.Labels,
-		Annotations:     b.Meta.Annotations,
+		Uid:                b.Meta.UID,
+		ResourceVersion:    b.Meta.ResourceVersion,
+		Generation:         b.Meta.Generation,
+		Labels:             b.Meta.Labels,
+		Annotations:        b.Meta.Annotations,
+		Conditions:         models.K8sConditionsToProto(b.Meta.Conditions), // ✅ ИСПРАВЛЕНО
+		ObservedGeneration: b.Meta.ObservedGeneration,
 	}
 	if !b.Meta.CreationTS.IsZero() {
 		pb.Meta.CreationTs = timestamppb.New(b.Meta.CreationTS.Time)
@@ -765,11 +765,13 @@ func convertAddressGroupPortMappingToPB(m models.AddressGroupPortMapping) *netgu
 
 	// Meta
 	result.Meta = &netguardpb.Meta{
-		Uid:             m.Meta.UID,
-		ResourceVersion: m.Meta.ResourceVersion,
-		Generation:      m.Meta.Generation,
-		Labels:          m.Meta.Labels,
-		Annotations:     m.Meta.Annotations,
+		Uid:                m.Meta.UID,
+		ResourceVersion:    m.Meta.ResourceVersion,
+		Generation:         m.Meta.Generation,
+		Labels:             m.Meta.Labels,
+		Annotations:        m.Meta.Annotations,
+		Conditions:         models.K8sConditionsToProto(m.Meta.Conditions), // ✅ ИСПРАВЛЕНО
+		ObservedGeneration: m.Meta.ObservedGeneration,
 	}
 	if !m.Meta.CreationTS.IsZero() {
 		result.Meta.CreationTs = timestamppb.New(m.Meta.CreationTS.Time)
@@ -835,11 +837,13 @@ func convertRuleS2SToPB(r models.RuleS2S) *netguardpb.RuleS2S {
 	}
 
 	pb.Meta = &netguardpb.Meta{
-		Uid:             r.Meta.UID,
-		ResourceVersion: r.Meta.ResourceVersion,
-		Generation:      r.Meta.Generation,
-		Labels:          r.Meta.Labels,
-		Annotations:     r.Meta.Annotations,
+		Uid:                r.Meta.UID,
+		ResourceVersion:    r.Meta.ResourceVersion,
+		Generation:         r.Meta.Generation,
+		Labels:             r.Meta.Labels,
+		Annotations:        r.Meta.Annotations,
+		Conditions:         models.K8sConditionsToProto(r.Meta.Conditions), // ✅ ИСПРАВЛЕНО
+		ObservedGeneration: r.Meta.ObservedGeneration,
 	}
 	if !r.Meta.CreationTS.IsZero() {
 		pb.Meta.CreationTs = timestamppb.New(r.Meta.CreationTS.Time)
@@ -861,11 +865,13 @@ func convertServiceAliasToPB(a models.ServiceAlias) *netguardpb.ServiceAlias {
 			},
 		},
 		Meta: &netguardpb.Meta{
-			Uid:             a.Meta.UID,
-			ResourceVersion: a.Meta.ResourceVersion,
-			Generation:      a.Meta.Generation,
-			Labels:          a.Meta.Labels,
-			Annotations:     a.Meta.Annotations,
+			Uid:                a.Meta.UID,
+			ResourceVersion:    a.Meta.ResourceVersion,
+			Generation:         a.Meta.Generation,
+			Labels:             a.Meta.Labels,
+			Annotations:        a.Meta.Annotations,
+			Conditions:         models.K8sConditionsToProto(a.Meta.Conditions), // ✅ ИСПРАВЛЕНО
+			ObservedGeneration: a.Meta.ObservedGeneration,
 		},
 	}
 	if !a.Meta.CreationTS.IsZero() {
@@ -972,18 +978,20 @@ func convertIEAgAgRuleToPB(rule models.IEAgAgRule) *netguardpb.IEAgAgRule {
 				Namespace: rule.AddressGroup.ResourceIdentifier.Namespace,
 			},
 		},
-		Action:   string(rule.Action),
+		Action:   netguardpb.RuleAction(netguardpb.RuleAction_value[string(rule.Action)]),
 		Logs:     rule.Logs,
 		Priority: rule.Priority,
 	}
 
 	// Populate Meta
 	result.Meta = &netguardpb.Meta{
-		Uid:             rule.Meta.UID,
-		ResourceVersion: rule.Meta.ResourceVersion,
-		Generation:      rule.Meta.Generation,
-		Labels:          rule.Meta.Labels,
-		Annotations:     rule.Meta.Annotations,
+		Uid:                rule.Meta.UID,
+		ResourceVersion:    rule.Meta.ResourceVersion,
+		Generation:         rule.Meta.Generation,
+		Labels:             rule.Meta.Labels,
+		Annotations:        rule.Meta.Annotations,
+		Conditions:         models.K8sConditionsToProto(rule.Meta.Conditions), // ✅ ИСПРАВЛЕНО
+		ObservedGeneration: rule.Meta.ObservedGeneration,
 	}
 	if !rule.Meta.CreationTS.IsZero() {
 		result.Meta.CreationTs = timestamppb.New(rule.Meta.CreationTS.Time)
@@ -1097,11 +1105,13 @@ func convertAddressGroupBindingPolicyToPB(policy models.AddressGroupBindingPolic
 
 	// Populate Meta information
 	pbPolicy.Meta = &netguardpb.Meta{
-		Uid:             policy.Meta.UID,
-		ResourceVersion: policy.Meta.ResourceVersion,
-		Generation:      policy.Meta.Generation,
-		Labels:          policy.Meta.Labels,
-		Annotations:     policy.Meta.Annotations,
+		Uid:                policy.Meta.UID,
+		ResourceVersion:    policy.Meta.ResourceVersion,
+		Generation:         policy.Meta.Generation,
+		Labels:             policy.Meta.Labels,
+		Annotations:        policy.Meta.Annotations,
+		Conditions:         models.K8sConditionsToProto(policy.Meta.Conditions), // ✅ ИСПРАВЛЕНО
+		ObservedGeneration: policy.Meta.ObservedGeneration,
 	}
 	if !policy.Meta.CreationTS.IsZero() {
 		pbPolicy.Meta.CreationTs = timestamppb.New(policy.Meta.CreationTS.Time)

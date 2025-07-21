@@ -7,13 +7,15 @@ metadata:
     config.kubernetes.io/local-config: "true"
 
 # Namespace для всех ресурсов
-namespace: netguard-test
+namespace: netguard-system
 
 # Ресурсы в порядке применения
 resources:
 - namespace.yaml
 - rbac.yaml
 - configmap.yaml
+- cert/issuer-selfsigned.yaml
+- cert/certificate-webhook.yaml
 - deployment.yaml
 - apiservice.yaml
 - backend-deployment.yaml

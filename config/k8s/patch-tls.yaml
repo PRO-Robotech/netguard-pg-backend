@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: netguard-apiserver
-  namespace: netguard-test
+  namespace: netguard-system
 spec:
   template:
     spec:

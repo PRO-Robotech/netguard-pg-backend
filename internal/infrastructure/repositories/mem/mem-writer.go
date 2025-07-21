@@ -100,17 +100,58 @@ func (w *writer) SyncServices(ctx context.Context, services []models.Service, sc
 	case models.SyncOpUpsert:
 		// Только добавление и обновление
 		for _, svc := range services {
+			// 🔍 ДИАГНОСТИКА: логируем входящий объект
+			log.Printf("🔍 DIAG: SyncOpUpsert processing service %s", svc.Key())
+			log.Printf("🔍 DIAG: Incoming service %s has %d conditions", svc.Key(), len(svc.Meta.Conditions))
+			for i, cond := range svc.Meta.Conditions {
+				log.Printf("  🔍 DIAG: incoming[%d] Type=%s Status=%s Reason=%s", i, cond.Type, cond.Status, cond.Reason)
+			}
+
 			if existing, ok := w.services[svc.Key()]; ok {
+				log.Printf("🔄 DIAG: existing service found with %d conditions", len(existing.Meta.Conditions))
+				for i, cond := range existing.Meta.Conditions {
+					log.Printf("  🔄 DIAG: existing[%d] Type=%s Status=%s", i, cond.Type, cond.Status)
+				}
+
 				if svc.Meta.CreationTS.IsZero() {
 					svc.Meta.CreationTS = existing.Meta.CreationTS
+					log.Printf("🔄 DIAG: copied CreationTS from existing")
 				}
 				if svc.Meta.UID == "" {
 					svc.Meta.UID = existing.Meta.UID
+					log.Printf("🔄 DIAG: copied UID from existing: %s", svc.Meta.UID)
 				}
+			} else {
+				log.Printf("🆕 DIAG: no existing service found, this is a new service")
 			}
+
+			// 🔍 ДИАГНОСТИКА: проверяем ПЕРЕД ensureMetaFill
+			log.Printf("🔍 DIAG: BEFORE ensureMetaFill: service %s has %d conditions", svc.Key(), len(svc.Meta.Conditions))
+
 			ensureMetaFill(&svc.Meta)
+
+			// 🔍 ДИАГНОСТИКА: проверяем ПОСЛЕ ensureMetaFill
+			log.Printf("🔍 DIAG: AFTER ensureMetaFill: service %s has %d conditions", svc.Key(), len(svc.Meta.Conditions))
+			for i, cond := range svc.Meta.Conditions {
+				log.Printf("  🔍 DIAG: after_fill[%d] Type=%s Status=%s", i, cond.Type, cond.Status)
+			}
+
 			log.Printf("mem.writer SyncOpUpsert Service key=%s uid=%s gen=%d rv=%s", svc.Key(), svc.Meta.UID, svc.Meta.Generation, svc.Meta.ResourceVersion)
+
+			// 🔍 ДИАГНОСТИКА: проверяем что сохраняем
+			log.Printf("💾 DIAG: about to store service %s with %d conditions", svc.Key(), len(svc.Meta.Conditions))
+
 			w.services[svc.Key()] = svc
+
+			// 🔍 ДИАГНОСТИКА: проверяем что сохранилось
+			if stored, ok := w.services[svc.Key()]; ok {
+				log.Printf("✅ DIAG: VERIFIED stored service %s has %d conditions", svc.Key(), len(stored.Meta.Conditions))
+				for i, cond := range stored.Meta.Conditions {
+					log.Printf("  ✅ DIAG: stored[%d] Type=%s Status=%s", i, cond.Type, cond.Status)
+				}
+			} else {
+				log.Printf("❌ DIAG: ERROR - service not found in storage after assignment!")
+			}
 		}
 
 	case models.SyncOpDelete:
@@ -701,33 +742,56 @@ func (w *writer) SyncAddressGroupBindingPolicies(ctx context.Context, policies [
 }
 
 func (w *writer) Commit() error {
+	log.Printf("💾 COMMIT: Starting database commit operation")
+
 	if w.services != nil {
+		log.Printf("💾 COMMIT: Committing %d services to database", len(w.services))
+		for key, svc := range w.services {
+			log.Printf("💾 COMMIT: Service[%s] has %d conditions", key, len(svc.Meta.Conditions))
+			for i, cond := range svc.Meta.Conditions {
+				log.Printf("  💾 COMMIT: svc[%s].condition[%d] Type=%s Status=%s", key, i, cond.Type, cond.Status)
+			}
+		}
 		w.registry.db.SetServices(w.services)
+		log.Printf("✅ COMMIT: Services committed to database")
+	} else {
+		log.Printf("💾 COMMIT: No services to commit")
 	}
+
 	if w.serviceAliases != nil {
+		log.Printf("💾 COMMIT: Committing %d service aliases to database", len(w.serviceAliases))
 		w.registry.db.SetServiceAliases(w.serviceAliases)
 	}
 	if w.addressGroups != nil {
+		log.Printf("💾 COMMIT: Committing %d address groups to database", len(w.addressGroups))
 		w.registry.db.SetAddressGroups(w.addressGroups)
 	}
 	if w.addressGroupBindings != nil {
+		log.Printf("💾 COMMIT: Committing %d address group bindings to database", len(w.addressGroupBindings))
 		w.registry.db.SetAddressGroupBindings(w.addressGroupBindings)
 	}
 	if w.addressGroupPortMappings != nil {
+		log.Printf("💾 COMMIT: Committing %d address group port mappings to database", len(w.addressGroupPortMappings))
 		w.registry.db.SetAddressGroupPortMappings(w.addressGroupPortMappings)
 	}
 	if w.addressGroupBindingPolicies != nil {
+		log.Printf("💾 COMMIT: Committing %d address group binding policies to database", len(w.addressGroupBindingPolicies))
 		w.registry.db.SetAddressGroupBindingPolicies(w.addressGroupBindingPolicies)
 	}
 	if w.ruleS2S != nil {
+		log.Printf("💾 COMMIT: Committing %d rule s2s to database", len(w.ruleS2S))
 		w.registry.db.SetRuleS2S(w.ruleS2S)
 	}
 	if w.ieAgAgRules != nil {
+		log.Printf("💾 COMMIT: Committing %d ieag ag rules to database", len(w.ieAgAgRules))
 		w.registry.db.SetIEAgAgRules(w.ieAgAgRules)
 	}
+
 	w.registry.db.SetSyncStatus(models.SyncStatus{
 		UpdatedAt: time.Now(),
 	})
+
+	log.Printf("✅ COMMIT: Database commit operation completed successfully")
 	return nil
 }
 

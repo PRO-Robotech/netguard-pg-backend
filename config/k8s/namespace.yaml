@@ -6,9 +6,8 @@ metadata:
   labels:
     app.kubernetes.io/name: netguard
     app.kubernetes.io/part-of: netguard
-    name: netguard-system
+    app.kubernetes.io/managed-by: netguard-apiserver
+    # Enable webhook for this namespace
+    webhook: enabled
   annotations:
-    # Можно добавить аннотации для policy engines
-    # pod-security.kubernetes.io/enforce: restricted
-    # pod-security.kubernetes.io/audit: restricted
-    # pod-security.kubernetes.io/warn: restricted 
+    description: "Netguard system namespace for aggregated API server and backend components" 

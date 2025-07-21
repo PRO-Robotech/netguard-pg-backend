@@ -48,6 +48,16 @@ message ResourceIdentifier {
   string namespace = 2;
 }
 
+// Condition - kubernetes condition for resource status
+message Condition {
+  string type = 1;
+  string status = 2;
+  int64 observed_generation = 3;
+  google.protobuf.Timestamp last_transition_time = 4;
+  string reason = 5;
+  string message = 6;
+}
+
 // Meta - kubernetes system metadata stored round-trip.
 message Meta {
   string uid = 1;
@@ -56,6 +66,10 @@ message Meta {
   google.protobuf.Timestamp creation_ts = 4;
   map<string,string> labels = 5;
   map<string,string> annotations = 6;
+  
+  // Status management - формируется Backend, отображается в Status клиентам
+  repeated Condition conditions = 7;
+  int64 observed_generation = 8;
 }
 
 // AddressGroupRef - reference to an address group
@@ -68,17 +82,29 @@ message ServiceRef {
   ResourceIdentifier identifier = 1;
 }
 
-// AddressGroup - represents a group of addresses
+// RuleAction - action for rules and address groups
+enum RuleAction {
+  // UNDEFINED - undefined action (should not be used)
+  UNDEFINED = 0;
+  
+  // DROP - drops network packet  
+  DROP = 1;
+  
+  // ACCEPT - accepts network packet
+  ACCEPT = 2;
+}
+
+// AddressGroup - represents an address group configuration for Netguard
 message AddressGroup {
   option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
     json_schema: {
-      required: ["self_ref"]
+      required: ["self_ref", "default_action"]
     }
   };
   ResourceIdentifier self_ref = 1;
-  string description = 3;
-  repeated string addresses = 4;
-  repeated ServiceRef services = 5;
+  RuleAction default_action = 2;  // Default action for the address group (ACCEPT/DROP)
+  bool logs = 3;                  // Whether to enable logs
+  bool trace = 4;                 // Whether to enable trace
   Meta meta = 6;
 }
 
@@ -181,7 +207,7 @@ message IEAgAgRule {
   AddressGroupRef address_group_local = 4;
   AddressGroupRef address_group = 5;
   repeated PortSpec ports = 6;
-  string action = 7;
+  RuleAction action = 7;
   bool logs = 8;
   int32 priority = 9;
   Meta meta = 10;

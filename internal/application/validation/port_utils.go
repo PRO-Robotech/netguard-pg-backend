@@ -6,11 +6,15 @@ import (
 	"strings"
 
 	"netguard-pg-backend/internal/domain/models"
+
+	"k8s.io/klog/v2"
 )
 
 // ParsePortRanges преобразует строковое представление портов в слайс PortRange
 // Поддерживает одиночные порты, диапазоны портов и списки портов через запятую
 func ParsePortRanges(port string) ([]models.PortRange, error) {
+	klog.Infof("🔧 ParsePortRanges: parsing port string '%s'", port)
+
 	if port == "" {
 		return nil, fmt.Errorf("port cannot be empty")
 	}
@@ -19,16 +23,21 @@ func ParsePortRanges(port string) ([]models.PortRange, error) {
 
 	// Разбиваем по запятой для обработки списка портов/диапазонов
 	portItems := strings.Split(port, ",")
-	for _, item := range portItems {
+	klog.Infof("🔧 Split port string into %d items", len(portItems))
+
+	for i, item := range portItems {
 		item = strings.TrimSpace(item)
+		klog.Infof("🔧 Processing item %d: '%s'", i, item)
 
 		// Пропускаем пустые элементы
 		if item == "" {
+			klog.Infof("🔧 Skipping empty item %d", i)
 			continue
 		}
 
 		// Проверяем, является ли это диапазоном портов (формат: "start-end")
 		if strings.Contains(item, "-") && !strings.HasPrefix(item, "-") {
+			klog.Infof("🔧 Item %d is a port range", i)
 			parts := strings.Split(item, "-")
 			if len(parts) != 2 {
 				return nil, fmt.Errorf("invalid port range format '%s', expected format is 'start-end'", item)
@@ -57,8 +66,10 @@ func ParsePortRanges(port string) ([]models.PortRange, error) {
 			}
 
 			result = append(result, models.PortRange{Start: start, End: end})
+			klog.Infof("🔧 Added port range %d-%d", start, end)
 		} else {
 			// Одиночный порт
+			klog.Infof("🔧 Item %d is a single port", i)
 			p, err := strconv.Atoi(item)
 			if err != nil {
 				return nil, fmt.Errorf("invalid port '%s': must be a number between 0 and 65535", item)
@@ -69,6 +80,7 @@ func ParsePortRanges(port string) ([]models.PortRange, error) {
 			}
 
 			result = append(result, models.PortRange{Start: p, End: p})
+			klog.Infof("🔧 Added single port %d", p)
 		}
 	}
 
@@ -76,6 +88,7 @@ func ParsePortRanges(port string) ([]models.PortRange, error) {
 		return nil, fmt.Errorf("no valid ports found in list '%s'", port)
 	}
 
+	klog.Infof("🔧 ParsePortRanges: successfully parsed %d port ranges from '%s'", len(result), port)
 	return result, nil
 }
 

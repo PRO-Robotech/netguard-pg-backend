@@ -16,6 +16,10 @@ type Meta struct {
 	CreationTS      metav1.Time       `json:"creationTimestamp,omitempty"`
 	Labels          map[string]string `json:"labels,omitempty"`
 	Annotations     map[string]string `json:"annotations,omitempty"`
+
+	// Status management - формируется Backend, отображается в Status клиентам
+	Conditions         []metav1.Condition `json:"conditions,omitempty"`
+	ObservedGeneration int64              `json:"observedGeneration,omitempty"`
 }
 
 // TouchOnCreate initializes meta fields that are set exactly once during
@@ -33,6 +37,10 @@ func (m *Meta) TouchOnCreate() {
 	if m.UID == "" {
 		m.UID = uuid.NewString()
 	}
+	// Инициализируем ObservedGeneration текущим Generation
+	if m.ObservedGeneration == 0 {
+		m.ObservedGeneration = m.Generation
+	}
 }
 
 // TouchOnWrite updates fields that must change on every write operation.
@@ -42,4 +50,49 @@ func (m *Meta) TouchOnWrite(newRV string) {
 		return
 	}
 	m.ResourceVersion = newRV
+	// Обновляем ObservedGeneration при изменении
+	m.ObservedGeneration = m.Generation
+}
+
+// SetCondition добавляет или обновляет условие в списке
+func (m *Meta) SetCondition(condition metav1.Condition) {
+	if m == nil {
+		return
+	}
+
+	if m.Conditions == nil {
+		m.Conditions = []metav1.Condition{}
+	}
+
+	// Поиск существующего условия
+	for i, existing := range m.Conditions {
+		if existing.Type == condition.Type {
+			// Обновляем существующее условие
+			m.Conditions[i] = condition
+			return
+		}
+	}
+
+	// Добавляем новое условие
+	m.Conditions = append(m.Conditions, condition)
+}
+
+// GetCondition возвращает условие по типу
+func (m *Meta) GetCondition(conditionType string) *metav1.Condition {
+	if m == nil || m.Conditions == nil {
+		return nil
+	}
+
+	for _, condition := range m.Conditions {
+		if condition.Type == conditionType {
+			return &condition
+		}
+	}
+	return nil
+}
+
+// IsConditionTrue проверяет, является ли условие истинным
+func (m *Meta) IsConditionTrue(conditionType string) bool {
+	condition := m.GetCondition(conditionType)
+	return condition != nil && condition.Status == metav1.ConditionTrue
 }

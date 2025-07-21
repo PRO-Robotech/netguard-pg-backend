@@ -60,8 +60,9 @@ func NewMockBackendClient() *MockBackendClient {
 						models.WithNamespace("netguard-test"),
 					),
 				},
-				Description: "Test Address Group 1",
-				Addresses:   []string{"192.168.1.0/24", "10.0.0.1/32"},
+				DefaultAction: models.ActionAccept,
+				Logs:          true,
+				Trace:         false,
 			},
 			{
 				SelfRef: models.SelfRef{
@@ -70,8 +71,9 @@ func NewMockBackendClient() *MockBackendClient {
 						models.WithNamespace("netguard-test"),
 					),
 				},
-				Description: "Test Address Group 2",
-				Addresses:   []string{"172.16.0.0/16", "10.1.1.1/32"},
+				DefaultAction: models.ActionDrop,
+				Logs:          false,
+				Trace:         true,
 			},
 		},
 		addressGroupBindings: []models.AddressGroupBinding{
@@ -323,6 +325,98 @@ func (m *MockBackendClient) GetReader(ctx context.Context) (ports.Reader, error)
 
 func (m *MockBackendClient) HealthCheck(ctx context.Context) error {
 	return nil
+}
+
+// Ping - простая проверка для mock (всегда успешна)
+func (m *MockBackendClient) Ping(ctx context.Context) error {
+	return nil
+}
+
+// UpdateMeta методы для всех ресурсов (простые заглушки для mock)
+func (m *MockBackendClient) UpdateServiceMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	return m.UpdateService(ctx, &models.Service{SelfRef: models.SelfRef{ResourceIdentifier: id}, Meta: meta})
+}
+
+func (m *MockBackendClient) UpdateAddressGroupMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	return m.UpdateAddressGroup(ctx, &models.AddressGroup{SelfRef: models.SelfRef{ResourceIdentifier: id}, Meta: meta})
+}
+
+func (m *MockBackendClient) UpdateAddressGroupBindingMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	return m.UpdateAddressGroupBinding(ctx, &models.AddressGroupBinding{SelfRef: models.SelfRef{ResourceIdentifier: id}, Meta: meta})
+}
+
+func (m *MockBackendClient) UpdateAddressGroupPortMappingMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	return nil // Простая заглушка для mock
+}
+
+func (m *MockBackendClient) UpdateRuleS2SMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	return nil // Простая заглушка для mock
+}
+
+func (m *MockBackendClient) UpdateServiceAliasMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	return nil // Простая заглушка для mock
+}
+
+func (m *MockBackendClient) UpdateAddressGroupBindingPolicyMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	return nil // Простая заглушка для mock
+}
+
+func (m *MockBackendClient) UpdateIEAgAgRuleMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	return nil // Простая заглушка для mock
+}
+
+// Helper методы для subresources (простые заглушки для mock)
+func (m *MockBackendClient) ListAddressGroupsForService(ctx context.Context, serviceID models.ResourceIdentifier) ([]models.AddressGroup, error) {
+	// Возвращаем тестовые address groups для mock
+	if serviceID.Name == "test-service-1" {
+		return []models.AddressGroup{
+			{
+				SelfRef: models.SelfRef{
+					ResourceIdentifier: models.NewResourceIdentifier(
+						"test-addressgroup-1",
+						models.WithNamespace("netguard-test"),
+					),
+				},
+				DefaultAction: models.ActionAccept,
+				Logs:          true,
+				Trace:         false,
+			},
+		}, nil
+	}
+	return []models.AddressGroup{}, nil
+}
+
+func (m *MockBackendClient) ListRuleS2SDstOwnRef(ctx context.Context, serviceID models.ResourceIdentifier) ([]models.RuleS2S, error) {
+	// Возвращаем тестовые cross-namespace rules для mock
+	return []models.RuleS2S{
+		{
+			SelfRef: models.SelfRef{
+				ResourceIdentifier: models.NewResourceIdentifier(
+					"test-rule-cross-ns",
+					models.WithNamespace("other-namespace"),
+				),
+			},
+			ServiceRef: models.NewServiceAliasRef(serviceID.Name, models.WithNamespace(serviceID.Namespace)),
+			Traffic:    "ingress",
+		},
+	}, nil
+}
+
+func (m *MockBackendClient) ListAccessPorts(ctx context.Context, mappingID models.ResourceIdentifier) ([]models.ServicePortsRef, error) {
+	// Возвращаем тестовые service ports refs для mock
+	return []models.ServicePortsRef{
+		{
+			ServiceRef: models.NewServiceRef("test-service-1", models.WithNamespace("netguard-test")),
+			Ports: models.ServicePorts{
+				Ports: map[models.TransportProtocol][]models.PortRange{
+					models.TCP: {
+						{Start: 80, End: 80},
+						{Start: 443, End: 443},
+					},
+				},
+			},
+		},
+	}, nil
 }
 
 func (m *MockBackendClient) Close() error {

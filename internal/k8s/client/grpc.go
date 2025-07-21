@@ -824,7 +824,7 @@ func (c *GRPCBackendClient) GetIEAgAgRule(ctx context.Context, id models.Resourc
 	if err != nil {
 		return nil, fmt.Errorf("failed to get IEAgAgRule: %w", err)
 	}
-	rule := convertIEAgAgRuleFromProto(resp.IeagagRule)
+	rule := ConvertIEAgAgRuleFromProto(resp.IeagagRule)
 	return &rule, nil
 }
 
@@ -854,7 +854,7 @@ func (c *GRPCBackendClient) ListIEAgAgRules(ctx context.Context, scope ports.Sco
 	}
 	rules := make([]models.IEAgAgRule, 0, len(resp.Items))
 	for _, protoRule := range resp.Items {
-		rules = append(rules, convertIEAgAgRuleFromProto(protoRule))
+		rules = append(rules, ConvertIEAgAgRuleFromProto(protoRule))
 	}
 	return rules, nil
 }
@@ -976,6 +976,186 @@ func (c *GRPCBackendClient) HealthCheck(ctx context.Context) error {
 		return fmt.Errorf("backend health check failed: %w", err)
 	}
 	return nil
+}
+
+// Ping - простая проверка соединения с backend (быстрее чем HealthCheck)
+func (c *GRPCBackendClient) Ping(ctx context.Context) error {
+	if !c.limiter.Allow() {
+		return fmt.Errorf("rate limit exceeded")
+	}
+	// Используем короткий timeout для ping
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	// Используем SyncStatus как простой ping endpoint
+	_, err := c.client.SyncStatus(ctx, &emptypb.Empty{})
+	if err != nil {
+		return fmt.Errorf("backend ping failed: %w", err)
+	}
+	return nil
+}
+
+// UpdateMeta методы для всех ресурсов
+func (c *GRPCBackendClient) UpdateServiceMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	// TODO: Реализовать когда backend добавит UpdateMeta endpoints
+	// На данный момент используем обычный Update через GetService + UpdateService
+	service, err := c.GetService(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get service for meta update: %w", err)
+	}
+	service.Meta = meta
+	return c.UpdateService(ctx, service)
+}
+
+func (c *GRPCBackendClient) UpdateAddressGroupMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	addressGroup, err := c.GetAddressGroup(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get address group for meta update: %w", err)
+	}
+	addressGroup.Meta = meta
+	return c.UpdateAddressGroup(ctx, addressGroup)
+}
+
+func (c *GRPCBackendClient) UpdateAddressGroupBindingMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	binding, err := c.GetAddressGroupBinding(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get address group binding for meta update: %w", err)
+	}
+	binding.Meta = meta
+	return c.UpdateAddressGroupBinding(ctx, binding)
+}
+
+func (c *GRPCBackendClient) UpdateAddressGroupPortMappingMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	mapping, err := c.GetAddressGroupPortMapping(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get address group port mapping for meta update: %w", err)
+	}
+	mapping.Meta = meta
+	return c.UpdateAddressGroupPortMapping(ctx, mapping)
+}
+
+func (c *GRPCBackendClient) UpdateRuleS2SMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	rule, err := c.GetRuleS2S(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get ruleS2S for meta update: %w", err)
+	}
+	rule.Meta = meta
+	return c.UpdateRuleS2S(ctx, rule)
+}
+
+func (c *GRPCBackendClient) UpdateServiceAliasMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	alias, err := c.GetServiceAlias(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get service alias for meta update: %w", err)
+	}
+	alias.Meta = meta
+	return c.UpdateServiceAlias(ctx, alias)
+}
+
+func (c *GRPCBackendClient) UpdateAddressGroupBindingPolicyMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	policy, err := c.GetAddressGroupBindingPolicy(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get address group binding policy for meta update: %w", err)
+	}
+	policy.Meta = meta
+	return c.UpdateAddressGroupBindingPolicy(ctx, policy)
+}
+
+func (c *GRPCBackendClient) UpdateIEAgAgRuleMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	rule, err := c.GetIEAgAgRule(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get IEAgAgRule for meta update: %w", err)
+	}
+	rule.Meta = meta
+	return c.UpdateIEAgAgRule(ctx, rule)
+}
+
+// Helper методы для subresources (оптимизированные запросы)
+func (c *GRPCBackendClient) ListAddressGroupsForService(ctx context.Context, serviceID models.ResourceIdentifier) ([]models.AddressGroup, error) {
+	klog.V(4).Infof("GRPCBackendClient.ListAddressGroupsForService serviceID=%s/%s", serviceID.Namespace, serviceID.Name)
+
+	// Получаем все bindings, которые ссылаются на этот Service
+	scope := ports.NewResourceIdentifierScope(serviceID)
+	bindings, err := c.ListAddressGroupBindings(ctx, scope)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list address group bindings for service: %w", err)
+	}
+
+	// Собираем уникальные AddressGroup идентификаторы
+	addressGroupIDs := make(map[string]models.ResourceIdentifier)
+	for _, binding := range bindings {
+		if binding.ServiceRef.Name == serviceID.Name && binding.ServiceRef.Namespace == serviceID.Namespace {
+			key := fmt.Sprintf("%s/%s", binding.AddressGroupRef.Namespace, binding.AddressGroupRef.Name)
+			addressGroupIDs[key] = models.NewResourceIdentifier(
+				binding.AddressGroupRef.Name,
+				models.WithNamespace(binding.AddressGroupRef.Namespace),
+			)
+		}
+	}
+
+	// Получаем все AddressGroups по найденным идентификаторам
+	var addressGroups []models.AddressGroup
+	for _, agID := range addressGroupIDs {
+		ag, err := c.GetAddressGroup(ctx, agID)
+		if err != nil {
+			klog.V(2).Infof("Failed to get address group %s/%s: %v", agID.Namespace, agID.Name, err)
+			continue // Пропускаем недоступные, но продолжаем
+		}
+		addressGroups = append(addressGroups, *ag)
+	}
+
+	klog.V(4).Infof("GRPCBackendClient.ListAddressGroupsForService found %d address groups for service %s/%s",
+		len(addressGroups), serviceID.Namespace, serviceID.Name)
+	return addressGroups, nil
+}
+
+func (c *GRPCBackendClient) ListRuleS2SDstOwnRef(ctx context.Context, serviceID models.ResourceIdentifier) ([]models.RuleS2S, error) {
+	klog.V(4).Infof("GRPCBackendClient.ListRuleS2SDstOwnRef serviceID=%s/%s", serviceID.Namespace, serviceID.Name)
+
+	// Получаем все RuleS2S правила
+	allRules, err := c.ListRuleS2S(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list all ruleS2S: %w", err)
+	}
+
+	// Фильтруем правила, которые ссылаются на этот Service как destination из других namespaces
+	var crossNamespaceRules []models.RuleS2S
+	for _, rule := range allRules {
+		// Проверяем, что это правило ссылается на наш service как destination И из другого namespace
+		if rule.ServiceRef.Name == serviceID.Name &&
+			rule.ServiceRef.Namespace == serviceID.Namespace &&
+			rule.Namespace != serviceID.Namespace {
+			crossNamespaceRules = append(crossNamespaceRules, rule)
+		}
+	}
+
+	klog.V(4).Infof("GRPCBackendClient.ListRuleS2SDstOwnRef found %d cross-namespace rules for service %s/%s",
+		len(crossNamespaceRules), serviceID.Namespace, serviceID.Name)
+	return crossNamespaceRules, nil
+}
+
+func (c *GRPCBackendClient) ListAccessPorts(ctx context.Context, mappingID models.ResourceIdentifier) ([]models.ServicePortsRef, error) {
+	klog.V(4).Infof("GRPCBackendClient.ListAccessPorts mappingID=%s/%s", mappingID.Namespace, mappingID.Name)
+
+	// Получаем AddressGroupPortMapping
+	mapping, err := c.GetAddressGroupPortMapping(ctx, mappingID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get address group port mapping: %w", err)
+	}
+
+	// Конвертируем AccessPorts map в slice ServicePortsRef
+	var servicePortsRefs []models.ServicePortsRef
+	for serviceRef, servicePorts := range mapping.AccessPorts {
+		servicePortsRef := models.ServicePortsRef{
+			ServiceRef: serviceRef,
+			Ports:      servicePorts,
+		}
+		servicePortsRefs = append(servicePortsRefs, servicePortsRef)
+	}
+
+	klog.V(4).Infof("GRPCBackendClient.ListAccessPorts found %d service ports refs for mapping %s/%s",
+		len(servicePortsRefs), mappingID.Namespace, mappingID.Name)
+	return servicePortsRefs, nil
 }
 
 func (c *GRPCBackendClient) Close() error {

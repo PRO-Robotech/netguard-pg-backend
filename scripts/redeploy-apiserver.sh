@@ -2,7 +2,7 @@
 
 set -e
 
-NAMESPACE="netguard-test"
+NAMESPACE="netguard-system"
 DEPLOYMENT_NAME="netguard-apiserver"
 IMAGE_NAME="netguard/k8s-apiserver:latest"
 MINIKUBE_PROFILE="incloud"

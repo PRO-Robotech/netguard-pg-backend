@@ -22,14 +22,18 @@ func TestIntegration_IEAgAgRuleValidation(t *testing.T) {
 	// Create test data
 	addressGroupLocalID := models.NewResourceIdentifier("test-ag-local")
 	addressGroupLocal := models.AddressGroup{
-		SelfRef:   models.SelfRef{ResourceIdentifier: addressGroupLocalID},
-		Addresses: []string{"192.168.1.1/32"},
+		SelfRef:       models.SelfRef{ResourceIdentifier: addressGroupLocalID},
+		DefaultAction: models.ActionAccept,
+		Logs:          true,
+		Trace:         false,
 	}
 
 	addressGroupID := models.NewResourceIdentifier("test-ag")
 	addressGroup := models.AddressGroup{
-		SelfRef:   models.SelfRef{ResourceIdentifier: addressGroupID},
-		Addresses: []string{"10.0.0.1/32"},
+		SelfRef:       models.SelfRef{ResourceIdentifier: addressGroupID},
+		DefaultAction: models.ActionAccept,
+		Logs:          true,
+		Trace:         false,
 	}
 
 	ruleID := models.NewResourceIdentifier("test-rule")
@@ -104,14 +108,18 @@ func TestIntegration_IEAgAgRuleReferences(t *testing.T) {
 	// Create test data
 	addressGroupLocalID := models.NewResourceIdentifier("test-ag-local")
 	addressGroupLocal := models.AddressGroup{
-		SelfRef:   models.SelfRef{ResourceIdentifier: addressGroupLocalID},
-		Addresses: []string{"192.168.1.1/32"},
+		SelfRef:       models.SelfRef{ResourceIdentifier: addressGroupLocalID},
+		DefaultAction: models.ActionAccept,
+		Logs:          true,
+		Trace:         false,
 	}
 
 	addressGroupID := models.NewResourceIdentifier("test-ag")
 	addressGroup := models.AddressGroup{
-		SelfRef:   models.SelfRef{ResourceIdentifier: addressGroupID},
-		Addresses: []string{"10.0.0.1/32"},
+		SelfRef:       models.SelfRef{ResourceIdentifier: addressGroupID},
+		DefaultAction: models.ActionAccept,
+		Logs:          true,
+		Trace:         false,
 	}
 
 	// Add data to repository
@@ -183,14 +191,18 @@ func TestIntegration_IEAgAgRuleValidateForCreation(t *testing.T) {
 	// Create test data
 	addressGroupLocalID := models.NewResourceIdentifier("test-ag-local")
 	addressGroupLocal := models.AddressGroup{
-		SelfRef:   models.SelfRef{ResourceIdentifier: addressGroupLocalID},
-		Addresses: []string{"192.168.1.1/32"},
+		SelfRef:       models.SelfRef{ResourceIdentifier: addressGroupLocalID},
+		DefaultAction: models.ActionAccept,
+		Logs:          true,
+		Trace:         false,
 	}
 
 	addressGroupID := models.NewResourceIdentifier("test-ag")
 	addressGroup := models.AddressGroup{
-		SelfRef:   models.SelfRef{ResourceIdentifier: addressGroupID},
-		Addresses: []string{"10.0.0.1/32"},
+		SelfRef:       models.SelfRef{ResourceIdentifier: addressGroupID},
+		DefaultAction: models.ActionAccept,
+		Logs:          true,
+		Trace:         false,
 	}
 
 	// Add data to repository

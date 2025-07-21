@@ -7,6 +7,8 @@ metadata:
     app.kubernetes.io/name: netguard-apiserver
     app.kubernetes.io/component: admission-webhook
     app.kubernetes.io/part-of: netguard
+  annotations:
+    cert-manager.io/inject-ca-from: netguard-system/netguard-apiserver-webhook-cert
 webhooks:
 - name: service.netguard.sgroups.io
   admissionReviewVersions: ["v1", "v1beta1"]
@@ -17,7 +19,7 @@ webhooks:
   clientConfig:
     service:
       name: netguard-apiserver-webhook
-      namespace: netguard-test
+      namespace: netguard-system
       path: /validate
     # CA bundle будет заполнен cert-manager или вручную
     caBundle: ""
@@ -47,7 +49,7 @@ webhooks:
   clientConfig:
     service:
       name: netguard-apiserver-webhook
-      namespace: netguard-test
+      namespace: netguard-system
       path: /validate
     caBundle: ""
   
@@ -71,7 +73,7 @@ webhooks:
   clientConfig:
     service:
       name: netguard-apiserver-webhook
-      namespace: netguard-test
+      namespace: netguard-system
       path: /validate
     caBundle: ""
   
@@ -95,7 +97,7 @@ webhooks:
   clientConfig:
     service:
       name: netguard-apiserver-webhook
-      namespace: netguard-test
+      namespace: netguard-system
       path: /validate
     caBundle: ""
   
@@ -119,7 +121,7 @@ webhooks:
   clientConfig:
     service:
       name: netguard-apiserver-webhook
-      namespace: netguard-test
+      namespace: netguard-system
       path: /validate
     caBundle: ""
   
@@ -143,7 +145,7 @@ webhooks:
   clientConfig:
     service:
       name: netguard-apiserver-webhook
-      namespace: netguard-test
+      namespace: netguard-system
       path: /validate
     caBundle: ""
   
@@ -167,7 +169,7 @@ webhooks:
   clientConfig:
     service:
       name: netguard-apiserver-webhook
-      namespace: netguard-test
+      namespace: netguard-system
       path: /validate
     caBundle: ""
   
@@ -191,7 +193,7 @@ webhooks:
   clientConfig:
     service:
       name: netguard-apiserver-webhook
-      namespace: netguard-test
+      namespace: netguard-system
       path: /validate
     caBundle: ""
   

@@ -88,8 +88,9 @@ func TestMemRegistryAddressGroups(t *testing.T) {
 		{
 			SelfRef: models.NewSelfRef(models.NewResourceIdentifier(
 				"internal", models.WithNamespace("default"))),
-			Description: "Internal addresses",
-			Addresses:   []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"},
+			DefaultAction: models.ActionAccept,
+			Logs:          true,
+			Trace:         false,
 		},
 	}
 
@@ -130,8 +131,8 @@ func TestMemRegistryAddressGroups(t *testing.T) {
 		t.Errorf("Expected name 'internal', got '%s'", foundAddressGroups[0].Name)
 	}
 
-	if len(foundAddressGroups[0].Addresses) != 3 {
-		t.Errorf("Expected 3 addresses, got %d", len(foundAddressGroups[0].Addresses))
+	if foundAddressGroups[0].DefaultAction != models.ActionAccept {
+		t.Errorf("Expected DefaultAction ACCEPT, got %s", foundAddressGroups[0].DefaultAction)
 	}
 }
 

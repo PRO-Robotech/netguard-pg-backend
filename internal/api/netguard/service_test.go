@@ -504,16 +504,18 @@ func TestSyncWithDifferentOperations(t *testing.T) {
 									Name:      "internal",
 									Namespace: "default",
 								},
-								Description: "Internal network",
-								Addresses:   []string{"10.0.0.0/8", "172.16.0.0/12"},
+								DefaultAction: netguardpb.RuleAction_ACCEPT,
+								Logs:          true,
+								Trace:         false,
 							},
 							{
 								SelfRef: &netguardpb.ResourceIdentifier{
 									Name:      "external",
 									Namespace: "default",
 								},
-								Description: "External network",
-								Addresses:   []string{"0.0.0.0/0"},
+								DefaultAction: netguardpb.RuleAction_ACCEPT,
+								Logs:          true,
+								Trace:         false,
 							},
 						},
 					},
@@ -557,8 +559,9 @@ func TestSyncWithDifferentOperations(t *testing.T) {
 									Name:      "dmz",
 									Namespace: "default",
 								},
-								Description: "DMZ network",
-								Addresses:   []string{"192.168.1.0/24"},
+								DefaultAction: netguardpb.RuleAction_ACCEPT,
+								Logs:          true,
+								Trace:         false,
 							},
 						},
 					},
@@ -619,16 +622,18 @@ func TestSyncWithDifferentOperations(t *testing.T) {
 									Name:      "internal",
 									Namespace: "default",
 								},
-								Description: "Internal network",
-								Addresses:   []string{"10.0.0.0/8", "172.16.0.0/12"},
+								DefaultAction: netguardpb.RuleAction_ACCEPT,
+								Logs:          true,
+								Trace:         false,
 							},
 							{
 								SelfRef: &netguardpb.ResourceIdentifier{
 									Name:      "external",
 									Namespace: "default",
 								},
-								Description: "External network",
-								Addresses:   []string{"0.0.0.0/0"},
+								DefaultAction: netguardpb.RuleAction_ACCEPT,
+								Logs:          true,
+								Trace:         false,
 							},
 						},
 					},
@@ -652,16 +657,18 @@ func TestSyncWithDifferentOperations(t *testing.T) {
 									Name:      "internal",
 									Namespace: "default",
 								},
-								Description: "Updated internal network",
-								Addresses:   []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"},
+								DefaultAction: netguardpb.RuleAction_ACCEPT,
+								Logs:          true,
+								Trace:         false,
 							},
 							{
 								SelfRef: &netguardpb.ResourceIdentifier{
 									Name:      "dmz",
 									Namespace: "default",
 								},
-								Description: "DMZ network",
-								Addresses:   []string{"192.168.1.0/24"},
+								DefaultAction: netguardpb.RuleAction_ACCEPT,
+								Logs:          true,
+								Trace:         false,
 							},
 						},
 					},
@@ -707,12 +714,16 @@ func TestSyncWithDifferentOperations(t *testing.T) {
 				t.Fatalf("Internal address group not found after Upsert")
 			}
 
-			if internalAddressGroup.Description != "Updated internal network" {
-				t.Errorf("Expected address group description 'Updated internal network', got '%s'", internalAddressGroup.Description)
+			if internalAddressGroup.DefaultAction != models.ActionAccept {
+				t.Errorf("Expected rule action 'ACCEPT' for internal address group, got '%s'", internalAddressGroup.DefaultAction)
 			}
 
-			if len(internalAddressGroup.Addresses) != 3 {
-				t.Errorf("Expected 3 addresses for internal address group, got %d", len(internalAddressGroup.Addresses))
+			if internalAddressGroup.Logs != true {
+				t.Errorf("Expected logs 'true' for internal address group, got '%v'", internalAddressGroup.Logs)
+			}
+
+			if internalAddressGroup.Trace != false {
+				t.Errorf("Expected trace 'false' for internal address group, got '%v'", internalAddressGroup.Trace)
 			}
 		})
 
@@ -739,16 +750,18 @@ func TestSyncWithDifferentOperations(t *testing.T) {
 									Name:      "internal",
 									Namespace: "default",
 								},
-								Description: "Internal network",
-								Addresses:   []string{"10.0.0.0/8", "172.16.0.0/12"},
+								DefaultAction: netguardpb.RuleAction_ACCEPT,
+								Logs:          true,
+								Trace:         false,
 							},
 							{
 								SelfRef: &netguardpb.ResourceIdentifier{
 									Name:      "external",
 									Namespace: "default",
 								},
-								Description: "External network",
-								Addresses:   []string{"0.0.0.0/0"},
+								DefaultAction: netguardpb.RuleAction_ACCEPT,
+								Logs:          true,
+								Trace:         false,
 							},
 						},
 					},
@@ -865,14 +878,18 @@ func TestSyncWithDifferentOperations(t *testing.T) {
 								Name:      "internal",
 								Namespace: "default",
 							},
-							Description: "Internal network",
+							DefaultAction: netguardpb.RuleAction_ACCEPT,
+							Logs:          true,
+							Trace:         false,
 						},
 						{
 							SelfRef: &netguardpb.ResourceIdentifier{
 								Name:      "external",
 								Namespace: "default",
 							},
-							Description: "External network",
+							DefaultAction: netguardpb.RuleAction_ACCEPT,
+							Logs:          true,
+							Trace:         false,
 						},
 					},
 				},
@@ -1209,20 +1226,16 @@ func TestListAddressGroups(t *testing.T) {
 		{
 			SelfRef: models.NewSelfRef(models.NewResourceIdentifier(
 				"internal", models.WithNamespace("default"))),
-			Description: "Internal addresses",
-			Addresses:   []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"},
-			Services: []models.ServiceRef{
-				models.NewServiceRef("web", models.WithNamespace("default")),
-			},
+			DefaultAction: models.ActionAccept,
+			Logs:          true,
+			Trace:         false,
 		},
 		{
 			SelfRef: models.NewSelfRef(models.NewResourceIdentifier(
 				"external", models.WithNamespace("default"))),
-			Description: "External addresses",
-			Addresses:   []string{"0.0.0.0/0"},
-			Services: []models.ServiceRef{
-				models.NewServiceRef("db", models.WithNamespace("default")),
-			},
+			DefaultAction: models.ActionAccept,
+			Logs:          true,
+			Trace:         false,
 		},
 	}
 
