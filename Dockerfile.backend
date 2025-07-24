@@ -13,6 +13,7 @@ COPY cmd/ cmd/
 COPY internal/ internal/
 COPY pkg/ pkg/
 COPY protos/ protos/
+COPY config/ config/
 
 # Build statically linked binary
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo \
@@ -28,6 +29,9 @@ WORKDIR /root/
 
 # Copy compiled binary
 COPY --from=builder /app/server ./server
+
+# Copy configuration file
+COPY --from=builder /src/config/config.yaml ./config/config.yaml
 
 EXPOSE 9090 8080
 

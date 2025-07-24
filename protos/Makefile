@@ -29,7 +29,7 @@ ifeq ($(wildcard $(GOBIN)/protoc-gen-connect-go),)
 	$(GO) install connectrpc.com/connect/cmd/protoc-gen-connect-go@latest
 endif
 
-proto_dirs := netguard common
+proto_dirs := netguard
 .PHONY: generate-api
 generate-api: | .grpc-plugins
 	@(\

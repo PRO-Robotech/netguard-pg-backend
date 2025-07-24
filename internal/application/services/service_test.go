@@ -301,17 +301,17 @@ func TestCreateService(t *testing.T) {
 		},
 	}
 
-	netguardService := services.NewNetguardService(mockRegistry)
+	netguardService := services.NewNetguardService(mockRegistry, nil)
 
 	// Тест успешного создания сервиса
-	_, err := netguardService.CreateService(ctx, service)
+	err := netguardService.CreateService(ctx, service)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
 	// Тест ошибки при создании сервиса (ошибка в SyncServices)
 	mockRegistry.writer.syncServicesError = errors.New("sync services error")
-	_, err = netguardService.CreateService(ctx, service)
+	err = netguardService.CreateService(ctx, service)
 	if err == nil {
 		t.Error("Expected error, got nil")
 	}
@@ -319,7 +319,7 @@ func TestCreateService(t *testing.T) {
 	// Тест ошибки при создании сервиса (ошибка в Commit)
 	mockRegistry.writer.syncServicesError = nil
 	mockRegistry.writer.commitError = errors.New("commit error")
-	_, err = netguardService.CreateService(ctx, service)
+	err = netguardService.CreateService(ctx, service)
 	if err == nil {
 		t.Error("Expected error, got nil")
 	}
@@ -346,7 +346,7 @@ func TestCreateService(t *testing.T) {
 	mockRegistry.reader.AddAddressGroupPortMapping(agpm)
 
 	// Должна быть ошибка валидации из-за перекрытия портов
-	_, err = netguardService.CreateService(ctx, service)
+	err = netguardService.CreateService(ctx, service)
 	if err == nil {
 		t.Error("Expected validation error, got nil")
 	}
@@ -366,7 +366,7 @@ func TestGetServiceByID(t *testing.T) {
 	}
 	mockRegistry.reader.AddService(service)
 
-	netguardService := services.NewNetguardService(mockRegistry)
+	netguardService := services.NewNetguardService(mockRegistry, nil)
 
 	// Тест успешного получения
 	retrievedService, err := netguardService.GetServiceByID(ctx, models.NewResourceIdentifier("test-service"))
@@ -410,7 +410,7 @@ func TestGetServices(t *testing.T) {
 	mockRegistry.reader.AddService(service1)
 	mockRegistry.reader.AddService(service2)
 
-	netguardService := services.NewNetguardService(mockRegistry)
+	netguardService := services.NewNetguardService(mockRegistry, nil)
 
 	// Тест успешного получения
 	svc, err := netguardService.GetServices(ctx, nil)
@@ -423,7 +423,7 @@ func TestGetServices(t *testing.T) {
 
 	// Тест с пустым результатом
 	emptyRegistry := NewMockRegistry() // Сбрасываем реестр
-	emptyService := services.NewNetguardService(emptyRegistry)
+	emptyService := services.NewNetguardService(emptyRegistry, nil)
 	emptyResults, err := emptyService.GetServices(ctx, nil)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
@@ -488,7 +488,7 @@ func TestUpdateService(t *testing.T) {
 
 	mockRegistry.reader.AddAddressGroupPortMapping(agpm)
 
-	netguardService := services.NewNetguardService(mockRegistry)
+	netguardService := services.NewNetguardService(mockRegistry, nil)
 
 	// Создаем новую версию сервиса для обновления
 	newService := models.Service{
@@ -502,14 +502,14 @@ func TestUpdateService(t *testing.T) {
 	}
 
 	// Тест успешного обновления сервиса
-	_, err := netguardService.UpdateService(ctx, newService)
+	err := netguardService.UpdateService(ctx, newService)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
 	// Тест ошибки при обновлении сервиса (ошибка в SyncServices)
 	mockRegistry.writer.syncServicesError = errors.New("sync services error")
-	_, err = netguardService.UpdateService(ctx, newService)
+	err = netguardService.UpdateService(ctx, newService)
 	if err == nil {
 		t.Error("Expected error, got nil")
 	}
@@ -517,7 +517,7 @@ func TestUpdateService(t *testing.T) {
 	// Тест ошибки при обновлении сервиса (ошибка в Commit)
 	mockRegistry.writer.syncServicesError = nil
 	mockRegistry.writer.commitError = errors.New("commit error")
-	_, err = netguardService.UpdateService(ctx, newService)
+	err = netguardService.UpdateService(ctx, newService)
 	if err == nil {
 		t.Error("Expected error, got nil")
 	}
@@ -537,7 +537,7 @@ func TestUpdateService(t *testing.T) {
 	}
 
 	// Должна быть ошибка валидации из-за перекрытия портов
-	_, err = netguardService.UpdateService(ctx, newServiceWithOverlap)
+	err = netguardService.UpdateService(ctx, newServiceWithOverlap)
 	if err == nil {
 		t.Error("Expected validation error, got nil")
 	}

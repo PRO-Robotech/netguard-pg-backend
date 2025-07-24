@@ -212,7 +212,7 @@ func (m *MockRegistry) Close() error {
 func TestConditionManager_ProcessServiceConditions_Success(t *testing.T) {
 	ctx := context.Background()
 	registry := NewMockRegistry()
-	netguardService := NewNetguardService(registry)
+	netguardService := NewNetguardService(registry, nil)
 	conditionManager := NewConditionManager(registry, netguardService)
 
 	// Создаем сервис с AddressGroup
@@ -252,7 +252,7 @@ func TestConditionManager_ProcessServiceConditions_Success(t *testing.T) {
 func TestConditionManager_ProcessServiceConditions_MissingAddressGroup(t *testing.T) {
 	ctx := context.Background()
 	registry := NewMockRegistry()
-	netguardService := NewNetguardService(registry)
+	netguardService := NewNetguardService(registry, nil)
 	conditionManager := NewConditionManager(registry, netguardService)
 
 	// Создаем сервис с несуществующим AddressGroup
@@ -286,7 +286,7 @@ func TestConditionManager_ProcessServiceConditions_MissingAddressGroup(t *testin
 func TestConditionManager_ProcessServiceConditions_NoIngressPorts(t *testing.T) {
 	ctx := context.Background()
 	registry := NewMockRegistry()
-	netguardService := NewNetguardService(registry)
+	netguardService := NewNetguardService(registry, nil)
 	conditionManager := NewConditionManager(registry, netguardService)
 
 	// Создаем сервис без портов
@@ -328,7 +328,7 @@ func TestConditionManager_ProcessServiceConditions_NoIngressPorts(t *testing.T) 
 func TestConditionManager_ProcessRuleS2SConditions_Success(t *testing.T) {
 	ctx := context.Background()
 	registry := NewMockRegistry()
-	netguardService := NewNetguardService(registry)
+	netguardService := NewNetguardService(registry, nil)
 	conditionManager := NewConditionManager(registry, netguardService)
 
 	// Создаем правило RuleS2S
@@ -385,7 +385,7 @@ func TestConditionManager_ProcessRuleS2SConditions_Success(t *testing.T) {
 func TestConditionManager_ProcessAddressGroupBindingConditions_Success(t *testing.T) {
 	ctx := context.Background()
 	registry := NewMockRegistry()
-	netguardService := NewNetguardService(registry)
+	netguardService := NewNetguardService(registry, nil)
 	conditionManager := NewConditionManager(registry, netguardService)
 
 	// Создаем binding
@@ -436,7 +436,7 @@ func TestConditionManager_ProcessAddressGroupBindingConditions_Success(t *testin
 
 func TestConditionManager_SetDefaultConditions(t *testing.T) {
 	registry := NewMockRegistry()
-	netguardService := NewNetguardService(registry)
+	netguardService := NewNetguardService(registry, nil)
 	conditionManager := NewConditionManager(registry, netguardService)
 
 	service := &models.Service{
@@ -474,7 +474,7 @@ func TestConditionManager_SetDefaultConditions(t *testing.T) {
 func TestServiceConditions_ConceptualSave(t *testing.T) {
 	ctx := context.Background()
 	registry := NewMockRegistry()
-	netguardService := NewNetguardService(registry)
+	netguardService := NewNetguardService(registry, nil)
 	conditionManager := NewConditionManager(registry, netguardService)
 
 	// Создаем сервис

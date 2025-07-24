@@ -2,7 +2,7 @@ package client
 
 import (
 	"netguard-pg-backend/internal/domain/models"
-	commonpb "netguard-pg-backend/protos/pkg/api/common"
+	// commonpb "github.com/H-BF/protos/pkg/api/common" - replaced with local types
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -41,9 +41,9 @@ func convertServiceFromProto(protoSvc *netguardpb.Service) models.Service {
 	for _, port := range protoSvc.IngressPorts {
 		var protocol models.TransportProtocol
 		switch port.Protocol {
-		case commonpb.Networks_NetIP_TCP:
+		case netguardpb.Networks_NetIP_TCP:
 			protocol = models.TCP
-		case commonpb.Networks_NetIP_UDP:
+		case netguardpb.Networks_NetIP_UDP:
 			protocol = models.UDP
 		default:
 			protocol = models.TCP // default
@@ -91,14 +91,14 @@ func convertServiceToProto(service models.Service) *netguardpb.Service {
 
 	// Конвертация IngressPorts
 	for _, port := range service.IngressPorts {
-		var protocol commonpb.Networks_NetIP_Transport
+		var protocol netguardpb.Networks_NetIP_Transport
 		switch port.Protocol {
 		case models.TCP:
-			protocol = commonpb.Networks_NetIP_TCP
+			protocol = netguardpb.Networks_NetIP_TCP
 		case models.UDP:
-			protocol = commonpb.Networks_NetIP_UDP
+			protocol = netguardpb.Networks_NetIP_UDP
 		default:
-			protocol = commonpb.Networks_NetIP_TCP // default
+			protocol = netguardpb.Networks_NetIP_TCP // default
 		}
 
 		protoSvc.IngressPorts = append(protoSvc.IngressPorts, &netguardpb.IngressPort{
@@ -392,9 +392,9 @@ func convertRuleS2SFromProto(proto *netguardpb.RuleS2S) models.RuleS2S {
 	// Конвертация Traffic protobuf enum в string
 	var traffic models.Traffic
 	switch proto.Traffic {
-	case commonpb.Traffic_Ingress:
+	case netguardpb.Traffic_Ingress:
 		traffic = models.INGRESS
-	case commonpb.Traffic_Egress:
+	case netguardpb.Traffic_Egress:
 		traffic = models.EGRESS
 	default:
 		traffic = models.INGRESS // default
@@ -443,14 +443,14 @@ func convertRuleS2SFromProto(proto *netguardpb.RuleS2S) models.RuleS2S {
 
 func convertRuleS2SToProto(m models.RuleS2S) *netguardpb.RuleS2S {
 	// Конвертация Traffic string в protobuf enum
-	var traffic commonpb.Traffic
+	var traffic netguardpb.Traffic
 	switch m.Traffic {
 	case models.INGRESS:
-		traffic = commonpb.Traffic_Ingress
+		traffic = netguardpb.Traffic_Ingress
 	case models.EGRESS:
-		traffic = commonpb.Traffic_Egress
+		traffic = netguardpb.Traffic_Egress
 	default:
-		traffic = commonpb.Traffic_Ingress // default
+		traffic = netguardpb.Traffic_Ingress // default
 	}
 
 	proto := &netguardpb.RuleS2S{
@@ -627,9 +627,9 @@ func ConvertIEAgAgRuleFromProto(proto *netguardpb.IEAgAgRule) models.IEAgAgRule 
 	// Конвертация Transport protobuf enum в string
 	var transport models.TransportProtocol
 	switch proto.Transport {
-	case commonpb.Networks_NetIP_TCP:
+	case netguardpb.Networks_NetIP_TCP:
 		transport = models.TCP
-	case commonpb.Networks_NetIP_UDP:
+	case netguardpb.Networks_NetIP_UDP:
 		transport = models.UDP
 	default:
 		transport = models.TCP // default
@@ -638,9 +638,9 @@ func ConvertIEAgAgRuleFromProto(proto *netguardpb.IEAgAgRule) models.IEAgAgRule 
 	// Конвертация Traffic protobuf enum в string
 	var traffic models.Traffic
 	switch proto.Traffic {
-	case commonpb.Traffic_Ingress:
+	case netguardpb.Traffic_Ingress:
 		traffic = models.INGRESS
-	case commonpb.Traffic_Egress:
+	case netguardpb.Traffic_Egress:
 		traffic = models.EGRESS
 	default:
 		traffic = models.INGRESS // default
@@ -704,25 +704,25 @@ func ConvertIEAgAgRuleFromProto(proto *netguardpb.IEAgAgRule) models.IEAgAgRule 
 
 func convertIEAgAgRuleToProto(m models.IEAgAgRule) *netguardpb.IEAgAgRule {
 	// Конвертация Transport string в protobuf enum
-	var transport commonpb.Networks_NetIP_Transport
+	var transport netguardpb.Networks_NetIP_Transport
 	switch m.Transport {
 	case models.TCP:
-		transport = commonpb.Networks_NetIP_TCP
+		transport = netguardpb.Networks_NetIP_TCP
 	case models.UDP:
-		transport = commonpb.Networks_NetIP_UDP
+		transport = netguardpb.Networks_NetIP_UDP
 	default:
-		transport = commonpb.Networks_NetIP_TCP // default
+		transport = netguardpb.Networks_NetIP_TCP // default
 	}
 
 	// Конвертация Traffic string в protobuf enum
-	var traffic commonpb.Traffic
+	var traffic netguardpb.Traffic
 	switch m.Traffic {
 	case models.INGRESS:
-		traffic = commonpb.Traffic_Ingress
+		traffic = netguardpb.Traffic_Ingress
 	case models.EGRESS:
-		traffic = commonpb.Traffic_Egress
+		traffic = netguardpb.Traffic_Egress
 	default:
-		traffic = commonpb.Traffic_Ingress // default
+		traffic = netguardpb.Traffic_Ingress // default
 	}
 
 	proto := &netguardpb.IEAgAgRule{

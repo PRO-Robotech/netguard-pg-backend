@@ -5,7 +5,20 @@ import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 import "google/api/annotations.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
-import "common/ip-transport.proto";
+// Temporary definitions for common types to avoid import issues
+message Networks {
+  message NetIP {
+    enum Transport {
+      TCP = 0;
+      UDP = 1;
+    }
+  }
+}
+
+enum Traffic {
+  Ingress = 0;
+  Egress = 1;
+}
 
 option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
   info: {
@@ -37,7 +50,7 @@ message Service {
 
 // IngressPort - defines a port configuration for ingress traffic
 message IngressPort {
-  common.Networks.NetIP.Transport protocol = 1;
+  Networks.NetIP.Transport protocol = 1;
   string port = 2;
   string description = 3;
 }
@@ -94,6 +107,15 @@ enum RuleAction {
   ACCEPT = 2;
 }
 
+// NetworkItem - represents a network item in an address group
+message NetworkItem {
+  string name = 1;
+  string cidr = 2;
+  string api_version = 3;
+  string kind = 4;
+  string namespace = 5;
+}
+
 // AddressGroup - represents an address group configuration for Netguard
 message AddressGroup {
   option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
@@ -105,6 +127,7 @@ message AddressGroup {
   RuleAction default_action = 2;  // Default action for the address group (ACCEPT/DROP)
   bool logs = 3;                  // Whether to enable logs
   bool trace = 4;                 // Whether to enable trace
+  repeated NetworkItem networks = 5; // Networks associated with this address group
   Meta meta = 6;
 }
 
@@ -188,7 +211,7 @@ message RuleS2S {
     }
   };
   ResourceIdentifier self_ref = 1;
-  common.Traffic traffic = 2;
+  Traffic traffic = 2;
   ServiceRef service_local_ref = 3;
   ServiceRef service_ref = 4;
   Meta meta = 6;
@@ -202,8 +225,8 @@ message IEAgAgRule {
     }
   };
   ResourceIdentifier self_ref = 1;
-  common.Networks.NetIP.Transport transport = 2;
-  common.Traffic traffic = 3;
+  Networks.NetIP.Transport transport = 2;
+  Traffic traffic = 3;
   AddressGroupRef address_group_local = 4;
   AddressGroupRef address_group = 5;
   repeated PortSpec ports = 6;

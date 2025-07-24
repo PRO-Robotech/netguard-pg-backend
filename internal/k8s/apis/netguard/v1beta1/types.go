@@ -131,8 +131,43 @@ type ServiceList struct {
 	Items           []Service `json:"items"`
 }
 
+// NetworkItem represents a network item in an address group
+type NetworkItem struct {
+	Name       string `json:"name"`
+	CIDR       string `json:"cidr"`
+	ApiVersion string `json:"apiVersion"`
+	Kind       string `json:"kind"`
+	Namespace  string `json:"namespace"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// NetworkItemList contains a list of NetworkItem
+type NetworkItemList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []NetworkItem `json:"items"`
+}
+
+// NetworksSpec defines the networks associated with an address group
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type NetworksSpec struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	// Items contains the list of network items
+	Items []NetworkItem `json:"items,omitempty"`
+}
+
+// NetworksSpecList contains a list of NetworksSpec
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+type NetworksSpecList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []NetworksSpec `json:"items"`
+}
+
 // +genclient
-// +k8s:openapi-gen=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // AddressGroup defines a group of network addresses
@@ -140,8 +175,9 @@ type AddressGroup struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   AddressGroupSpec   `json:"spec,omitempty"`
-	Status AddressGroupStatus `json:"status,omitempty"`
+	Spec     AddressGroupSpec   `json:"spec,omitempty"`
+	Status   AddressGroupStatus `json:"status,omitempty"`
+	Networks NetworksSpec       `json:"networks,omitempty"` // Networks subresource
 }
 
 // AddressGroupSpec defines the desired state of AddressGroup
@@ -162,6 +198,10 @@ type AddressGroupSpec struct {
 
 // AddressGroupStatus defines the observed state of AddressGroup
 type AddressGroupStatus struct {
+	// AddressGroupName is the name used in sgroups synchronization
+	// +optional
+	AddressGroupName string `json:"addressGroupName,omitempty"`
+
 	// Conditions represent the latest available observations of the address group's current state
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`

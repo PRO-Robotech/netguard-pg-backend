@@ -25,6 +25,18 @@ func (c *AddressGroupConverter) ToDomain(ctx context.Context, k8sObj *netguardv1
 		return nil, fmt.Errorf("k8s AddressGroup object is nil")
 	}
 
+	// Convert Networks from K8s to domain
+	networks := make([]models.NetworkItem, len(k8sObj.Networks.Items))
+	for i, item := range k8sObj.Networks.Items {
+		networks[i] = models.NetworkItem{
+			Name:       item.Name,
+			CIDR:       item.CIDR,
+			ApiVersion: item.ApiVersion,
+			Kind:       item.Kind,
+			Namespace:  item.Namespace,
+		}
+	}
+
 	// Create domain address group
 	domainAddressGroup := &models.AddressGroup{
 		SelfRef: models.SelfRef{
@@ -33,9 +45,11 @@ func (c *AddressGroupConverter) ToDomain(ctx context.Context, k8sObj *netguardv1
 				Namespace: k8sObj.Namespace,
 			},
 		},
-		DefaultAction: models.RuleAction(k8sObj.Spec.DefaultAction),
-		Logs:          k8sObj.Spec.Logs,
-		Trace:         k8sObj.Spec.Trace,
+		DefaultAction:    models.RuleAction(k8sObj.Spec.DefaultAction),
+		Logs:             k8sObj.Spec.Logs,
+		Trace:            k8sObj.Spec.Trace,
+		Networks:         networks,
+		AddressGroupName: k8sObj.Status.AddressGroupName,
 		Meta: models.Meta{
 			UID:                string(k8sObj.UID),
 			ResourceVersion:    k8sObj.ResourceVersion,
@@ -70,6 +84,18 @@ func (c *AddressGroupConverter) FromDomain(ctx context.Context, domainObj *model
 		return nil, fmt.Errorf("domain AddressGroup object is nil")
 	}
 
+	// Convert Networks from domain to K8s
+	networks := make([]netguardv1beta1.NetworkItem, len(domainObj.Networks))
+	for i, item := range domainObj.Networks {
+		networks[i] = netguardv1beta1.NetworkItem{
+			Name:       item.Name,
+			CIDR:       item.CIDR,
+			ApiVersion: item.ApiVersion,
+			Kind:       item.Kind,
+			Namespace:  item.Namespace,
+		}
+	}
+
 	// Create k8s address group
 	k8sAddressGroup := &netguardv1beta1.AddressGroup{
 		TypeMeta: metav1.TypeMeta{
@@ -88,6 +114,9 @@ func (c *AddressGroupConverter) FromDomain(ctx context.Context, domainObj *model
 			DefaultAction: netguardv1beta1.RuleAction(domainObj.DefaultAction),
 			Logs:          domainObj.Logs,
 			Trace:         domainObj.Trace,
+		},
+		Networks: netguardv1beta1.NetworksSpec{
+			Items: networks,
 		},
 	}
 
@@ -108,6 +137,7 @@ func (c *AddressGroupConverter) FromDomain(ctx context.Context, domainObj *model
 
 	// Convert status - переносим условия из Meta в Status
 	k8sAddressGroup.Status = netguardv1beta1.AddressGroupStatus{
+		AddressGroupName:   domainObj.AddressGroupName,
 		ObservedGeneration: domainObj.Meta.ObservedGeneration,
 		Conditions:         domainObj.Meta.Conditions, // Backend формирует условия
 	}

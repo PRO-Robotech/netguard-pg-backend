@@ -52,6 +52,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&RuleS2SDstOwnRefSpecList{},
 		&AccessPortsSpec{},
 		&AccessPortsSpecList{},
+		&NetworksSpec{},
+		&NetworksSpecList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil
@@ -82,6 +84,8 @@ func addKnownTypesInternal(scheme *runtime.Scheme) error {
 		&RuleS2SDstOwnRefSpecList{},
 		&AccessPortsSpec{},
 		&AccessPortsSpecList{},
+		&NetworksSpec{},
+		&NetworksSpecList{},
 	)
 	// do NOT call metav1.AddToGroupVersion for internal hub version to avoid
 	// duplicate registration of meta types like WatchEvent.

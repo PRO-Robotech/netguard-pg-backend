@@ -39,10 +39,13 @@ type (
 
 	// AddressGroup -
 	AddressGroup struct {
-		Name        string   `db:"name"`
-		Namespace   string   `db:"namespace"`
-		Description string   `db:"description"`
-		Addresses   []string `db:"addresses"`
+		Name              string `db:"name"`
+		Namespace         string `db:"namespace"`
+		DefaultAction     string `db:"default_action"`
+		Logs              bool   `db:"logs"`
+		Trace             bool   `db:"trace"`
+		Networks          string `db:"networks"`          // JSONB field stored as string
+		AddressGroupName  string `db:"address_group_name"` // Name used in sgroups synchronization
 	}
 
 	// AddressGroupBinding -

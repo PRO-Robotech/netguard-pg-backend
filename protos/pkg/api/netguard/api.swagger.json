@@ -583,33 +583,7 @@
         "TCP",
         "UDP"
       ],
-      "default": "TCP",
-      "title": "Transport: represents net transport (L4)"
-    },
-    "commonTraffic": {
-      "type": "string",
-      "enum": [
-        "Undef",
-        "Ingress",
-        "Egress"
-      ],
-      "default": "Undef",
-      "description": "- Undef: undefined tfaffic direction\n - Ingress: Ingress\n - Egress: Egress",
-      "title": "Ingress / Egress traffic dir"
-    },
-    "netguardv1PortRange": {
-      "type": "object",
-      "properties": {
-        "start": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "end": {
-          "type": "integer",
-          "format": "int32"
-        }
-      },
-      "title": "PortRange - range of ports"
+      "default": "TCP"
     },
     "protobufAny": {
       "type": "object",
@@ -656,6 +630,14 @@
         "trace": {
           "type": "boolean",
           "title": "Whether to enable trace"
+        },
+        "networks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1NetworkItem"
+          },
+          "title": "Networks associated with this address group"
         },
         "meta": {
           "$ref": "#/definitions/v1Meta"
@@ -852,7 +834,7 @@
           "$ref": "#/definitions/NetIPTransport"
         },
         "traffic": {
-          "$ref": "#/definitions/commonTraffic"
+          "$ref": "#/definitions/v1Traffic"
         },
         "addressGroupLocal": {
           "$ref": "#/definitions/v1AddressGroupRef"
@@ -1054,6 +1036,41 @@
       },
       "description": "Meta - kubernetes system metadata stored round-trip."
     },
+    "v1NetworkItem": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "cidr": {
+          "type": "string"
+        },
+        "apiVersion": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        }
+      },
+      "title": "NetworkItem - represents a network item in an address group"
+    },
+    "v1PortRange": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "end": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "title": "PortRange - range of ports"
+    },
     "v1PortRanges": {
       "type": "object",
       "properties": {
@@ -1061,7 +1078,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/netguardv1PortRange"
+            "$ref": "#/definitions/v1PortRange"
           }
         }
       },
@@ -1121,7 +1138,7 @@
           "$ref": "#/definitions/v1ResourceIdentifier"
         },
         "traffic": {
-          "$ref": "#/definitions/commonTraffic"
+          "$ref": "#/definitions/v1Traffic"
         },
         "serviceLocalRef": {
           "$ref": "#/definitions/v1ServiceRef"
@@ -1382,6 +1399,14 @@
         }
       },
       "title": "SyncStatusResp - sync status"
+    },
+    "v1Traffic": {
+      "type": "string",
+      "enum": [
+        "Ingress",
+        "Egress"
+      ],
+      "default": "Ingress"
     }
   },
   "externalDocs": {

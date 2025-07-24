@@ -1,0 +1,59 @@
+# Основная информация о приложении
+app:
+  name: "netguard-pg-backend"
+  version: "v1.0.0"
+
+# Настройки приложения
+settings:
+  sgroup-grpc-address: "sgroups-server.incloud-sgroups.svc:9006"
+  http-addr: ":8080"
+  grpc-addr: ":9090"
+
+# Конфигурация логирования
+logger:
+  log-level: "DEBUG"
+
+# Конфигурация аутентификации
+authn:
+  type: "tls"
+  tls:
+    cert-file: ""
+    key-file: ""
+    client:
+      verify: "skip"
+      ca-files: []
+
+# Конфигурация синхронизации
+sync:
+  enabled: true
+  
+  # Настройки sgroups клиента
+  sgroups:
+    grpc_address: "sgroups-server.incloud-sgroups.svc:9006"
+    request_timeout: "30s"
+    keep_alive:
+      time: "0s"                # Отключаем keep-alive
+      timeout: "0s"
+      permit_without_stream: false
+    tls:
+      enabled: true
+      cert_file: ""
+      key_file: ""
+      ca_file: ""
+      insecure_skip_verify: true
+  
+  # Настройки повторных попыток
+  retry:
+    max_retries: 3
+    initial_delay: 100    # миллисекунды
+    max_delay: 5000       # миллисекунды
+    backoff_factor: 2.0
+  
+  # Настройки debouncing
+  debounce:
+    time: "5s"
+  
+  # Настройки очистки
+  cleanup:
+    interval: "10m"
+    max_age: "1h"

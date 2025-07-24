@@ -10,6 +10,8 @@ import (
 	"netguard-pg-backend/internal/application/validation"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
+	"netguard-pg-backend/internal/sync/interfaces"
+	"netguard-pg-backend/internal/sync/types"
 
 	"github.com/pkg/errors"
 )
@@ -18,12 +20,14 @@ import (
 type NetguardService struct {
 	registry         ports.Registry
 	conditionManager *ConditionManager
+	syncManager      interfaces.SyncManager
 }
 
 // NewNetguardService creates a new NetguardService
-func NewNetguardService(registry ports.Registry) *NetguardService {
+func NewNetguardService(registry ports.Registry, syncManager interfaces.SyncManager) *NetguardService {
 	s := &NetguardService{
-		registry: registry,
+		registry:    registry,
+		syncManager: syncManager,
 	}
 	s.conditionManager = NewConditionManager(registry, s)
 	return s
@@ -195,11 +199,8 @@ func (s *NetguardService) CreateService(ctx context.Context, service models.Serv
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
-	// Обработка conditions
-	s.conditionManager.ProcessServiceConditions(ctx, &service)
-	if err := s.conditionManager.saveResourceConditions(ctx, &service); err != nil {
-		return errors.Wrap(err, "failed to save service conditions")
-	}
+	// Используем универсальную функцию
+	s.processConditionsIfNeeded(ctx, &service, models.SyncOpUpsert)
 	return nil
 }
 
@@ -236,11 +237,12 @@ func (s *NetguardService) CreateAddressGroup(ctx context.Context, addressGroup m
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
-	// Обработка conditions
-	s.conditionManager.ProcessAddressGroupConditions(ctx, &addressGroup)
-	if err := s.conditionManager.saveResourceConditions(ctx, &addressGroup); err != nil {
-		return errors.Wrap(err, "failed to save address group conditions")
-	}
+
+	// Синхронизация с sgroups после успешного создания в БД
+	s.syncAddressGroupsWithSGroups(ctx, []models.AddressGroup{addressGroup}, types.SyncOperationUpsert)
+
+	// Используем универсальную функцию
+	s.processConditionsIfNeeded(ctx, &addressGroup, models.SyncOpUpsert)
 	return nil
 }
 
@@ -283,10 +285,8 @@ func (s *NetguardService) UpdateService(ctx context.Context, service models.Serv
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
-	s.conditionManager.ProcessServiceConditions(ctx, &service)
-	if err := s.conditionManager.saveResourceConditions(ctx, &service); err != nil {
-		return errors.Wrap(err, "failed to save service conditions")
-	}
+	// Используем универсальную функцию
+	s.processConditionsIfNeeded(ctx, &service, models.SyncOpUpsert)
 	return nil
 }
 
@@ -329,10 +329,12 @@ func (s *NetguardService) UpdateAddressGroup(ctx context.Context, addressGroup m
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
-	s.conditionManager.ProcessAddressGroupConditions(ctx, &addressGroup)
-	if err := s.conditionManager.saveResourceConditions(ctx, &addressGroup); err != nil {
-		return errors.Wrap(err, "failed to save address group conditions")
-	}
+
+	// Синхронизация с sgroups после успешного обновления в БД
+	s.syncAddressGroupsWithSGroups(ctx, []models.AddressGroup{addressGroup}, types.SyncOperationUpsert)
+
+	// Используем универсальную функцию
+	s.processConditionsIfNeeded(ctx, &addressGroup, models.SyncOpUpsert)
 	return nil
 }
 
@@ -441,37 +443,22 @@ func (s *NetguardService) Sync(ctx context.Context, syncOp models.SyncOp, subjec
 		if err := s.syncServices(ctx, writer, v, syncOp); err != nil {
 			return err
 		}
-		// Обработка conditions после успешного commit
-		for i := range v {
-			s.conditionManager.ProcessServiceConditions(ctx, &v[i])
-			if err := s.conditionManager.saveResourceConditions(ctx, &v[i]); err != nil {
-				log.Printf("Failed to save service conditions for %s: %v", v[i].Key(), err)
-			}
-		}
+		// Используем универсальную функцию
+		s.processConditionsIfNeeded(ctx, v, syncOp)
 		return nil
 	case []models.AddressGroup:
 		if err := s.syncAddressGroups(ctx, writer, v, syncOp); err != nil {
 			return err
 		}
-		// Обработка conditions после успешного commit
-		for i := range v {
-			s.conditionManager.ProcessAddressGroupConditions(ctx, &v[i])
-			if err := s.conditionManager.saveResourceConditions(ctx, &v[i]); err != nil {
-				log.Printf("Failed to save address group conditions for %s: %v", v[i].Key(), err)
-			}
-		}
+		// Используем универсальную функцию
+		s.processConditionsIfNeeded(ctx, v, syncOp)
 		return nil
 	case []models.AddressGroupBinding:
 		if err := s.syncAddressGroupBindings(ctx, writer, v, syncOp); err != nil {
 			return err
 		}
-		// Обработка conditions после успешного commit
-		for i := range v {
-			s.conditionManager.ProcessAddressGroupBindingConditions(ctx, &v[i])
-			if err := s.conditionManager.saveResourceConditions(ctx, &v[i]); err != nil {
-				log.Printf("Failed to save address group binding conditions for %s: %v", v[i].Key(), err)
-			}
-		}
+		// Используем универсальную функцию
+		s.processConditionsIfNeeded(ctx, v, syncOp)
 		return nil
 	case []models.AddressGroupPortMapping:
 		if err := s.syncAddressGroupPortMappings(ctx, writer, v, syncOp); err != nil {
@@ -481,52 +468,100 @@ func (s *NetguardService) Sync(ctx context.Context, syncOp models.SyncOp, subjec
 		if err := writer.Commit(); err != nil {
 			return errors.Wrap(err, "failed to commit")
 		}
-		// Обработка conditions после успешного commit
+		// Используем универсальную функцию
+		s.processConditionsIfNeeded(ctx, v, syncOp)
+		return nil
+	case []models.RuleS2S:
+		if err := s.syncRuleS2S(ctx, writer, v, syncOp); err != nil {
+			return err
+		}
+		// Используем универсальную функцию
+		s.processConditionsIfNeeded(ctx, v, syncOp)
+		return nil
+	case []models.ServiceAlias:
+		if err := s.syncServiceAliases(ctx, writer, v, syncOp); err != nil {
+			return err
+		}
+		// Используем универсальную функцию
+		s.processConditionsIfNeeded(ctx, v, syncOp)
+		return nil
+	case []models.AddressGroupBindingPolicy:
+		if err := s.syncAddressGroupBindingPolicies(ctx, writer, v, syncOp); err != nil {
+			return err
+		}
+		// Используем универсальную функцию
+		s.processConditionsIfNeeded(ctx, v, syncOp)
+		return nil
+	default:
+		return errors.New("unsupported subject type")
+	}
+}
+
+// processConditionsIfNeeded обрабатывает conditions только для не-удаления операций
+func (s *NetguardService) processConditionsIfNeeded(ctx context.Context, subject interface{}, syncOp models.SyncOp) {
+	// Пропускаем обработку conditions для операций удаления
+	if syncOp == models.SyncOpDelete {
+		log.Printf("⚠️  DEBUG: processConditionsIfNeeded - Skipping conditions processing for DELETE operation")
+		return
+	}
+
+	switch v := subject.(type) {
+	case []models.Service:
+		for i := range v {
+			s.conditionManager.ProcessServiceConditions(ctx, &v[i])
+			if err := s.conditionManager.saveResourceConditions(ctx, &v[i]); err != nil {
+				log.Printf("Failed to save service conditions for %s: %v", v[i].Key(), err)
+			}
+		}
+	case []models.AddressGroup:
+		for i := range v {
+			s.conditionManager.ProcessAddressGroupConditions(ctx, &v[i])
+			if err := s.conditionManager.saveResourceConditions(ctx, &v[i]); err != nil {
+				log.Printf("Failed to save address group conditions for %s: %v", v[i].Key(), err)
+			}
+		}
+	case []models.AddressGroupBinding:
+		for i := range v {
+			s.conditionManager.ProcessAddressGroupBindingConditions(ctx, &v[i])
+			if err := s.conditionManager.saveResourceConditions(ctx, &v[i]); err != nil {
+				log.Printf("Failed to save address group binding conditions for %s: %v", v[i].Key(), err)
+			}
+		}
+	case []models.AddressGroupPortMapping:
 		for i := range v {
 			s.conditionManager.ProcessAddressGroupPortMappingConditions(ctx, &v[i])
 			if err := s.conditionManager.saveResourceConditions(ctx, &v[i]); err != nil {
 				log.Printf("Failed to save address group port mapping conditions for %s: %v", v[i].Key(), err)
 			}
 		}
-		return nil
 	case []models.RuleS2S:
-		if err := s.syncRuleS2S(ctx, writer, v, syncOp); err != nil {
-			return err
-		}
-		// Обработка conditions после успешного commit
 		for i := range v {
 			s.conditionManager.ProcessRuleS2SConditions(ctx, &v[i])
 			if err := s.conditionManager.saveResourceConditions(ctx, &v[i]); err != nil {
 				log.Printf("Failed to save rule s2s conditions for %s: %v", v[i].Key(), err)
 			}
 		}
-		return nil
 	case []models.ServiceAlias:
-		if err := s.syncServiceAliases(ctx, writer, v, syncOp); err != nil {
-			return err
-		}
-		// Обработка conditions после успешного commit
 		for i := range v {
 			s.conditionManager.ProcessServiceAliasConditions(ctx, &v[i])
 			if err := s.conditionManager.saveResourceConditions(ctx, &v[i]); err != nil {
 				log.Printf("Failed to save service alias conditions for %s: %v", v[i].Key(), err)
 			}
 		}
-		return nil
 	case []models.AddressGroupBindingPolicy:
-		if err := s.syncAddressGroupBindingPolicies(ctx, writer, v, syncOp); err != nil {
-			return err
-		}
-		// Обработка conditions после успешного commit
 		for i := range v {
 			s.conditionManager.ProcessAddressGroupBindingPolicyConditions(ctx, &v[i])
 			if err := s.conditionManager.saveResourceConditions(ctx, &v[i]); err != nil {
 				log.Printf("Failed to save address group binding policy conditions for %s: %v", v[i].Key(), err)
 			}
 		}
-		return nil
+	case *models.AddressGroupPortMapping:
+		s.conditionManager.ProcessAddressGroupPortMappingConditions(ctx, v)
+		if err := s.conditionManager.saveResourceConditions(ctx, v); err != nil {
+			log.Printf("Failed to save address group port mapping conditions for %s: %v", v.Key(), err)
+		}
 	default:
-		return errors.New("unsupported subject type")
+		log.Printf("⚠️  WARNING: processConditionsIfNeeded - Unknown subject type: %T", subject)
 	}
 }
 
@@ -563,11 +598,8 @@ func (s *NetguardService) CreateAddressGroupPortMapping(ctx context.Context, map
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
-	// Обработка conditions
-	s.conditionManager.ProcessAddressGroupPortMappingConditions(ctx, &mapping)
-	if err := s.conditionManager.saveResourceConditions(ctx, &mapping); err != nil {
-		return errors.Wrap(err, "failed to save address group port mapping conditions")
-	}
+	// Используем универсальную функцию
+	s.processConditionsIfNeeded(ctx, &mapping, models.SyncOpUpsert)
 	return nil
 }
 
@@ -610,10 +642,8 @@ func (s *NetguardService) UpdateAddressGroupPortMapping(ctx context.Context, map
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
-	s.conditionManager.ProcessAddressGroupPortMappingConditions(ctx, &mapping)
-	if err := s.conditionManager.saveResourceConditions(ctx, &mapping); err != nil {
-		return errors.Wrap(err, "failed to save address group port mapping conditions")
-	}
+	// Используем универсальную функцию
+	s.processConditionsIfNeeded(ctx, &mapping, models.SyncOpUpsert)
 	return nil
 }
 
@@ -1163,6 +1193,13 @@ func (s *NetguardService) SyncServices(ctx context.Context, services []models.Se
 
 // syncAddressGroups синхронизирует группы адресов с указанной операцией
 func (s *NetguardService) syncAddressGroups(ctx context.Context, writer ports.Writer, addressGroups []models.AddressGroup, syncOp models.SyncOp) error {
+	log.Printf("🔧 DEBUG: syncAddressGroups - Starting sync process for %d AddressGroups (operation: %s)", len(addressGroups), syncOp)
+
+	// Логируем детали каждой AddressGroup
+	for i, ag := range addressGroups {
+		log.Printf("🔧 DEBUG: syncAddressGroups - AddressGroup[%d]: %s (Name=%s, Namespace=%s)",
+			i, ag.GetSyncKey(), ag.Name, ag.Namespace)
+	}
 	// Валидация в зависимости от операции
 	if syncOp != models.SyncOpDelete {
 		reader, err := s.registry.Reader(ctx)
@@ -1222,13 +1259,30 @@ func (s *NetguardService) syncAddressGroups(ctx context.Context, writer ports.Wr
 	}
 
 	// Выполнение операции с указанной опцией для не-удаления
+	log.Printf("🔧 DEBUG: syncAddressGroups - Executing writer.SyncAddressGroups with scope and syncOp: %s", syncOp)
 	if err := writer.SyncAddressGroups(ctx, addressGroups, scope, ports.WithSyncOp(syncOp)); err != nil {
+		log.Printf("❌ ERROR: syncAddressGroups - Failed to sync address groups to writer: %v", err)
 		return errors.Wrap(err, "failed to sync address groups")
 	}
+	log.Printf("✅ DEBUG: syncAddressGroups - Successfully synced address groups to writer")
 
+	log.Printf("🔧 DEBUG: syncAddressGroups - Committing transaction to database")
 	if err := writer.Commit(); err != nil {
+		log.Printf("❌ ERROR: syncAddressGroups - Failed to commit transaction: %v", err)
 		return errors.Wrap(err, "failed to commit")
 	}
+	log.Printf("✅ DEBUG: syncAddressGroups - Successfully committed transaction to database")
+
+	// Синхронизация с sgroups после успешного commit'а (только для операций создания/обновления)
+	if syncOp != models.SyncOpDelete {
+		log.Printf("🔧 DEBUG: syncAddressGroups - Starting sgroups synchronization for %d AddressGroups", len(addressGroups))
+		s.syncAddressGroupsWithSGroups(ctx, addressGroups, types.SyncOperationUpsert)
+		log.Printf("✅ DEBUG: syncAddressGroups - Completed sgroups synchronization")
+	} else {
+		log.Printf("⚠️  DEBUG: syncAddressGroups - Skipping sgroups sync for DELETE operation (handled separately)")
+	}
+
+	log.Printf("✅ DEBUG: syncAddressGroups - Completed sync process for %d AddressGroups", len(addressGroups))
 	return nil
 }
 
@@ -1350,7 +1404,36 @@ func (s *NetguardService) SyncAddressGroups(ctx context.Context, addressGroups [
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
+
+	// Синхронизация с sgroups после успешного commit'а
+	s.syncAddressGroupsWithSGroups(ctx, addressGroups, types.SyncOperationUpsert)
+
 	return nil
+}
+
+// syncAddressGroupsWithSGroups синхронизирует AddressGroup с sgroups
+func (s *NetguardService) syncAddressGroupsWithSGroups(ctx context.Context, addressGroups []models.AddressGroup, operation types.SyncOperation) {
+	if s.syncManager == nil {
+		log.Printf("⚠️  WARNING: syncAddressGroupsWithSGroups - SyncManager is nil, skipping sync for %d AddressGroups", len(addressGroups))
+		return
+	}
+
+	log.Printf("🔧 DEBUG: syncAddressGroupsWithSGroups - Starting sync process for %d AddressGroups (operation: %s)", len(addressGroups), operation)
+
+	for _, addressGroup := range addressGroups {
+		log.Printf("🔧 DEBUG: syncAddressGroupsWithSGroups - Attempting to sync AddressGroup %s with sgroups", addressGroup.GetSyncKey())
+		log.Printf("🔧 DEBUG: syncAddressGroupsWithSGroups - AddressGroup details: Name=%s, Namespace=%s, SyncSubjectType=%s",
+			addressGroup.Name, addressGroup.Namespace, addressGroup.GetSyncSubjectType())
+
+		if syncErr := s.syncManager.SyncEntity(ctx, &addressGroup, operation); syncErr != nil {
+			log.Printf("❌ ERROR: syncAddressGroupsWithSGroups - Failed to sync AddressGroup %s with sgroups: %v", addressGroup.GetSyncKey(), syncErr)
+			// Не прерываем обработку остальных AddressGroup - синхронизация может быть повторена позже
+		} else {
+			log.Printf("✅ DEBUG: syncAddressGroupsWithSGroups - Successfully initiated sync for AddressGroup %s", addressGroup.GetSyncKey())
+		}
+	}
+
+	log.Printf("✅ DEBUG: syncAddressGroupsWithSGroups - Completed sync process for %d AddressGroups", len(addressGroups))
 }
 
 // syncAddressGroupBindings синхронизирует привязки групп адресов с указанной операцией
@@ -2961,6 +3044,11 @@ func (s *NetguardService) DeleteAddressGroupsByIDs(ctx context.Context, ids []mo
 	// Commit transaction
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
+	}
+
+	// Синхронизация с sgroups после успешного удаления из БД
+	if len(addressGroups) > 0 {
+		s.syncAddressGroupsWithSGroups(ctx, addressGroups, types.SyncOperationDelete)
 	}
 
 	return nil

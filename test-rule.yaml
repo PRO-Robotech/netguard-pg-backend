@@ -1,0 +1,17 @@
+apiVersion: netguard.sgroups.io/v1beta1
+kind: RuleS2S
+metadata:
+  name: test-rule
+  namespace: test-app
+spec:
+  traffic: egress
+  serviceLocalRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: ServiceAlias
+    name: frontend-alias
+    namespace: test-app
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: ServiceAlias
+    name: api-alias
+    namespace: test-app

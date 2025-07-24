@@ -2,6 +2,8 @@ package validation
 
 import (
 	"context"
+	"fmt"
+	"net"
 
 	"github.com/pkg/errors"
 	"netguard-pg-backend/internal/domain/models"
@@ -23,14 +25,46 @@ func (v *AddressGroupValidator) ValidateReferences(ctx context.Context, group mo
 
 // ValidateForCreation validates an address group before creation
 func (v *AddressGroupValidator) ValidateForCreation(ctx context.Context, group models.AddressGroup) error {
+	if err := v.validateNetworks(group.Networks); err != nil {
+		return err
+	}
 	return v.ValidateReferences(ctx, group)
 }
 
 // ValidateForUpdate validates an address group before update
 func (v *AddressGroupValidator) ValidateForUpdate(ctx context.Context, oldGroup, newGroup models.AddressGroup) error {
+	if err := v.validateNetworks(newGroup.Networks); err != nil {
+		return err
+	}
 	// For address groups, the validation for update is the same as for creation
 	// We might add specific update validation rules in the future if needed
 	return v.ValidateReferences(ctx, newGroup)
+}
+
+// validateNetworks validates the Networks field of an AddressGroup
+func (v *AddressGroupValidator) validateNetworks(networks []models.NetworkItem) error {
+	for i, network := range networks {
+		// Validate required fields
+		if network.Name == "" {
+			return fmt.Errorf("network item %d: name is required", i)
+		}
+
+		if network.CIDR == "" {
+			return fmt.Errorf("network item %d (%s): CIDR is required", i, network.Name)
+		}
+
+		// Validate CIDR format
+		if _, _, err := net.ParseCIDR(network.CIDR); err != nil {
+			return fmt.Errorf("network item %d (%s): invalid CIDR format '%s': %v", i, network.Name, network.CIDR, err)
+		}
+
+		// Validate Kind if provided
+		if network.Kind != "" && network.Kind != "Service" && network.Kind != "Pod" && network.Kind != "Node" {
+			return fmt.Errorf("network item %d (%s): invalid kind '%s', must be one of: Service, Pod, Node", i, network.Name, network.Kind)
+		}
+	}
+
+	return nil
 }
 
 // CheckDependencies checks if there are dependencies before deleting an address group

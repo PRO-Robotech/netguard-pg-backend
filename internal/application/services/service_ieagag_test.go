@@ -279,7 +279,7 @@ func TestGenerateIEAgAgRulesFromRuleS2S(t *testing.T) {
 			mockRegistry := NewMockRegistryForIEAgAgRules(mockReader, &MockWriter{})
 
 			// Create service
-			netguardService := services.NewNetguardService(mockRegistry)
+			netguardService := services.NewNetguardService(mockRegistry, nil)
 
 			// Call the method
 			rules, err := netguardService.GenerateIEAgAgRulesFromRuleS2S(context.Background(), tc.ruleS2S)
@@ -420,7 +420,7 @@ func TestSyncRuleS2S_WithIEAgAgRules(t *testing.T) {
 	mockRegistry := NewMockRegistryForIEAgAgRules(mockReader, mockWriter)
 
 	// Create service
-	netguardService := services.NewNetguardService(mockRegistry)
+	netguardService := services.NewNetguardService(mockRegistry, nil)
 
 	// Call the method
 	err := netguardService.SyncRuleS2S(context.Background(), []models.RuleS2S{rule}, nil)
@@ -562,7 +562,7 @@ func TestRuleS2SAndIEAgAgRuleIntegration(t *testing.T) {
 			mockRegistry := NewMockRegistryForIEAgAgRules(mockReader, mockWriter)
 
 			// Create service
-			netguardService := services.NewNetguardService(mockRegistry)
+			netguardService := services.NewNetguardService(mockRegistry, nil)
 
 			// First, sync the rule to create initial IEAgAgRules
 			err := netguardService.SyncRuleS2S(context.Background(), []models.RuleS2S{rule}, nil)

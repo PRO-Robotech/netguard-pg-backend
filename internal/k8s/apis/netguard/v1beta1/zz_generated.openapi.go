@@ -111,6 +111,10 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IEAgAgRuleStatus":                schema_k8s_apis_netguard_v1beta1_IEAgAgRuleStatus(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IngressPort":                     schema_k8s_apis_netguard_v1beta1_IngressPort(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference":       schema_k8s_apis_netguard_v1beta1_NamespacedObjectReference(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NetworkItem":                     schema_k8s_apis_netguard_v1beta1_NetworkItem(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NetworkItemList":                 schema_k8s_apis_netguard_v1beta1_NetworkItemList(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NetworksSpec":                    schema_k8s_apis_netguard_v1beta1_NetworksSpec(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NetworksSpecList":                schema_k8s_apis_netguard_v1beta1_NetworksSpecList(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ObjectReference":                 schema_k8s_apis_netguard_v1beta1_ObjectReference(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.PortConfig":                      schema_k8s_apis_netguard_v1beta1_PortConfig(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.PortRange":                       schema_k8s_apis_netguard_v1beta1_PortRange(ref),
@@ -2945,11 +2949,17 @@ func schema_k8s_apis_netguard_v1beta1_AddressGroup(ref common.ReferenceCallback)
 							Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupStatus"),
 						},
 					},
+					"networks": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NetworksSpec"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupSpec", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupStatus"},
+			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupSpec", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupStatus", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NetworksSpec"},
 	}
 }
 
@@ -3518,6 +3528,13 @@ func schema_k8s_apis_netguard_v1beta1_AddressGroupStatus(ref common.ReferenceCal
 				Description: "AddressGroupStatus defines the observed state of AddressGroup",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
+					"addressGroupName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AddressGroupName is the name used in sgroups synchronization",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"conditions": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Conditions represent the latest available observations of the address group's current state",
@@ -3937,6 +3954,202 @@ func schema_k8s_apis_netguard_v1beta1_NamespacedObjectReference(ref common.Refer
 				Required: []string{"apiVersion", "kind", "name"},
 			},
 		},
+	}
+}
+
+func schema_k8s_apis_netguard_v1beta1_NetworkItem(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NetworkItem represents a network item in an address group",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"cidr": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"namespace": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+				},
+				Required: []string{"name", "cidr", "apiVersion", "kind", "namespace"},
+			},
+		},
+	}
+}
+
+func schema_k8s_apis_netguard_v1beta1_NetworkItemList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NetworkItemList contains a list of NetworkItem",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NetworkItem"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NetworkItem"},
+	}
+}
+
+func schema_k8s_apis_netguard_v1beta1_NetworksSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NetworksSpec defines the networks associated with an address group",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Items contains the list of network items",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NetworkItem"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NetworkItem"},
+	}
+}
+
+func schema_k8s_apis_netguard_v1beta1_NetworksSpecList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NetworksSpecList contains a list of NetworksSpec",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NetworksSpec"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NetworksSpec"},
 	}
 }
 

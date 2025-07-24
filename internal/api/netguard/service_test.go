@@ -11,7 +11,7 @@ import (
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/infrastructure/repositories/mem"
-	commonpb "netguard-pg-backend/protos/pkg/api/common"
+	// commonpb "github.com/H-BF/protos/pkg/api/common" - replaced with local types
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
 )
 
@@ -21,7 +21,7 @@ func TestSync(t *testing.T) {
 	defer registry.Close()
 
 	// Create service
-	service := services.NewNetguardService(registry)
+	service := services.NewNetguardService(registry, nil)
 
 	// Create API server
 	server := NewNetguardServiceServer(service)
@@ -40,7 +40,7 @@ func TestSync(t *testing.T) {
 						Description: "Web service",
 						IngressPorts: []*netguardpb.IngressPort{
 							{
-								Protocol:    commonpb.Networks_NetIP_TCP,
+								Protocol:    netguardpb.Networks_NetIP_TCP,
 								Port:        "80",
 								Description: "HTTP",
 							},
@@ -92,7 +92,7 @@ func TestSyncWithDifferentOperations(t *testing.T) {
 		defer registry.Close()
 
 		// Create service
-		service := services.NewNetguardService(registry)
+		service := services.NewNetguardService(registry, nil)
 
 		// Create API server
 		server := NewNetguardServiceServer(service)
@@ -115,7 +115,7 @@ func TestSyncWithDifferentOperations(t *testing.T) {
 								Description: "Web service",
 								IngressPorts: []*netguardpb.IngressPort{
 									{
-										Protocol:    commonpb.Networks_NetIP_TCP,
+										Protocol:    netguardpb.Networks_NetIP_TCP,
 										Port:        "80",
 										Description: "HTTP",
 									},
@@ -129,7 +129,7 @@ func TestSyncWithDifferentOperations(t *testing.T) {
 								Description: "Database service",
 								IngressPorts: []*netguardpb.IngressPort{
 									{
-										Protocol:    commonpb.Networks_NetIP_TCP,
+										Protocol:    netguardpb.Networks_NetIP_TCP,
 										Port:        "5432",
 										Description: "PostgreSQL",
 									},
@@ -180,7 +180,7 @@ func TestSyncWithDifferentOperations(t *testing.T) {
 								Description: "API service",
 								IngressPorts: []*netguardpb.IngressPort{
 									{
-										Protocol:    commonpb.Networks_NetIP_TCP,
+										Protocol:    netguardpb.Networks_NetIP_TCP,
 										Port:        "8080",
 										Description: "API",
 									},
@@ -229,7 +229,7 @@ func TestSyncWithDifferentOperations(t *testing.T) {
 			defer registry.Close()
 
 			// Create service
-			service := services.NewNetguardService(registry)
+			service := services.NewNetguardService(registry, nil)
 
 			// Create API server
 			server := NewNetguardServiceServer(service)
@@ -248,7 +248,7 @@ func TestSyncWithDifferentOperations(t *testing.T) {
 								Description: "Web service",
 								IngressPorts: []*netguardpb.IngressPort{
 									{
-										Protocol:    commonpb.Networks_NetIP_TCP,
+										Protocol:    netguardpb.Networks_NetIP_TCP,
 										Port:        "80",
 										Description: "HTTP",
 									},
@@ -262,7 +262,7 @@ func TestSyncWithDifferentOperations(t *testing.T) {
 								Description: "Database service",
 								IngressPorts: []*netguardpb.IngressPort{
 									{
-										Protocol:    commonpb.Networks_NetIP_TCP,
+										Protocol:    netguardpb.Networks_NetIP_TCP,
 										Port:        "5432",
 										Description: "PostgreSQL",
 									},
@@ -293,12 +293,12 @@ func TestSyncWithDifferentOperations(t *testing.T) {
 								Description: "Updated web service",
 								IngressPorts: []*netguardpb.IngressPort{
 									{
-										Protocol:    commonpb.Networks_NetIP_TCP,
+										Protocol:    netguardpb.Networks_NetIP_TCP,
 										Port:        "80",
 										Description: "HTTP",
 									},
 									{
-										Protocol:    commonpb.Networks_NetIP_TCP,
+										Protocol:    netguardpb.Networks_NetIP_TCP,
 										Port:        "443",
 										Description: "HTTPS",
 									},
@@ -312,7 +312,7 @@ func TestSyncWithDifferentOperations(t *testing.T) {
 								Description: "API service",
 								IngressPorts: []*netguardpb.IngressPort{
 									{
-										Protocol:    commonpb.Networks_NetIP_TCP,
+										Protocol:    netguardpb.Networks_NetIP_TCP,
 										Port:        "8080",
 										Description: "API",
 									},
@@ -378,7 +378,7 @@ func TestSyncWithDifferentOperations(t *testing.T) {
 			defer registry.Close()
 
 			// Create service
-			service := services.NewNetguardService(registry)
+			service := services.NewNetguardService(registry, nil)
 
 			// Create API server
 			server := NewNetguardServiceServer(service)
@@ -397,7 +397,7 @@ func TestSyncWithDifferentOperations(t *testing.T) {
 								Description: "Web service",
 								IngressPorts: []*netguardpb.IngressPort{
 									{
-										Protocol:    commonpb.Networks_NetIP_TCP,
+										Protocol:    netguardpb.Networks_NetIP_TCP,
 										Port:        "80",
 										Description: "HTTP",
 									},
@@ -411,7 +411,7 @@ func TestSyncWithDifferentOperations(t *testing.T) {
 								Description: "Database service",
 								IngressPorts: []*netguardpb.IngressPort{
 									{
-										Protocol:    commonpb.Networks_NetIP_TCP,
+										Protocol:    netguardpb.Networks_NetIP_TCP,
 										Port:        "5432",
 										Description: "PostgreSQL",
 									},
@@ -484,7 +484,7 @@ func TestSyncWithDifferentOperations(t *testing.T) {
 		defer registry.Close()
 
 		// Create service
-		service := services.NewNetguardService(registry)
+		service := services.NewNetguardService(registry, nil)
 
 		// Create API server
 		server := NewNetguardServiceServer(service)
@@ -606,7 +606,7 @@ func TestSyncWithDifferentOperations(t *testing.T) {
 			defer registry.Close()
 
 			// Create service
-			service := services.NewNetguardService(registry)
+			service := services.NewNetguardService(registry, nil)
 
 			// Create API server
 			server := NewNetguardServiceServer(service)
@@ -734,7 +734,7 @@ func TestSyncWithDifferentOperations(t *testing.T) {
 			defer registry.Close()
 
 			// Create service
-			service := services.NewNetguardService(registry)
+			service := services.NewNetguardService(registry, nil)
 
 			// Create API server
 			server := NewNetguardServiceServer(service)
@@ -830,7 +830,7 @@ func TestSyncWithDifferentOperations(t *testing.T) {
 		defer registry.Close()
 
 		// Create service
-		service := services.NewNetguardService(registry)
+		service := services.NewNetguardService(registry, nil)
 
 		// Create API server
 		server := NewNetguardServiceServer(service)
@@ -1077,7 +1077,7 @@ func TestSyncStatus(t *testing.T) {
 	defer registry.Close()
 
 	// Create service
-	service := services.NewNetguardService(registry)
+	service := services.NewNetguardService(registry, nil)
 
 	// Create API server
 	server := NewNetguardServiceServer(service)
@@ -1129,7 +1129,7 @@ func TestListServices(t *testing.T) {
 	defer registry.Close()
 
 	// Create service
-	service := services.NewNetguardService(registry)
+	service := services.NewNetguardService(registry, nil)
 
 	// Create API server
 	server := NewNetguardServiceServer(service)
@@ -1210,7 +1210,7 @@ func TestListAddressGroups(t *testing.T) {
 	defer registry.Close()
 
 	// Create service
-	service := services.NewNetguardService(registry)
+	service := services.NewNetguardService(registry, nil)
 
 	// Create API server
 	server := NewNetguardServiceServer(service)
@@ -1286,7 +1286,7 @@ func TestListAddressGroupBindings(t *testing.T) {
 	defer registry.Close()
 
 	// Create service
-	service := services.NewNetguardService(registry)
+	service := services.NewNetguardService(registry, nil)
 
 	// Create API server
 	server := NewNetguardServiceServer(service)
@@ -1369,7 +1369,7 @@ func TestListAddressGroupPortMappings(t *testing.T) {
 	defer registry.Close()
 
 	// Create service
-	service := services.NewNetguardService(registry)
+	service := services.NewNetguardService(registry, nil)
 
 	// Create API server
 	server := NewNetguardServiceServer(service)
@@ -1456,7 +1456,7 @@ func TestListRuleS2S(t *testing.T) {
 	defer registry.Close()
 
 	// Create service
-	service := services.NewNetguardService(registry)
+	service := services.NewNetguardService(registry, nil)
 
 	// Create API server
 	server := NewNetguardServiceServer(service)

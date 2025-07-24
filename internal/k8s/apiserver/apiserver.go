@@ -197,6 +197,7 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 		"services/addressgroups":               svcstorage.NewAddressGroupsREST(bClient),
 		"services/rules2sdstownref":            svcstorage.NewRuleS2SDstOwnRefREST(bClient),
 		"addressgroupportmappings/accessports": portmappingstorage.NewAccessPortsREST(bClient),
+		"addressgroups/networks":               agstorage.NewNetworksREST(bClient),
 	}
 
 	if err := gs.InstallAPIGroup(&apiGroupInfo); err != nil {

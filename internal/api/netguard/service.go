@@ -11,7 +11,7 @@ import (
 	"netguard-pg-backend/internal/application/services"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
-	commonpb "netguard-pg-backend/protos/pkg/api/common"
+	// commonpb "github.com/H-BF/protos/pkg/api/common" - replaced with local types
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
 )
 
@@ -596,9 +596,9 @@ func convertRuleS2S(r *netguardpb.RuleS2S) models.RuleS2S {
 
 	// Правильная конвертация Traffic
 	switch r.Traffic {
-	case commonpb.Traffic_Ingress:
+	case netguardpb.Traffic_Ingress:
 		result.Traffic = models.INGRESS
-	case commonpb.Traffic_Egress:
+	case netguardpb.Traffic_Egress:
 		result.Traffic = models.EGRESS
 	}
 
@@ -652,12 +652,12 @@ func convertServiceToPB(svc models.Service) *netguardpb.Service {
 
 	// Convert ingress ports
 	for _, p := range svc.IngressPorts {
-		var proto commonpb.Networks_NetIP_Transport
+		var proto netguardpb.Networks_NetIP_Transport
 		switch p.Protocol {
 		case models.TCP:
-			proto = commonpb.Networks_NetIP_TCP
+			proto = netguardpb.Networks_NetIP_TCP
 		case models.UDP:
-			proto = commonpb.Networks_NetIP_UDP
+			proto = netguardpb.Networks_NetIP_UDP
 		}
 
 		result.IngressPorts = append(result.IngressPorts, &netguardpb.IngressPort{
@@ -831,9 +831,9 @@ func convertRuleS2SToPB(r models.RuleS2S) *netguardpb.RuleS2S {
 	}
 	// traffic enum conversion
 	if r.Traffic == models.EGRESS {
-		pb.Traffic = commonpb.Traffic_Egress
+		pb.Traffic = netguardpb.Traffic_Egress
 	} else {
-		pb.Traffic = commonpb.Traffic_Ingress
+		pb.Traffic = netguardpb.Traffic_Ingress
 	}
 
 	pb.Meta = &netguardpb.Meta{
@@ -943,20 +943,20 @@ func (s *NetguardServiceServer) GetIEAgAgRule(ctx context.Context, req *netguard
 }
 
 func convertIEAgAgRuleToPB(rule models.IEAgAgRule) *netguardpb.IEAgAgRule {
-	var transport commonpb.Networks_NetIP_Transport
+	var transport netguardpb.Networks_NetIP_Transport
 	switch rule.Transport {
 	case models.TCP:
-		transport = commonpb.Networks_NetIP_TCP
+		transport = netguardpb.Networks_NetIP_TCP
 	case models.UDP:
-		transport = commonpb.Networks_NetIP_UDP
+		transport = netguardpb.Networks_NetIP_UDP
 	}
 
-	var traffic commonpb.Traffic
+	var traffic netguardpb.Traffic
 	switch rule.Traffic {
 	case models.INGRESS:
-		traffic = commonpb.Traffic_Ingress
+		traffic = netguardpb.Traffic_Ingress
 	case models.EGRESS:
-		traffic = commonpb.Traffic_Egress
+		traffic = netguardpb.Traffic_Egress
 	}
 
 	result := &netguardpb.IEAgAgRule{
