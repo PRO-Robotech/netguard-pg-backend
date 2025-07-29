@@ -24,6 +24,12 @@ const (
 
 	// TblServiceAliases table 'service aliases'
 	TblServiceAliases
+
+	// TblNetworks table 'networks'
+	TblNetworks
+
+	// TblNetworkBindings table 'network bindings'
+	TblNetworkBindings
 )
 
 // SchemaName database scheme name
@@ -42,4 +48,6 @@ var tableID2string = map[TableID]string{
 	TblAddressGroupPortMappings: "tbl_address_group_port_mapping",
 	TblRuleS2S:                  "tbl_rule_s2s",
 	TblSyncStatus:               "tbl_sync_status",
+	TblNetworks:                 "tbl_network",
+	TblNetworkBindings:          "tbl_network_binding",
 }

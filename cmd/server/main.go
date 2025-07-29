@@ -77,10 +77,8 @@ func main() {
 	// Create registry
 	var registry ports.Registry
 	if *memoryDB {
-		log.Println("Using in-memory database")
 		registry = mem.NewRegistry()
 	} else if *pgURI != "" {
-		log.Println("Using PostgreSQL database")
 
 		//// Run migrations if requested
 		//if *migrateDB {
@@ -146,7 +144,6 @@ func main() {
 
 	// Wait for context cancellation
 	<-ctx.Done()
-	log.Println("Shutting down...")
 
 	// Gracefully stop servers
 	grpcServer.GracefulStop()
@@ -157,70 +154,65 @@ func main() {
 
 // setupSyncManager creates and configures the sync manager for sgroups integration
 func setupSyncManager(ctx context.Context, cfg *config.Config) interfaces.SyncManager {
-	log.Println("🔧 DEBUG: Starting SyncManager setup")
-
 	// Use sync configuration from loaded config
 	syncConfig := cfg.Sync
-	log.Printf("🔧 DEBUG: Sync config loaded - Enabled: %v, SGroups address: %s",
-		syncConfig.Enabled, syncConfig.SGroups.GRPCAddress)
 
 	// Validate configuration
-	log.Println("🔧 DEBUG: Validating sync configuration")
 	if err := syncConfig.Validate(); err != nil {
 		log.Printf("❌ ERROR: Invalid sync configuration: %v", err)
 		return nil
 	}
-	log.Println("✅ DEBUG: Sync configuration is valid")
 
 	// Skip sync setup if disabled
 	if !syncConfig.Enabled {
-		log.Println("⚠️  DEBUG: Sync is disabled, skipping SyncManager setup")
 		return nil
 	}
 
 	// Create SGroups client
-	log.Printf("🔧 DEBUG: Creating SGroups client for address: %s", syncConfig.SGroups.GRPCAddress)
 	sgroupsClient, err := clients.NewSGroupsClient(syncConfig.SGroups)
 	if err != nil {
 		log.Printf("❌ ERROR: Failed to create sgroups client: %v", err)
 		return nil
 	}
-	log.Println("✅ DEBUG: SGroups client created successfully")
 
 	// Test connection to sgroups
-	log.Println("🔧 DEBUG: Testing connection to sgroups service")
 	if err := sgroupsClient.Health(ctx); err != nil {
 		log.Printf("❌ ERROR: Failed to connect to sgroups service: %v", err)
 		return nil
 	}
-	log.Println("✅ DEBUG: Successfully connected to sgroups service")
 
 	// Create logger for sync manager
-	log.Println("🔧 DEBUG: Creating logger for sync manager")
 	logger := stdr.New(log.Default())
 
 	// Create sync manager
-	log.Println("🔧 DEBUG: Creating sync manager")
 	syncManager := manager.NewSyncManager(sgroupsClient, logger)
-	log.Println("✅ DEBUG: Sync manager created successfully")
 
 	// Register AddressGroup syncer
-	log.Println("🔧 DEBUG: Creating and registering AddressGroup syncer")
 	addressGroupSyncer := syncers.NewAddressGroupSyncer(sgroupsClient, logger)
 	if err := syncManager.RegisterSyncer(types.SyncSubjectTypeGroups, addressGroupSyncer); err != nil {
 		log.Printf("❌ ERROR: Failed to register AddressGroup syncer: %v", err)
 		return nil
 	}
-	log.Println("✅ DEBUG: AddressGroup syncer registered successfully")
+
+	// Register Network syncer
+	networkSyncer := syncers.NewNetworkSyncer(sgroupsClient, logger)
+	if err := syncManager.RegisterSyncer(types.SyncSubjectTypeNetworks, networkSyncer); err != nil {
+		log.Printf("❌ ERROR: Failed to register Network syncer: %v", err)
+		return nil
+	}
+
+	// Register IEAgAgRule syncer
+	ieagagRuleSyncer := syncers.NewIEAgAgRuleSyncer(sgroupsClient, logger)
+	if err := syncManager.RegisterSyncer(types.SyncSubjectTypeIEAgAgRules, ieagagRuleSyncer); err != nil {
+		log.Printf("❌ ERROR: Failed to register IEAgAgRule syncer: %v", err)
+		return nil
+	}
 
 	// Start sync manager
-	log.Println("🔧 DEBUG: Starting sync manager")
 	if err := syncManager.Start(ctx); err != nil {
 		log.Printf("❌ ERROR: Failed to start sync manager: %v", err)
 		return nil
 	}
-	log.Println("✅ DEBUG: Sync manager started successfully")
 
-	log.Println("🎉 SyncManager initialized successfully")
 	return syncManager
 }

@@ -13,7 +13,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/registry/rest"
-	"k8s.io/klog/v2"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -110,35 +109,18 @@ func (s *BaseStorage[K, D]) NamespaceScoped() bool {
 func (s *BaseStorage[K, D]) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
 	namespace := utils.NamespaceFrom(ctx)
 
-	klog.Infof("🔍 BaseStorage.Get: reading %s %s/%s from backend", s.kindName, namespace, name)
-
 	// Get the resource from backend
 	domainObj, err := s.getFromBackend(ctx, namespace, name)
 	if err != nil {
-		klog.Errorf("❌ BaseStorage.Get: failed to get %s %s/%s from backend: %v", s.kindName, namespace, name, err)
 		return nil, err
-	}
-
-	klog.Infof("✅ BaseStorage.Get: successfully read %s %s/%s from backend", s.kindName, namespace, name)
-
-	// 🔍 ДИАГНОСТИКА: логируем что читаем из backend для Service
-	if s.kindName == "Service" {
-		if servicePtr, ok := any(*domainObj).(*models.Service); ok {
-			klog.Infof("🔍 BaseStorage.Get: Service %s has %d conditions from backend", servicePtr.Key(), len(servicePtr.Meta.Conditions))
-			for i, cond := range servicePtr.Meta.Conditions {
-				klog.Infof("  🔍 BACKEND_READ[%d]: Type=%s, Status=%s, Reason=%s", i, cond.Type, cond.Status, cond.Reason)
-			}
-		}
 	}
 
 	// Convert to Kubernetes object
 	k8sObj, err := s.converter.FromDomain(ctx, *domainObj)
 	if err != nil {
-		klog.Errorf("❌ BaseStorage.Get: failed to convert %s %s/%s to k8s object: %v", s.kindName, namespace, name, err)
 		return nil, fmt.Errorf("failed to convert domain object to k8s object: %w", err)
 	}
 
-	klog.Infof("✅ BaseStorage.Get: successfully converted %s %s/%s to k8s object", s.kindName, namespace, name)
 	return k8sObj, nil
 }
 

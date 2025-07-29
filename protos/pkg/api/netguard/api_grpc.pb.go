@@ -38,6 +38,10 @@ const (
 	NetguardService_GetAddressGroupBindingPolicy_FullMethodName    = "/netguard.v1.NetguardService/GetAddressGroupBindingPolicy"
 	NetguardService_ListIEAgAgRules_FullMethodName                 = "/netguard.v1.NetguardService/ListIEAgAgRules"
 	NetguardService_GetIEAgAgRule_FullMethodName                   = "/netguard.v1.NetguardService/GetIEAgAgRule"
+	NetguardService_ListNetworks_FullMethodName                    = "/netguard.v1.NetguardService/ListNetworks"
+	NetguardService_GetNetwork_FullMethodName                      = "/netguard.v1.NetguardService/GetNetwork"
+	NetguardService_ListNetworkBindings_FullMethodName             = "/netguard.v1.NetguardService/ListNetworkBindings"
+	NetguardService_GetNetworkBinding_FullMethodName               = "/netguard.v1.NetguardService/GetNetworkBinding"
 )
 
 // NetguardServiceClient is the client API for NetguardService service.
@@ -82,6 +86,14 @@ type NetguardServiceClient interface {
 	ListIEAgAgRules(ctx context.Context, in *ListIEAgAgRulesReq, opts ...grpc.CallOption) (*ListIEAgAgRulesResp, error)
 	// GetIEAgAgRule - gets a specific IEAgAgRule by ID
 	GetIEAgAgRule(ctx context.Context, in *GetIEAgAgRuleReq, opts ...grpc.CallOption) (*GetIEAgAgRuleResp, error)
+	// ListNetworks - gets list of networks
+	ListNetworks(ctx context.Context, in *ListNetworksReq, opts ...grpc.CallOption) (*ListNetworksResp, error)
+	// GetNetwork - gets a specific network by ID
+	GetNetwork(ctx context.Context, in *GetNetworkReq, opts ...grpc.CallOption) (*GetNetworkResp, error)
+	// ListNetworkBindings - gets list of network bindings
+	ListNetworkBindings(ctx context.Context, in *ListNetworkBindingsReq, opts ...grpc.CallOption) (*ListNetworkBindingsResp, error)
+	// GetNetworkBinding - gets a specific network binding by ID
+	GetNetworkBinding(ctx context.Context, in *GetNetworkBindingReq, opts ...grpc.CallOption) (*GetNetworkBindingResp, error)
 }
 
 type netguardServiceClient struct {
@@ -272,6 +284,46 @@ func (c *netguardServiceClient) GetIEAgAgRule(ctx context.Context, in *GetIEAgAg
 	return out, nil
 }
 
+func (c *netguardServiceClient) ListNetworks(ctx context.Context, in *ListNetworksReq, opts ...grpc.CallOption) (*ListNetworksResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListNetworksResp)
+	err := c.cc.Invoke(ctx, NetguardService_ListNetworks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *netguardServiceClient) GetNetwork(ctx context.Context, in *GetNetworkReq, opts ...grpc.CallOption) (*GetNetworkResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetNetworkResp)
+	err := c.cc.Invoke(ctx, NetguardService_GetNetwork_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *netguardServiceClient) ListNetworkBindings(ctx context.Context, in *ListNetworkBindingsReq, opts ...grpc.CallOption) (*ListNetworkBindingsResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListNetworkBindingsResp)
+	err := c.cc.Invoke(ctx, NetguardService_ListNetworkBindings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *netguardServiceClient) GetNetworkBinding(ctx context.Context, in *GetNetworkBindingReq, opts ...grpc.CallOption) (*GetNetworkBindingResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetNetworkBindingResp)
+	err := c.cc.Invoke(ctx, NetguardService_GetNetworkBinding_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // NetguardServiceServer is the server API for NetguardService service.
 // All implementations must embed UnimplementedNetguardServiceServer
 // for forward compatibility.
@@ -314,6 +366,14 @@ type NetguardServiceServer interface {
 	ListIEAgAgRules(context.Context, *ListIEAgAgRulesReq) (*ListIEAgAgRulesResp, error)
 	// GetIEAgAgRule - gets a specific IEAgAgRule by ID
 	GetIEAgAgRule(context.Context, *GetIEAgAgRuleReq) (*GetIEAgAgRuleResp, error)
+	// ListNetworks - gets list of networks
+	ListNetworks(context.Context, *ListNetworksReq) (*ListNetworksResp, error)
+	// GetNetwork - gets a specific network by ID
+	GetNetwork(context.Context, *GetNetworkReq) (*GetNetworkResp, error)
+	// ListNetworkBindings - gets list of network bindings
+	ListNetworkBindings(context.Context, *ListNetworkBindingsReq) (*ListNetworkBindingsResp, error)
+	// GetNetworkBinding - gets a specific network binding by ID
+	GetNetworkBinding(context.Context, *GetNetworkBindingReq) (*GetNetworkBindingResp, error)
 	mustEmbedUnimplementedNetguardServiceServer()
 }
 
@@ -377,6 +437,18 @@ func (UnimplementedNetguardServiceServer) ListIEAgAgRules(context.Context, *List
 }
 func (UnimplementedNetguardServiceServer) GetIEAgAgRule(context.Context, *GetIEAgAgRuleReq) (*GetIEAgAgRuleResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetIEAgAgRule not implemented")
+}
+func (UnimplementedNetguardServiceServer) ListNetworks(context.Context, *ListNetworksReq) (*ListNetworksResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListNetworks not implemented")
+}
+func (UnimplementedNetguardServiceServer) GetNetwork(context.Context, *GetNetworkReq) (*GetNetworkResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetNetwork not implemented")
+}
+func (UnimplementedNetguardServiceServer) ListNetworkBindings(context.Context, *ListNetworkBindingsReq) (*ListNetworkBindingsResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListNetworkBindings not implemented")
+}
+func (UnimplementedNetguardServiceServer) GetNetworkBinding(context.Context, *GetNetworkBindingReq) (*GetNetworkBindingResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetNetworkBinding not implemented")
 }
 func (UnimplementedNetguardServiceServer) mustEmbedUnimplementedNetguardServiceServer() {}
 func (UnimplementedNetguardServiceServer) testEmbeddedByValue()                         {}
@@ -723,6 +795,78 @@ func _NetguardService_GetIEAgAgRule_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NetguardService_ListNetworks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListNetworksReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).ListNetworks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_ListNetworks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).ListNetworks(ctx, req.(*ListNetworksReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NetguardService_GetNetwork_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetNetworkReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).GetNetwork(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_GetNetwork_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).GetNetwork(ctx, req.(*GetNetworkReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NetguardService_ListNetworkBindings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListNetworkBindingsReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).ListNetworkBindings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_ListNetworkBindings_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).ListNetworkBindings(ctx, req.(*ListNetworkBindingsReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NetguardService_GetNetworkBinding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetNetworkBindingReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).GetNetworkBinding(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_GetNetworkBinding_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).GetNetworkBinding(ctx, req.(*GetNetworkBindingReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // NetguardService_ServiceDesc is the grpc.ServiceDesc for NetguardService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -801,6 +945,22 @@ var NetguardService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetIEAgAgRule",
 			Handler:    _NetguardService_GetIEAgAgRule_Handler,
+		},
+		{
+			MethodName: "ListNetworks",
+			Handler:    _NetguardService_ListNetworks_Handler,
+		},
+		{
+			MethodName: "GetNetwork",
+			Handler:    _NetguardService_GetNetwork_Handler,
+		},
+		{
+			MethodName: "ListNetworkBindings",
+			Handler:    _NetguardService_ListNetworkBindings_Handler,
+		},
+		{
+			MethodName: "GetNetworkBinding",
+			Handler:    _NetguardService_GetNetworkBinding_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

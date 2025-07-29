@@ -25,10 +25,8 @@ func (r *reader) ListServices(ctx context.Context, consume func(models.Service) 
 	// Use data from writer if available
 	if r.writer != nil && r.writer.services != nil {
 		services = r.writer.services
-		log.Printf("📋 LIST: using writer data with %d services", len(services))
 	} else {
 		services = r.registry.db.GetServices()
-		log.Printf("📋 LIST: using registry db data with %d services", len(services))
 	}
 
 	// Use data from writer if available
@@ -38,15 +36,6 @@ func (r *reader) ListServices(ctx context.Context, consume func(models.Service) 
 		bindings = r.registry.db.GetAddressGroupBindings()
 	}
 
-	// 🔍 КРАТКАЯ ДИАГНОСТИКА: проверяем только общее количество conditions
-	totalConditions := 0
-	for key, service := range services {
-		condCount := len(service.Meta.Conditions)
-		totalConditions += condCount
-		log.Printf("🔍 LIST_DB_BRIEF: Service[%s] has %d conditions", key, condCount)
-	}
-	log.Printf("🔍 LIST_TOTAL: Found %d services with total %d conditions", len(services), totalConditions)
-
 	if scope != nil && !scope.IsEmpty() {
 		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && !ris.IsEmpty() {
 			for _, id := range ris.Identifiers {
@@ -54,12 +43,8 @@ func (r *reader) ListServices(ctx context.Context, consume func(models.Service) 
 				if id.Name == "" && id.Namespace != "" {
 					for _, service := range services {
 						if service.Namespace == id.Namespace {
-							log.Printf("🔍 COPY_TEST: Before copy - %s has %d conditions", service.Key(), len(service.Meta.Conditions))
-
 							// Create a copy of the service to avoid modifying the original
 							serviceCopy := service
-
-							log.Printf("🔍 COPY_TEST: After copy - %s has %d conditions", serviceCopy.Key(), len(serviceCopy.Meta.Conditions))
 
 							// Clear the address groups to avoid duplicates
 							serviceCopy.AddressGroups = []models.AddressGroupRef{}
@@ -71,13 +56,9 @@ func (r *reader) ListServices(ctx context.Context, consume func(models.Service) 
 								}
 							}
 
-							log.Printf("🔍 CONSUME_TEST: Before consume - %s has %d conditions", serviceCopy.Key(), len(serviceCopy.Meta.Conditions))
-
 							if err := consume(serviceCopy); err != nil {
 								return err
 							}
-
-							log.Printf("✅ CONSUME_OK: After consume - %s processed", serviceCopy.Key())
 						}
 					}
 					return nil
@@ -85,8 +66,6 @@ func (r *reader) ListServices(ctx context.Context, consume func(models.Service) 
 
 				// Otherwise, look for the service by exact key
 				if service, ok := services[id.Key()]; ok {
-					log.Printf("🔍 EXACT_COPY: Service %s has %d conditions", service.Key(), len(service.Meta.Conditions))
-
 					// Create a copy of the service to avoid modifying the original
 					serviceCopy := service
 
@@ -109,8 +88,6 @@ func (r *reader) ListServices(ctx context.Context, consume func(models.Service) 
 		}
 	}
 	for _, service := range services {
-		log.Printf("🔍 ALL_COPY: Service %s has %d conditions", service.Key(), len(service.Meta.Conditions))
-
 		// Create a copy of the service to avoid modifying the original
 		serviceCopy := service
 
@@ -124,13 +101,9 @@ func (r *reader) ListServices(ctx context.Context, consume func(models.Service) 
 			}
 		}
 
-		log.Printf("🔍 ALL_CONSUME: Before consume - %s has %d conditions", serviceCopy.Key(), len(serviceCopy.Meta.Conditions))
-
 		if err := consume(serviceCopy); err != nil {
 			return err
 		}
-
-		log.Printf("✅ ALL_OK: Service %s processed successfully", serviceCopy.Key())
 	}
 	return nil
 }
@@ -352,7 +325,6 @@ func (r *reader) GetSyncStatus(ctx context.Context) (*models.SyncStatus, error) 
 
 // GetServiceByID gets a service by ID
 func (r *reader) GetServiceByID(ctx context.Context, id models.ResourceIdentifier) (*models.Service, error) {
-	log.Printf("GetServiceByID: looking for ns=%q name=%q key=%s", id.Namespace, id.Name, id.Key())
 
 	var services map[string]models.Service
 	var bindings map[string]models.AddressGroupBinding
@@ -360,36 +332,13 @@ func (r *reader) GetServiceByID(ctx context.Context, id models.ResourceIdentifie
 	// Use data from writer if available
 	if r.writer != nil && r.writer.services != nil {
 		services = r.writer.services
-		log.Printf("GetServiceByID: using writer data")
 	} else {
 		services = r.registry.db.GetServices()
-		log.Printf("GetServiceByID: using registry db data")
-	}
-
-	log.Printf("GetServiceByID: services map size=%d", len(services))
-	for k := range services {
-		if k == id.Key() {
-			log.Printf("GetServiceByID: found matching key in map: %s", k)
-		}
 	}
 
 	if service, ok := services[id.Key()]; ok {
-		log.Printf("GetServiceByID: EXACT match found for key=%s meta.uid=%s", id.Key(), service.Meta.UID)
-
-		// 🔍 ДИАГНОСТИКА: логируем что читаем из БД
-		log.Printf("🔍 READER: Service from DB %s has %d conditions", service.Key(), len(service.Meta.Conditions))
-		for i, cond := range service.Meta.Conditions {
-			log.Printf("  🔍 READER: db[%d] Type=%s Status=%s Reason=%s", i, cond.Type, cond.Status, cond.Reason)
-		}
-
 		// Create a copy of the service to avoid modifying the original
 		serviceCopy := service
-
-		// 🔍 ДИАГНОСТИКА: проверяем что скопировано
-		log.Printf("🔍 READER: After copy %s has %d conditions", serviceCopy.Key(), len(serviceCopy.Meta.Conditions))
-		for i, cond := range serviceCopy.Meta.Conditions {
-			log.Printf("  🔍 READER: copy[%d] Type=%s Status=%s Reason=%s", i, cond.Type, cond.Status, cond.Reason)
-		}
 
 		// Clear the address groups to avoid duplicates
 		serviceCopy.AddressGroups = []models.AddressGroupRef{}
@@ -408,15 +357,8 @@ func (r *reader) GetServiceByID(ctx context.Context, id models.ResourceIdentifie
 			}
 		}
 
-		// 🔍 ДИАГНОСТИКА: финальная проверка перед возвратом
-		log.Printf("✅ READER: RETURNING service %s with %d conditions", serviceCopy.Key(), len(serviceCopy.Meta.Conditions))
-		for i, cond := range serviceCopy.Meta.Conditions {
-			log.Printf("  ✅ READER: return[%d] Type=%s Status=%s Reason=%s", i, cond.Type, cond.Status, cond.Reason)
-		}
-
 		return &serviceCopy, nil
 	}
-	log.Printf("GetServiceByID: NOT FOUND key=%s", id.Key())
 	return nil, ports.ErrNotFound
 }
 
@@ -597,7 +539,11 @@ func (r *reader) ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAg
 			return nil
 		}
 	}
-	for _, rule := range rules {
+	log.Printf("🔍 LISTING %d IEAgAgRules from memory", len(rules))
+	for i, rule := range rules {
+		log.Printf("🔍 LISTING IEAgAgRule[%d] %s: Transport='%s', Traffic='%s', Action='%s', AddressGroupLocal.Name='%s', AddressGroup.Name='%s'",
+			i, rule.Key(), rule.Transport, rule.Traffic, rule.Action,
+			rule.AddressGroupLocal.Name, rule.AddressGroup.Name)
 		if err := consume(rule); err != nil {
 			return err
 		}
@@ -606,17 +552,178 @@ func (r *reader) ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAg
 }
 
 func (r *reader) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
+	log.Printf("GetIEAgAgRuleByID: looking for ns=%q name=%q key=%s", id.Namespace, id.Name, id.Key())
+
 	var rules map[string]models.IEAgAgRule
 
 	// Use data from writer if available
 	if r.writer != nil && r.writer.ieAgAgRules != nil {
 		rules = r.writer.ieAgAgRules
+		log.Printf("GetIEAgAgRuleByID: using writer data")
 	} else {
 		rules = r.registry.db.GetIEAgAgRules()
+		log.Printf("GetIEAgAgRuleByID: using registry db data")
 	}
 
 	if rule, ok := rules[id.Key()]; ok {
+		log.Printf("🔍 FOUND IEAgAgRule %s: Transport='%s', Traffic='%s', Action='%s', AddressGroupLocal.Name='%s', AddressGroup.Name='%s'",
+			id.Key(), rule.Transport, rule.Traffic, rule.Action,
+			rule.AddressGroupLocal.Name, rule.AddressGroup.Name)
 		return &rule, nil
 	}
+
+	log.Printf("❌ NOT FOUND IEAgAgRule %s in memory", id.Key())
+	return nil, ports.ErrNotFound
+}
+
+func (r *reader) ListNetworks(ctx context.Context, consume func(models.Network) error, scope ports.Scope) error {
+	var networks map[string]models.Network
+
+	// Use data from writer if available
+	if r.writer != nil && r.writer.networks != nil {
+		networks = r.writer.networks
+	} else {
+		networks = r.registry.db.GetNetworks()
+	}
+
+	if scope != nil && !scope.IsEmpty() {
+		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && !ris.IsEmpty() {
+			for _, id := range ris.Identifiers {
+				// If only namespace is set, return all networks in that namespace
+				if id.Name == "" && id.Namespace != "" {
+					for _, network := range networks {
+						if network.Namespace == id.Namespace {
+							if err := consume(network); err != nil {
+								return err
+							}
+						}
+					}
+					return nil
+				}
+
+				// Otherwise, look for the network by exact key
+				if network, ok := networks[id.Key()]; ok {
+					if err := consume(network); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		}
+	}
+
+	// If no scope or empty scope, return all networks
+	for _, network := range networks {
+		if err := consume(network); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *reader) GetNetworkByID(ctx context.Context, id models.ResourceIdentifier) (*models.Network, error) {
+	log.Printf("GetNetworkByID: looking for ns=%q name=%q key=%s", id.Namespace, id.Name, id.Key())
+
+	var networks map[string]models.Network
+
+	// Use data from writer if available
+	if r.writer != nil && r.writer.networks != nil {
+		networks = r.writer.networks
+		log.Printf("GetNetworkByID: using writer data")
+	} else {
+		networks = r.registry.db.GetNetworks()
+		log.Printf("GetNetworkByID: using registry db data")
+	}
+
+	if network, ok := networks[id.Key()]; ok {
+		log.Printf("🔍 GetNetworkByID: Network[%s] has %d conditions, IsBound=%t", id.Key(), len(network.Meta.Conditions), network.IsBound)
+		if network.BindingRef != nil {
+			log.Printf("  🔍 GetNetworkByID: network[%s].BindingRef=%s", id.Key(), network.BindingRef.Name)
+		} else {
+			log.Printf("  🔍 GetNetworkByID: network[%s].BindingRef=nil", id.Key())
+		}
+		if network.AddressGroupRef != nil {
+			log.Printf("  🔍 GetNetworkByID: network[%s].AddressGroupRef=%s", id.Key(), network.AddressGroupRef.Name)
+		} else {
+			log.Printf("  🔍 GetNetworkByID: network[%s].AddressGroupRef=nil", id.Key())
+		}
+		for i, cond := range network.Meta.Conditions {
+			log.Printf("  🔍 GetNetworkByID: network[%s].condition[%d] Type=%s Status=%s", id.Key(), i, cond.Type, cond.Status)
+		}
+		return &network, nil
+	}
+
+	return nil, ports.ErrNotFound
+}
+
+func (r *reader) ListNetworkBindings(ctx context.Context, consume func(models.NetworkBinding) error, scope ports.Scope) error {
+	var bindings map[string]models.NetworkBinding
+
+	// Use data from writer if available
+	if r.writer != nil && r.writer.networkBindings != nil {
+		bindings = r.writer.networkBindings
+	} else {
+		bindings = r.registry.db.GetNetworkBindings()
+	}
+
+	if scope != nil && !scope.IsEmpty() {
+		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && !ris.IsEmpty() {
+			for _, id := range ris.Identifiers {
+				// If only namespace is set, return all network bindings in that namespace
+				if id.Name == "" && id.Namespace != "" {
+					for _, binding := range bindings {
+						if binding.Namespace == id.Namespace {
+							if err := consume(binding); err != nil {
+								return err
+							}
+						}
+					}
+					return nil
+				}
+
+				// Otherwise, look for the network binding by exact key
+				if binding, ok := bindings[id.Key()]; ok {
+					if err := consume(binding); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		}
+	}
+
+	// If no scope or empty scope, return all network bindings
+	for _, binding := range bindings {
+		if err := consume(binding); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *reader) GetNetworkBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.NetworkBinding, error) {
+	log.Printf("GetNetworkBindingByID: looking for ns=%q name=%q key=%s", id.Namespace, id.Name, id.Key())
+
+	var bindings map[string]models.NetworkBinding
+
+	// Use data from writer if available
+	if r.writer != nil && r.writer.networkBindings != nil {
+		bindings = r.writer.networkBindings
+		log.Printf("GetNetworkBindingByID: using writer data")
+	} else {
+		bindings = r.registry.db.GetNetworkBindings()
+		log.Printf("GetNetworkBindingByID: using registry db data")
+	}
+
+	if binding, ok := bindings[id.Key()]; ok {
+		log.Printf("🔍 GetNetworkBindingByID: NetworkBinding[%s] has %d conditions", id.Key(), len(binding.Meta.Conditions))
+		for i, cond := range binding.Meta.Conditions {
+			log.Printf("  🔍 GetNetworkBindingByID: binding[%s].condition[%d] Type=%s Status=%s", id.Key(), i, cond.Type, cond.Status)
+		}
+		return &binding, nil
+	}
+
 	return nil, ports.ErrNotFound
 }

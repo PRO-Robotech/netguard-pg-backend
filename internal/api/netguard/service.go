@@ -2,6 +2,7 @@ package netguard
 
 import (
 	"context"
+	"log"
 
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -11,6 +12,9 @@ import (
 	"netguard-pg-backend/internal/application/services"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
+	"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
+	"netguard-pg-backend/internal/k8s/client"
+
 	// commonpb "github.com/H-BF/protos/pkg/api/common" - replaced with local types
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
 )
@@ -152,17 +156,24 @@ func (s *NetguardServiceServer) Sync(ctx context.Context, req *netguardpb.SyncRe
 			return &emptypb.Empty{}, nil
 		}
 
+		log.Printf("🚀 API: Received Sync request for %d IEAgAgRules (operation: %s)",
+			len(subject.IeagagRules.IeagagRules), syncOp)
+
 		// Convert IEAgAgRules
 		rules := make([]models.IEAgAgRule, 0, len(subject.IeagagRules.IeagagRules))
 		for _, r := range subject.IeagagRules.IeagagRules {
-			rules = append(rules, convertIEAgAgRule(r))
+			rules = append(rules, client.ConvertIEAgAgRuleFromProto(r))
 		}
+
+		log.Printf("🚀 API: Converted %d IEAgAgRules, calling service.Sync", len(rules))
 
 		// Sync IEAgAgRules with the specified operation
 		err = s.service.Sync(ctx, syncOp, rules)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to sync IEAgAgRules")
 		}
+
+		log.Printf("✅ API: Successfully synced %d IEAgAgRules", len(rules))
 
 	case *netguardpb.SyncReq_AddressGroupBindingPolicies:
 		if subject.AddressGroupBindingPolicies == nil || len(subject.AddressGroupBindingPolicies.AddressGroupBindingPolicies) == 0 {
@@ -179,6 +190,40 @@ func (s *NetguardServiceServer) Sync(ctx context.Context, req *netguardpb.SyncRe
 		err = s.service.Sync(ctx, syncOp, policies)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to sync address group binding policies")
+		}
+
+	case *netguardpb.SyncReq_Networks:
+		if subject.Networks == nil || len(subject.Networks.Networks) == 0 {
+			return &emptypb.Empty{}, nil
+		}
+
+		// Конвертируем сети
+		networks := make([]models.Network, 0, len(subject.Networks.Networks))
+		for _, n := range subject.Networks.Networks {
+			networks = append(networks, convertNetwork(n))
+		}
+
+		// Синхронизируем сети с указанной операцией
+		err = s.service.Sync(ctx, syncOp, networks)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to sync networks")
+		}
+
+	case *netguardpb.SyncReq_NetworkBindings:
+		if subject.NetworkBindings == nil || len(subject.NetworkBindings.NetworkBindings) == 0 {
+			return &emptypb.Empty{}, nil
+		}
+
+		// Конвертируем привязки сетей
+		bindings := make([]models.NetworkBinding, 0, len(subject.NetworkBindings.NetworkBindings))
+		for _, b := range subject.NetworkBindings.NetworkBindings {
+			bindings = append(bindings, convertNetworkBinding(b))
+		}
+
+		// Синхронизируем привязки сетей с указанной операцией
+		err = s.service.Sync(ctx, syncOp, bindings)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to sync network bindings")
 		}
 
 	default:
@@ -272,13 +317,26 @@ func (s *NetguardServiceServer) ListAddressGroups(ctx context.Context, req *netg
 // GetAddressGroup gets a specific address group by ID
 func (s *NetguardServiceServer) GetAddressGroup(ctx context.Context, req *netguardpb.GetAddressGroupReq) (*netguardpb.GetAddressGroupResp, error) {
 	id := idFromReq(req.GetIdentifier())
+	log.Printf("🚀 GRPC GetAddressGroup: request for %s", id.Key())
 	addressGroup, err := s.service.GetAddressGroupByID(ctx, id)
 	if err != nil {
+		log.Printf("❌ GRPC GetAddressGroup: failed to get %s: %v", id.Key(), err)
 		return nil, errors.Wrap(err, "failed to get address group")
 	}
 
+	log.Printf("🔍 GRPC GetAddressGroup: AddressGroup[%s] has %d networks", id.Key(), len(addressGroup.Networks))
+	for i, network := range addressGroup.Networks {
+		log.Printf("  🔍 GRPC GetAddressGroup: network[%d] Name=%s CIDR=%s", i, network.Name, network.CIDR)
+	}
+
+	pbAddressGroup := convertAddressGroupToPB(*addressGroup)
+	log.Printf("🔍 GRPC GetAddressGroup: After convertAddressGroupToPB, protobuf has %d networks", len(pbAddressGroup.Networks))
+	for i, network := range pbAddressGroup.Networks {
+		log.Printf("  🔍 GRPC GetAddressGroup: protobuf network[%d] Name=%s CIDR=%s", i, network.Name, network.Cidr)
+	}
+
 	return &netguardpb.GetAddressGroupResp{
-		AddressGroup: convertAddressGroupToPB(*addressGroup),
+		AddressGroup: pbAddressGroup,
 	}, nil
 }
 
@@ -715,6 +773,17 @@ func convertAddressGroupToPB(ag models.AddressGroup) *netguardpb.AddressGroup {
 		result.Meta.CreationTs = timestamppb.New(ag.Meta.CreationTS.Time)
 	}
 
+	// Convert Networks list
+	for _, networkItem := range ag.Networks {
+		result.Networks = append(result.Networks, &netguardpb.NetworkItem{
+			Name:       networkItem.Name,
+			Cidr:       networkItem.CIDR,
+			ApiVersion: networkItem.ApiVersion,
+			Kind:       networkItem.Kind,
+			Namespace:  networkItem.Namespace,
+		})
+	}
+
 	return result
 }
 
@@ -942,13 +1011,31 @@ func (s *NetguardServiceServer) GetIEAgAgRule(ctx context.Context, req *netguard
 	}, nil
 }
 
+func convertActionToPB(action models.RuleAction) netguardpb.RuleAction {
+	switch action {
+	case models.ActionAccept:
+		return netguardpb.RuleAction_ACCEPT
+	case models.ActionDrop:
+		return netguardpb.RuleAction_DROP
+	default:
+		log.Printf("⚠️  WARNING: Unknown Action '%s', defaulting to ACCEPT", action)
+		return netguardpb.RuleAction_ACCEPT
+	}
+}
+
 func convertIEAgAgRuleToPB(rule models.IEAgAgRule) *netguardpb.IEAgAgRule {
+	log.Printf("🔄 convertIEAgAgRuleToPB: Converting rule %s - Transport='%s', Traffic='%s', Action='%s'",
+		rule.Key(), rule.Transport, rule.Traffic, rule.Action)
+
 	var transport netguardpb.Networks_NetIP_Transport
 	switch rule.Transport {
 	case models.TCP:
 		transport = netguardpb.Networks_NetIP_TCP
 	case models.UDP:
 		transport = netguardpb.Networks_NetIP_UDP
+	default:
+		log.Printf("⚠️  WARNING: Unknown Transport '%s' for rule %s, defaulting to TCP", rule.Transport, rule.Key())
+		transport = netguardpb.Networks_NetIP_TCP
 	}
 
 	var traffic netguardpb.Traffic
@@ -957,6 +1044,9 @@ func convertIEAgAgRuleToPB(rule models.IEAgAgRule) *netguardpb.IEAgAgRule {
 		traffic = netguardpb.Traffic_Ingress
 	case models.EGRESS:
 		traffic = netguardpb.Traffic_Egress
+	default:
+		log.Printf("⚠️  WARNING: Unknown Traffic '%s' for rule %s, defaulting to Ingress", rule.Traffic, rule.Key())
+		traffic = netguardpb.Traffic_Ingress
 	}
 
 	result := &netguardpb.IEAgAgRule{
@@ -978,7 +1068,7 @@ func convertIEAgAgRuleToPB(rule models.IEAgAgRule) *netguardpb.IEAgAgRule {
 				Namespace: rule.AddressGroup.ResourceIdentifier.Namespace,
 			},
 		},
-		Action:   netguardpb.RuleAction(netguardpb.RuleAction_value[string(rule.Action)]),
+		Action:   convertActionToPB(rule.Action),
 		Logs:     rule.Logs,
 		Priority: rule.Priority,
 	}
@@ -1000,50 +1090,6 @@ func convertIEAgAgRuleToPB(rule models.IEAgAgRule) *netguardpb.IEAgAgRule {
 	// Convert ports
 	for _, p := range rule.Ports {
 		result.Ports = append(result.Ports, &netguardpb.PortSpec{
-			Source:      p.Source,
-			Destination: p.Destination,
-		})
-	}
-
-	return result
-}
-
-func convertIEAgAgRule(rule *netguardpb.IEAgAgRule) models.IEAgAgRule {
-	result := models.IEAgAgRule{
-		SelfRef:   models.NewSelfRef(getSelfRef(rule.GetSelfRef())),
-		Transport: models.TransportProtocol(rule.Transport.String()),
-		Traffic:   models.Traffic(rule.Traffic.String()),
-		AddressGroupLocal: models.AddressGroupRef{
-			ResourceIdentifier: models.NewResourceIdentifier(rule.GetAddressGroupLocal().GetIdentifier().GetName(),
-				models.WithNamespace(rule.GetAddressGroupLocal().GetIdentifier().GetNamespace())),
-		},
-		AddressGroup: models.AddressGroupRef{
-			ResourceIdentifier: models.NewResourceIdentifier(rule.GetAddressGroup().GetIdentifier().GetName(),
-				models.WithNamespace(rule.GetAddressGroup().GetIdentifier().GetNamespace())),
-		},
-		Action:   models.RuleAction(rule.Action),
-		Logs:     rule.Logs,
-		Priority: rule.Priority,
-		Meta:     models.Meta{},
-	}
-
-	// Copy Meta from proto
-	if rule.Meta != nil {
-		result.Meta = models.Meta{
-			UID:             rule.Meta.Uid,
-			ResourceVersion: rule.Meta.ResourceVersion,
-			Generation:      rule.Meta.Generation,
-			Labels:          rule.Meta.Labels,
-			Annotations:     rule.Meta.Annotations,
-		}
-		if rule.Meta.CreationTs != nil {
-			result.Meta.CreationTS = metav1.NewTime(rule.Meta.CreationTs.AsTime())
-		}
-	}
-
-	// Convert ports
-	for _, p := range rule.Ports {
-		result.Ports = append(result.Ports, models.PortSpec{
 			Source:      p.Source,
 			Destination: p.Destination,
 		})
@@ -1157,4 +1203,278 @@ func (s *NetguardServiceServer) GetAddressGroupBindingPolicy(ctx context.Context
 	return &netguardpb.GetAddressGroupBindingPolicyResp{
 		AddressGroupBindingPolicy: convertAddressGroupBindingPolicyToPB(*policy),
 	}, nil
+}
+
+// ListNetworks gets list of networks
+func (s *NetguardServiceServer) ListNetworks(ctx context.Context, req *netguardpb.ListNetworksReq) (*netguardpb.ListNetworksResp, error) {
+	var scope ports.Scope = ports.EmptyScope{}
+	if len(req.Identifiers) > 0 {
+		identifiers := make([]models.ResourceIdentifier, 0, len(req.Identifiers))
+		for _, id := range req.Identifiers {
+			identifiers = append(identifiers, models.NewResourceIdentifier(id.Name, models.WithNamespace(id.Namespace)))
+		}
+		scope = ports.NewResourceIdentifierScope(identifiers...)
+	}
+
+	networks, err := s.service.GetNetworks(ctx, scope)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get networks")
+	}
+
+	items := make([]*netguardpb.Network, 0, len(networks))
+	for _, network := range networks {
+		items = append(items, convertNetworkToPB(network))
+	}
+
+	return &netguardpb.ListNetworksResp{
+		Items: items,
+	}, nil
+}
+
+// GetNetwork gets a specific network by ID
+func (s *NetguardServiceServer) GetNetwork(ctx context.Context, req *netguardpb.GetNetworkReq) (*netguardpb.GetNetworkResp, error) {
+	id := idFromReq(req.GetIdentifier())
+	log.Printf("🚀 GRPC GetNetwork: request for %s", id.Key())
+	network, err := s.service.GetNetworkByID(ctx, id)
+	if err != nil {
+		log.Printf("❌ GRPC GetNetwork: failed to get %s: %v", id.Key(), err)
+		return nil, errors.Wrap(err, "failed to get network")
+	}
+
+	if network != nil {
+		log.Printf("🔍 GRPC GetNetwork: Network[%s] returned with IsBound=%t", id.Key(), network.IsBound)
+		if network.BindingRef != nil {
+			log.Printf("  🔍 GRPC GetNetwork: network[%s].BindingRef=%s", id.Key(), network.BindingRef.Name)
+		} else {
+			log.Printf("  🔍 GRPC GetNetwork: network[%s].BindingRef=nil", id.Key())
+		}
+	}
+
+	if network == nil {
+		return nil, errors.New("network not found")
+	}
+
+	pbNetwork := convertNetworkToPB(*network)
+	log.Printf("🔍 GRPC GetNetwork: After convertNetworkToPB, protobuf Network has IsBound=%t", pbNetwork.IsBound)
+	if pbNetwork.BindingRef != nil {
+		log.Printf("  🔍 GRPC GetNetwork: protobuf.BindingRef=%s", pbNetwork.BindingRef.Name)
+	} else {
+		log.Printf("  🔍 GRPC GetNetwork: protobuf.BindingRef=nil")
+	}
+	if pbNetwork.AddressGroupRef != nil {
+		log.Printf("  🔍 GRPC GetNetwork: protobuf.AddressGroupRef=%s (ns=%s)", pbNetwork.AddressGroupRef.Name, pbNetwork.AddressGroupRef.Namespace)
+	} else {
+		log.Printf("  🔍 GRPC GetNetwork: protobuf.AddressGroupRef=nil")
+	}
+
+	return &netguardpb.GetNetworkResp{
+		Network: pbNetwork,
+	}, nil
+}
+
+// ListNetworkBindings gets list of network bindings
+func (s *NetguardServiceServer) ListNetworkBindings(ctx context.Context, req *netguardpb.ListNetworkBindingsReq) (*netguardpb.ListNetworkBindingsResp, error) {
+	var scope ports.Scope = ports.EmptyScope{}
+	if len(req.Identifiers) > 0 {
+		identifiers := make([]models.ResourceIdentifier, 0, len(req.Identifiers))
+		for _, id := range req.Identifiers {
+			identifiers = append(identifiers, models.NewResourceIdentifier(id.Name, models.WithNamespace(id.Namespace)))
+		}
+		scope = ports.NewResourceIdentifierScope(identifiers...)
+	}
+
+	bindings, err := s.service.GetNetworkBindings(ctx, scope)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get network bindings")
+	}
+
+	items := make([]*netguardpb.NetworkBinding, 0, len(bindings))
+	for _, binding := range bindings {
+		items = append(items, convertNetworkBindingToPB(binding))
+	}
+
+	return &netguardpb.ListNetworkBindingsResp{
+		Items: items,
+	}, nil
+}
+
+// GetNetworkBinding gets a specific network binding by ID
+func (s *NetguardServiceServer) GetNetworkBinding(ctx context.Context, req *netguardpb.GetNetworkBindingReq) (*netguardpb.GetNetworkBindingResp, error) {
+	id := idFromReq(req.GetIdentifier())
+	binding, err := s.service.GetNetworkBindingByID(ctx, id)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get network binding")
+	}
+
+	if binding == nil {
+		return nil, errors.New("network binding not found")
+	}
+
+	return &netguardpb.GetNetworkBindingResp{
+		NetworkBinding: convertNetworkBindingToPB(*binding),
+	}, nil
+}
+
+// convertNetwork converts proto Network to domain Network
+func convertNetwork(network *netguardpb.Network) models.Network {
+	result := models.Network{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: models.ResourceIdentifier{
+				Name:      network.GetSelfRef().GetName(),
+				Namespace: network.GetSelfRef().GetNamespace(),
+			},
+		},
+		CIDR: network.Cidr,
+		Meta: models.Meta{},
+	}
+
+	// Copy meta if provided
+	if network.Meta != nil {
+		result.Meta = models.Meta{
+			UID:             network.Meta.Uid,
+			ResourceVersion: network.Meta.ResourceVersion,
+			Generation:      network.Meta.Generation,
+			Labels:          network.Meta.Labels,
+			Annotations:     network.Meta.Annotations,
+			Conditions:      models.ProtoConditionsToK8s(network.Meta.Conditions),
+		}
+		if network.Meta.CreationTs != nil {
+			result.Meta.CreationTS = metav1.NewTime(network.Meta.CreationTs.AsTime())
+		}
+	}
+
+	return result
+}
+
+// convertNetworkToPB converts domain Network to proto Network
+func convertNetworkToPB(network models.Network) *netguardpb.Network {
+	pbNetwork := &netguardpb.Network{
+		SelfRef: &netguardpb.ResourceIdentifier{
+			Name:      network.Name,
+			Namespace: network.Namespace,
+		},
+		Cidr: network.CIDR,
+	}
+
+	// Populate Meta information
+	pbNetwork.Meta = &netguardpb.Meta{
+		Uid:                network.Meta.UID,
+		ResourceVersion:    network.Meta.ResourceVersion,
+		Generation:         network.Meta.Generation,
+		Labels:             network.Meta.Labels,
+		Annotations:        network.Meta.Annotations,
+		Conditions:         models.K8sConditionsToProto(network.Meta.Conditions),
+		ObservedGeneration: network.Meta.ObservedGeneration,
+	}
+	if !network.Meta.CreationTS.IsZero() {
+		pbNetwork.Meta.CreationTs = timestamppb.New(network.Meta.CreationTS.Time)
+	}
+
+	// Add status fields
+	pbNetwork.IsBound = network.IsBound
+
+	if network.BindingRef != nil {
+		pbNetwork.BindingRef = &netguardpb.ObjectReference{
+			ApiVersion: network.BindingRef.APIVersion,
+			Kind:       network.BindingRef.Kind,
+			Name:       network.BindingRef.Name,
+		}
+	}
+
+	if network.AddressGroupRef != nil {
+		pbNetwork.AddressGroupRef = &netguardpb.NamespacedObjectReference{
+			ApiVersion: network.AddressGroupRef.APIVersion,
+			Kind:       network.AddressGroupRef.Kind,
+			Name:       network.AddressGroupRef.Name,
+			Namespace:  network.Namespace, // Use Network's namespace
+		}
+	}
+
+	return pbNetwork
+}
+
+// convertNetworkBinding converts proto NetworkBinding to domain NetworkBinding
+func convertNetworkBinding(binding *netguardpb.NetworkBinding) models.NetworkBinding {
+	result := models.NetworkBinding{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: models.ResourceIdentifier{
+				Name:      binding.GetSelfRef().GetName(),
+				Namespace: binding.GetSelfRef().GetNamespace(),
+			},
+		},
+		Meta: models.Meta{},
+	}
+
+	// Convert NetworkRef
+	result.NetworkRef = v1beta1.ObjectReference{
+		Name: binding.GetNetworkRef().GetName(),
+	}
+
+	// Convert AddressGroupRef
+	result.AddressGroupRef = v1beta1.ObjectReference{
+		Name: binding.GetAddressGroupRef().GetName(),
+	}
+
+	// Convert NetworkItem if present
+	if binding.NetworkItem != nil {
+		result.NetworkItem = models.NetworkItem{
+			Name: binding.NetworkItem.Name,
+			CIDR: binding.NetworkItem.Cidr,
+		}
+	}
+
+	// Copy Meta if presented
+	if binding.Meta != nil {
+		result.Meta = models.Meta{
+			UID:             binding.Meta.Uid,
+			ResourceVersion: binding.Meta.ResourceVersion,
+			Generation:      binding.Meta.Generation,
+			Labels:          binding.Meta.Labels,
+			Annotations:     binding.Meta.Annotations,
+			Conditions:      models.ProtoConditionsToK8s(binding.Meta.Conditions),
+		}
+		if binding.Meta.CreationTs != nil {
+			result.Meta.CreationTS = metav1.NewTime(binding.Meta.CreationTs.AsTime())
+		}
+	}
+
+	return result
+}
+
+// convertNetworkBindingToPB converts domain NetworkBinding to proto NetworkBinding
+func convertNetworkBindingToPB(binding models.NetworkBinding) *netguardpb.NetworkBinding {
+	pbBinding := &netguardpb.NetworkBinding{
+		SelfRef: &netguardpb.ResourceIdentifier{
+			Name:      binding.Name,
+			Namespace: binding.Namespace,
+		},
+		NetworkRef: &netguardpb.ResourceIdentifier{
+			Name: binding.NetworkRef.Name,
+		},
+		AddressGroupRef: &netguardpb.ResourceIdentifier{
+			Name: binding.AddressGroupRef.Name,
+		},
+	}
+
+	// Convert NetworkItem
+	pbBinding.NetworkItem = &netguardpb.NetworkItem{
+		Name: binding.NetworkItem.Name,
+		Cidr: binding.NetworkItem.CIDR,
+	}
+
+	// Populate Meta information
+	pbBinding.Meta = &netguardpb.Meta{
+		Uid:                binding.Meta.UID,
+		ResourceVersion:    binding.Meta.ResourceVersion,
+		Generation:         binding.Meta.Generation,
+		Labels:             binding.Meta.Labels,
+		Annotations:        binding.Meta.Annotations,
+		Conditions:         models.K8sConditionsToProto(binding.Meta.Conditions),
+		ObservedGeneration: binding.Meta.ObservedGeneration,
+	}
+	if !binding.Meta.CreationTS.IsZero() {
+		pbBinding.Meta.CreationTs = timestamppb.New(binding.Meta.CreationTS.Time)
+	}
+
+	return pbBinding
 }

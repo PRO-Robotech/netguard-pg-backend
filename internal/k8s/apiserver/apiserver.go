@@ -21,6 +21,8 @@ import (
 	policybindingstorage "netguard-pg-backend/internal/k8s/registry/addressgroupbindingpolicy"
 	portmappingstorage "netguard-pg-backend/internal/k8s/registry/addressgroupportmapping"
 	ieagagstorage "netguard-pg-backend/internal/k8s/registry/ieagagrule"
+	networkstorage "netguard-pg-backend/internal/k8s/registry/network"
+	networkbindingstorage "netguard-pg-backend/internal/k8s/registry/network_binding"
 	rules2sstorage "netguard-pg-backend/internal/k8s/registry/rules2s"
 	svcstorage "netguard-pg-backend/internal/k8s/registry/service"
 	aliasstorage "netguard-pg-backend/internal/k8s/registry/servicealias"
@@ -86,9 +88,6 @@ func (c completedConfig) New() (*NetguardServer, error) {
 	s := &NetguardServer{
 		GenericAPIServer: genericServer,
 	}
-
-	// Install APIs here
-	// TODO: Install your APIs here
 
 	return s, nil
 }
@@ -162,7 +161,7 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 
 	apiGroupInfo := server.NewDefaultAPIGroupInfo(netguardv1beta1.GroupName, scheme.Scheme, metav1.ParameterCodec, scheme.Codecs)
 
-	// Shared storage instances
+	// Shared storage instances - using old BackendClient approach for now
 	agStore := agstorage.NewAddressGroupStorage(bClient)
 	svcStore := svcstorage.NewServiceStorageWithClient(bClient) // Use correct BackendClient approach
 	aliasStore := aliasstorage.NewServiceAliasStorage(bClient)
@@ -171,6 +170,10 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 	pmStore := portmappingstorage.NewAddressGroupPortMappingStorage(bClient)
 	rules2sStore := rules2sstorage.NewRuleS2SStorage(bClient)
 	ieagagStore := ieagagstorage.NewIEAgAgRuleStorage(bClient)
+
+	// Use old BackendClient approach for Network resources for now
+	networkStore := networkstorage.NewNetworkStorageWithClient(bClient)
+	networkBindingStore := networkbindingstorage.NewNetworkBindingStorageWithClient(bClient)
 
 	apiGroupInfo.VersionedResourcesStorageMap[netguardv1beta1.SchemeGroupVersion.Version] = map[string]rest.Storage{
 		// Основные ресурсы
@@ -182,6 +185,8 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 		"addressgroupportmappings":    pmStore,
 		"rules2s":                     rules2sStore,
 		"ieagagrules":                 ieagagStore,
+		"networks":                    networkStore,
+		"networkbindings":             networkBindingStore,
 
 		// Status subresources для всех основных ресурсов
 		"addressgroups/status":               agstorage.NewStatusREST(agStore),
@@ -192,6 +197,8 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 		"addressgroupportmappings/status":    portmappingstorage.NewStatusREST(pmStore),
 		"rules2s/status":                     rules2sstorage.NewStatusREST(rules2sStore),
 		"ieagagrules/status":                 ieagagstorage.NewStatusREST(ieagagStore),
+		"networks/status":                    networkstorage.NewStatusREST(networkStore),
+		"networkbindings/status":             networkbindingstorage.NewStatusREST(networkBindingStore),
 
 		// Дополнительные subresources
 		"services/addressgroups":               svcstorage.NewAddressGroupsREST(bClient),

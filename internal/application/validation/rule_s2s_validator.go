@@ -12,7 +12,7 @@ import (
 // ValidateExists checks if a rule s2s exists
 func (v *RuleS2SValidator) ValidateExists(ctx context.Context, id models.ResourceIdentifier) error {
 	return v.BaseValidator.ValidateExists(ctx, id, func(entity interface{}) string {
-		return entity.(models.RuleS2S).Key()
+		return entity.(*models.RuleS2S).Key() // Используем указатель вместо значения
 	})
 }
 

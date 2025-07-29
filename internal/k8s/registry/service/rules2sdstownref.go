@@ -162,8 +162,6 @@ func (r *RuleS2SDstOwnRefREST) ConvertToTable(ctx context.Context, obj runtime.O
 
 // getCrossNamespaceRulesForService is a helper function to get cross-namespace rules for a service
 func (r *RuleS2SDstOwnRefREST) getCrossNamespaceRulesForService(ctx context.Context, service *models.Service) (*netguardv1beta1.RuleS2SDstOwnRefSpec, error) {
-	// Optimized: Get all RuleS2S rules (we still need to get all to find cross-namespace references)
-	// TODO: Consider adding backend method to filter by service destination for better performance
 	allRules, err := r.backendClient.ListRuleS2S(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list rules2s: %w", err)

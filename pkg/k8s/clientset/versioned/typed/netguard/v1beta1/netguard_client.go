@@ -33,6 +33,8 @@ type NetguardV1beta1Interface interface {
 	AddressGroupBindingPoliciesGetter
 	AddressGroupPortMappingsGetter
 	IEAgAgRulesGetter
+	NetworksGetter
+	NetworkBindingsGetter
 	RuleS2SsGetter
 	ServicesGetter
 	ServiceAliasesGetter
@@ -61,6 +63,14 @@ func (c *NetguardV1beta1Client) AddressGroupPortMappings(namespace string) Addre
 
 func (c *NetguardV1beta1Client) IEAgAgRules(namespace string) IEAgAgRuleInterface {
 	return newIEAgAgRules(c, namespace)
+}
+
+func (c *NetguardV1beta1Client) Networks(namespace string) NetworkInterface {
+	return newNetworks(c, namespace)
+}
+
+func (c *NetguardV1beta1Client) NetworkBindings(namespace string) NetworkBindingInterface {
+	return newNetworkBindings(c, namespace)
 }
 
 func (c *NetguardV1beta1Client) RuleS2Ss(namespace string) RuleS2SInterface {

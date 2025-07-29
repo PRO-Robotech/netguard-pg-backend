@@ -63,9 +63,6 @@ func (c *RuleS2SConverter) ToDomain(ctx context.Context, k8sObj *netguardv1beta1
 		},
 	}
 
-	// Note: IEAgAgRuleRefs are not part of k8s API spec, they are managed by the backend
-	// We'll keep them empty for now as they are populated by the controller logic
-
 	// Copy metadata
 	if k8sObj.Labels != nil {
 		domainRule.Meta.Labels = make(map[string]string)
@@ -130,9 +127,6 @@ func (c *RuleS2SConverter) FromDomain(ctx context.Context, domainObj *models.Rul
 			},
 		},
 	}
-
-	// Note: IEAgAgRuleRefs are not part of k8s API spec, they are managed by the backend
-	// The refs are stored in the domain model but not exposed via k8s API
 
 	// Copy metadata
 	if domainObj.Meta.Labels != nil {

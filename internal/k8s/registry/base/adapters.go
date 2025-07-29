@@ -286,3 +286,147 @@ func (i *IEAgAgRuleBackendOperations) Update(ctx context.Context, obj *models.IE
 func (i *IEAgAgRuleBackendOperations) Delete(ctx context.Context, id models.ResourceIdentifier) error {
 	return i.client.DeleteIEAgAgRule(ctx, id)
 }
+
+// NetworkOperations implements BackendOperations for Network using NetguardService
+type NetworkOperations struct {
+	netguardService *services.NetguardService
+}
+
+// NewNetworkOperations creates a new NetworkOperations
+func NewNetworkOperations(netguardService *services.NetguardService) *NetworkOperations {
+	return &NetworkOperations{
+		netguardService: netguardService,
+	}
+}
+
+func (n *NetworkOperations) Get(ctx context.Context, id models.ResourceIdentifier) (*models.Network, error) {
+	return n.netguardService.GetNetworkByID(ctx, id)
+}
+
+func (n *NetworkOperations) List(ctx context.Context, scope ports.Scope) ([]models.Network, error) {
+	return n.netguardService.GetNetworks(ctx, scope)
+}
+
+func (n *NetworkOperations) Create(ctx context.Context, obj *models.Network) error {
+	return n.netguardService.CreateNetwork(ctx, *obj)
+}
+
+func (n *NetworkOperations) Update(ctx context.Context, obj *models.Network) error {
+	return n.netguardService.UpdateNetwork(ctx, *obj)
+}
+
+func (n *NetworkOperations) Delete(ctx context.Context, id models.ResourceIdentifier) error {
+	return n.netguardService.DeleteNetwork(ctx, id)
+}
+
+// NewNetworkPtrOpsWithNetguardService creates a new PtrBackendOperations for Network using NetguardService
+func NewNetworkPtrOpsWithNetguardService(netguardService *services.NetguardService) BackendOperations[*models.Network] {
+	return NewPtrBackendOperations[models.Network](NewNetworkOperations(netguardService))
+}
+
+// NetworkBindingOperations implements BackendOperations for NetworkBinding using NetguardService
+type NetworkBindingOperations struct {
+	netguardService *services.NetguardService
+}
+
+// NewNetworkBindingOperations creates a new NetworkBindingOperations
+func NewNetworkBindingOperations(netguardService *services.NetguardService) *NetworkBindingOperations {
+	return &NetworkBindingOperations{
+		netguardService: netguardService,
+	}
+}
+
+func (nb *NetworkBindingOperations) Get(ctx context.Context, id models.ResourceIdentifier) (*models.NetworkBinding, error) {
+	return nb.netguardService.GetNetworkBindingByID(ctx, id)
+}
+
+func (nb *NetworkBindingOperations) List(ctx context.Context, scope ports.Scope) ([]models.NetworkBinding, error) {
+	return nb.netguardService.GetNetworkBindings(ctx, scope)
+}
+
+func (nb *NetworkBindingOperations) Create(ctx context.Context, obj *models.NetworkBinding) error {
+	return nb.netguardService.CreateNetworkBinding(ctx, *obj)
+}
+
+func (nb *NetworkBindingOperations) Update(ctx context.Context, obj *models.NetworkBinding) error {
+	return nb.netguardService.UpdateNetworkBinding(ctx, *obj)
+}
+
+func (nb *NetworkBindingOperations) Delete(ctx context.Context, id models.ResourceIdentifier) error {
+	return nb.netguardService.DeleteNetworkBinding(ctx, id)
+}
+
+// NewNetworkBindingPtrOpsWithNetguardService creates a new PtrBackendOperations for NetworkBinding using NetguardService
+func NewNetworkBindingPtrOpsWithNetguardService(netguardService *services.NetguardService) BackendOperations[*models.NetworkBinding] {
+	return NewPtrBackendOperations[models.NetworkBinding](NewNetworkBindingOperations(netguardService))
+}
+
+// NetworkBackendOperations implements BackendOperations for Network (DEPRECATED - use NetworkOperations)
+type NetworkBackendOperations struct {
+	client client.BackendClient
+}
+
+// NewNetworkBackendOperations creates a new NetworkBackendOperations
+func NewNetworkBackendOperations(client client.BackendClient) *NetworkBackendOperations {
+	return &NetworkBackendOperations{client: client}
+}
+
+func (n *NetworkBackendOperations) Get(ctx context.Context, id models.ResourceIdentifier) (*models.Network, error) {
+	return n.client.GetNetwork(ctx, id)
+}
+
+func (n *NetworkBackendOperations) List(ctx context.Context, scope ports.Scope) ([]models.Network, error) {
+	return n.client.ListNetworks(ctx, scope)
+}
+
+func (n *NetworkBackendOperations) Create(ctx context.Context, obj *models.Network) error {
+	return n.client.CreateNetwork(ctx, obj)
+}
+
+func (n *NetworkBackendOperations) Update(ctx context.Context, obj *models.Network) error {
+	return n.client.UpdateNetwork(ctx, obj)
+}
+
+func (n *NetworkBackendOperations) Delete(ctx context.Context, id models.ResourceIdentifier) error {
+	return n.client.DeleteNetwork(ctx, id)
+}
+
+// NewNetworkPtrOpsOld creates a new PtrBackendOperations for Network (old client-based)
+func NewNetworkPtrOpsOld(client client.BackendClient) BackendOperations[*models.Network] {
+	return NewPtrBackendOperations[models.Network](NewNetworkBackendOperations(client))
+}
+
+// NetworkBindingBackendOperations implements BackendOperations for NetworkBinding (DEPRECATED - use NetworkBindingOperations)
+type NetworkBindingBackendOperations struct {
+	client client.BackendClient
+}
+
+// NewNetworkBindingBackendOperations creates a new NetworkBindingBackendOperations
+func NewNetworkBindingBackendOperations(client client.BackendClient) *NetworkBindingBackendOperations {
+	return &NetworkBindingBackendOperations{client: client}
+}
+
+func (nb *NetworkBindingBackendOperations) Get(ctx context.Context, id models.ResourceIdentifier) (*models.NetworkBinding, error) {
+	return nb.client.GetNetworkBinding(ctx, id)
+}
+
+func (nb *NetworkBindingBackendOperations) List(ctx context.Context, scope ports.Scope) ([]models.NetworkBinding, error) {
+	return nb.client.ListNetworkBindings(ctx, scope)
+}
+
+func (nb *NetworkBindingBackendOperations) Create(ctx context.Context, obj *models.NetworkBinding) error {
+	return nb.client.CreateNetworkBinding(ctx, obj)
+}
+
+func (nb *NetworkBindingBackendOperations) Update(ctx context.Context, obj *models.NetworkBinding) error {
+	return nb.client.UpdateNetworkBinding(ctx, obj)
+}
+
+func (nb *NetworkBindingBackendOperations) Delete(ctx context.Context, id models.ResourceIdentifier) error {
+	return nb.client.DeleteNetworkBinding(ctx, id)
+}
+
+// NewNetworkBindingPtrOpsOld creates a new PtrBackendOperations for NetworkBinding (old client-based)
+func NewNetworkBindingPtrOpsOld(client client.BackendClient) BackendOperations[*models.NetworkBinding] {
+	return NewPtrBackendOperations[models.NetworkBinding](NewNetworkBindingBackendOperations(client))
+}

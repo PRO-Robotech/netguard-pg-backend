@@ -96,3 +96,19 @@ func (m *Meta) IsConditionTrue(conditionType string) bool {
 	condition := m.GetCondition(conditionType)
 	return condition != nil && condition.Status == metav1.ConditionTrue
 }
+
+// GetConditions returns the conditions slice
+func (m *Meta) GetConditions() []metav1.Condition {
+	if m == nil {
+		return nil
+	}
+	return m.Conditions
+}
+
+// SetConditions sets the conditions slice
+func (m *Meta) SetConditions(conditions []metav1.Condition) {
+	if m == nil {
+		return
+	}
+	m.Conditions = conditions
+}

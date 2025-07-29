@@ -8,29 +8,33 @@ import (
 
 // MemDB in-memory database
 type MemDB struct {
-	services                   map[string]models.Service
-	serviceAliases             map[string]models.ServiceAlias
-	addressGroups              map[string]models.AddressGroup
-	addressGroupBindings       map[string]models.AddressGroupBinding
-	addressGroupPortMappings   map[string]models.AddressGroupPortMapping
+	services                    map[string]models.Service
+	serviceAliases              map[string]models.ServiceAlias
+	addressGroups               map[string]models.AddressGroup
+	addressGroupBindings        map[string]models.AddressGroupBinding
+	addressGroupPortMappings    map[string]models.AddressGroupPortMapping
 	addressGroupBindingPolicies map[string]models.AddressGroupBindingPolicy
-	ruleS2S                    map[string]models.RuleS2S
-	ieAgAgRules                map[string]models.IEAgAgRule
-	syncStatus                 models.SyncStatus
-	mu                         sync.RWMutex
+	ruleS2S                     map[string]models.RuleS2S
+	ieAgAgRules                 map[string]models.IEAgAgRule
+	networks                    map[string]models.Network
+	networkBindings             map[string]models.NetworkBinding
+	syncStatus                  models.SyncStatus
+	mu                          sync.RWMutex
 }
 
 // NewMemDB creates a new in-memory database
 func NewMemDB() *MemDB {
 	return &MemDB{
-		services:                   make(map[string]models.Service),
-		serviceAliases:             make(map[string]models.ServiceAlias),
-		addressGroups:              make(map[string]models.AddressGroup),
-		addressGroupBindings:       make(map[string]models.AddressGroupBinding),
-		addressGroupPortMappings:   make(map[string]models.AddressGroupPortMapping),
+		services:                    make(map[string]models.Service),
+		serviceAliases:              make(map[string]models.ServiceAlias),
+		addressGroups:               make(map[string]models.AddressGroup),
+		addressGroupBindings:        make(map[string]models.AddressGroupBinding),
+		addressGroupPortMappings:    make(map[string]models.AddressGroupPortMapping),
 		addressGroupBindingPolicies: make(map[string]models.AddressGroupBindingPolicy),
-		ruleS2S:                    make(map[string]models.RuleS2S),
-		ieAgAgRules:                make(map[string]models.IEAgAgRule),
+		ruleS2S:                     make(map[string]models.RuleS2S),
+		ieAgAgRules:                 make(map[string]models.IEAgAgRule),
+		networks:                    make(map[string]models.Network),
+		networkBindings:             make(map[string]models.NetworkBinding),
 	}
 }
 
@@ -190,4 +194,40 @@ func (db *MemDB) SetIEAgAgRules(rules map[string]models.IEAgAgRule) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	db.ieAgAgRules = rules
+}
+
+// GetNetworks returns all networks
+func (db *MemDB) GetNetworks() map[string]models.Network {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	result := make(map[string]models.Network, len(db.networks))
+	for k, v := range db.networks {
+		result[k] = v
+	}
+	return result
+}
+
+// SetNetworks sets the networks
+func (db *MemDB) SetNetworks(networks map[string]models.Network) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.networks = networks
+}
+
+// GetNetworkBindings returns all network bindings
+func (db *MemDB) GetNetworkBindings() map[string]models.NetworkBinding {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	result := make(map[string]models.NetworkBinding, len(db.networkBindings))
+	for k, v := range db.networkBindings {
+		result[k] = v
+	}
+	return result
+}
+
+// SetNetworkBindings sets the network bindings
+func (db *MemDB) SetNetworkBindings(bindings map[string]models.NetworkBinding) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.networkBindings = bindings
 }

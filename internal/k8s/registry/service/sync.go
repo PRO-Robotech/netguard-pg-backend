@@ -37,16 +37,6 @@ func (r *SyncREST) Destroy() {
 	// Nothing to clean up
 }
 
-// Create triggers manual sync for a Service
-// Usage: kubectl create -f - <<EOF
-// apiVersion: netguard.sgroups.io/v1beta1
-// kind: Service
-// metadata:
-//
-//	name: my-service
-//	namespace: default
-//
-// EOF
 func (r *SyncREST) Create(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
 	service, ok := obj.(*netguardv1beta1.Service)
 	if !ok {

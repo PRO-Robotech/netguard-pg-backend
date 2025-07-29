@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -14,8 +15,12 @@ import (
 	"netguard-pg-backend/internal/application/validation"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
+	"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
+
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
 
+	"google.golang.org/protobuf/types/known/timestamppb"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 )
 
@@ -184,7 +189,6 @@ func (c *GRPCBackendClient) syncService(ctx context.Context, syncOp models.SyncO
 	return nil
 }
 
-// --- AddressGroup ---
 func (c *GRPCBackendClient) GetAddressGroup(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroup, error) {
 	klog.V(4).Infof("GRPCBackendClient.GetAddressGroup ns=%q name=%q", id.Namespace, id.Name)
 	if !c.limiter.Allow() {
@@ -289,7 +293,6 @@ func (c *GRPCBackendClient) syncAddressGroup(ctx context.Context, syncOp models.
 	return nil
 }
 
-// --- AddressGroupBinding ---
 func (c *GRPCBackendClient) GetAddressGroupBinding(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBinding, error) {
 	if !c.limiter.Allow() {
 		return nil, fmt.Errorf("rate limit exceeded")
@@ -392,7 +395,6 @@ func (c *GRPCBackendClient) syncAddressGroupBinding(ctx context.Context, syncOp 
 	return nil
 }
 
-// --- AddressGroupPortMapping ---
 func (c *GRPCBackendClient) GetAddressGroupPortMapping(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupPortMapping, error) {
 	if !c.limiter.Allow() {
 		return nil, fmt.Errorf("rate limit exceeded")
@@ -495,7 +497,6 @@ func (c *GRPCBackendClient) syncAddressGroupPortMapping(ctx context.Context, syn
 	return nil
 }
 
-// --- RuleS2S ---
 func (c *GRPCBackendClient) GetRuleS2S(ctx context.Context, id models.ResourceIdentifier) (*models.RuleS2S, error) {
 	if !c.limiter.Allow() {
 		return nil, fmt.Errorf("rate limit exceeded")
@@ -598,7 +599,6 @@ func (c *GRPCBackendClient) syncRuleS2S(ctx context.Context, syncOp models.SyncO
 	return nil
 }
 
-// --- ServiceAlias ---
 func (c *GRPCBackendClient) GetServiceAlias(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error) {
 	if !c.limiter.Allow() {
 		return nil, fmt.Errorf("rate limit exceeded")
@@ -704,7 +704,6 @@ func (c *GRPCBackendClient) syncServiceAlias(ctx context.Context, syncOp models.
 	return nil
 }
 
-// --- AddressGroupBindingPolicy ---
 func (c *GRPCBackendClient) GetAddressGroupBindingPolicy(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
 	if !c.limiter.Allow() {
 		return nil, fmt.Errorf("rate limit exceeded")
@@ -807,7 +806,6 @@ func (c *GRPCBackendClient) syncAddressGroupBindingPolicy(ctx context.Context, s
 	return nil
 }
 
-// --- IEAgAgRule ---
 func (c *GRPCBackendClient) GetIEAgAgRule(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
 	if !c.limiter.Allow() {
 		return nil, fmt.Errorf("rate limit exceeded")
@@ -824,7 +822,7 @@ func (c *GRPCBackendClient) GetIEAgAgRule(ctx context.Context, id models.Resourc
 	if err != nil {
 		return nil, fmt.Errorf("failed to get IEAgAgRule: %w", err)
 	}
-	rule := ConvertIEAgAgRuleFromProto(resp.IeagagRule)
+	rule := convertIEAgAgRuleFromProto(resp.IeagagRule)
 	return &rule, nil
 }
 
@@ -854,7 +852,7 @@ func (c *GRPCBackendClient) ListIEAgAgRules(ctx context.Context, scope ports.Sco
 	}
 	rules := make([]models.IEAgAgRule, 0, len(resp.Items))
 	for _, protoRule := range resp.Items {
-		rules = append(rules, ConvertIEAgAgRuleFromProto(protoRule))
+		rules = append(rules, convertIEAgAgRuleFromProto(protoRule))
 	}
 	return rules, nil
 }
@@ -872,6 +870,166 @@ func (c *GRPCBackendClient) DeleteIEAgAgRule(ctx context.Context, id models.Reso
 		SelfRef: models.SelfRef{ResourceIdentifier: id},
 	}
 	return c.syncIEAgAgRule(ctx, models.SyncOpDelete, []*models.IEAgAgRule{rule})
+}
+
+func (c *GRPCBackendClient) GetNetwork(ctx context.Context, id models.ResourceIdentifier) (*models.Network, error) {
+	if !c.limiter.Allow() {
+		return nil, fmt.Errorf("rate limit exceeded")
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+	req := &netguardpb.GetNetworkReq{
+		Identifier: &netguardpb.ResourceIdentifier{
+			Namespace: id.Namespace,
+			Name:      id.Name,
+		},
+	}
+	resp, err := c.client.GetNetwork(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get network: %w", err)
+	}
+	network := convertNetworkFromProto(resp.Network)
+	log.Printf("🔍 GRPC CLIENT: Network[%s] received from backend with IsBound=%t", id.Key(), network.IsBound)
+	if network.BindingRef != nil {
+		log.Printf("  🔍 GRPC CLIENT: network[%s].BindingRef=%s", id.Key(), network.BindingRef.Name)
+	} else {
+		log.Printf("  🔍 GRPC CLIENT: network[%s].BindingRef=nil", id.Key())
+	}
+	return &network, nil
+}
+
+func (c *GRPCBackendClient) ListNetworks(ctx context.Context, scope ports.Scope) ([]models.Network, error) {
+	if !c.limiter.Allow() {
+		return nil, fmt.Errorf("rate limit exceeded")
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+	var identifiers []*netguardpb.ResourceIdentifier
+	if scope != nil {
+		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+			for _, id := range ris.Identifiers {
+				identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
+					Namespace: id.Namespace,
+					Name:      id.Name,
+				})
+			}
+		}
+	}
+	req := &netguardpb.ListNetworksReq{
+		Identifiers: identifiers,
+	}
+	resp, err := c.client.ListNetworks(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list networks: %w", err)
+	}
+	networks := make([]models.Network, 0, len(resp.Items))
+	for _, protoNet := range resp.Items {
+		networks = append(networks, convertNetworkFromProto(protoNet))
+	}
+	return networks, nil
+}
+
+func (c *GRPCBackendClient) CreateNetwork(ctx context.Context, network *models.Network) error {
+	// Use Sync API for creation
+	networks := []models.Network{*network}
+	return c.Sync(ctx, models.SyncOpUpsert, networks)
+}
+
+func (c *GRPCBackendClient) UpdateNetwork(ctx context.Context, network *models.Network) error {
+	// Use Sync API for update
+	networks := []models.Network{*network}
+	return c.Sync(ctx, models.SyncOpUpsert, networks)
+}
+
+func (c *GRPCBackendClient) DeleteNetwork(ctx context.Context, id models.ResourceIdentifier) error {
+	network, err := c.GetNetwork(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get network for deletion: %w", err)
+	}
+	if network == nil {
+		return fmt.Errorf("network not found: %s", id.Key())
+	}
+
+	networks := []models.Network{*network}
+	return c.Sync(ctx, models.SyncOpDelete, networks)
+}
+
+func (c *GRPCBackendClient) GetNetworkBinding(ctx context.Context, id models.ResourceIdentifier) (*models.NetworkBinding, error) {
+	if !c.limiter.Allow() {
+		return nil, fmt.Errorf("rate limit exceeded")
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+	req := &netguardpb.GetNetworkBindingReq{
+		Identifier: &netguardpb.ResourceIdentifier{
+			Namespace: id.Namespace,
+			Name:      id.Name,
+		},
+	}
+	resp, err := c.client.GetNetworkBinding(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get network binding: %w", err)
+	}
+	binding := convertNetworkBindingFromProto(resp.NetworkBinding)
+	return &binding, nil
+}
+
+func (c *GRPCBackendClient) ListNetworkBindings(ctx context.Context, scope ports.Scope) ([]models.NetworkBinding, error) {
+	if !c.limiter.Allow() {
+		return nil, fmt.Errorf("rate limit exceeded")
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+	var identifiers []*netguardpb.ResourceIdentifier
+	if scope != nil {
+		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+			for _, id := range ris.Identifiers {
+				identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
+					Namespace: id.Namespace,
+					Name:      id.Name,
+				})
+			}
+		}
+	}
+	req := &netguardpb.ListNetworkBindingsReq{
+		Identifiers: identifiers,
+	}
+	resp, err := c.client.ListNetworkBindings(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list network bindings: %w", err)
+	}
+	bindings := make([]models.NetworkBinding, 0, len(resp.Items))
+	for _, protoBinding := range resp.Items {
+		bindings = append(bindings, convertNetworkBindingFromProto(protoBinding))
+	}
+	return bindings, nil
+}
+
+func (c *GRPCBackendClient) CreateNetworkBinding(ctx context.Context, binding *models.NetworkBinding) error {
+	// Use Sync API for creation
+	bindings := []models.NetworkBinding{*binding}
+	return c.Sync(ctx, models.SyncOpUpsert, bindings)
+}
+
+func (c *GRPCBackendClient) UpdateNetworkBinding(ctx context.Context, binding *models.NetworkBinding) error {
+	// Use Sync API for update
+	bindings := []models.NetworkBinding{*binding}
+	return c.Sync(ctx, models.SyncOpUpsert, bindings)
+}
+
+func (c *GRPCBackendClient) DeleteNetworkBinding(ctx context.Context, id models.ResourceIdentifier) error {
+	// Use Sync API for deletion
+	// We need to get the binding first to delete it
+	binding, err := c.GetNetworkBinding(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get network binding for deletion: %w", err)
+	}
+	if binding == nil {
+		return fmt.Errorf("network binding not found: %s", id.Key())
+	}
+
+	bindings := []models.NetworkBinding{*binding}
+	return c.Sync(ctx, models.SyncOpDelete, bindings)
 }
 
 func (c *GRPCBackendClient) syncIEAgAgRule(ctx context.Context, syncOp models.SyncOp, rules []*models.IEAgAgRule) error {
@@ -910,6 +1068,78 @@ func (c *GRPCBackendClient) syncIEAgAgRule(ctx context.Context, syncOp models.Sy
 	return nil
 }
 
+func (c *GRPCBackendClient) syncNetwork(ctx context.Context, syncOp models.SyncOp, networks []*models.Network) error {
+	if !c.limiter.Allow() {
+		return fmt.Errorf("rate limit exceeded")
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+	protoNetworks := make([]*netguardpb.Network, 0, len(networks))
+	for _, network := range networks {
+		protoNetworks = append(protoNetworks, convertNetworkToPB(*network))
+	}
+	var protoSyncOp netguardpb.SyncOp
+	switch syncOp {
+	case models.SyncOpUpsert:
+		protoSyncOp = netguardpb.SyncOp_Upsert
+	case models.SyncOpDelete:
+		protoSyncOp = netguardpb.SyncOp_Delete
+	case models.SyncOpFullSync:
+		protoSyncOp = netguardpb.SyncOp_FullSync
+	default:
+		protoSyncOp = netguardpb.SyncOp_NoOp
+	}
+	req := &netguardpb.SyncReq{
+		SyncOp: protoSyncOp,
+		Subject: &netguardpb.SyncReq_Networks{
+			Networks: &netguardpb.SyncNetworks{
+				Networks: protoNetworks,
+			},
+		},
+	}
+	_, err := c.client.Sync(ctx, req)
+	if err != nil {
+		return fmt.Errorf("failed to sync networks: %w", err)
+	}
+	return nil
+}
+
+func (c *GRPCBackendClient) syncNetworkBinding(ctx context.Context, syncOp models.SyncOp, bindings []*models.NetworkBinding) error {
+	if !c.limiter.Allow() {
+		return fmt.Errorf("rate limit exceeded")
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+	protoBindings := make([]*netguardpb.NetworkBinding, 0, len(bindings))
+	for _, binding := range bindings {
+		protoBindings = append(protoBindings, convertNetworkBindingToPB(*binding))
+	}
+	var protoSyncOp netguardpb.SyncOp
+	switch syncOp {
+	case models.SyncOpUpsert:
+		protoSyncOp = netguardpb.SyncOp_Upsert
+	case models.SyncOpDelete:
+		protoSyncOp = netguardpb.SyncOp_Delete
+	case models.SyncOpFullSync:
+		protoSyncOp = netguardpb.SyncOp_FullSync
+	default:
+		protoSyncOp = netguardpb.SyncOp_NoOp
+	}
+	req := &netguardpb.SyncReq{
+		SyncOp: protoSyncOp,
+		Subject: &netguardpb.SyncReq_NetworkBindings{
+			NetworkBindings: &netguardpb.SyncNetworkBindings{
+				NetworkBindings: protoBindings,
+			},
+		},
+	}
+	_, err := c.client.Sync(ctx, req)
+	if err != nil {
+		return fmt.Errorf("failed to sync network bindings: %w", err)
+	}
+	return nil
+}
+
 // Sync implements generic sync for known slice types. Currently supports AddressGroup.
 func (c *GRPCBackendClient) Sync(ctx context.Context, syncOp models.SyncOp, resources interface{}) error {
 	switch res := resources.(type) {
@@ -937,6 +1167,18 @@ func (c *GRPCBackendClient) Sync(ctx context.Context, syncOp models.SyncOp, reso
 			ptrs = append(ptrs, &res[i])
 		}
 		return c.syncAddressGroupBindingPolicy(ctx, syncOp, ptrs)
+	case []models.Network:
+		ptrs := make([]*models.Network, 0, len(res))
+		for i := range res {
+			ptrs = append(ptrs, &res[i])
+		}
+		return c.syncNetwork(ctx, syncOp, ptrs)
+	case []models.NetworkBinding:
+		ptrs := make([]*models.NetworkBinding, 0, len(res))
+		for i := range res {
+			ptrs = append(ptrs, &res[i])
+		}
+		return c.syncNetworkBinding(ctx, syncOp, ptrs)
 	default:
 		return fmt.Errorf("generic sync not implemented for %T", resources)
 	}
@@ -1070,6 +1312,24 @@ func (c *GRPCBackendClient) UpdateIEAgAgRuleMeta(ctx context.Context, id models.
 	return c.UpdateIEAgAgRule(ctx, rule)
 }
 
+func (c *GRPCBackendClient) UpdateNetworkMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	network, err := c.GetNetwork(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get network for meta update: %w", err)
+	}
+	network.Meta = meta
+	return c.UpdateNetwork(ctx, network)
+}
+
+func (c *GRPCBackendClient) UpdateNetworkBindingMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	binding, err := c.GetNetworkBinding(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get network binding for meta update: %w", err)
+	}
+	binding.Meta = meta
+	return c.UpdateNetworkBinding(ctx, binding)
+}
+
 // Helper методы для subresources (оптимизированные запросы)
 func (c *GRPCBackendClient) ListAddressGroupsForService(ctx context.Context, serviceID models.ResourceIdentifier) ([]models.AddressGroup, error) {
 	klog.V(4).Infof("GRPCBackendClient.ListAddressGroupsForService serviceID=%s/%s", serviceID.Namespace, serviceID.Name)
@@ -1163,4 +1423,273 @@ func (c *GRPCBackendClient) Close() error {
 		return c.conn.Close()
 	}
 	return nil
+}
+
+// Helper functions for Network conversions
+func convertNetworkFromProto(protoNetwork *netguardpb.Network) models.Network {
+	result := models.Network{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: models.ResourceIdentifier{
+				Name:      protoNetwork.GetSelfRef().GetName(),
+				Namespace: protoNetwork.GetSelfRef().GetNamespace(),
+			},
+		},
+		CIDR: protoNetwork.Cidr,
+		Meta: models.Meta{},
+	}
+
+	// Copy meta if provided
+	if protoNetwork.Meta != nil {
+		result.Meta = models.Meta{
+			UID:             protoNetwork.Meta.Uid,
+			ResourceVersion: protoNetwork.Meta.ResourceVersion,
+			Generation:      protoNetwork.Meta.Generation,
+			Labels:          protoNetwork.Meta.Labels,
+			Annotations:     protoNetwork.Meta.Annotations,
+			Conditions:      models.ProtoConditionsToK8s(protoNetwork.Meta.Conditions),
+		}
+		if protoNetwork.Meta.CreationTs != nil {
+			result.Meta.CreationTS = metav1.NewTime(protoNetwork.Meta.CreationTs.AsTime())
+		}
+	}
+
+	// Add status fields
+	result.IsBound = protoNetwork.IsBound
+
+	if protoNetwork.BindingRef != nil {
+		result.BindingRef = &v1beta1.ObjectReference{
+			APIVersion: protoNetwork.BindingRef.ApiVersion,
+			Kind:       protoNetwork.BindingRef.Kind,
+			Name:       protoNetwork.BindingRef.Name,
+		}
+	}
+
+	if protoNetwork.AddressGroupRef != nil {
+		result.AddressGroupRef = &v1beta1.ObjectReference{
+			APIVersion: protoNetwork.AddressGroupRef.ApiVersion,
+			Kind:       protoNetwork.AddressGroupRef.Kind,
+			Name:       protoNetwork.AddressGroupRef.Name,
+		}
+	}
+
+	return result
+}
+
+func convertNetworkToPB(network models.Network) *netguardpb.Network {
+	pbNetwork := &netguardpb.Network{
+		SelfRef: &netguardpb.ResourceIdentifier{
+			Name:      network.Name,
+			Namespace: network.Namespace,
+		},
+		Cidr: network.CIDR,
+	}
+
+	// Populate Meta information
+	pbNetwork.Meta = &netguardpb.Meta{
+		Uid:                network.Meta.UID,
+		ResourceVersion:    network.Meta.ResourceVersion,
+		Generation:         network.Meta.Generation,
+		Labels:             network.Meta.Labels,
+		Annotations:        network.Meta.Annotations,
+		Conditions:         models.K8sConditionsToProto(network.Meta.Conditions),
+		ObservedGeneration: network.Meta.ObservedGeneration,
+	}
+	if !network.Meta.CreationTS.IsZero() {
+		pbNetwork.Meta.CreationTs = timestamppb.New(network.Meta.CreationTS.Time)
+	}
+
+	return pbNetwork
+}
+
+// Helper functions for NetworkBinding conversions
+func convertNetworkBindingFromProto(protoBinding *netguardpb.NetworkBinding) models.NetworkBinding {
+	result := models.NetworkBinding{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: models.ResourceIdentifier{
+				Name:      protoBinding.GetSelfRef().GetName(),
+				Namespace: protoBinding.GetSelfRef().GetNamespace(),
+			},
+		},
+		Meta: models.Meta{},
+	}
+
+	// Convert NetworkRef
+	result.NetworkRef = v1beta1.ObjectReference{
+		Name: protoBinding.GetNetworkRef().GetName(),
+	}
+
+	// Convert AddressGroupRef
+	result.AddressGroupRef = v1beta1.ObjectReference{
+		Name: protoBinding.GetAddressGroupRef().GetName(),
+	}
+
+	// Convert NetworkItem if present
+	if protoBinding.NetworkItem != nil {
+		result.NetworkItem = models.NetworkItem{
+			Name: protoBinding.NetworkItem.Name,
+			CIDR: protoBinding.NetworkItem.Cidr,
+		}
+	}
+
+	// Copy Meta if presented
+	if protoBinding.Meta != nil {
+		result.Meta = models.Meta{
+			UID:             protoBinding.Meta.Uid,
+			ResourceVersion: protoBinding.Meta.ResourceVersion,
+			Generation:      protoBinding.Meta.Generation,
+			Labels:          protoBinding.Meta.Labels,
+			Annotations:     protoBinding.Meta.Annotations,
+			Conditions:      models.ProtoConditionsToK8s(protoBinding.Meta.Conditions),
+		}
+		if protoBinding.Meta.CreationTs != nil {
+			result.Meta.CreationTS = metav1.NewTime(protoBinding.Meta.CreationTs.AsTime())
+		}
+	}
+
+	return result
+}
+
+func convertNetworkBindingToPB(binding models.NetworkBinding) *netguardpb.NetworkBinding {
+	pbBinding := &netguardpb.NetworkBinding{
+		SelfRef: &netguardpb.ResourceIdentifier{
+			Name:      binding.Name,
+			Namespace: binding.Namespace,
+		},
+		NetworkRef: &netguardpb.ResourceIdentifier{
+			Name: binding.NetworkRef.Name,
+		},
+		AddressGroupRef: &netguardpb.ResourceIdentifier{
+			Name: binding.AddressGroupRef.Name,
+		},
+	}
+
+	// Convert NetworkItem
+	pbBinding.NetworkItem = &netguardpb.NetworkItem{
+		Name: binding.NetworkItem.Name,
+		Cidr: binding.NetworkItem.CIDR,
+	}
+
+	// Populate Meta information
+	pbBinding.Meta = &netguardpb.Meta{
+		Uid:                binding.Meta.UID,
+		ResourceVersion:    binding.Meta.ResourceVersion,
+		Generation:         binding.Meta.Generation,
+		Labels:             binding.Meta.Labels,
+		Annotations:        binding.Meta.Annotations,
+		Conditions:         models.K8sConditionsToProto(binding.Meta.Conditions),
+		ObservedGeneration: binding.Meta.ObservedGeneration,
+	}
+	if !binding.Meta.CreationTS.IsZero() {
+		pbBinding.Meta.CreationTs = timestamppb.New(binding.Meta.CreationTS.Time)
+	}
+
+	return pbBinding
+}
+
+// Helper functions for IEAgAgRule conversions
+func convertIEAgAgRuleFromProto(protoRule *netguardpb.IEAgAgRule) models.IEAgAgRule {
+	log.Printf("🔧 API convertIEAgAgRuleFromProto: Converting rule %s/%s - Transport=%d, Traffic=%d, Action=%d",
+		protoRule.GetSelfRef().GetNamespace(), protoRule.GetSelfRef().GetName(),
+		protoRule.Transport, protoRule.Traffic, protoRule.Action)
+
+	// Convert Transport
+	var transport models.TransportProtocol
+	switch protoRule.Transport {
+	case netguardpb.Networks_NetIP_TCP:
+		transport = models.TCP
+	case netguardpb.Networks_NetIP_UDP:
+		transport = models.UDP
+	default:
+		log.Printf("⚠️  WARNING: Unknown protobuf Transport %d, defaulting to TCP", protoRule.Transport)
+		transport = models.TCP
+	}
+
+	// Convert Traffic
+	var traffic models.Traffic
+	switch protoRule.Traffic {
+	case netguardpb.Traffic_Ingress:
+		traffic = models.INGRESS
+	case netguardpb.Traffic_Egress:
+		traffic = models.EGRESS
+	default:
+		log.Printf("⚠️  WARNING: Unknown protobuf Traffic %d, defaulting to INGRESS", protoRule.Traffic)
+		traffic = models.INGRESS
+	}
+
+	// Convert Action
+	var action models.RuleAction
+	switch protoRule.Action {
+	case netguardpb.RuleAction_ACCEPT:
+		action = models.ActionAccept
+	case netguardpb.RuleAction_DROP:
+		action = models.ActionDrop
+	default:
+		log.Printf("⚠️  WARNING: Unknown protobuf Action %d, defaulting to ACCEPT", protoRule.Action)
+		action = models.ActionAccept
+	}
+
+	result := models.IEAgAgRule{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: models.ResourceIdentifier{
+				Name:      protoRule.GetSelfRef().GetName(),
+				Namespace: protoRule.GetSelfRef().GetNamespace(),
+			},
+		},
+		Transport: transport,
+		Traffic:   traffic,
+		Action:    action,
+		Logs:      protoRule.Logs,
+		Priority:  protoRule.Priority,
+		Meta:      models.Meta{},
+	}
+
+	// Copy AddressGroups
+	if protoRule.AddressGroupLocal != nil && protoRule.AddressGroupLocal.Identifier != nil {
+		result.AddressGroupLocal = models.AddressGroupRef{
+			ResourceIdentifier: models.ResourceIdentifier{
+				Name:      protoRule.AddressGroupLocal.Identifier.Name,
+				Namespace: protoRule.AddressGroupLocal.Identifier.Namespace,
+			},
+		}
+	}
+
+	if protoRule.AddressGroup != nil && protoRule.AddressGroup.Identifier != nil {
+		result.AddressGroup = models.AddressGroupRef{
+			ResourceIdentifier: models.ResourceIdentifier{
+				Name:      protoRule.AddressGroup.Identifier.Name,
+				Namespace: protoRule.AddressGroup.Identifier.Namespace,
+			},
+		}
+	}
+
+	// Copy Ports
+	for _, protoPort := range protoRule.Ports {
+		result.Ports = append(result.Ports, models.PortSpec{
+			Source:      protoPort.Source,
+			Destination: protoPort.Destination,
+		})
+	}
+
+	// Copy Meta if provided
+	if protoRule.Meta != nil {
+		result.Meta = models.Meta{
+			UID:             protoRule.Meta.Uid,
+			ResourceVersion: protoRule.Meta.ResourceVersion,
+			Generation:      protoRule.Meta.Generation,
+			Labels:          protoRule.Meta.Labels,
+			Annotations:     protoRule.Meta.Annotations,
+		}
+		if protoRule.Meta.CreationTs != nil {
+			result.Meta.CreationTS = metav1.NewTime(protoRule.Meta.CreationTs.AsTime())
+		}
+		if protoRule.Meta.Conditions != nil {
+			result.Meta.Conditions = models.ProtoConditionsToK8s(protoRule.Meta.Conditions)
+		}
+		result.Meta.ObservedGeneration = protoRule.Meta.ObservedGeneration
+	}
+
+	log.Printf("✅ API convertIEAgAgRuleFromProto: Converted to Transport='%s', Traffic='%s', Action='%s'",
+		result.Transport, result.Traffic, result.Action)
+
+	return result
 }

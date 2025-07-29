@@ -13,7 +13,7 @@ import (
 // ValidateExists checks if a service exists
 func (v *ServiceValidator) ValidateExists(ctx context.Context, id models.ResourceIdentifier) error {
 	return v.BaseValidator.ValidateExists(ctx, id, func(entity interface{}) string {
-		return entity.(models.Service).Key()
+		return entity.(*models.Service).Key() // Используем указатель вместо значения
 	})
 }
 

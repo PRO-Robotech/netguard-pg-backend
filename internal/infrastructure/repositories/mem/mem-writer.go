@@ -21,6 +21,8 @@ type writer struct {
 	ruleS2S                     map[string]models.RuleS2S
 	serviceAliases              map[string]models.ServiceAlias
 	ieAgAgRules                 map[string]models.IEAgAgRule
+	networks                    map[string]models.Network
+	networkBindings             map[string]models.NetworkBinding
 }
 
 func (w *writer) SyncServices(ctx context.Context, services []models.Service, scope ports.Scope, opts ...ports.Option) error {
@@ -100,58 +102,18 @@ func (w *writer) SyncServices(ctx context.Context, services []models.Service, sc
 	case models.SyncOpUpsert:
 		// Только добавление и обновление
 		for _, svc := range services {
-			// 🔍 ДИАГНОСТИКА: логируем входящий объект
-			log.Printf("🔍 DIAG: SyncOpUpsert processing service %s", svc.Key())
-			log.Printf("🔍 DIAG: Incoming service %s has %d conditions", svc.Key(), len(svc.Meta.Conditions))
-			for i, cond := range svc.Meta.Conditions {
-				log.Printf("  🔍 DIAG: incoming[%d] Type=%s Status=%s Reason=%s", i, cond.Type, cond.Status, cond.Reason)
-			}
-
 			if existing, ok := w.services[svc.Key()]; ok {
-				log.Printf("🔄 DIAG: existing service found with %d conditions", len(existing.Meta.Conditions))
-				for i, cond := range existing.Meta.Conditions {
-					log.Printf("  🔄 DIAG: existing[%d] Type=%s Status=%s", i, cond.Type, cond.Status)
-				}
-
 				if svc.Meta.CreationTS.IsZero() {
 					svc.Meta.CreationTS = existing.Meta.CreationTS
-					log.Printf("🔄 DIAG: copied CreationTS from existing")
 				}
 				if svc.Meta.UID == "" {
 					svc.Meta.UID = existing.Meta.UID
-					log.Printf("🔄 DIAG: copied UID from existing: %s", svc.Meta.UID)
 				}
-			} else {
-				log.Printf("🆕 DIAG: no existing service found, this is a new service")
 			}
-
-			// 🔍 ДИАГНОСТИКА: проверяем ПЕРЕД ensureMetaFill
-			log.Printf("🔍 DIAG: BEFORE ensureMetaFill: service %s has %d conditions", svc.Key(), len(svc.Meta.Conditions))
 
 			ensureMetaFill(&svc.Meta)
 
-			// 🔍 ДИАГНОСТИКА: проверяем ПОСЛЕ ensureMetaFill
-			log.Printf("🔍 DIAG: AFTER ensureMetaFill: service %s has %d conditions", svc.Key(), len(svc.Meta.Conditions))
-			for i, cond := range svc.Meta.Conditions {
-				log.Printf("  🔍 DIAG: after_fill[%d] Type=%s Status=%s", i, cond.Type, cond.Status)
-			}
-
-			log.Printf("mem.writer SyncOpUpsert Service key=%s uid=%s gen=%d rv=%s", svc.Key(), svc.Meta.UID, svc.Meta.Generation, svc.Meta.ResourceVersion)
-
-			// 🔍 ДИАГНОСТИКА: проверяем что сохраняем
-			log.Printf("💾 DIAG: about to store service %s with %d conditions", svc.Key(), len(svc.Meta.Conditions))
-
 			w.services[svc.Key()] = svc
-
-			// 🔍 ДИАГНОСТИКА: проверяем что сохранилось
-			if stored, ok := w.services[svc.Key()]; ok {
-				log.Printf("✅ DIAG: VERIFIED stored service %s has %d conditions", svc.Key(), len(stored.Meta.Conditions))
-				for i, cond := range stored.Meta.Conditions {
-					log.Printf("  ✅ DIAG: stored[%d] Type=%s Status=%s", i, cond.Type, cond.Status)
-				}
-			} else {
-				log.Printf("❌ DIAG: ERROR - service not found in storage after assignment!")
-			}
 		}
 
 	case models.SyncOpDelete:
@@ -764,7 +726,14 @@ func (w *writer) Commit() error {
 	}
 	if w.addressGroups != nil {
 		log.Printf("💾 COMMIT: Committing %d address groups to database", len(w.addressGroups))
+		for key, ag := range w.addressGroups {
+			log.Printf("💾 COMMIT: AddressGroup[%s] has %d conditions, %d networks", key, len(ag.Meta.Conditions), len(ag.Networks))
+			for i, network := range ag.Networks {
+				log.Printf("  💾 COMMIT: ag[%s].network[%d] Name=%s CIDR=%s", key, i, network.Name, network.CIDR)
+			}
+		}
 		w.registry.db.SetAddressGroups(w.addressGroups)
+		log.Printf("✅ COMMIT: AddressGroups committed to database")
 	}
 	if w.addressGroupBindings != nil {
 		log.Printf("💾 COMMIT: Committing %d address group bindings to database", len(w.addressGroupBindings))
@@ -785,6 +754,35 @@ func (w *writer) Commit() error {
 	if w.ieAgAgRules != nil {
 		log.Printf("💾 COMMIT: Committing %d ieag ag rules to database", len(w.ieAgAgRules))
 		w.registry.db.SetIEAgAgRules(w.ieAgAgRules)
+	}
+
+	if w.networks != nil {
+		log.Printf("💾 COMMIT: Committing %d networks to database", len(w.networks))
+		for key, network := range w.networks {
+			log.Printf("💾 COMMIT: Network[%s] has %d conditions, IsBound=%t", key, len(network.Meta.Conditions), network.IsBound)
+			if network.BindingRef != nil {
+				log.Printf("  💾 COMMIT: network[%s].BindingRef=%s", key, network.BindingRef.Name)
+			}
+			if network.AddressGroupRef != nil {
+				log.Printf("  💾 COMMIT: network[%s].AddressGroupRef=%s", key, network.AddressGroupRef.Name)
+			}
+			for i, cond := range network.Meta.Conditions {
+				log.Printf("  💾 COMMIT: network[%s].condition[%d] Type=%s Status=%s", key, i, cond.Type, cond.Status)
+			}
+		}
+		w.registry.db.SetNetworks(w.networks)
+		log.Printf("✅ COMMIT: Networks committed to database")
+	}
+
+	if w.networkBindings != nil {
+		log.Printf("💾 COMMIT: Committing %d network bindings to database", len(w.networkBindings))
+		for key, binding := range w.networkBindings {
+			log.Printf("💾 COMMIT: NetworkBinding[%s] has %d conditions", key, len(binding.Meta.Conditions))
+			for i, cond := range binding.Meta.Conditions {
+				log.Printf("  💾 COMMIT: binding[%s].condition[%d] Type=%s Status=%s", key, i, cond.Type, cond.Status)
+			}
+		}
+		w.registry.db.SetNetworkBindings(w.networkBindings)
 	}
 
 	w.registry.db.SetSyncStatus(models.SyncStatus{
@@ -1015,16 +1013,246 @@ func (w *writer) SyncIEAgAgRules(ctx context.Context, rules []models.IEAgAgRule,
 
 // DeleteIEAgAgRulesByIDs deletes IEAgAgRules by IDs
 func (w *writer) DeleteIEAgAgRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	// Инициализация карты, если она еще не создана
 	if w.ieAgAgRules == nil {
 		w.ieAgAgRules = make(map[string]models.IEAgAgRule)
-		// Copy existing IEAgAgRules
+		// Всегда копируем существующие правила, чтобы иметь полную карту для работы
 		for k, v := range w.registry.db.GetIEAgAgRules() {
 			w.ieAgAgRules[k] = v
 		}
 	}
 
+	// Удаляем правила по идентификаторам
 	for _, id := range ids {
 		delete(w.ieAgAgRules, id.Key())
+	}
+
+	return nil
+}
+
+func (w *writer) SyncNetworks(ctx context.Context, networks []models.Network, scope ports.Scope, opts ...ports.Option) error {
+	// Определение операции (по умолчанию FullSync)
+	syncOp := models.SyncOpFullSync
+
+	// Извлечение опций
+	for _, opt := range opts {
+		if so, ok := opt.(ports.SyncOption); ok {
+			syncOp = so.Operation
+		}
+	}
+
+	// Инициализация карты, если она еще не создана
+	if w.networks == nil {
+		w.networks = make(map[string]models.Network)
+		// Всегда копируем существующие сети, чтобы иметь полную карту для работы
+		for k, v := range w.registry.db.GetNetworks() {
+			w.networks[k] = v
+		}
+	}
+
+	// Обработка в зависимости от типа операции
+	switch syncOp {
+	case models.SyncOpFullSync:
+		// Если scope не пустой, удаляем только сети в указанной области
+		if scope != nil && !scope.IsEmpty() {
+			// Проверяем, что scope имеет тип ResourceIdentifierScope
+			if ris, ok := scope.(ports.ResourceIdentifierScope); ok && !ris.IsEmpty() {
+				// Создаем временную карту для хранения сетей вне области видимости
+				tempNetworks := make(map[string]models.Network)
+
+				// Создаем карту идентификаторов в области видимости для быстрого поиска
+				scopeIds := make(map[string]bool)
+				for _, id := range ris.Identifiers {
+					scopeIds[id.Key()] = true
+				}
+
+				// Сохраняем сети вне области видимости
+				for k, v := range w.networks {
+					// Проверяем, входит ли сеть в область видимости
+					networkKey := v.Key()
+					if !scopeIds[networkKey] {
+						// Сохраняем сети, которые не входят в область видимости
+						tempNetworks[k] = v
+					}
+				}
+
+				// Очищаем карту и восстанавливаем сети вне области видимости
+				w.networks = make(map[string]models.Network)
+				for k, v := range tempNetworks {
+					w.networks[k] = v
+				}
+			}
+		} else {
+			// Если область пуста, очищаем всю карту
+			w.networks = make(map[string]models.Network)
+		}
+
+		// Добавляем новые сети
+		for _, network := range networks {
+			if existing, ok := w.networks[network.Key()]; ok {
+				if network.Meta.CreationTS.IsZero() {
+					network.Meta.CreationTS = existing.Meta.CreationTS
+				}
+				if network.Meta.UID == "" {
+					network.Meta.UID = existing.Meta.UID
+				}
+			}
+			ensureMetaFill(&network.Meta)
+			w.networks[network.Key()] = network
+		}
+
+	case models.SyncOpUpsert:
+		// Добавляем или обновляем сети
+		for _, network := range networks {
+			if existing, ok := w.networks[network.Key()]; ok {
+				if network.Meta.CreationTS.IsZero() {
+					network.Meta.CreationTS = existing.Meta.CreationTS
+				}
+				if network.Meta.UID == "" {
+					network.Meta.UID = existing.Meta.UID
+				}
+			}
+			ensureMetaFill(&network.Meta)
+			w.networks[network.Key()] = network
+		}
+
+	case models.SyncOpDelete:
+		// Удаляем сети
+		for _, network := range networks {
+			delete(w.networks, network.Key())
+		}
+	}
+
+	return nil
+}
+
+func (w *writer) SyncNetworkBindings(ctx context.Context, bindings []models.NetworkBinding, scope ports.Scope, opts ...ports.Option) error {
+	// Определение операции (по умолчанию FullSync)
+	syncOp := models.SyncOpFullSync
+
+	// Извлечение опций
+	for _, opt := range opts {
+		if so, ok := opt.(ports.SyncOption); ok {
+			syncOp = so.Operation
+		}
+	}
+
+	// Инициализация карты, если она еще не создана
+	if w.networkBindings == nil {
+		w.networkBindings = make(map[string]models.NetworkBinding)
+		// Всегда копируем существующие binding'и, чтобы иметь полную карту для работы
+		for k, v := range w.registry.db.GetNetworkBindings() {
+			w.networkBindings[k] = v
+		}
+	}
+
+	// Обработка в зависимости от типа операции
+	switch syncOp {
+	case models.SyncOpFullSync:
+		// Если scope не пустой, удаляем только binding'и в указанной области
+		if scope != nil && !scope.IsEmpty() {
+			// Проверяем, что scope имеет тип ResourceIdentifierScope
+			if ris, ok := scope.(ports.ResourceIdentifierScope); ok && !ris.IsEmpty() {
+				// Создаем временную карту для хранения binding'ов вне области видимости
+				tempBindings := make(map[string]models.NetworkBinding)
+
+				// Создаем карту идентификаторов в области видимости для быстрого поиска
+				scopeIds := make(map[string]bool)
+				for _, id := range ris.Identifiers {
+					scopeIds[id.Key()] = true
+				}
+
+				// Сохраняем binding'и вне области видимости
+				for k, v := range w.networkBindings {
+					// Проверяем, входит ли binding в область видимости
+					bindingKey := v.Key()
+					if !scopeIds[bindingKey] {
+						// Сохраняем binding'и, которые не входят в область видимости
+						tempBindings[k] = v
+					}
+				}
+
+				// Очищаем карту и восстанавливаем binding'и вне области видимости
+				w.networkBindings = make(map[string]models.NetworkBinding)
+				for k, v := range tempBindings {
+					w.networkBindings[k] = v
+				}
+			}
+		} else {
+			// Если область пуста, очищаем всю карту
+			w.networkBindings = make(map[string]models.NetworkBinding)
+		}
+
+		// Добавляем новые binding'и
+		for _, binding := range bindings {
+			if existing, ok := w.networkBindings[binding.Key()]; ok {
+				if binding.Meta.CreationTS.IsZero() {
+					binding.Meta.CreationTS = existing.Meta.CreationTS
+				}
+				if binding.Meta.UID == "" {
+					binding.Meta.UID = existing.Meta.UID
+				}
+			}
+			ensureMetaFill(&binding.Meta)
+			w.networkBindings[binding.Key()] = binding
+		}
+
+	case models.SyncOpUpsert:
+		// Добавляем или обновляем binding'и
+		for _, binding := range bindings {
+			if existing, ok := w.networkBindings[binding.Key()]; ok {
+				if binding.Meta.CreationTS.IsZero() {
+					binding.Meta.CreationTS = existing.Meta.CreationTS
+				}
+				if binding.Meta.UID == "" {
+					binding.Meta.UID = existing.Meta.UID
+				}
+			}
+			ensureMetaFill(&binding.Meta)
+			w.networkBindings[binding.Key()] = binding
+		}
+
+	case models.SyncOpDelete:
+		// Удаляем binding'и
+		for _, binding := range bindings {
+			delete(w.networkBindings, binding.Key())
+		}
+	}
+
+	return nil
+}
+
+func (w *writer) DeleteNetworksByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	// Инициализация карты, если она еще не создана
+	if w.networks == nil {
+		w.networks = make(map[string]models.Network)
+		// Всегда копируем существующие сети, чтобы иметь полную карту для работы
+		for k, v := range w.registry.db.GetNetworks() {
+			w.networks[k] = v
+		}
+	}
+
+	// Удаляем сети по идентификаторам
+	for _, id := range ids {
+		delete(w.networks, id.Key())
+	}
+
+	return nil
+}
+
+func (w *writer) DeleteNetworkBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	// Инициализация карты, если она еще не создана
+	if w.networkBindings == nil {
+		w.networkBindings = make(map[string]models.NetworkBinding)
+		// Всегда копируем существующие binding'и, чтобы иметь полную карту для работы
+		for k, v := range w.registry.db.GetNetworkBindings() {
+			w.networkBindings[k] = v
+		}
+	}
+
+	// Удаляем binding'и по идентификаторам
+	for _, id := range ids {
+		delete(w.networkBindings, id.Key())
 	}
 
 	return nil
@@ -1039,4 +1267,6 @@ func (w *writer) Abort() {
 	w.ruleS2S = nil
 	w.serviceAliases = nil
 	w.ieAgAgRules = nil
+	w.networks = nil
+	w.networkBindings = nil
 }

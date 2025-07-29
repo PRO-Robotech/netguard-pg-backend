@@ -195,7 +195,7 @@ func CheckPortOverlaps(service models.Service, portMapping models.AddressGroupPo
 // ValidateExists checks if an address group binding exists
 func (v *AddressGroupBindingValidator) ValidateExists(ctx context.Context, id models.ResourceIdentifier) error {
 	return v.BaseValidator.ValidateExists(ctx, id, func(entity interface{}) string {
-		return entity.(models.AddressGroupBinding).Key()
+		return entity.(*models.AddressGroupBinding).Key() // Используем указатель вместо значения
 	})
 }
 

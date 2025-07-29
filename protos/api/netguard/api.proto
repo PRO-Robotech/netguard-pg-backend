@@ -61,6 +61,33 @@ message ResourceIdentifier {
   string namespace = 2;
 }
 
+// ObjectReference contains enough information to let you locate the referenced object
+message ObjectReference {
+  // APIVersion of the referenced object
+  string api_version = 1;
+  
+  // Kind of the referenced object
+  string kind = 2;
+  
+  // Name of the referenced object
+  string name = 3;
+}
+
+// NamespacedObjectReference extends ObjectReference with a Namespace field
+message NamespacedObjectReference {
+  // APIVersion of the referenced object
+  string api_version = 1;
+  
+  // Kind of the referenced object
+  string kind = 2;
+  
+  // Name of the referenced object
+  string name = 3;
+  
+  // Namespace of the referenced object
+  string namespace = 4;
+}
+
 // Condition - kubernetes condition for resource status
 message Condition {
   string type = 1;
@@ -116,6 +143,23 @@ message NetworkItem {
   string namespace = 5;
 }
 
+// Network - represents a network configuration for Netguard
+message Network {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      required: ["self_ref", "cidr"]
+    }
+  };
+  ResourceIdentifier self_ref = 1;
+  string cidr = 2;  // Network in CIDR notation
+  Meta meta = 3;
+  
+  // Status fields
+  bool is_bound = 4;                               // Whether the network is bound to an AddressGroup
+  ObjectReference binding_ref = 5;                 // Reference to the NetworkBinding
+  NamespacedObjectReference address_group_ref = 6; // Reference to the bound AddressGroup
+}
+
 // AddressGroup - represents an address group configuration for Netguard
 message AddressGroup {
   option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
@@ -142,6 +186,20 @@ message AddressGroupBinding {
   ServiceRef service_ref = 3;
   AddressGroupRef address_group_ref = 4;
   Meta meta = 6;
+}
+
+// NetworkBinding - binding between a network and an address group
+message NetworkBinding {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      required: ["self_ref", "network_ref", "address_group_ref"]
+    }
+  };
+  ResourceIdentifier self_ref = 1;
+  ResourceIdentifier network_ref = 2;  // Reference to the Network resource
+  ResourceIdentifier address_group_ref = 3;  // Reference to the AddressGroup resource
+  NetworkItem network_item = 4;  // Network item details
+  Meta meta = 5;
 }
 
 // ProtocolPorts - mapping of protocols to port ranges
@@ -300,6 +358,16 @@ message SyncAddressGroupBindingPolicies {
 // SyncIEAgAgRules - subject of IEAgAgRules to sync
 message SyncIEAgAgRules {
   repeated IEAgAgRule ieagag_rules = 1;
+}
+
+// SyncNetworks - subject of Networks to sync
+message SyncNetworks {
+  repeated Network networks = 1;
+}
+
+// SyncNetworkBindings - subject of Network Bindings to sync
+message SyncNetworkBindings {
+  repeated NetworkBinding network_bindings = 1;
 }
 
 // Requests and responses for API methods
@@ -464,6 +532,46 @@ message GetIEAgAgRuleResp {
   IEAgAgRule ieagag_rule = 1;
 }
 
+// ListNetworksReq - request to list networks
+message ListNetworksReq {
+  repeated ResourceIdentifier identifiers = 1;
+}
+
+// ListNetworksResp - response with list of networks
+message ListNetworksResp {
+  repeated Network items = 1;
+}
+
+// GetNetworkReq - request to get a specific network
+message GetNetworkReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetNetworkResp - response with a specific network
+message GetNetworkResp {
+  Network network = 1;
+}
+
+// ListNetworkBindingsReq - request to list network bindings
+message ListNetworkBindingsReq {
+  repeated ResourceIdentifier identifiers = 1;
+}
+
+// ListNetworkBindingsResp - response with list of network bindings
+message ListNetworkBindingsResp {
+  repeated NetworkBinding items = 1;
+}
+
+// GetNetworkBindingReq - request to get a specific network binding
+message GetNetworkBindingReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetNetworkBindingResp - response with a specific network binding
+message GetNetworkBindingResp {
+  NetworkBinding network_binding = 1;
+}
+
 // SyncReq - request to sync
 message SyncReq {
   // Sync operation to apply
@@ -494,6 +602,12 @@ message SyncReq {
 
     // Subject of IEAgAgRules
     SyncIEAgAgRules ieagag_rules = 9;
+
+    // Subject of Networks
+    SyncNetworks networks = 10;
+
+    // Subject of Network Bindings
+    SyncNetworkBindings network_bindings = 11;
   }
 }
 
@@ -681,6 +795,46 @@ service NetguardService {
     };
     option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
       description: "GetIEAgAgRule: gets a specific IEAgAgRule by ID";
+    };
+  }
+
+  // ListNetworks - gets list of networks
+  rpc ListNetworks(ListNetworksReq) returns (ListNetworksResp) {
+    option (google.api.http) = {
+      get: "/v1/networks"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "ListNetworks: gets list of networks";
+    };
+  }
+
+  // GetNetwork - gets a specific network by ID
+  rpc GetNetwork(GetNetworkReq) returns (GetNetworkResp) {
+    option (google.api.http) = {
+      get: "/v1/networks/{identifier.namespace}/{identifier.name}"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "GetNetwork: gets a specific network by ID";
+    };
+  }
+
+  // ListNetworkBindings - gets list of network bindings
+  rpc ListNetworkBindings(ListNetworkBindingsReq) returns (ListNetworkBindingsResp) {
+    option (google.api.http) = {
+      get: "/v1/network-bindings"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "ListNetworkBindings: gets list of network bindings";
+    };
+  }
+
+  // GetNetworkBinding - gets a specific network binding by ID
+  rpc GetNetworkBinding(GetNetworkBindingReq) returns (GetNetworkBindingResp) {
+    option (google.api.http) = {
+      get: "/v1/network-bindings/{identifier.namespace}/{identifier.name}"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "GetNetworkBinding: gets a specific network binding by ID";
     };
   }
 }

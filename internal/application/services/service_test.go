@@ -170,9 +170,25 @@ func (m *MockReader) ListIEAgAgRules(ctx context.Context, consume func(models.IE
 func (m *MockReader) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
 	rule, ok := m.ieAgAgRules[id.Key()]
 	if !ok {
-		return nil, errors.New("IEAgAgRule not found")
+		return nil, errors.New("ieagag rule not found")
 	}
 	return &rule, nil
+}
+
+func (m *MockReader) GetNetworkByID(ctx context.Context, id models.ResourceIdentifier) (*models.Network, error) {
+	return nil, errors.New("network not found")
+}
+
+func (m *MockReader) GetNetworkBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.NetworkBinding, error) {
+	return nil, errors.New("network binding not found")
+}
+
+func (m *MockReader) ListNetworks(ctx context.Context, consume func(models.Network) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReader) ListNetworkBindings(ctx context.Context, consume func(models.NetworkBinding) error, scope ports.Scope) error {
+	return nil
 }
 
 // Вспомогательные методы для настройки мока
@@ -269,6 +285,22 @@ func (m *MockWriter) SyncIEAgAgRules(ctx context.Context, rules []models.IEAgAgR
 }
 
 func (m *MockWriter) DeleteIEAgAgRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	return nil
+}
+
+func (m *MockWriter) DeleteNetworkBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	return nil
+}
+
+func (m *MockWriter) DeleteNetworksByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	return nil
+}
+
+func (m *MockWriter) SyncNetworkBindings(ctx context.Context, bindings []models.NetworkBinding, scope ports.Scope, opts ...ports.Option) error {
+	return nil
+}
+
+func (m *MockWriter) SyncNetworks(ctx context.Context, networks []models.Network, scope ports.Scope, opts ...ports.Option) error {
 	return nil
 }
 

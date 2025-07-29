@@ -14,6 +14,8 @@ type MockBackendClient struct {
 	services             []models.Service
 	addressGroups        []models.AddressGroup
 	addressGroupBindings []models.AddressGroupBinding
+	networks             []models.Network
+	networkBindings      []models.NetworkBinding
 }
 
 func NewMockBackendClient() *MockBackendClient {
@@ -304,7 +306,85 @@ func (m *MockBackendClient) UpdateIEAgAgRule(ctx context.Context, rule *models.I
 }
 
 func (m *MockBackendClient) DeleteIEAgAgRule(ctx context.Context, id models.ResourceIdentifier) error {
+	return fmt.Errorf("not implemented")
+}
+
+// Network operations
+func (m *MockBackendClient) GetNetwork(ctx context.Context, id models.ResourceIdentifier) (*models.Network, error) {
+	for _, network := range m.networks {
+		if network.Key() == id.Key() {
+			return &network, nil
+		}
+	}
+	return nil, fmt.Errorf("network not found: %s", id.Key())
+}
+
+func (m *MockBackendClient) ListNetworks(ctx context.Context, scope ports.Scope) ([]models.Network, error) {
+	return m.networks, nil
+}
+
+func (m *MockBackendClient) CreateNetwork(ctx context.Context, network *models.Network) error {
+	m.networks = append(m.networks, *network)
 	return nil
+}
+
+func (m *MockBackendClient) UpdateNetwork(ctx context.Context, network *models.Network) error {
+	for i, existing := range m.networks {
+		if existing.Key() == network.Key() {
+			m.networks[i] = *network
+			return nil
+		}
+	}
+	return fmt.Errorf("network not found: %s", network.Key())
+}
+
+func (m *MockBackendClient) DeleteNetwork(ctx context.Context, id models.ResourceIdentifier) error {
+	for i, network := range m.networks {
+		if network.Key() == id.Key() {
+			m.networks = append(m.networks[:i], m.networks[i+1:]...)
+			return nil
+		}
+	}
+	return fmt.Errorf("network not found: %s", id.Key())
+}
+
+// NetworkBinding operations
+func (m *MockBackendClient) GetNetworkBinding(ctx context.Context, id models.ResourceIdentifier) (*models.NetworkBinding, error) {
+	for _, binding := range m.networkBindings {
+		if binding.Key() == id.Key() {
+			return &binding, nil
+		}
+	}
+	return nil, fmt.Errorf("network binding not found: %s", id.Key())
+}
+
+func (m *MockBackendClient) ListNetworkBindings(ctx context.Context, scope ports.Scope) ([]models.NetworkBinding, error) {
+	return m.networkBindings, nil
+}
+
+func (m *MockBackendClient) CreateNetworkBinding(ctx context.Context, binding *models.NetworkBinding) error {
+	m.networkBindings = append(m.networkBindings, *binding)
+	return nil
+}
+
+func (m *MockBackendClient) UpdateNetworkBinding(ctx context.Context, binding *models.NetworkBinding) error {
+	for i, existing := range m.networkBindings {
+		if existing.Key() == binding.Key() {
+			m.networkBindings[i] = *binding
+			return nil
+		}
+	}
+	return fmt.Errorf("network binding not found: %s", binding.Key())
+}
+
+func (m *MockBackendClient) DeleteNetworkBinding(ctx context.Context, id models.ResourceIdentifier) error {
+	for i, binding := range m.networkBindings {
+		if binding.Key() == id.Key() {
+			m.networkBindings = append(m.networkBindings[:i], m.networkBindings[i+1:]...)
+			return nil
+		}
+	}
+	return fmt.Errorf("network binding not found: %s", id.Key())
 }
 
 func (m *MockBackendClient) Sync(ctx context.Context, syncOp models.SyncOp, resources interface{}) error {
@@ -362,7 +442,27 @@ func (m *MockBackendClient) UpdateAddressGroupBindingPolicyMeta(ctx context.Cont
 }
 
 func (m *MockBackendClient) UpdateIEAgAgRuleMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
-	return nil // Простая заглушка для mock
+	return fmt.Errorf("not implemented")
+}
+
+func (m *MockBackendClient) UpdateNetworkMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	for i, network := range m.networks {
+		if network.Key() == id.Key() {
+			m.networks[i].Meta = meta
+			return nil
+		}
+	}
+	return fmt.Errorf("network not found: %s", id.Key())
+}
+
+func (m *MockBackendClient) UpdateNetworkBindingMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	for i, binding := range m.networkBindings {
+		if binding.Key() == id.Key() {
+			m.networkBindings[i].Meta = meta
+			return nil
+		}
+	}
+	return fmt.Errorf("network binding not found: %s", id.Key())
 }
 
 // Helper методы для subresources (простые заглушки для mock)

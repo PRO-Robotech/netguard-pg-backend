@@ -19,7 +19,7 @@ type IEAgAgRuleValidator struct {
 func NewIEAgAgRuleValidator(reader ports.Reader) *IEAgAgRuleValidator {
 	listFunction := func(ctx context.Context, consume func(entity interface{}) error, scope ports.Scope) error {
 		return reader.ListIEAgAgRules(ctx, func(rule models.IEAgAgRule) error {
-			return consume(rule)
+			return consume(&rule) // Передаем указатель вместо значения
 		}, scope)
 	}
 	return &IEAgAgRuleValidator{
@@ -30,7 +30,7 @@ func NewIEAgAgRuleValidator(reader ports.Reader) *IEAgAgRuleValidator {
 // ValidateExists проверяет существование правила
 func (v *IEAgAgRuleValidator) ValidateExists(ctx context.Context, id models.ResourceIdentifier) error {
 	return v.BaseValidator.ValidateExists(ctx, id, func(entity interface{}) string {
-		return entity.(models.IEAgAgRule).Key()
+		return entity.(*models.IEAgAgRule).Key() // Используем указатель вместо значения
 	})
 }
 

@@ -12,7 +12,7 @@ import (
 // ValidateExists checks if an address group binding policy exists
 func (v *AddressGroupBindingPolicyValidator) ValidateExists(ctx context.Context, id models.ResourceIdentifier) error {
 	return v.BaseValidator.ValidateExists(ctx, id, func(entity interface{}) string {
-		return entity.(models.AddressGroupBindingPolicy).Key()
+		return entity.(*models.AddressGroupBindingPolicy).Key() // Используем указатель вместо значения
 	})
 }
 

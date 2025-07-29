@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"netguard-pg-backend/internal/application/validation"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
+	"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 	"netguard-pg-backend/internal/sync/interfaces"
 	"netguard-pg-backend/internal/sync/types"
 
@@ -18,9 +20,11 @@ import (
 
 // NetguardService provides operations for managing netguard resources
 type NetguardService struct {
-	registry         ports.Registry
-	conditionManager *ConditionManager
-	syncManager      interfaces.SyncManager
+	registry              ports.Registry
+	conditionManager      *ConditionManager
+	syncManager           interfaces.SyncManager
+	networkService        *NetworkService
+	networkBindingService *NetworkBindingService
 }
 
 // NewNetguardService creates a new NetguardService
@@ -30,6 +34,8 @@ func NewNetguardService(registry ports.Registry, syncManager interfaces.SyncMana
 		syncManager: syncManager,
 	}
 	s.conditionManager = NewConditionManager(registry, s)
+	s.networkService = NewNetworkService(registry, syncManager)
+	s.networkBindingService = NewNetworkBindingService(registry, s.networkService, syncManager)
 	return s
 }
 
@@ -164,6 +170,44 @@ func (s *NetguardService) GetAddressGroupBindingPolicies(ctx context.Context, sc
 		return nil, errors.Wrap(err, "failed to list address group binding policies")
 	}
 	return policies, nil
+}
+
+// GetNetworks returns all networks
+func (s *NetguardService) GetNetworks(ctx context.Context, scope ports.Scope) ([]models.Network, error) {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	var networks []models.Network
+	err = reader.ListNetworks(ctx, func(network models.Network) error {
+		networks = append(networks, network)
+		return nil
+	}, scope)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to list networks")
+	}
+	return networks, nil
+}
+
+// GetNetworkBindings returns all network bindings
+func (s *NetguardService) GetNetworkBindings(ctx context.Context, scope ports.Scope) ([]models.NetworkBinding, error) {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	var bindings []models.NetworkBinding
+	err = reader.ListNetworkBindings(ctx, func(binding models.NetworkBinding) error {
+		bindings = append(bindings, binding)
+		return nil
+	}, scope)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to list network bindings")
+	}
+	return bindings, nil
 }
 
 // CreateService создает новый сервис
@@ -492,6 +536,28 @@ func (s *NetguardService) Sync(ctx context.Context, syncOp models.SyncOp, subjec
 		// Используем универсальную функцию
 		s.processConditionsIfNeeded(ctx, v, syncOp)
 		return nil
+	case []models.Network:
+		if err := s.syncNetworks(ctx, writer, v, syncOp); err != nil {
+			return err
+		}
+		// NOTE: We do NOT call processConditionsIfNeeded here because syncNetworks
+		// already handles conditions processing with sgroups sync results
+		return nil
+	case []models.NetworkBinding:
+		if err := s.syncNetworkBindings(ctx, writer, v, syncOp); err != nil {
+			return err
+		}
+		// NOTE: We do NOT call processConditionsIfNeeded here because syncNetworkBindings
+		// already handles condition processing within the same transaction.
+		// Calling it here would create a separate commit that overwrites our atomic changes.
+		return nil
+	case []models.IEAgAgRule:
+		log.Printf("🚀 SYNC: Processing %d IEAgAgRules through general Sync function", len(v))
+		if err := s.syncIEAgAgRules(ctx, writer, v, syncOp); err != nil {
+			return err
+		}
+		// NOTE: syncIEAgAgRules already handles sgroups sync and conditions processing
+		return nil
 	default:
 		return errors.New("unsupported subject type")
 	}
@@ -501,7 +567,6 @@ func (s *NetguardService) Sync(ctx context.Context, syncOp models.SyncOp, subjec
 func (s *NetguardService) processConditionsIfNeeded(ctx context.Context, subject interface{}, syncOp models.SyncOp) {
 	// Пропускаем обработку conditions для операций удаления
 	if syncOp == models.SyncOpDelete {
-		log.Printf("⚠️  DEBUG: processConditionsIfNeeded - Skipping conditions processing for DELETE operation")
 		return
 	}
 
@@ -555,13 +620,26 @@ func (s *NetguardService) processConditionsIfNeeded(ctx context.Context, subject
 				log.Printf("Failed to save address group binding policy conditions for %s: %v", v[i].Key(), err)
 			}
 		}
+	case []models.Network:
+		// ВАЖНО: Для Network не используем processConditionsIfNeeded!
+		// Условия для Network обрабатываются специально в syncNetworks/SyncNetworks
+		// с учетом результата синхронизации sgroups. Это предотвращает race condition
+		// и перезапись правильных условий неправильными.
+		return
+	case []models.NetworkBinding:
+		for i := range v {
+			s.conditionManager.ProcessNetworkBindingConditions(ctx, &v[i])
+			if err := s.conditionManager.saveResourceConditions(ctx, &v[i]); err != nil {
+				log.Printf("Failed to save network binding conditions for %s: %v", v[i].Key(), err)
+			}
+		}
 	case *models.AddressGroupPortMapping:
 		s.conditionManager.ProcessAddressGroupPortMappingConditions(ctx, v)
 		if err := s.conditionManager.saveResourceConditions(ctx, v); err != nil {
 			log.Printf("Failed to save address group port mapping conditions for %s: %v", v.Key(), err)
 		}
 	default:
-		log.Printf("⚠️  WARNING: processConditionsIfNeeded - Unknown subject type: %T", subject)
+		// Unknown subject type - no conditions processing needed
 	}
 }
 
@@ -734,8 +812,6 @@ func (s *NetguardService) syncServices(ctx context.Context, writer ports.Writer,
 		if err != nil {
 			return errors.Wrap(err, "failed to find affected RuleS2S")
 		}
-
-		log.Println("affected Rules", affectedRules)
 
 		// Собираем информацию о IEAGAG правилах, которые будут созданы
 		for _, rule := range affectedRules {
@@ -969,7 +1045,6 @@ func (s *NetguardService) updateIEAgAgRulesForRuleS2SWithReaderNoConditions(ctx 
 
 	// Generate IEAgAgRules for each RuleS2S
 	for _, rule := range rules {
-		log.Println("rule", rule)
 		ieAgAgRules, err := s.GenerateIEAgAgRulesFromRuleS2SWithReader(ctx, reader, rule)
 		if err != nil {
 			return errors.Wrapf(err, "failed to generate IEAgAgRules for RuleS2S %s", rule.Key())
@@ -982,12 +1057,11 @@ func (s *NetguardService) updateIEAgAgRulesForRuleS2SWithReaderNoConditions(ctx 
 		}
 	}
 
-	// Sync all new rules at once
+	// Sync all new rules at once WITH sgroups synchronization
 	if len(allNewRules) > 0 {
-		if err = writer.SyncIEAgAgRules(ctx, allNewRules, nil, ports.WithSyncOp(syncOp)); err != nil {
+		if err = s.syncIEAgAgRules(ctx, writer, allNewRules, syncOp); err != nil {
 			return errors.Wrap(err, "failed to sync new IEAgAgRules")
 		}
-		// NOTE: Conditions are NOT processed here - they will be processed by the caller
 	}
 
 	// Find and delete obsolete rules
@@ -1032,7 +1106,6 @@ func (s *NetguardService) updateIEAgAgRulesForRuleS2SWithReader(ctx context.Cont
 
 	// Generate IEAgAgRules for each RuleS2S
 	for _, rule := range rules {
-		log.Println("rule", rule)
 		ieAgAgRules, err := s.GenerateIEAgAgRulesFromRuleS2SWithReader(ctx, reader, rule)
 		if err != nil {
 			return errors.Wrapf(err, "failed to generate IEAgAgRules for RuleS2S %s", rule.Key())
@@ -1045,19 +1118,10 @@ func (s *NetguardService) updateIEAgAgRulesForRuleS2SWithReader(ctx context.Cont
 		}
 	}
 
-	// Sync all new rules at once
+	// Sync all new rules at once WITH sgroups synchronization
 	if len(allNewRules) > 0 {
-		if err = writer.SyncIEAgAgRules(ctx, allNewRules, nil, ports.WithSyncOp(syncOp)); err != nil {
+		if err = s.syncIEAgAgRules(ctx, writer, allNewRules, syncOp); err != nil {
 			return errors.Wrap(err, "failed to sync new IEAgAgRules")
-		}
-		// Process conditions for newly created IEAGAG rules after sync
-		for i := range allNewRules {
-			if err := s.conditionManager.ProcessIEAgAgRuleConditions(ctx, &allNewRules[i]); err != nil {
-				log.Printf("Failed to process IEAgAgRule conditions for %s: %v", allNewRules[i].Key(), err)
-			}
-			if err := s.conditionManager.saveResourceConditions(ctx, &allNewRules[i]); err != nil {
-				log.Printf("Failed to save IEAgAgRule conditions for %s: %v", allNewRules[i].Key(), err)
-			}
 		}
 	}
 
@@ -1193,13 +1257,6 @@ func (s *NetguardService) SyncServices(ctx context.Context, services []models.Se
 
 // syncAddressGroups синхронизирует группы адресов с указанной операцией
 func (s *NetguardService) syncAddressGroups(ctx context.Context, writer ports.Writer, addressGroups []models.AddressGroup, syncOp models.SyncOp) error {
-	log.Printf("🔧 DEBUG: syncAddressGroups - Starting sync process for %d AddressGroups (operation: %s)", len(addressGroups), syncOp)
-
-	// Логируем детали каждой AddressGroup
-	for i, ag := range addressGroups {
-		log.Printf("🔧 DEBUG: syncAddressGroups - AddressGroup[%d]: %s (Name=%s, Namespace=%s)",
-			i, ag.GetSyncKey(), ag.Name, ag.Namespace)
-	}
 	// Валидация в зависимости от операции
 	if syncOp != models.SyncOpDelete {
 		reader, err := s.registry.Reader(ctx)
@@ -1259,30 +1316,21 @@ func (s *NetguardService) syncAddressGroups(ctx context.Context, writer ports.Wr
 	}
 
 	// Выполнение операции с указанной опцией для не-удаления
-	log.Printf("🔧 DEBUG: syncAddressGroups - Executing writer.SyncAddressGroups with scope and syncOp: %s", syncOp)
 	if err := writer.SyncAddressGroups(ctx, addressGroups, scope, ports.WithSyncOp(syncOp)); err != nil {
 		log.Printf("❌ ERROR: syncAddressGroups - Failed to sync address groups to writer: %v", err)
 		return errors.Wrap(err, "failed to sync address groups")
 	}
-	log.Printf("✅ DEBUG: syncAddressGroups - Successfully synced address groups to writer")
 
-	log.Printf("🔧 DEBUG: syncAddressGroups - Committing transaction to database")
 	if err := writer.Commit(); err != nil {
 		log.Printf("❌ ERROR: syncAddressGroups - Failed to commit transaction: %v", err)
 		return errors.Wrap(err, "failed to commit")
 	}
-	log.Printf("✅ DEBUG: syncAddressGroups - Successfully committed transaction to database")
 
 	// Синхронизация с sgroups после успешного commit'а (только для операций создания/обновления)
 	if syncOp != models.SyncOpDelete {
-		log.Printf("🔧 DEBUG: syncAddressGroups - Starting sgroups synchronization for %d AddressGroups", len(addressGroups))
 		s.syncAddressGroupsWithSGroups(ctx, addressGroups, types.SyncOperationUpsert)
-		log.Printf("✅ DEBUG: syncAddressGroups - Completed sgroups synchronization")
-	} else {
-		log.Printf("⚠️  DEBUG: syncAddressGroups - Skipping sgroups sync for DELETE operation (handled separately)")
 	}
 
-	log.Printf("✅ DEBUG: syncAddressGroups - Completed sync process for %d AddressGroups", len(addressGroups))
 	return nil
 }
 
@@ -1414,26 +1462,95 @@ func (s *NetguardService) SyncAddressGroups(ctx context.Context, addressGroups [
 // syncAddressGroupsWithSGroups синхронизирует AddressGroup с sgroups
 func (s *NetguardService) syncAddressGroupsWithSGroups(ctx context.Context, addressGroups []models.AddressGroup, operation types.SyncOperation) {
 	if s.syncManager == nil {
-		log.Printf("⚠️  WARNING: syncAddressGroupsWithSGroups - SyncManager is nil, skipping sync for %d AddressGroups", len(addressGroups))
 		return
 	}
 
-	log.Printf("🔧 DEBUG: syncAddressGroupsWithSGroups - Starting sync process for %d AddressGroups (operation: %s)", len(addressGroups), operation)
-
 	for _, addressGroup := range addressGroups {
-		log.Printf("🔧 DEBUG: syncAddressGroupsWithSGroups - Attempting to sync AddressGroup %s with sgroups", addressGroup.GetSyncKey())
-		log.Printf("🔧 DEBUG: syncAddressGroupsWithSGroups - AddressGroup details: Name=%s, Namespace=%s, SyncSubjectType=%s",
-			addressGroup.Name, addressGroup.Namespace, addressGroup.GetSyncSubjectType())
-
 		if syncErr := s.syncManager.SyncEntity(ctx, &addressGroup, operation); syncErr != nil {
 			log.Printf("❌ ERROR: syncAddressGroupsWithSGroups - Failed to sync AddressGroup %s with sgroups: %v", addressGroup.GetSyncKey(), syncErr)
 			// Не прерываем обработку остальных AddressGroup - синхронизация может быть повторена позже
+		}
+	}
+}
+
+// syncAddressGroupsWithSGroupsForced синхронизирует AddressGroup с sgroups без debouncing
+func (s *NetguardService) syncAddressGroupsWithSGroupsForced(ctx context.Context, addressGroups []models.AddressGroup, operation types.SyncOperation) {
+	if s.syncManager == nil {
+		return
+	}
+
+	for _, addressGroup := range addressGroups {
+		if syncErr := s.syncManager.SyncEntityForced(ctx, &addressGroup, operation); syncErr != nil {
+			log.Printf("❌ ERROR: syncAddressGroupsWithSGroupsForced - Failed to sync AddressGroup %s with sgroups: %v", addressGroup.GetSyncKey(), syncErr)
+			// Не прерываем обработку остальных AddressGroup - синхронизация может быть повторена позже
+		}
+	}
+}
+
+// syncNetworksWithSGroups синхронизирует Network с sgroups
+func (s *NetguardService) syncNetworksWithSGroups(ctx context.Context, networks []models.Network, operation types.SyncOperation) map[string]error {
+	syncResults := make(map[string]error)
+
+	if s.syncManager == nil {
+		log.Printf("⚠️  WARNING: syncNetworksWithSGroups - SyncManager is nil, skipping sync for %d Networks", len(networks))
+		// Возвращаем ошибки для всех Networks
+		for _, network := range networks {
+			syncResults[network.GetSyncKey()] = fmt.Errorf("SyncManager is nil")
+		}
+		return syncResults
+	}
+
+	log.Printf("🔧 DEBUG: syncNetworksWithSGroups - Starting sync process for %d Networks (operation: %s)", len(networks), operation)
+
+	for _, network := range networks {
+		log.Printf("🔧 DEBUG: syncNetworksWithSGroups - Attempting to sync Network %s with sgroups", network.GetSyncKey())
+		log.Printf("🔧 DEBUG: syncNetworksWithSGroups - Network details: Name=%s, Namespace=%s, SyncSubjectType=%s",
+			network.Name, network.Namespace, network.GetSyncSubjectType())
+
+		if syncErr := s.syncManager.SyncEntity(ctx, &network, operation); syncErr != nil {
+			log.Printf("❌ ERROR: syncNetworksWithSGroups - Failed to sync Network %s with sgroups: %v", network.GetSyncKey(), syncErr)
+			syncResults[network.GetSyncKey()] = syncErr
 		} else {
-			log.Printf("✅ DEBUG: syncAddressGroupsWithSGroups - Successfully initiated sync for AddressGroup %s", addressGroup.GetSyncKey())
+			log.Printf("✅ DEBUG: syncNetworksWithSGroups - Successfully initiated sync for Network %s", network.GetSyncKey())
+			syncResults[network.GetSyncKey()] = nil // Успешная синхронизация
 		}
 	}
 
-	log.Printf("✅ DEBUG: syncAddressGroupsWithSGroups - Completed sync process for %d AddressGroups", len(addressGroups))
+	log.Printf("✅ DEBUG: syncNetworksWithSGroups - Completed sync process for %d Networks", len(networks))
+	return syncResults
+}
+
+// syncNetworksWithSGroupsForced синхронизирует Network с sgroups без debouncing
+func (s *NetguardService) syncNetworksWithSGroupsForced(ctx context.Context, networks []models.Network, operation types.SyncOperation) map[string]error {
+	syncResults := make(map[string]error)
+
+	if s.syncManager == nil {
+		log.Printf("⚠️  WARNING: syncNetworksWithSGroupsForced - SyncManager is nil, skipping sync for %d Networks", len(networks))
+		// Возвращаем ошибки для всех Networks
+		for _, network := range networks {
+			syncResults[network.GetSyncKey()] = fmt.Errorf("SyncManager is nil")
+		}
+		return syncResults
+	}
+
+	log.Printf("🔧 DEBUG: syncNetworksWithSGroupsForced - Starting FORCED sync process for %d Networks (operation: %s)", len(networks), operation)
+
+	for _, network := range networks {
+		log.Printf("🔧 DEBUG: syncNetworksWithSGroupsForced - Attempting to FORCE sync Network %s with sgroups", network.GetSyncKey())
+		log.Printf("🔧 DEBUG: syncNetworksWithSGroupsForced - Network details: Name=%s, Namespace=%s, SyncSubjectType=%s",
+			network.Name, network.Namespace, network.GetSyncSubjectType())
+
+		if syncErr := s.syncManager.SyncEntityForced(ctx, &network, operation); syncErr != nil {
+			log.Printf("❌ ERROR: syncNetworksWithSGroupsForced - Failed to sync Network %s with sgroups: %v", network.GetSyncKey(), syncErr)
+			syncResults[network.GetSyncKey()] = syncErr
+		} else {
+			log.Printf("✅ DEBUG: syncNetworksWithSGroupsForced - Successfully initiated FORCED sync for Network %s", network.GetSyncKey())
+			syncResults[network.GetSyncKey()] = nil // Успешная синхронизация
+		}
+	}
+
+	log.Printf("✅ DEBUG: syncNetworksWithSGroupsForced - Completed FORCED sync process for %d Networks", len(networks))
+	return syncResults
 }
 
 // syncAddressGroupBindings синхронизирует привязки групп адресов с указанной операцией
@@ -1514,6 +1631,13 @@ func (s *NetguardService) syncAddressGroupBindings(ctx context.Context, writer p
 
 	if err := writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
+	}
+
+	for i := range bindings {
+		s.conditionManager.ProcessAddressGroupBindingConditions(ctx, &bindings[i])
+		if err := s.conditionManager.saveResourceConditions(ctx, &bindings[i]); err != nil {
+			log.Printf("Failed to save address group binding conditions for %s: %v", bindings[i].Key(), err)
+		}
 	}
 
 	return nil
@@ -1919,8 +2043,6 @@ func (s *NetguardService) syncRuleS2S(ctx context.Context, writer ports.Writer, 
 		}
 	}
 
-	log.Println("rules from scope", rules)
-
 	// Определение scope
 	var scope ports.Scope
 	if len(rules) > 0 {
@@ -1985,9 +2107,6 @@ func (s *NetguardService) syncRuleS2S(ctx context.Context, writer ports.Writer, 
 		return errors.Wrap(err, "failed to update RuleS2S with IEAgAgRule references")
 	}
 
-	log.Println("expectedRules", expectedRules)
-	log.Println("allNewRules", allNewRules)
-
 	// Получаем существующие IE AG AG правила по сохраненным ссылкам
 	existingRules := make(map[string]models.IEAgAgRule)
 
@@ -1997,22 +2116,20 @@ func (s *NetguardService) syncRuleS2S(ctx context.Context, writer ports.Writer, 
 		for _, ref := range rule.IEAgAgRuleRefs {
 			// Получаем IE AG AG правило по ссылке
 			ieRule, err := txReader.GetIEAgAgRuleByID(ctx, ref)
-			if err == nil {
-				// Если правило найдено, добавляем его в карту существующих правил
+			if err == nil && ieRule != nil {
+				// Если правило найдено и не nil, добавляем его в карту существующих правил
 				existingRules[ieRule.Key()] = *ieRule
 			} else if err != ports.ErrNotFound {
 				// Если произошла ошибка, отличная от "не найдено", возвращаем ее
 				return errors.Wrapf(err, "failed to get IE AG AG rule %s", ref.Key())
 			}
-			// Если правило не найдено, просто пропускаем его
+			// Если правило не найдено или nil, просто пропускаем его
 		}
 	}
 
-	log.Println("existing IE AG AG rules from references", existingRules)
-
-	// Синхронизируем все новые правила за один раз
+	// Синхронизируем все новые правила за один раз WITH sgroups synchronization
 	if len(allNewRules) > 0 {
-		if err = writer.SyncIEAgAgRules(ctx, allNewRules, nil, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
+		if err = s.syncIEAgAgRules(ctx, writer, allNewRules, models.SyncOpUpsert); err != nil {
 			return errors.Wrap(err, "failed to sync new IEAgAgRules")
 		}
 	}
@@ -2125,9 +2242,9 @@ func (s *NetguardService) SyncRuleS2S(ctx context.Context, rules []models.RuleS2
 		}
 	}
 
-	// Sync all new rules at once
+	// Sync all new rules at once WITH sgroups synchronization
 	if len(allNewRules) > 0 {
-		if err = writer.SyncIEAgAgRules(ctx, allNewRules, nil, ports.WithSyncOp(models.SyncOpFullSync)); err != nil {
+		if err = s.syncIEAgAgRules(ctx, writer, allNewRules, models.SyncOpFullSync); err != nil {
 			writer.Abort()
 			return errors.Wrap(err, "failed to sync new IEAgAgRules")
 		}
@@ -2634,6 +2751,46 @@ func (s *NetguardService) GetAddressGroupBindingPolicyByID(ctx context.Context, 
 	return policy, nil
 }
 
+// CreateNetwork creates a new Network with business logic
+func (s *NetguardService) CreateNetwork(ctx context.Context, network models.Network) error {
+	return s.networkService.CreateNetwork(ctx, &network)
+}
+
+// UpdateNetwork updates an existing Network with business logic
+func (s *NetguardService) UpdateNetwork(ctx context.Context, network models.Network) error {
+	return s.networkService.UpdateNetwork(ctx, &network)
+}
+
+// DeleteNetwork deletes a Network with cleanup logic
+func (s *NetguardService) DeleteNetwork(ctx context.Context, id models.ResourceIdentifier) error {
+	return s.networkService.DeleteNetwork(ctx, id)
+}
+
+// GetNetworkByID returns a network by ID
+func (s *NetguardService) GetNetworkByID(ctx context.Context, id models.ResourceIdentifier) (*models.Network, error) {
+	return s.networkService.GetNetwork(ctx, id)
+}
+
+// CreateNetworkBinding creates a new NetworkBinding with business logic
+func (s *NetguardService) CreateNetworkBinding(ctx context.Context, binding models.NetworkBinding) error {
+	return s.networkBindingService.CreateNetworkBinding(ctx, &binding)
+}
+
+// UpdateNetworkBinding updates an existing NetworkBinding with business logic
+func (s *NetguardService) UpdateNetworkBinding(ctx context.Context, binding models.NetworkBinding) error {
+	return s.networkBindingService.UpdateNetworkBinding(ctx, &binding)
+}
+
+// DeleteNetworkBinding deletes a NetworkBinding with cleanup logic
+func (s *NetguardService) DeleteNetworkBinding(ctx context.Context, id models.ResourceIdentifier) error {
+	return s.networkBindingService.DeleteNetworkBinding(ctx, id)
+}
+
+// GetNetworkBindingByID returns a network binding by ID
+func (s *NetguardService) GetNetworkBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.NetworkBinding, error) {
+	return s.networkBindingService.GetNetworkBinding(ctx, id)
+}
+
 // GetServicesByIDs returns services by IDs
 func (s *NetguardService) GetServicesByIDs(ctx context.Context, ids []models.ResourceIdentifier) ([]models.Service, error) {
 	reader, err := s.registry.Reader(ctx)
@@ -2779,6 +2936,48 @@ func (s *NetguardService) GetAddressGroupBindingPoliciesByIDs(ctx context.Contex
 	}
 
 	return policies, nil
+}
+
+// GetNetworksByIDs returns networks by IDs
+func (s *NetguardService) GetNetworksByIDs(ctx context.Context, ids []models.ResourceIdentifier) ([]models.Network, error) {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	var networks []models.Network
+	err = reader.ListNetworks(ctx, func(network models.Network) error {
+		networks = append(networks, network)
+		return nil
+	}, ports.NewResourceIdentifierScope(ids...))
+
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to list networks")
+	}
+
+	return networks, nil
+}
+
+// GetNetworkBindingsByIDs returns network bindings by IDs
+func (s *NetguardService) GetNetworkBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier) ([]models.NetworkBinding, error) {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	var bindings []models.NetworkBinding
+	err = reader.ListNetworkBindings(ctx, func(binding models.NetworkBinding) error {
+		bindings = append(bindings, binding)
+		return nil
+	}, ports.NewResourceIdentifierScope(ids...))
+
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to list network bindings")
+	}
+
+	return bindings, nil
 }
 
 // DeleteServicesByIDs deletes services by IDs with cascade deletion of dependencies
@@ -2985,6 +3184,24 @@ func (s *NetguardService) DeleteAddressGroupsByIDs(ctx context.Context, ids []mo
 		return errors.Wrap(err, "failed to list services")
 	}
 
+	// Get all NetworkBindings that reference the address groups being deleted
+	var networkBindingsToDelete []models.ResourceIdentifier
+	err = reader.ListNetworkBindings(ctx, func(binding models.NetworkBinding) error {
+		for _, id := range ids {
+			// ObjectReference содержит только Name, сравниваем по имени
+			// NetworkBinding и AddressGroup должны быть в одном namespace
+			if binding.AddressGroupRef.Name == id.Name && binding.Namespace == id.Namespace {
+				networkBindingsToDelete = append(networkBindingsToDelete, binding.ResourceIdentifier)
+				log.Printf("🔧 DEBUG: DeleteAddressGroupsByIDs - Found NetworkBinding %s referencing AddressGroup %s", binding.Key(), id.Key())
+				break
+			}
+		}
+		return nil
+	}, nil)
+	if err != nil {
+		return errors.Wrap(err, "failed to list network bindings")
+	}
+
 	// Get all IE AG AG rules that reference the address groups being deleted
 	var ieRulesToDelete []models.ResourceIdentifier
 	err = reader.ListIEAgAgRules(ctx, func(rule models.IEAgAgRule) error {
@@ -3011,7 +3228,104 @@ func (s *NetguardService) DeleteAddressGroupsByIDs(ctx context.Context, ids []mo
 		}
 	}()
 
-	// 1. Delete bindings
+	// 1. Update Networks to clear binding references BEFORE deleting NetworkBindings
+	var networksToUpdate []models.Network
+	if len(networkBindingsToDelete) > 0 {
+		log.Printf("🔧 DEBUG: DeleteAddressGroupsByIDs - Processing %d NetworkBindings for deletion", len(networkBindingsToDelete))
+
+		// Получаем NetworkBindings которые будут удалены
+		for _, bindingID := range networkBindingsToDelete {
+			binding, err := reader.GetNetworkBindingByID(ctx, bindingID)
+			if err != nil {
+				if err == ports.ErrNotFound {
+					log.Printf("⚠️  DEBUG: DeleteAddressGroupsByIDs - NetworkBinding %s not found, skipping", bindingID.Key())
+					continue
+				}
+				return errors.Wrapf(err, "failed to get network binding %s", bindingID.Key())
+			}
+
+			// Находим связанную Network и обновляем её
+			networkRef := models.ResourceIdentifier{Name: binding.NetworkRef.Name, Namespace: binding.Namespace}
+			network, err := reader.GetNetworkByID(ctx, networkRef)
+			if err != nil {
+				if err == ports.ErrNotFound {
+					log.Printf("⚠️  DEBUG: DeleteAddressGroupsByIDs - Network %s not found, skipping", networkRef.Key())
+					continue
+				}
+				return errors.Wrapf(err, "failed to get network %s", networkRef.Key())
+			}
+
+			log.Printf("🔧 DEBUG: DeleteAddressGroupsByIDs - Clearing binding references in Network %s", network.Key())
+
+			// Очищаем binding references
+			network.BindingRef = nil
+			network.AddressGroupRef = nil
+			network.IsBound = false
+			network.Meta.TouchOnWrite(fmt.Sprintf("unbinding-ag-deletion-%d", time.Now().UnixNano()))
+
+			networksToUpdate = append(networksToUpdate, *network)
+		}
+
+		// Обновляем Network в транзакции
+		if len(networksToUpdate) > 0 {
+			log.Printf("🔧 DEBUG: DeleteAddressGroupsByIDs - Updating %d Networks to clear binding references", len(networksToUpdate))
+			if err = writer.SyncNetworks(ctx, networksToUpdate, nil, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
+				return errors.Wrap(err, "failed to update networks to clear binding references")
+			}
+		}
+
+		// Теперь удаляем NetworkBindings
+		log.Printf("🔧 DEBUG: DeleteAddressGroupsByIDs - Deleting %d NetworkBindings for address groups", len(networkBindingsToDelete))
+		if err = writer.DeleteNetworkBindingsByIDs(ctx, networkBindingsToDelete); err != nil {
+			return errors.Wrap(err, "failed to delete network bindings")
+		}
+	}
+
+	// 1.5. Удаляем Network из AddressGroups перед удалением самих AddressGroups
+	var updatedAddressGroups []models.AddressGroup
+	if len(networksToUpdate) > 0 {
+		log.Printf("🔧 DEBUG: DeleteAddressGroupsByIDs - Removing Networks from AddressGroups before deletion")
+
+		for _, addressGroup := range addressGroups {
+			// Для каждой AddressGroup удаляем Networks которые были обновлены
+			originalNetworkCount := len(addressGroup.Networks)
+			var updatedNetworks []models.NetworkItem
+
+			for _, networkItem := range addressGroup.Networks {
+				// Проверяем, есть ли эта сеть среди обновленных
+				shouldRemove := false
+				for _, updatedNetwork := range networksToUpdate {
+					networkName := fmt.Sprintf("%s/%s", updatedNetwork.Namespace, updatedNetwork.Name)
+					if networkItem.Name == networkName {
+						shouldRemove = true
+						log.Printf("🔧 DEBUG: DeleteAddressGroupsByIDs - Removing Network %s from AddressGroup %s", networkName, addressGroup.Key())
+						break
+					}
+				}
+
+				if !shouldRemove {
+					updatedNetworks = append(updatedNetworks, networkItem)
+				}
+			}
+
+			if len(updatedNetworks) != originalNetworkCount {
+				addressGroup.Networks = updatedNetworks
+				addressGroup.Meta.TouchOnWrite(fmt.Sprintf("network-removal-%d", time.Now().UnixNano()))
+				updatedAddressGroups = append(updatedAddressGroups, addressGroup)
+				log.Printf("✅ DEBUG: DeleteAddressGroupsByIDs - Removed %d Networks from AddressGroup %s", originalNetworkCount-len(updatedNetworks), addressGroup.Key())
+			}
+		}
+
+		// Обновляем AddressGroups если были изменения
+		if len(updatedAddressGroups) > 0 {
+			log.Printf("🔧 DEBUG: DeleteAddressGroupsByIDs - Updating %d AddressGroups to remove Networks", len(updatedAddressGroups))
+			if err = writer.SyncAddressGroups(ctx, updatedAddressGroups, nil, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
+				return errors.Wrap(err, "failed to update address groups to remove networks")
+			}
+		}
+	}
+
+	// 2. Delete AddressGroupBindings
 	if len(bindingsToDelete) > 0 {
 		log.Println("Deleting", len(bindingsToDelete), "bindings for address groups")
 		if err = writer.DeleteAddressGroupBindingsByIDs(ctx, bindingsToDelete); err != nil {
@@ -3019,7 +3333,7 @@ func (s *NetguardService) DeleteAddressGroupsByIDs(ctx context.Context, ids []mo
 		}
 	}
 
-	// 2. Update services, removing references to deleted address groups
+	// 3. Update services, removing references to deleted address groups
 	if len(servicesToUpdate) > 0 {
 		log.Println("Updating", len(servicesToUpdate), "services to remove references to deleted address groups")
 		if err = writer.SyncServices(ctx, servicesToUpdate, nil, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
@@ -3027,7 +3341,7 @@ func (s *NetguardService) DeleteAddressGroupsByIDs(ctx context.Context, ids []mo
 		}
 	}
 
-	// 3. Delete IE AG AG rules related to the address groups being deleted
+	// 4. Delete IE AG AG rules related to the address groups being deleted
 	if len(ieRulesToDelete) > 0 {
 		log.Println("Deleting", len(ieRulesToDelete), "IE AG AG rules for address groups")
 		if err = writer.DeleteIEAgAgRulesByIDs(ctx, ieRulesToDelete); err != nil {
@@ -3035,7 +3349,7 @@ func (s *NetguardService) DeleteAddressGroupsByIDs(ctx context.Context, ids []mo
 		}
 	}
 
-	// 4. Delete address groups
+	// 5. Delete address groups
 	log.Println("Deleting", len(ids), "address groups")
 	if err = writer.DeleteAddressGroupsByIDs(ctx, ids); err != nil {
 		return errors.Wrap(err, "failed to delete address groups")
@@ -3046,9 +3360,35 @@ func (s *NetguardService) DeleteAddressGroupsByIDs(ctx context.Context, ids []mo
 		return errors.Wrap(err, "failed to commit")
 	}
 
+	// Синхронизация обновленных AddressGroups с sgroups (перед удалением)
+	if len(updatedAddressGroups) > 0 {
+		log.Printf("🔧 DEBUG: DeleteAddressGroupsByIDs - Starting sgroups synchronization for %d updated AddressGroups", len(updatedAddressGroups))
+		s.syncAddressGroupsWithSGroups(ctx, updatedAddressGroups, types.SyncOperationUpsert)
+		log.Printf("✅ DEBUG: DeleteAddressGroupsByIDs - Completed updated AddressGroups sgroups synchronization")
+	}
+
 	// Синхронизация с sgroups после успешного удаления из БД
 	if len(addressGroups) > 0 {
+		log.Printf("🔧 DEBUG: DeleteAddressGroupsByIDs - Starting sgroups synchronization for %d deleted AddressGroups", len(addressGroups))
 		s.syncAddressGroupsWithSGroups(ctx, addressGroups, types.SyncOperationDelete)
+		log.Printf("✅ DEBUG: DeleteAddressGroupsByIDs - Completed AddressGroups sgroups synchronization")
+	}
+
+	// Синхронизация обновленных Network с sgroups
+	if len(networksToUpdate) > 0 {
+		log.Printf("🔧 DEBUG: DeleteAddressGroupsByIDs - Starting sgroups synchronization for %d updated Networks", len(networksToUpdate))
+		networkSyncResults := s.syncNetworksWithSGroups(ctx, networksToUpdate, types.SyncOperationUpsert)
+		log.Printf("✅ DEBUG: DeleteAddressGroupsByIDs - Completed Networks sgroups synchronization")
+
+		// Обрабатываем условия для обновленных Network с результатами синхронизации
+		for i := range networksToUpdate {
+			network := &networksToUpdate[i]
+			syncResult := networkSyncResults[network.GetSyncKey()]
+			s.conditionManager.ProcessNetworkConditions(ctx, network, syncResult)
+			if err := s.conditionManager.saveResourceConditions(ctx, network); err != nil {
+				log.Printf("Failed to save network conditions for %s: %v", network.Key(), err)
+			}
+		}
 	}
 
 	return nil
@@ -3468,15 +3808,11 @@ func (s *NetguardService) GetIEAgAgRuleByID(ctx context.Context, id models.Resou
 	return reader.GetIEAgAgRuleByID(ctx, id)
 }
 
-// syncIEAgAgRules синхронизирует правила IEAgAgRule с указанной операцией
-func (s *NetguardService) syncIEAgAgRules(ctx context.Context, writer ports.Writer, rules []models.IEAgAgRule, syncOp models.SyncOp) error {
+// syncIEAgAgRulesWithReader синхронизирует правила IEAgAgRule с указанной операцией, используя переданный reader
+func (s *NetguardService) syncIEAgAgRulesWithReader(ctx context.Context, writer ports.Writer, reader ports.Reader, rules []models.IEAgAgRule, syncOp models.SyncOp) error {
+	log.Printf("🚀 CALLED: syncIEAgAgRulesWithReader function called with %d rules, syncOp=%s", len(rules), syncOp)
 	// Валидация в зависимости от операции
 	if syncOp != models.SyncOpDelete {
-		reader, err := s.registry.Reader(ctx)
-		if err != nil {
-			return errors.Wrap(err, "failed to get reader")
-		}
-		defer reader.Close()
 
 		validator := validation.NewDependencyValidator(reader)
 		ruleValidator := validator.GetIEAgAgRuleValidator()
@@ -3517,12 +3853,412 @@ func (s *NetguardService) syncIEAgAgRules(ctx context.Context, writer ports.Writ
 	if err := writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
+
+	// Sync with sgroups after successful commit
+	if s.syncManager == nil {
+		log.Printf("⚠️  WARNING: syncManager is nil, skipping sgroups synchronization for %d IEAgAgRule(s)", len(rules))
+	} else if len(rules) == 0 {
+		log.Printf("⚠️  WARNING: No IEAgAgRules to sync with sgroups")
+	} else {
+		log.Printf("🔧 DEBUG: Starting sgroups synchronization for %d IEAgAgRule(s)", len(rules))
+		for i := range rules {
+			log.Printf("🔧 DEBUG: Syncing IEAgAgRule %s with sgroups (Transport: %s, Traffic: %s, Action: %s)",
+				rules[i].Key(), rules[i].Transport, rules[i].Traffic, rules[i].Action)
+
+			if syncOp == models.SyncOpDelete {
+				if syncErr := s.syncManager.SyncEntity(ctx, &rules[i], types.SyncOperationDelete); syncErr != nil {
+					log.Printf("❌ Failed to sync IEAgAgRule %s with sgroups (delete): %v", rules[i].Key(), syncErr)
+				} else {
+					log.Printf("✅ Successfully synced IEAgAgRule %s with sgroups (delete)", rules[i].Key())
+				}
+			} else {
+				if syncErr := s.syncManager.SyncEntity(ctx, &rules[i], types.SyncOperationUpsert); syncErr != nil {
+					log.Printf("❌ Failed to sync IEAgAgRule %s with sgroups: %v", rules[i].Key(), syncErr)
+				} else {
+					log.Printf("✅ Successfully synced IEAgAgRule %s with sgroups", rules[i].Key())
+				}
+			}
+		}
+		log.Printf("✅ DEBUG: Completed sgroups synchronization for IEAgAgRules")
+	}
+
+	// Process conditions after sgroups sync
 	for i := range rules {
 		s.conditionManager.ProcessIEAgAgRuleConditions(ctx, &rules[i])
 		if err := s.conditionManager.saveResourceConditions(ctx, &rules[i]); err != nil {
 			log.Printf("Failed to save IEAgAgRule conditions for %s: %v", rules[i].Key(), err)
 		}
 	}
+	return nil
+}
+
+// syncIEAgAgRules синхронизирует правила IEAgAgRule с указанной операцией (создает новый reader)
+func (s *NetguardService) syncIEAgAgRules(ctx context.Context, writer ports.Writer, rules []models.IEAgAgRule, syncOp models.SyncOp) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	return s.syncIEAgAgRulesWithReader(ctx, writer, reader, rules, syncOp)
+}
+
+// syncNetworks синхронизирует сети с указанной операцией
+func (s *NetguardService) syncNetworks(ctx context.Context, writer ports.Writer, networks []models.Network, syncOp models.SyncOp) error {
+	// Валидация в зависимости от операции
+	if syncOp != models.SyncOpDelete {
+		reader, err := s.registry.Reader(ctx)
+		if err != nil {
+			return errors.Wrap(err, "failed to get reader")
+		}
+		defer reader.Close()
+
+		// Create validator
+		validator := validation.NewDependencyValidator(reader)
+		networkValidator := validator.GetNetworkValidator()
+
+		// Validate all networks
+		for i := range networks {
+			network := &networks[i]
+
+			// Check if network exists
+			networkID := models.ResourceIdentifier{Name: network.Name, Namespace: network.Namespace}
+			existingNetwork, err := reader.GetNetworkByID(ctx, networkID)
+			if err == nil {
+				// Network exists - use ValidateForUpdate
+				if err := networkValidator.ValidateForUpdate(ctx, *existingNetwork, *network); err != nil {
+					return err
+				}
+			} else if err == ports.ErrNotFound {
+				// Network is new - use ValidateForCreation
+				if err := networkValidator.ValidateForCreation(ctx, *network); err != nil {
+					return err
+				}
+			} else {
+				// Other error occurred
+				return errors.Wrap(err, "failed to get network")
+			}
+		}
+	}
+
+	// Определение scope
+	var scope ports.Scope
+	if len(networks) > 0 {
+		var ids []models.ResourceIdentifier
+		for _, network := range networks {
+			ids = append(ids, models.ResourceIdentifier{Name: network.Name, Namespace: network.Namespace})
+		}
+		scope = ports.NewResourceIdentifierScope(ids...)
+	} else {
+		scope = ports.EmptyScope{}
+	}
+
+	// Если это удаление, используем DeleteNetworksByIDs для корректного удаления
+	if syncOp == models.SyncOpDelete {
+		// Собираем ID сетей
+		var ids []models.ResourceIdentifier
+		for _, network := range networks {
+			ids = append(ids, models.ResourceIdentifier{Name: network.Name, Namespace: network.Namespace})
+		}
+
+		// Используем DeleteNetworksByIDs для удаления сетей
+		return s.DeleteNetworksByIDs(ctx, ids)
+	}
+
+	// Выполнение операции с указанной опцией для не-удаления
+	if err := writer.SyncNetworks(ctx, networks, scope, ports.WithSyncOp(syncOp)); err != nil {
+		return errors.Wrap(err, "failed to sync networks")
+	}
+
+	if err := writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+
+	// Синхронизация с sgroups после успешного commit'а (только для операций создания/обновления)
+	var sgroupsSyncResults map[string]error
+	if syncOp != models.SyncOpDelete {
+		log.Printf("🔧 DEBUG: syncNetworks - Starting sgroups synchronization for %d Networks", len(networks))
+		sgroupsSyncResults = s.syncNetworksWithSGroups(ctx, networks, types.SyncOperationUpsert)
+		log.Printf("✅ DEBUG: syncNetworks - Completed sgroups synchronization")
+	} else {
+		log.Printf("⚠️  DEBUG: syncNetworks - Skipping sgroups sync for DELETE operation (handled separately)")
+		// Для DELETE операций считаем что синхронизация успешна (нет необходимости в sgroups sync)
+		sgroupsSyncResults = make(map[string]error)
+		for _, network := range networks {
+			sgroupsSyncResults[network.GetSyncKey()] = nil
+		}
+	}
+
+	for i := range networks {
+		network := &networks[i]
+		syncResult := sgroupsSyncResults[network.GetSyncKey()]
+		s.conditionManager.ProcessNetworkConditions(ctx, network, syncResult)
+		if err := s.conditionManager.saveResourceConditions(ctx, network); err != nil {
+			log.Printf("Failed to save network conditions for %s: %v", network.Key(), err)
+		}
+	}
+	return nil
+}
+
+// syncNetworkBindings синхронизирует привязки сетей с указанной операцией
+func (s *NetguardService) syncNetworkBindings(ctx context.Context, writer ports.Writer, bindings []models.NetworkBinding, syncOp models.SyncOp) error {
+	// Валидация в зависимости от операции
+	if syncOp != models.SyncOpDelete {
+		reader, err := s.registry.Reader(ctx)
+		if err != nil {
+			return errors.Wrap(err, "failed to get reader")
+		}
+		defer reader.Close()
+
+		// Create validator
+		validator := validation.NewDependencyValidator(reader)
+		bindingValidator := validator.GetNetworkBindingValidator()
+
+		// Validate all bindings
+		for i := range bindings {
+			binding := &bindings[i]
+
+			// Check if binding exists
+			bindingID := models.ResourceIdentifier{Name: binding.Name, Namespace: binding.Namespace}
+			existingBinding, err := reader.GetNetworkBindingByID(ctx, bindingID)
+			if err == nil {
+				// Binding exists - use ValidateForUpdate
+				if err := bindingValidator.ValidateForUpdate(ctx, *existingBinding, *binding); err != nil {
+					return err
+				}
+			} else if err == ports.ErrNotFound {
+				// Binding is new - use ValidateForCreation
+				if err := bindingValidator.ValidateForCreation(ctx, *binding); err != nil {
+					return err
+				}
+			} else {
+				// Other error occurred
+				return errors.Wrap(err, "failed to get network binding")
+			}
+		}
+	}
+
+	// Определение scope
+	var scope ports.Scope
+	if len(bindings) > 0 {
+		var ids []models.ResourceIdentifier
+		for _, binding := range bindings {
+			ids = append(ids, models.ResourceIdentifier{Name: binding.Name, Namespace: binding.Namespace})
+		}
+		scope = ports.NewResourceIdentifierScope(ids...)
+	} else {
+		scope = ports.EmptyScope{}
+	}
+
+	log.Printf("🔄 DEBUG: syncNetworkBindings - Starting to sync %d NetworkBindings with operation: %s", len(bindings), syncOp)
+
+	// 1. Сначала сохраняем NetworkBindings в транзакции
+	if err := writer.SyncNetworkBindings(ctx, bindings, scope, ports.WithSyncOp(syncOp)); err != nil {
+		return errors.Wrap(err, "failed to sync network bindings")
+	}
+	log.Printf("✅ DEBUG: syncNetworkBindings - Successfully synced NetworkBindings to transaction")
+
+	// 2. Получаем reader который видит незакоммиченные изменения в текущей транзакции
+	txReader, err := s.registry.ReaderFromWriter(ctx, writer)
+	if err != nil {
+		return errors.Wrap(err, "failed to get transaction reader")
+	}
+	defer txReader.Close()
+	log.Printf("✅ DEBUG: syncNetworkBindings - Got transaction reader")
+
+	// 3. В ТОЙ ЖЕ транзакции обновляем связанные Network и AddressGroup
+	var networksToSync []models.Network
+	var addressGroupsToSync []models.AddressGroup
+
+	if syncOp != models.SyncOpDelete {
+		log.Printf("🔄 DEBUG: syncNetworkBindings - Processing %d bindings for Network and AddressGroup updates IN SAME TRANSACTION", len(bindings))
+
+		for _, binding := range bindings {
+			log.Printf("🔄 DEBUG: syncNetworkBindings - Processing binding %s", binding.Key())
+
+			// Обновляем Network в той же транзакции
+			networkRef := models.ResourceIdentifier{Name: binding.NetworkRef.Name, Namespace: binding.Namespace}
+			log.Printf("🔄 DEBUG: syncNetworkBindings - Getting Network %s", networkRef.Key())
+
+			network, err := txReader.GetNetworkByID(ctx, networkRef)
+			if err != nil {
+				return errors.Wrapf(err, "failed to get network %s", networkRef.Key())
+			}
+			log.Printf("✅ DEBUG: syncNetworkBindings - Found Network %s, updating binding references", network.Key())
+
+			// Обновляем Network с binding references
+			network.BindingRef = &v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "NetworkBinding",
+				Name:       binding.Name,
+			}
+			network.AddressGroupRef = &v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "AddressGroup",
+				Name:       binding.AddressGroupRef.Name,
+			}
+			network.IsBound = true
+			network.Meta.TouchOnWrite(fmt.Sprintf("binding-%d", time.Now().UnixNano()))
+
+			// Сохраняем обновленный Network в той же транзакции
+			log.Printf("🔄 DEBUG: syncNetworkBindings - About to call writer.SyncNetworks for %s", network.Key())
+			log.Printf("🔄 DEBUG: syncNetworkBindings - Network details: IsBound=%t, BindingRef=%v, AddressGroupRef=%v",
+				network.IsBound, network.BindingRef, network.AddressGroupRef)
+			if err := writer.SyncNetworks(ctx, []models.Network{*network}, ports.NewResourceIdentifierScope(networkRef)); err != nil {
+				return errors.Wrapf(err, "failed to sync network %s in transaction", networkRef.Key())
+			}
+			networksToSync = append(networksToSync, *network)
+			log.Printf("✅ DEBUG: syncNetworkBindings - Updated Network %s in transaction (should be in writer now)", network.Key())
+
+			// Обновляем AddressGroup в той же транзакции
+			addressGroupRef := models.ResourceIdentifier{Name: binding.AddressGroupRef.Name, Namespace: binding.Namespace}
+			log.Printf("🔄 DEBUG: syncNetworkBindings - Getting AddressGroup %s", addressGroupRef.Key())
+
+			addressGroup, err := txReader.GetAddressGroupByID(ctx, addressGroupRef)
+			if err != nil {
+				return errors.Wrapf(err, "failed to get address group %s", addressGroupRef.Key())
+			}
+			log.Printf("✅ DEBUG: syncNetworkBindings - Found AddressGroup %s, checking if Network already in Networks list", addressGroup.Key())
+
+			// Проверяем, есть ли уже Network в AddressGroup
+			networkName := fmt.Sprintf("%s/%s", network.Namespace, network.Name)
+			networkExists := false
+			for _, item := range addressGroup.Networks {
+				if item.Name == networkName {
+					networkExists = true
+					break
+				}
+			}
+
+			if !networkExists {
+				log.Printf("🔄 DEBUG: syncNetworkBindings - Adding Network %s to AddressGroup %s Networks list", networkName, addressGroup.Key())
+
+				// Добавляем Network в AddressGroup
+				networkItem := models.NetworkItem{
+					Name:       networkName,
+					CIDR:       network.CIDR,
+					ApiVersion: "netguard.sgroups.io/v1beta1",
+					Kind:       "Network",
+					Namespace:  network.Namespace,
+				}
+				addressGroup.Networks = append(addressGroup.Networks, networkItem)
+				addressGroup.Meta.TouchOnWrite(fmt.Sprintf("binding-%d", time.Now().UnixNano()))
+
+				// Сохраняем обновленный AddressGroup в той же транзакции
+				log.Printf("🔄 DEBUG: syncNetworkBindings - About to call writer.SyncAddressGroups for %s", addressGroup.Key())
+				log.Printf("🔄 DEBUG: syncNetworkBindings - AddressGroup Networks count: %d", len(addressGroup.Networks))
+				if err := writer.SyncAddressGroups(ctx, []models.AddressGroup{*addressGroup}, ports.NewResourceIdentifierScope(addressGroupRef)); err != nil {
+					return errors.Wrapf(err, "failed to sync address group %s in transaction", addressGroupRef.Key())
+				}
+				addressGroupsToSync = append(addressGroupsToSync, *addressGroup)
+				log.Printf("✅ DEBUG: syncNetworkBindings - Updated AddressGroup %s in transaction (should be in writer now)", addressGroup.Key())
+			} else {
+				log.Printf("ℹ️  DEBUG: syncNetworkBindings - Network %s already exists in AddressGroup %s", networkName, addressGroup.Key())
+				addressGroupsToSync = append(addressGroupsToSync, *addressGroup)
+			}
+		}
+	} else {
+		log.Printf("🔄 DEBUG: syncNetworkBindings - Processing %d bindings for deletion IN SAME TRANSACTION", len(bindings))
+
+		for _, binding := range bindings {
+			log.Printf("🔄 DEBUG: syncNetworkBindings - Processing deletion for binding %s", binding.Key())
+
+			// Очищаем references в Network
+			networkRef := models.ResourceIdentifier{Name: binding.NetworkRef.Name, Namespace: binding.Namespace}
+			network, err := txReader.GetNetworkByID(ctx, networkRef)
+			if err != nil {
+				if err == ports.ErrNotFound {
+					log.Printf("⚠️  DEBUG: syncNetworkBindings - Network %s not found for deletion, skipping", networkRef.Key())
+				} else {
+					return errors.Wrapf(err, "failed to get network %s for deletion", networkRef.Key())
+				}
+			} else {
+				log.Printf("🔄 DEBUG: syncNetworkBindings - Clearing binding references in Network %s", network.Key())
+
+				// Очищаем binding references
+				network.BindingRef = nil
+				network.AddressGroupRef = nil
+				network.IsBound = false
+				network.Meta.TouchOnWrite(fmt.Sprintf("unbinding-%d", time.Now().UnixNano()))
+
+				if err := writer.SyncNetworks(ctx, []models.Network{*network}, ports.NewResourceIdentifierScope(networkRef)); err != nil {
+					return errors.Wrapf(err, "failed to sync network %s for deletion", networkRef.Key())
+				}
+				networksToSync = append(networksToSync, *network)
+				log.Printf("✅ DEBUG: syncNetworkBindings - Cleared Network %s references in transaction", network.Key())
+			}
+
+			// Удаляем Network из AddressGroup
+			addressGroupRef := models.ResourceIdentifier{Name: binding.AddressGroupRef.Name, Namespace: binding.Namespace}
+			addressGroup, err := txReader.GetAddressGroupByID(ctx, addressGroupRef)
+			if err != nil {
+				if err == ports.ErrNotFound {
+					log.Printf("⚠️  DEBUG: syncNetworkBindings - AddressGroup %s not found for deletion, skipping", addressGroupRef.Key())
+				} else {
+					return errors.Wrapf(err, "failed to get address group %s for deletion", addressGroupRef.Key())
+				}
+			} else {
+				log.Printf("🔄 DEBUG: syncNetworkBindings - Removing Network from AddressGroup %s", addressGroup.Key())
+
+				// Удаляем Network из AddressGroup (используем правильный формат namespace/name)
+				networkName := fmt.Sprintf("%s/%s", binding.Namespace, binding.NetworkRef.Name)
+				var updatedNetworks []models.NetworkItem
+				removedCount := 0
+				for _, item := range addressGroup.Networks {
+					if item.Name != networkName {
+						updatedNetworks = append(updatedNetworks, item)
+					} else {
+						removedCount++
+					}
+				}
+
+				if removedCount > 0 {
+					addressGroup.Networks = updatedNetworks
+					addressGroup.Meta.TouchOnWrite(fmt.Sprintf("unbinding-%d", time.Now().UnixNano()))
+
+					if err := writer.SyncAddressGroups(ctx, []models.AddressGroup{*addressGroup}, ports.NewResourceIdentifierScope(addressGroupRef)); err != nil {
+						return errors.Wrapf(err, "failed to sync address group %s for deletion", addressGroupRef.Key())
+					}
+					addressGroupsToSync = append(addressGroupsToSync, *addressGroup)
+					log.Printf("✅ DEBUG: syncNetworkBindings - Removed Network %s from AddressGroup %s in transaction", networkName, addressGroup.Key())
+				} else {
+					log.Printf("ℹ️  DEBUG: syncNetworkBindings - Network %s not found in AddressGroup %s", networkName, addressGroup.Key())
+					addressGroupsToSync = append(addressGroupsToSync, *addressGroup)
+				}
+			}
+		}
+	}
+
+	// 4. Коммитим ВСЕ изменения разом (NetworkBindings + Networks + AddressGroups)
+	log.Printf("🔄 DEBUG: syncNetworkBindings - About to commit transaction")
+	log.Printf("🔄 DEBUG: syncNetworkBindings - Expected to commit %d Networks and %d AddressGroups", len(networksToSync), len(addressGroupsToSync))
+	if err := writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit all changes")
+	}
+	log.Printf("✅ DEBUG: syncNetworkBindings - Successfully committed all changes")
+
+	// 5. После успешного коммита синхронизируем с SGROUP
+	if len(networksToSync) > 0 {
+		log.Printf("🔄 DEBUG: syncNetworkBindings - Syncing %d Networks with SGROUP (FORCED)", len(networksToSync))
+		networkSyncResults := s.syncNetworksWithSGroupsForced(ctx, networksToSync, types.SyncOperationUpsert)
+		log.Printf("✅ DEBUG: syncNetworkBindings - Completed Networks sync with SGROUP")
+
+		// Логируем результаты синхронизации для отладки
+		for _, network := range networksToSync {
+			if err := networkSyncResults[network.GetSyncKey()]; err != nil {
+				log.Printf("❌ ERROR: syncNetworkBindings - Network %s sync failed: %v", network.GetSyncKey(), err)
+			}
+		}
+	}
+
+	if len(addressGroupsToSync) > 0 {
+		log.Printf("🔄 DEBUG: syncNetworkBindings - Syncing %d AddressGroups with SGROUP (FORCED)", len(addressGroupsToSync))
+		s.syncAddressGroupsWithSGroupsForced(ctx, addressGroupsToSync, types.SyncOperationUpsert)
+		log.Printf("✅ DEBUG: syncNetworkBindings - Completed AddressGroups sync with SGROUP")
+	}
+
+	// Используем универсальную функцию для обработки conditions
+	s.processConditionsIfNeeded(ctx, bindings, syncOp)
 	return nil
 }
 
@@ -3725,12 +4461,140 @@ func (s *NetguardService) SyncIEAgAgRules(ctx context.Context, rules []models.IE
 		}
 	}()
 
-	if err = writer.SyncIEAgAgRules(ctx, rules, scope, ports.WithSyncOp(models.SyncOpFullSync)); err != nil {
+	if err = s.syncIEAgAgRules(ctx, writer, rules, models.SyncOpFullSync); err != nil {
 		return errors.Wrap(err, "failed to sync IEAgAgRules")
+	}
+	return nil
+}
+
+// SyncNetworks синхронизирует сети
+func (s *NetguardService) SyncNetworks(ctx context.Context, networks []models.Network, scope ports.Scope) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Create validator for Network validation
+	validator := validation.NewDependencyValidator(reader)
+	networkValidator := validator.GetNetworkValidator()
+
+	// Validate all networks
+	for i := range networks {
+		network := &networks[i]
+
+		// Check if network exists
+		networkID := models.ResourceIdentifier{Name: network.Name, Namespace: network.Namespace}
+		existingNetwork, err := reader.GetNetworkByID(ctx, networkID)
+		if err == nil {
+			// Network exists - use ValidateForUpdate
+			if err := networkValidator.ValidateForUpdate(ctx, *existingNetwork, *network); err != nil {
+				return err
+			}
+		} else if err == ports.ErrNotFound {
+			// Network is new - use ValidateForCreation
+			if err := networkValidator.ValidateForCreation(ctx, *network); err != nil {
+				return err
+			}
+		} else {
+			// Other error occurred
+			return errors.Wrap(err, "failed to get network")
+		}
+	}
+
+	writer, err := s.registry.Writer(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get writer")
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	if err = writer.SyncNetworks(ctx, networks, scope, ports.WithSyncOp(models.SyncOpFullSync)); err != nil {
+		return errors.Wrap(err, "failed to sync networks")
 	}
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
+
+	// Синхронизация с sgroups после успешного commit'а
+	log.Printf("🔧 DEBUG: SyncNetworks - Starting sgroups synchronization for %d Networks", len(networks))
+	sgroupsSyncResults := s.syncNetworksWithSGroups(ctx, networks, types.SyncOperationUpsert)
+	log.Printf("✅ DEBUG: SyncNetworks - Completed sgroups synchronization")
+
+	for i := range networks {
+		network := &networks[i]
+		syncResult := sgroupsSyncResults[network.GetSyncKey()]
+		s.conditionManager.ProcessNetworkConditions(ctx, network, syncResult)
+		if err := s.conditionManager.saveResourceConditions(ctx, network); err != nil {
+			log.Printf("Failed to save network conditions for %s: %v", network.Key(), err)
+		}
+	}
+	return nil
+}
+
+// SyncNetworkBindings синхронизирует привязки сетей
+func (s *NetguardService) SyncNetworkBindings(ctx context.Context, bindings []models.NetworkBinding, scope ports.Scope) error {
+	log.Printf("🚨 DEBUG: SyncNetworkBindings PUBLIC METHOD CALLED with %d bindings", len(bindings))
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Create validator for NetworkBinding validation
+	validator := validation.NewDependencyValidator(reader)
+	bindingValidator := validator.GetNetworkBindingValidator()
+
+	// Validate all bindings
+	for i := range bindings {
+		binding := &bindings[i]
+
+		// Check if binding exists
+		bindingID := models.ResourceIdentifier{Name: binding.Name, Namespace: binding.Namespace}
+		existingBinding, err := reader.GetNetworkBindingByID(ctx, bindingID)
+		if err == nil {
+			// Binding exists - use ValidateForUpdate
+			if err := bindingValidator.ValidateForUpdate(ctx, *existingBinding, *binding); err != nil {
+				return err
+			}
+		} else if err == ports.ErrNotFound {
+			// Binding is new - use ValidateForCreation
+			if err := bindingValidator.ValidateForCreation(ctx, *binding); err != nil {
+				return err
+			}
+		} else {
+			// Other error occurred
+			return errors.Wrap(err, "failed to get network binding")
+		}
+	}
+
+	// Use the same logic as the general Sync method for consistency
+	// This ensures atomic updates of NetworkBinding, Network, and AddressGroup
+	log.Printf("🔄 DEBUG: SyncNetworkBindings - Using unified sync logic for %d NetworkBindings", len(bindings))
+
+	writer, err := s.registry.Writer(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get writer")
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	// Use the internal syncNetworkBindings method that handles atomicity
+	if err := s.syncNetworkBindings(ctx, writer, bindings, models.SyncOpFullSync); err != nil {
+		return err
+	}
+
+	// NOTE: We do NOT call processConditionsIfNeeded here because syncNetworkBindings
+	// already handles condition processing within the same transaction.
+	// Calling it here would create a separate commit that overwrites our atomic changes.
+
+	log.Printf("✅ DEBUG: SyncNetworkBindings - Successfully completed unified sync for %d NetworkBindings", len(bindings))
 	return nil
 }
 
@@ -3814,5 +4678,109 @@ func (s *NetguardService) DeleteAddressGroupBindingPoliciesByIDs(ctx context.Con
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit")
 	}
+	return nil
+}
+
+// DeleteNetworksByIDs deletes networks by IDs
+func (s *NetguardService) DeleteNetworksByIDs(ctx context.Context, ids []models.ResourceIdentifier) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Get networks that will be deleted (for syncing with SGROUP after deletion)
+	var networks []models.Network
+	for _, id := range ids {
+		network, err := reader.GetNetworkByID(ctx, id)
+		if err != nil {
+			continue // Skip if network doesn't exist
+		}
+		networks = append(networks, *network)
+	}
+
+	// Create validator for dependency checking
+	validator := validation.NewDependencyValidator(reader)
+	networkValidator := validator.GetNetworkValidator()
+
+	// Check dependencies for each network
+	for _, id := range ids {
+		if err := networkValidator.CheckDependencies(ctx, id); err != nil {
+			return err
+		}
+	}
+
+	writer, err := s.registry.Writer(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get writer")
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	if err = writer.DeleteNetworksByIDs(ctx, ids); err != nil {
+		return errors.Wrap(err, "failed to delete networks")
+	}
+
+	if err = writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+
+	// Синхронизация с sgroups после успешного удаления из БД
+	if len(networks) > 0 {
+		log.Printf("🔧 DEBUG: DeleteNetworksByIDs - Starting sgroups synchronization for %d deleted Networks", len(networks))
+		deleteSyncResults := s.syncNetworksWithSGroups(ctx, networks, types.SyncOperationDelete)
+		log.Printf("✅ DEBUG: DeleteNetworksByIDs - Completed sgroups synchronization")
+
+		// Логируем результаты синхронизации удаления для отладки
+		for _, network := range networks {
+			if err := deleteSyncResults[network.GetSyncKey()]; err != nil {
+				log.Printf("❌ ERROR: DeleteNetworksByIDs - Network %s delete sync failed: %v", network.GetSyncKey(), err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// DeleteNetworkBindingsByIDs deletes network bindings by IDs
+func (s *NetguardService) DeleteNetworkBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Create validator for dependency checking
+	validator := validation.NewDependencyValidator(reader)
+	bindingValidator := validator.GetNetworkBindingValidator()
+
+	// Check dependencies for each network binding
+	for _, id := range ids {
+		if err := bindingValidator.CheckDependencies(ctx, id); err != nil {
+			return err
+		}
+	}
+
+	writer, err := s.registry.Writer(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get writer")
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	if err = writer.DeleteNetworkBindingsByIDs(ctx, ids); err != nil {
+		return errors.Wrap(err, "failed to delete network bindings")
+	}
+
+	if err = writer.Commit(); err != nil {
+		return errors.Wrap(err, "failed to commit")
+	}
+
 	return nil
 }

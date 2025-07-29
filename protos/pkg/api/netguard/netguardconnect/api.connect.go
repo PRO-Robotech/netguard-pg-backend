@@ -87,6 +87,18 @@ const (
 	// NetguardServiceGetIEAgAgRuleProcedure is the fully-qualified name of the NetguardService's
 	// GetIEAgAgRule RPC.
 	NetguardServiceGetIEAgAgRuleProcedure = "/netguard.v1.NetguardService/GetIEAgAgRule"
+	// NetguardServiceListNetworksProcedure is the fully-qualified name of the NetguardService's
+	// ListNetworks RPC.
+	NetguardServiceListNetworksProcedure = "/netguard.v1.NetguardService/ListNetworks"
+	// NetguardServiceGetNetworkProcedure is the fully-qualified name of the NetguardService's
+	// GetNetwork RPC.
+	NetguardServiceGetNetworkProcedure = "/netguard.v1.NetguardService/GetNetwork"
+	// NetguardServiceListNetworkBindingsProcedure is the fully-qualified name of the NetguardService's
+	// ListNetworkBindings RPC.
+	NetguardServiceListNetworkBindingsProcedure = "/netguard.v1.NetguardService/ListNetworkBindings"
+	// NetguardServiceGetNetworkBindingProcedure is the fully-qualified name of the NetguardService's
+	// GetNetworkBinding RPC.
+	NetguardServiceGetNetworkBindingProcedure = "/netguard.v1.NetguardService/GetNetworkBinding"
 )
 
 // NetguardServiceClient is a client for the netguard.v1.NetguardService service.
@@ -127,6 +139,14 @@ type NetguardServiceClient interface {
 	ListIEAgAgRules(context.Context, *connect.Request[netguard.ListIEAgAgRulesReq]) (*connect.Response[netguard.ListIEAgAgRulesResp], error)
 	// GetIEAgAgRule - gets a specific IEAgAgRule by ID
 	GetIEAgAgRule(context.Context, *connect.Request[netguard.GetIEAgAgRuleReq]) (*connect.Response[netguard.GetIEAgAgRuleResp], error)
+	// ListNetworks - gets list of networks
+	ListNetworks(context.Context, *connect.Request[netguard.ListNetworksReq]) (*connect.Response[netguard.ListNetworksResp], error)
+	// GetNetwork - gets a specific network by ID
+	GetNetwork(context.Context, *connect.Request[netguard.GetNetworkReq]) (*connect.Response[netguard.GetNetworkResp], error)
+	// ListNetworkBindings - gets list of network bindings
+	ListNetworkBindings(context.Context, *connect.Request[netguard.ListNetworkBindingsReq]) (*connect.Response[netguard.ListNetworkBindingsResp], error)
+	// GetNetworkBinding - gets a specific network binding by ID
+	GetNetworkBinding(context.Context, *connect.Request[netguard.GetNetworkBindingReq]) (*connect.Response[netguard.GetNetworkBindingResp], error)
 }
 
 // NewNetguardServiceClient constructs a client for the netguard.v1.NetguardService service. By
@@ -248,6 +268,30 @@ func NewNetguardServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(netguardServiceMethods.ByName("GetIEAgAgRule")),
 			connect.WithClientOptions(opts...),
 		),
+		listNetworks: connect.NewClient[netguard.ListNetworksReq, netguard.ListNetworksResp](
+			httpClient,
+			baseURL+NetguardServiceListNetworksProcedure,
+			connect.WithSchema(netguardServiceMethods.ByName("ListNetworks")),
+			connect.WithClientOptions(opts...),
+		),
+		getNetwork: connect.NewClient[netguard.GetNetworkReq, netguard.GetNetworkResp](
+			httpClient,
+			baseURL+NetguardServiceGetNetworkProcedure,
+			connect.WithSchema(netguardServiceMethods.ByName("GetNetwork")),
+			connect.WithClientOptions(opts...),
+		),
+		listNetworkBindings: connect.NewClient[netguard.ListNetworkBindingsReq, netguard.ListNetworkBindingsResp](
+			httpClient,
+			baseURL+NetguardServiceListNetworkBindingsProcedure,
+			connect.WithSchema(netguardServiceMethods.ByName("ListNetworkBindings")),
+			connect.WithClientOptions(opts...),
+		),
+		getNetworkBinding: connect.NewClient[netguard.GetNetworkBindingReq, netguard.GetNetworkBindingResp](
+			httpClient,
+			baseURL+NetguardServiceGetNetworkBindingProcedure,
+			connect.WithSchema(netguardServiceMethods.ByName("GetNetworkBinding")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -271,6 +315,10 @@ type netguardServiceClient struct {
 	getAddressGroupBindingPolicy    *connect.Client[netguard.GetAddressGroupBindingPolicyReq, netguard.GetAddressGroupBindingPolicyResp]
 	listIEAgAgRules                 *connect.Client[netguard.ListIEAgAgRulesReq, netguard.ListIEAgAgRulesResp]
 	getIEAgAgRule                   *connect.Client[netguard.GetIEAgAgRuleReq, netguard.GetIEAgAgRuleResp]
+	listNetworks                    *connect.Client[netguard.ListNetworksReq, netguard.ListNetworksResp]
+	getNetwork                      *connect.Client[netguard.GetNetworkReq, netguard.GetNetworkResp]
+	listNetworkBindings             *connect.Client[netguard.ListNetworkBindingsReq, netguard.ListNetworkBindingsResp]
+	getNetworkBinding               *connect.Client[netguard.GetNetworkBindingReq, netguard.GetNetworkBindingResp]
 }
 
 // Sync calls netguard.v1.NetguardService.Sync.
@@ -364,6 +412,26 @@ func (c *netguardServiceClient) GetIEAgAgRule(ctx context.Context, req *connect.
 	return c.getIEAgAgRule.CallUnary(ctx, req)
 }
 
+// ListNetworks calls netguard.v1.NetguardService.ListNetworks.
+func (c *netguardServiceClient) ListNetworks(ctx context.Context, req *connect.Request[netguard.ListNetworksReq]) (*connect.Response[netguard.ListNetworksResp], error) {
+	return c.listNetworks.CallUnary(ctx, req)
+}
+
+// GetNetwork calls netguard.v1.NetguardService.GetNetwork.
+func (c *netguardServiceClient) GetNetwork(ctx context.Context, req *connect.Request[netguard.GetNetworkReq]) (*connect.Response[netguard.GetNetworkResp], error) {
+	return c.getNetwork.CallUnary(ctx, req)
+}
+
+// ListNetworkBindings calls netguard.v1.NetguardService.ListNetworkBindings.
+func (c *netguardServiceClient) ListNetworkBindings(ctx context.Context, req *connect.Request[netguard.ListNetworkBindingsReq]) (*connect.Response[netguard.ListNetworkBindingsResp], error) {
+	return c.listNetworkBindings.CallUnary(ctx, req)
+}
+
+// GetNetworkBinding calls netguard.v1.NetguardService.GetNetworkBinding.
+func (c *netguardServiceClient) GetNetworkBinding(ctx context.Context, req *connect.Request[netguard.GetNetworkBindingReq]) (*connect.Response[netguard.GetNetworkBindingResp], error) {
+	return c.getNetworkBinding.CallUnary(ctx, req)
+}
+
 // NetguardServiceHandler is an implementation of the netguard.v1.NetguardService service.
 type NetguardServiceHandler interface {
 	// Sync - syncs data in DB
@@ -402,6 +470,14 @@ type NetguardServiceHandler interface {
 	ListIEAgAgRules(context.Context, *connect.Request[netguard.ListIEAgAgRulesReq]) (*connect.Response[netguard.ListIEAgAgRulesResp], error)
 	// GetIEAgAgRule - gets a specific IEAgAgRule by ID
 	GetIEAgAgRule(context.Context, *connect.Request[netguard.GetIEAgAgRuleReq]) (*connect.Response[netguard.GetIEAgAgRuleResp], error)
+	// ListNetworks - gets list of networks
+	ListNetworks(context.Context, *connect.Request[netguard.ListNetworksReq]) (*connect.Response[netguard.ListNetworksResp], error)
+	// GetNetwork - gets a specific network by ID
+	GetNetwork(context.Context, *connect.Request[netguard.GetNetworkReq]) (*connect.Response[netguard.GetNetworkResp], error)
+	// ListNetworkBindings - gets list of network bindings
+	ListNetworkBindings(context.Context, *connect.Request[netguard.ListNetworkBindingsReq]) (*connect.Response[netguard.ListNetworkBindingsResp], error)
+	// GetNetworkBinding - gets a specific network binding by ID
+	GetNetworkBinding(context.Context, *connect.Request[netguard.GetNetworkBindingReq]) (*connect.Response[netguard.GetNetworkBindingResp], error)
 }
 
 // NewNetguardServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -519,6 +595,30 @@ func NewNetguardServiceHandler(svc NetguardServiceHandler, opts ...connect.Handl
 		connect.WithSchema(netguardServiceMethods.ByName("GetIEAgAgRule")),
 		connect.WithHandlerOptions(opts...),
 	)
+	netguardServiceListNetworksHandler := connect.NewUnaryHandler(
+		NetguardServiceListNetworksProcedure,
+		svc.ListNetworks,
+		connect.WithSchema(netguardServiceMethods.ByName("ListNetworks")),
+		connect.WithHandlerOptions(opts...),
+	)
+	netguardServiceGetNetworkHandler := connect.NewUnaryHandler(
+		NetguardServiceGetNetworkProcedure,
+		svc.GetNetwork,
+		connect.WithSchema(netguardServiceMethods.ByName("GetNetwork")),
+		connect.WithHandlerOptions(opts...),
+	)
+	netguardServiceListNetworkBindingsHandler := connect.NewUnaryHandler(
+		NetguardServiceListNetworkBindingsProcedure,
+		svc.ListNetworkBindings,
+		connect.WithSchema(netguardServiceMethods.ByName("ListNetworkBindings")),
+		connect.WithHandlerOptions(opts...),
+	)
+	netguardServiceGetNetworkBindingHandler := connect.NewUnaryHandler(
+		NetguardServiceGetNetworkBindingProcedure,
+		svc.GetNetworkBinding,
+		connect.WithSchema(netguardServiceMethods.ByName("GetNetworkBinding")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/netguard.v1.NetguardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case NetguardServiceSyncProcedure:
@@ -557,6 +657,14 @@ func NewNetguardServiceHandler(svc NetguardServiceHandler, opts ...connect.Handl
 			netguardServiceListIEAgAgRulesHandler.ServeHTTP(w, r)
 		case NetguardServiceGetIEAgAgRuleProcedure:
 			netguardServiceGetIEAgAgRuleHandler.ServeHTTP(w, r)
+		case NetguardServiceListNetworksProcedure:
+			netguardServiceListNetworksHandler.ServeHTTP(w, r)
+		case NetguardServiceGetNetworkProcedure:
+			netguardServiceGetNetworkHandler.ServeHTTP(w, r)
+		case NetguardServiceListNetworkBindingsProcedure:
+			netguardServiceListNetworkBindingsHandler.ServeHTTP(w, r)
+		case NetguardServiceGetNetworkBindingProcedure:
+			netguardServiceGetNetworkBindingHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -636,4 +744,20 @@ func (UnimplementedNetguardServiceHandler) ListIEAgAgRules(context.Context, *con
 
 func (UnimplementedNetguardServiceHandler) GetIEAgAgRule(context.Context, *connect.Request[netguard.GetIEAgAgRuleReq]) (*connect.Response[netguard.GetIEAgAgRuleResp], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetIEAgAgRule is not implemented"))
+}
+
+func (UnimplementedNetguardServiceHandler) ListNetworks(context.Context, *connect.Request[netguard.ListNetworksReq]) (*connect.Response[netguard.ListNetworksResp], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.ListNetworks is not implemented"))
+}
+
+func (UnimplementedNetguardServiceHandler) GetNetwork(context.Context, *connect.Request[netguard.GetNetworkReq]) (*connect.Response[netguard.GetNetworkResp], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetNetwork is not implemented"))
+}
+
+func (UnimplementedNetguardServiceHandler) ListNetworkBindings(context.Context, *connect.Request[netguard.ListNetworkBindingsReq]) (*connect.Response[netguard.ListNetworkBindingsResp], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.ListNetworkBindings is not implemented"))
+}
+
+func (UnimplementedNetguardServiceHandler) GetNetworkBinding(context.Context, *connect.Request[netguard.GetNetworkBindingReq]) (*connect.Response[netguard.GetNetworkBindingResp], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetNetworkBinding is not implemented"))
 }

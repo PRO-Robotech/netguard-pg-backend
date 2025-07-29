@@ -11,8 +11,6 @@ import (
 	"netguard-pg-backend/internal/domain/models"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 	"netguard-pg-backend/internal/k8s/registry/base"
-
-	"k8s.io/klog/v2"
 )
 
 // ServiceConverter implements conversion between k8s Service and domain Service
@@ -82,12 +80,6 @@ func (c *ServiceConverter) FromDomain(ctx context.Context, domainObj *models.Ser
 		return nil, fmt.Errorf("domain Service object is nil")
 	}
 
-	// 🔍 ДИАГНОСТИКА: логируем что приходит на вход конвертера
-	klog.Infof("🔄 ServiceConverter.FromDomain: converting service %s with %d conditions", domainObj.Key(), len(domainObj.Meta.Conditions))
-	for i, cond := range domainObj.Meta.Conditions {
-		klog.Infof("  🔍 CONV_IN[%d]: Type=%s, Status=%s, Reason=%s", i, cond.Type, cond.Status, cond.Reason)
-	}
-
 	// Create k8s service
 	k8sService := &netguardv1beta1.Service{
 		TypeMeta: metav1.TypeMeta{
@@ -138,12 +130,6 @@ func (c *ServiceConverter) FromDomain(ctx context.Context, domainObj *models.Ser
 	k8sService.Status = netguardv1beta1.ServiceStatus{
 		ObservedGeneration: domainObj.Meta.ObservedGeneration,
 		Conditions:         domainObj.Meta.Conditions, // Backend формирует условия
-	}
-
-	// 🔍 ДИАГНОСТИКА: логируем что отдаем на выход
-	klog.Infof("✅ ServiceConverter.FromDomain: converted service %s with %d conditions in status", k8sService.Name, len(k8sService.Status.Conditions))
-	for i, cond := range k8sService.Status.Conditions {
-		klog.Infof("  ✅ CONV_OUT[%d]: Type=%s, Status=%s, Reason=%s", i, cond.Type, cond.Status, cond.Reason)
 	}
 
 	return k8sService, nil

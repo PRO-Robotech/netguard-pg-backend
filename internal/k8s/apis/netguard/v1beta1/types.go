@@ -177,7 +177,7 @@ type AddressGroup struct {
 
 	Spec     AddressGroupSpec   `json:"spec,omitempty"`
 	Status   AddressGroupStatus `json:"status,omitempty"`
-	Networks NetworksSpec       `json:"networks,omitempty"` // Networks subresource
+	Networks []NetworkItem      `json:"networks,omitempty"` // Networks list
 }
 
 // AddressGroupSpec defines the desired state of AddressGroup
@@ -189,11 +189,11 @@ type AddressGroupSpec struct {
 
 	// Whether to enable logs
 	// +optional
-	Logs bool `json:"logs,omitempty"`
+	Logs bool `json:"logs"`
 
 	// Whether to enable trace
 	// +optional
-	Trace bool `json:"trace,omitempty"`
+	Trace bool `json:"trace"`
 }
 
 // AddressGroupStatus defines the observed state of AddressGroup
@@ -574,4 +574,98 @@ type IEAgAgRuleList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []IEAgAgRule `json:"items"`
+}
+
+// NetworkSpec defines the desired state of Network
+type NetworkSpec struct {
+	// CIDR is the IP range in CIDR notation
+	CIDR string `json:"cidr"`
+}
+
+// NetworkStatus defines the observed state of Network
+type NetworkStatus struct {
+	// NetworkName is the name of the network
+	NetworkName string `json:"networkName,omitempty"`
+
+	// IsBound indicates if the network is bound to an AddressGroup
+	IsBound bool `json:"isBound"`
+
+	// BindingRef is a reference to the NetworkBinding that binds this network
+	BindingRef *ObjectReference `json:"bindingRef,omitempty"`
+
+	// AddressGroupRef is a reference to the AddressGroup this network is bound to
+	AddressGroupRef *ObjectReference `json:"addressGroupRef,omitempty"`
+
+	// Conditions represent the latest available observations of the resource's state
+	// +optional
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+}
+
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// Network is the Schema for the networks API
+type Network struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   NetworkSpec   `json:"spec,omitempty"`
+	Status NetworkStatus `json:"status,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// NetworkList contains a list of Network
+type NetworkList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []Network `json:"items"`
+}
+
+// NetworkBindingSpec defines the desired state of NetworkBinding
+type NetworkBindingSpec struct {
+	// NetworkRef is a reference to the Network resource
+	NetworkRef ObjectReference `json:"networkRef"`
+
+	// AddressGroupRef is a reference to the AddressGroup resource
+	AddressGroupRef ObjectReference `json:"addressGroupRef"`
+}
+
+// NetworkBindingStatus defines the observed state of NetworkBinding
+type NetworkBindingStatus struct {
+	// Conditions represent the latest available observations of the resource's state
+	// +optional
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+}
+
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// NetworkBinding is the Schema for the networkbindings API
+type NetworkBinding struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec        NetworkBindingSpec   `json:"spec,omitempty"`
+	Status      NetworkBindingStatus `json:"status,omitempty"`
+	NetworkItem NetworkItem          `json:"network,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// NetworkBindingList contains a list of NetworkBinding
+type NetworkBindingList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []NetworkBinding `json:"items"`
 }

@@ -2,6 +2,8 @@ package watch
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -276,8 +278,81 @@ func (c *AddressGroupBindingPolicyConverter) GetResourceKey(resource interface{}
 type IEAgAgRuleConverter struct{}
 
 func (c *IEAgAgRuleConverter) ConvertToK8s(resource interface{}) runtime.Object {
-	// TODO: реализовать
-	return nil
+	rule, ok := resource.(models.IEAgAgRule)
+	if !ok {
+		return nil
+	}
+
+	k8sRule := &netguardv1beta1.IEAgAgRule{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "IEAgAgRule",
+			APIVersion: "netguard.sgroups.io/v1beta1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        rule.ResourceIdentifier.Name,
+			Namespace:   rule.ResourceIdentifier.Namespace,
+			Labels:      rule.Meta.Labels,
+			Annotations: rule.Meta.Annotations,
+		},
+		Spec: netguardv1beta1.IEAgAgRuleSpec{
+			Description: fmt.Sprintf("IEAgAgRule: %s traffic from %s to %s",
+				rule.Traffic, rule.AddressGroupLocal.Name, rule.AddressGroup.Name),
+			Transport: string(rule.Transport),
+			Traffic:   string(rule.Traffic),
+			AddressGroupLocal: netguardv1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "AddressGroup",
+				Name:       rule.AddressGroupLocal.Name,
+			},
+			AddressGroup: netguardv1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "AddressGroup",
+				Name:       rule.AddressGroup.Name,
+			},
+			Action:   netguardv1beta1.RuleAction(rule.Action),
+			Priority: rule.Priority,
+		},
+		Status: netguardv1beta1.IEAgAgRuleStatus{
+			ObservedGeneration: rule.Meta.ObservedGeneration,
+			Conditions:         rule.Meta.Conditions,
+		},
+	}
+
+	// Convert ports
+	for _, portSpec := range rule.Ports {
+		if portSpec.Destination != "" {
+			ports := strings.Split(portSpec.Destination, ",")
+			for _, portStr := range ports {
+				portStr = strings.TrimSpace(portStr)
+				if portStr == "" {
+					continue
+				}
+
+				k8sPortSpec := netguardv1beta1.PortSpec{}
+
+				if strings.Contains(portStr, "-") {
+					// Port range
+					var from, to int32
+					if _, err := fmt.Sscanf(portStr, "%d-%d", &from, &to); err == nil {
+						k8sPortSpec.PortRange = &netguardv1beta1.PortRange{
+							From: from,
+							To:   to,
+						}
+					}
+				} else {
+					// Single port
+					var port int32
+					if _, err := fmt.Sscanf(portStr, "%d", &port); err == nil {
+						k8sPortSpec.Port = port
+					}
+				}
+
+				k8sRule.Spec.Ports = append(k8sRule.Spec.Ports, k8sPortSpec)
+			}
+		}
+	}
+
+	return k8sRule
 }
 
 func (c *IEAgAgRuleConverter) ListResources(ctx context.Context, backend client.BackendClient) ([]interface{}, error) {

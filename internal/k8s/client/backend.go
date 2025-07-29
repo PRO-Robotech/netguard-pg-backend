@@ -60,6 +60,18 @@ type BackendClient interface {
 	UpdateIEAgAgRule(ctx context.Context, rule *models.IEAgAgRule) error
 	DeleteIEAgAgRule(ctx context.Context, id models.ResourceIdentifier) error
 
+	GetNetwork(ctx context.Context, id models.ResourceIdentifier) (*models.Network, error)
+	ListNetworks(ctx context.Context, scope ports.Scope) ([]models.Network, error)
+	CreateNetwork(ctx context.Context, network *models.Network) error
+	UpdateNetwork(ctx context.Context, network *models.Network) error
+	DeleteNetwork(ctx context.Context, id models.ResourceIdentifier) error
+
+	GetNetworkBinding(ctx context.Context, id models.ResourceIdentifier) (*models.NetworkBinding, error)
+	ListNetworkBindings(ctx context.Context, scope ports.Scope) ([]models.NetworkBinding, error)
+	CreateNetworkBinding(ctx context.Context, binding *models.NetworkBinding) error
+	UpdateNetworkBinding(ctx context.Context, binding *models.NetworkBinding) error
+	DeleteNetworkBinding(ctx context.Context, id models.ResourceIdentifier) error
+
 	// Sync операции
 	Sync(ctx context.Context, syncOp models.SyncOp, resources interface{}) error
 	GetSyncStatus(ctx context.Context) (*models.SyncStatus, error)
@@ -83,6 +95,9 @@ type BackendClient interface {
 	UpdateServiceAliasMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
 	UpdateAddressGroupBindingPolicyMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
 	UpdateIEAgAgRuleMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
+
+	UpdateNetworkMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
+	UpdateNetworkBindingMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
 
 	// Helper методы для subresources (оптимизированные запросы)
 	ListAddressGroupsForService(ctx context.Context, serviceID models.ResourceIdentifier) ([]models.AddressGroup, error)

@@ -58,6 +58,22 @@ type IEAgAgRuleListerExpansion interface{}
 // IEAgAgRuleNamespaceLister.
 type IEAgAgRuleNamespaceListerExpansion interface{}
 
+// NetworkListerExpansion allows custom methods to be added to
+// NetworkLister.
+type NetworkListerExpansion interface{}
+
+// NetworkNamespaceListerExpansion allows custom methods to be added to
+// NetworkNamespaceLister.
+type NetworkNamespaceListerExpansion interface{}
+
+// NetworkBindingListerExpansion allows custom methods to be added to
+// NetworkBindingLister.
+type NetworkBindingListerExpansion interface{}
+
+// NetworkBindingNamespaceListerExpansion allows custom methods to be added to
+// NetworkBindingNamespaceLister.
+type NetworkBindingNamespaceListerExpansion interface{}
+
 // RuleS2SListerExpansion allows custom methods to be added to
 // RuleS2SLister.
 type RuleS2SListerExpansion interface{}

@@ -45,7 +45,6 @@ func (v *AddressGroupBindingValidator) ValidateDelete(ctx context.Context, obj *
 	// For delete operations, we might want to check:
 	// - If binding is referenced by policies
 	// - If there are dependent resources
-	// For now, deletion is always allowed
 	return field.ErrorList{}
 }
 

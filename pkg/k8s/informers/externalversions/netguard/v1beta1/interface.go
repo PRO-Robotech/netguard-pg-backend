@@ -34,6 +34,10 @@ type Interface interface {
 	AddressGroupPortMappings() AddressGroupPortMappingInformer
 	// IEAgAgRules returns a IEAgAgRuleInformer.
 	IEAgAgRules() IEAgAgRuleInformer
+	// Networks returns a NetworkInformer.
+	Networks() NetworkInformer
+	// NetworkBindings returns a NetworkBindingInformer.
+	NetworkBindings() NetworkBindingInformer
 	// RuleS2Ss returns a RuleS2SInformer.
 	RuleS2Ss() RuleS2SInformer
 	// Services returns a ServiceInformer.
@@ -76,6 +80,16 @@ func (v *version) AddressGroupPortMappings() AddressGroupPortMappingInformer {
 // IEAgAgRules returns a IEAgAgRuleInformer.
 func (v *version) IEAgAgRules() IEAgAgRuleInformer {
 	return &iEAgAgRuleInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// Networks returns a NetworkInformer.
+func (v *version) Networks() NetworkInformer {
+	return &networkInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// NetworkBindings returns a NetworkBindingInformer.
+func (v *version) NetworkBindings() NetworkBindingInformer {
+	return &networkBindingInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // RuleS2Ss returns a RuleS2SInformer.

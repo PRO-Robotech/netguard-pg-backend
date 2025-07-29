@@ -235,5 +235,3 @@ func (s *StatusREST[K, D]) applyPatch(current runtime.Object, patchType types.Pa
 	// Delegate to parent storage
 	return s.parent.applyPatch(current, patchType, data)
 }
-
-// Note: getObjectName function is defined in storage.go and can be used from there

@@ -176,6 +176,22 @@ func (m *MockReader) GetAddressGroupBindingPolicyByID(ctx context.Context, id mo
 	return nil, ports.ErrNotFound
 }
 
+func (m *MockReader) GetNetworkByID(ctx context.Context, id models.ResourceIdentifier) (*models.Network, error) {
+	return nil, ports.ErrNotFound
+}
+
+func (m *MockReader) GetNetworkBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.NetworkBinding, error) {
+	return nil, ports.ErrNotFound
+}
+
+func (m *MockReader) ListNetworkBindings(ctx context.Context, consume func(models.NetworkBinding) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReader) ListNetworks(ctx context.Context, consume func(models.Network) error, scope ports.Scope) error {
+	return nil
+}
+
 // MockRegistry для тестирования
 type MockRegistry struct {
 	mock.Mock

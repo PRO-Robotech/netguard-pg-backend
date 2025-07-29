@@ -5,21 +5,22 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/pkg/errors"
 	"netguard-pg-backend/internal/domain/models"
+
+	"github.com/pkg/errors"
 )
 
 // ValidateExists checks if an address group exists
 func (v *AddressGroupValidator) ValidateExists(ctx context.Context, id models.ResourceIdentifier) error {
 	return v.BaseValidator.ValidateExists(ctx, id, func(entity interface{}) string {
-		return entity.(models.AddressGroup).Key()
+		return entity.(*models.AddressGroup).Key()
 	})
 }
 
 // ValidateReferences checks if all references in an address group are valid
-// Note: This is currently a no-op as we need to avoid circular dependencies
 func (v *AddressGroupValidator) ValidateReferences(ctx context.Context, group models.AddressGroup) error {
-	// TODO: Implement validation of service references once circular dependency is resolved
+	// AddressGroup doesn't have references to other resources
+	// Networks field contains only CIDR addresses, not resource references
 	return nil
 }
 
@@ -58,9 +59,10 @@ func (v *AddressGroupValidator) validateNetworks(networks []models.NetworkItem) 
 			return fmt.Errorf("network item %d (%s): invalid CIDR format '%s': %v", i, network.Name, network.CIDR, err)
 		}
 
-		// Validate Kind if provided
-		if network.Kind != "" && network.Kind != "Service" && network.Kind != "Pod" && network.Kind != "Node" {
-			return fmt.Errorf("network item %d (%s): invalid kind '%s', must be one of: Service, Pod, Node", i, network.Name, network.Kind)
+		// NetworkItem should not have Kind field for AddressGroup
+		// Kind field is used in other contexts, not here
+		if network.Kind != "" {
+			return fmt.Errorf("network item %d (%s): kind field should not be used in AddressGroup networks", i, network.Name)
 		}
 	}
 
@@ -105,9 +107,6 @@ func (v *AddressGroupValidator) CheckDependencies(ctx context.Context, id models
 	if hasBindings {
 		return NewDependencyExistsError("address_group", id.Key(), "address_group_binding")
 	}
-
-	// For now, we're skipping the check for AddressGroupPortMappings as the model structure is unclear
-	// TODO: Implement this check once we understand how AddressGroupPortMapping is associated with AddressGroup
 
 	return nil
 }

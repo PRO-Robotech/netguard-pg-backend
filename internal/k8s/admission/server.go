@@ -17,6 +17,8 @@ import (
 
 	"netguard-pg-backend/internal/k8s/client"
 	clientscheme "netguard-pg-backend/pkg/k8s/clientset/versioned/scheme"
+
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // WebhookServer handles admission webhook HTTP requests
@@ -158,6 +160,54 @@ func (s *WebhookServer) handleAdmission(w http.ResponseWriter, r *http.Request, 
 		klog.V(2).Infof("%s webhook request processed in %v", webhookType, time.Since(start))
 	}()
 
+	// Declare body variable early so it's available in defer
+	var body []byte
+
+	// Add panic recovery to prevent EOF errors
+	defer func() {
+		if r := recover(); r != nil {
+			klog.Errorf("Panic in %s webhook: %v", webhookType, r)
+
+			// Try to get UID from the request if available
+			var requestUID types.UID
+			if body != nil {
+				var tempReview admissionv1.AdmissionReview
+				if err := json.Unmarshal(body, &tempReview); err == nil && tempReview.Request != nil {
+					requestUID = tempReview.Request.UID
+				}
+			}
+
+			// Create error response for panic
+			errorResponse := &admissionv1.AdmissionResponse{
+				UID:     requestUID,
+				Allowed: false,
+				Result: &metav1.Status{
+					Code:    500,
+					Message: fmt.Sprintf("Internal webhook error: %v", r),
+				},
+			}
+
+			responseReview := &admissionv1.AdmissionReview{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: admissionv1.SchemeGroupVersion.String(),
+					Kind:       "AdmissionReview",
+				},
+				Response: errorResponse,
+			}
+
+			responseBytes, err := json.Marshal(responseReview)
+			if err != nil {
+				klog.Errorf("Failed to encode panic response: %v", err)
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK) // K8s expects 200 even for validation failures
+			w.Write(responseBytes)
+		}
+	}()
+
 	// Only allow POST
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -172,7 +222,8 @@ func (s *WebhookServer) handleAdmission(w http.ResponseWriter, r *http.Request, 
 	}
 
 	// Read request body
-	body, err := io.ReadAll(r.Body)
+	var err error
+	body, err = io.ReadAll(r.Body)
 	if err != nil {
 		klog.Errorf("Failed to read request body: %v", err)
 		http.Error(w, "Failed to read request body", http.StatusBadRequest)
@@ -196,6 +247,11 @@ func (s *WebhookServer) handleAdmission(w http.ResponseWriter, r *http.Request, 
 
 	// Process the request
 	response := handler(r.Context(), admissionReview.Request)
+
+	// Ensure UID is set from request
+	if response.UID == "" && admissionReview.Request != nil {
+		response.UID = admissionReview.Request.UID
+	}
 
 	// Create response admission review
 	responseReview := &admissionv1.AdmissionReview{
@@ -241,8 +297,18 @@ func (s *WebhookServer) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 // handleReady handles readiness check requests
 func (s *WebhookServer) handleReady(w http.ResponseWriter, r *http.Request) {
-	// For now, just return OK
-	// In the future, we could check backend connectivity here
+	// Check backend connectivity
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	if err := s.validationWebhook.backendClient.Ping(ctx); err != nil {
+		klog.Errorf("Backend ping failed in readiness check: %v", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte(fmt.Sprintf(`{"status": "not ready", "error": "%v"}`, err)))
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"status": "ready"}`))

@@ -37,7 +37,6 @@ func (v *AddressGroupValidator) ValidateDelete(ctx context.Context, obj *v1beta1
 	// For delete operations, we might want to check:
 	// - If AddressGroup is referenced by AddressGroupBinding
 	// - If AddressGroup is referenced by IEAgAgRule
-	// For now, deletion is always allowed
 	return field.ErrorList{}
 }
 

@@ -9,6 +9,8 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 
+# Force rebuild by adding timestamp
+RUN echo "Build timestamp: $(date)" > /tmp/build_timestamp
 COPY cmd/ cmd/
 COPY internal/ internal/
 COPY pkg/ pkg/

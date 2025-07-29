@@ -47,6 +47,10 @@ func (w *ValidationWebhook) ValidateAdmissionReview(ctx context.Context, req *ad
 		return w.validateAddressGroupBindingPolicy(ctx, req)
 	case "IEAgAgRule":
 		return w.validateIEAgAgRule(ctx, req)
+	case "Network":
+		return w.validateNetwork(ctx, req)
+	case "NetworkBinding":
+		return w.validateNetworkBinding(ctx, req)
 	default:
 		return w.errorResponse(req.UID, fmt.Sprintf("Unknown resource kind: %s", req.Kind.Kind))
 	}
@@ -396,8 +400,8 @@ func (w *ValidationWebhook) validateAddressGroupBindingPolicy(ctx context.Contex
 }
 
 func (w *ValidationWebhook) validateIEAgAgRule(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
-	var rule netguardv1beta1.IEAgAgRule
-	if err := json.Unmarshal(req.Object.Raw, &rule); err != nil {
+	var ieAgAgRule netguardv1beta1.IEAgAgRule
+	if err := json.Unmarshal(req.Object.Raw, &ieAgAgRule); err != nil {
 		return w.errorResponse(req.UID, fmt.Sprintf("Failed to unmarshal IEAgAgRule: %v", err))
 	}
 
@@ -410,29 +414,29 @@ func (w *ValidationWebhook) validateIEAgAgRule(ctx context.Context, req *admissi
 
 	// Получаем валидатор
 	validator := w.backendClient.GetDependencyValidator()
-	ruleValidator := validator.GetIEAgAgRuleValidator()
+	ieAgAgRuleValidator := validator.GetIEAgAgRuleValidator()
 
 	// Конвертируем в domain модель
-	domainRule := convertIEAgAgRuleToDomain(rule)
+	domainIEAgAgRule := convertIEAgAgRuleToDomain(ieAgAgRule)
 
 	switch req.Operation {
 	case admissionv1.Create:
 		// Валидация для создания
-		if err := ruleValidator.ValidateForCreation(ctx, domainRule); err != nil {
+		if err := ieAgAgRuleValidator.ValidateForCreation(ctx, domainIEAgAgRule); err != nil {
 			return w.errorResponse(req.UID, fmt.Sprintf("IEAgAgRule validation failed: %v", err))
 		}
 
 	case admissionv1.Update:
 		// Получаем старую версию для валидации обновления
-		var oldRule netguardv1beta1.IEAgAgRule
-		if err := json.Unmarshal(req.OldObject.Raw, &oldRule); err != nil {
+		var oldIEAgAgRule netguardv1beta1.IEAgAgRule
+		if err := json.Unmarshal(req.OldObject.Raw, &oldIEAgAgRule); err != nil {
 			return w.errorResponse(req.UID, fmt.Sprintf("Failed to unmarshal old IEAgAgRule: %v", err))
 		}
 
-		oldDomainRule := convertIEAgAgRuleToDomain(oldRule)
+		oldDomainIEAgAgRule := convertIEAgAgRuleToDomain(oldIEAgAgRule)
 
 		// Валидация для обновления
-		if err := ruleValidator.ValidateForUpdate(ctx, oldDomainRule, domainRule); err != nil {
+		if err := ieAgAgRuleValidator.ValidateForUpdate(ctx, oldDomainIEAgAgRule, domainIEAgAgRule); err != nil {
 			return w.errorResponse(req.UID, fmt.Sprintf("IEAgAgRule update validation failed: %v", err))
 		}
 
@@ -442,6 +446,104 @@ func (w *ValidationWebhook) validateIEAgAgRule(ctx context.Context, req *admissi
 	}
 
 	return w.allowResponse(req.UID, "IEAgAgRule validation passed")
+}
+
+func (w *ValidationWebhook) validateNetwork(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
+	var network netguardv1beta1.Network
+	if err := json.Unmarshal(req.Object.Raw, &network); err != nil {
+		return w.errorResponse(req.UID, fmt.Sprintf("Failed to unmarshal Network: %v", err))
+	}
+
+	// Получаем Reader для валидации
+	reader, err := w.backendClient.GetReader(ctx)
+	if err != nil {
+		return w.errorResponse(req.UID, fmt.Sprintf("Failed to get reader: %v", err))
+	}
+	defer reader.Close()
+
+	// Получаем валидатор
+	validator := w.backendClient.GetDependencyValidator()
+	networkValidator := validator.GetNetworkValidator()
+
+	// Конвертируем в domain модель
+	domainNetwork := convertNetworkToDomain(network)
+
+	switch req.Operation {
+	case admissionv1.Create:
+		// Валидация для создания
+		if err := networkValidator.ValidateForCreation(ctx, domainNetwork); err != nil {
+			return w.errorResponse(req.UID, fmt.Sprintf("Network validation failed: %v", err))
+		}
+
+	case admissionv1.Update:
+		// Получаем старую версию для валидации обновления
+		var oldNetwork netguardv1beta1.Network
+		if err := json.Unmarshal(req.OldObject.Raw, &oldNetwork); err != nil {
+			return w.errorResponse(req.UID, fmt.Sprintf("Failed to unmarshal old Network: %v", err))
+		}
+
+		oldDomainNetwork := convertNetworkToDomain(oldNetwork)
+
+		// Валидация для обновления
+		if err := networkValidator.ValidateForUpdate(ctx, oldDomainNetwork, domainNetwork); err != nil {
+			return w.errorResponse(req.UID, fmt.Sprintf("Network update validation failed: %v", err))
+		}
+
+	case admissionv1.Delete:
+		// Для Delete операций не используем валидацию - она будет в API Server при вызове backend
+		log.Printf("Delete operation for Network %s/%s - validation will be done in API Server", req.Namespace, req.Name)
+	}
+
+	return w.allowResponse(req.UID, "Network validation passed")
+}
+
+func (w *ValidationWebhook) validateNetworkBinding(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
+	var networkBinding netguardv1beta1.NetworkBinding
+	if err := json.Unmarshal(req.Object.Raw, &networkBinding); err != nil {
+		return w.errorResponse(req.UID, fmt.Sprintf("Failed to unmarshal NetworkBinding: %v", err))
+	}
+
+	// Получаем Reader для валидации
+	reader, err := w.backendClient.GetReader(ctx)
+	if err != nil {
+		return w.errorResponse(req.UID, fmt.Sprintf("Failed to get reader: %v", err))
+	}
+	defer reader.Close()
+
+	// Получаем валидатор
+	validator := w.backendClient.GetDependencyValidator()
+	networkBindingValidator := validator.GetNetworkBindingValidator()
+
+	// Конвертируем в domain модель
+	domainNetworkBinding := convertNetworkBindingToDomain(networkBinding)
+
+	switch req.Operation {
+	case admissionv1.Create:
+		// Валидация для создания
+		if err := networkBindingValidator.ValidateForCreation(ctx, domainNetworkBinding); err != nil {
+			return w.errorResponse(req.UID, fmt.Sprintf("NetworkBinding validation failed: %v", err))
+		}
+
+	case admissionv1.Update:
+		// Получаем старую версию для валидации обновления
+		var oldNetworkBinding netguardv1beta1.NetworkBinding
+		if err := json.Unmarshal(req.OldObject.Raw, &oldNetworkBinding); err != nil {
+			return w.errorResponse(req.UID, fmt.Sprintf("Failed to unmarshal old NetworkBinding: %v", err))
+		}
+
+		oldDomainNetworkBinding := convertNetworkBindingToDomain(oldNetworkBinding)
+
+		// Валидация для обновления
+		if err := networkBindingValidator.ValidateForUpdate(ctx, oldDomainNetworkBinding, domainNetworkBinding); err != nil {
+			return w.errorResponse(req.UID, fmt.Sprintf("NetworkBinding update validation failed: %v", err))
+		}
+
+	case admissionv1.Delete:
+		// Для Delete операций не используем валидацию - она будет в API Server при вызове backend
+		log.Printf("Delete operation for NetworkBinding %s/%s - validation will be done in API Server", req.Namespace, req.Name)
+	}
+
+	return w.allowResponse(req.UID, "NetworkBinding validation passed")
 }
 
 // Helper functions для конвертации K8s API типов в domain модели
@@ -481,8 +583,8 @@ func convertServiceToDomain(k8sService netguardv1beta1.Service) models.Service {
 
 func convertAddressGroupToDomain(k8sGroup netguardv1beta1.AddressGroup) models.AddressGroup {
 	// Конвертация Networks
-	networks := make([]models.NetworkItem, len(k8sGroup.Networks.Items))
-	for i, item := range k8sGroup.Networks.Items {
+	networks := make([]models.NetworkItem, len(k8sGroup.Networks))
+	for i, item := range k8sGroup.Networks {
 		networks[i] = models.NetworkItem{
 			Name:       item.Name,
 			CIDR:       item.CIDR,
@@ -491,7 +593,7 @@ func convertAddressGroupToDomain(k8sGroup netguardv1beta1.AddressGroup) models.A
 			Namespace:  item.Namespace,
 		}
 	}
-	
+
 	return models.AddressGroup{
 		SelfRef: models.SelfRef{
 			ResourceIdentifier: models.ResourceIdentifier{
@@ -712,6 +814,41 @@ func convertIEAgAgRuleToDomain(k8sRule netguardv1beta1.IEAgAgRule) models.IEAgAg
 	}
 
 	return rule
+}
+
+func convertNetworkToDomain(k8sNetwork netguardv1beta1.Network) models.Network {
+	return models.Network{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: models.ResourceIdentifier{
+				Name:      k8sNetwork.Name,
+				Namespace: k8sNetwork.Namespace,
+			},
+		},
+		CIDR: k8sNetwork.Spec.CIDR,
+		Meta: models.Meta{
+			Generation:  k8sNetwork.Generation,
+			Labels:      k8sNetwork.Labels,
+			Annotations: k8sNetwork.Annotations,
+		},
+	}
+}
+
+func convertNetworkBindingToDomain(k8sBinding netguardv1beta1.NetworkBinding) models.NetworkBinding {
+	return models.NetworkBinding{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: models.ResourceIdentifier{
+				Name:      k8sBinding.Name,
+				Namespace: k8sBinding.Namespace,
+			},
+		},
+		NetworkRef:      k8sBinding.Spec.NetworkRef,
+		AddressGroupRef: k8sBinding.Spec.AddressGroupRef,
+		Meta: models.Meta{
+			Generation:  k8sBinding.Generation,
+			Labels:      k8sBinding.Labels,
+			Annotations: k8sBinding.Annotations,
+		},
+	}
 }
 
 func (w *ValidationWebhook) allowResponse(uid types.UID, message string) *admissionv1.AdmissionResponse {

@@ -3,6 +3,7 @@ package convert
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -120,6 +121,11 @@ func (c *IEAgAgRuleConverter) FromDomain(ctx context.Context, domainObj *models.
 		return nil, fmt.Errorf("domain IEAgAgRule object is nil")
 	}
 
+	// Add detailed logging for debugging
+	log.Printf("🔧 DEBUG: Converting IEAgAgRule from domain: name=%s, namespace=%s, transport='%s', traffic='%s', action='%s'",
+		domainObj.ResourceIdentifier.Name, domainObj.ResourceIdentifier.Namespace,
+		domainObj.Transport, domainObj.Traffic, domainObj.Action)
+
 	// Convert Transport protocol
 	transport, err := c.convertTransportFromDomain(domainObj.Transport)
 	if err != nil {
@@ -151,6 +157,8 @@ func (c *IEAgAgRuleConverter) FromDomain(ctx context.Context, domainObj *models.
 			ResourceVersion:   domainObj.Meta.ResourceVersion,
 			Generation:        domainObj.Meta.Generation,
 			CreationTimestamp: domainObj.Meta.CreationTS,
+			Labels:            domainObj.Meta.Labels,
+			Annotations:       domainObj.Meta.Annotations,
 		},
 		Spec: netguardv1beta1.IEAgAgRuleSpec{
 			Description: fmt.Sprintf("IEAgAgRule: %s traffic from %s to %s",
@@ -170,37 +178,52 @@ func (c *IEAgAgRuleConverter) FromDomain(ctx context.Context, domainObj *models.
 			Action:   action,
 			Priority: domainObj.Priority,
 		},
+		Status: netguardv1beta1.IEAgAgRuleStatus{
+			ObservedGeneration: domainObj.Meta.ObservedGeneration,
+			Conditions:         domainObj.Meta.Conditions,
+		},
 	}
 
 	// Convert ports
 	if len(domainObj.Ports) > 0 {
-		k8sRule.Spec.Ports = make([]netguardv1beta1.PortSpec, len(domainObj.Ports))
-		for i, portSpec := range domainObj.Ports {
-			k8sPortSpec := netguardv1beta1.PortSpec{}
+		for _, portSpec := range domainObj.Ports {
+			// Handle comma-separated ports in destination
+			if portSpec.Destination != "" {
+				ports := strings.Split(portSpec.Destination, ",")
+				for _, portStr := range ports {
+					portStr = strings.TrimSpace(portStr)
+					if portStr == "" {
+						continue
+					}
 
-			// Parse destination port
-			if strings.Contains(portSpec.Destination, "-") {
-				// Port range
-				var from, to int32
-				_, err := fmt.Sscanf(portSpec.Destination, "%d-%d", &from, &to)
-				if err != nil {
-					return nil, fmt.Errorf("failed to parse port range %s: %w", portSpec.Destination, err)
+					k8sPortSpec := netguardv1beta1.PortSpec{}
+
+					if strings.Contains(portStr, "-") {
+						// Port range
+						var from, to int32
+						_, err := fmt.Sscanf(portStr, "%d-%d", &from, &to)
+						if err != nil {
+							log.Printf("⚠️  WARNING: Failed to parse port range %s: %v", portStr, err)
+							continue
+						}
+						k8sPortSpec.PortRange = &netguardv1beta1.PortRange{
+							From: from,
+							To:   to,
+						}
+					} else {
+						// Single port
+						var port int32
+						_, err := fmt.Sscanf(portStr, "%d", &port)
+						if err != nil {
+							log.Printf("⚠️  WARNING: Failed to parse port %s: %v", portStr, err)
+							continue
+						}
+						k8sPortSpec.Port = port
+					}
+
+					k8sRule.Spec.Ports = append(k8sRule.Spec.Ports, k8sPortSpec)
 				}
-				k8sPortSpec.PortRange = &netguardv1beta1.PortRange{
-					From: from,
-					To:   to,
-				}
-			} else {
-				// Single port
-				var port int32
-				_, err := fmt.Sscanf(portSpec.Destination, "%d", &port)
-				if err != nil {
-					return nil, fmt.Errorf("failed to parse port %s: %w", portSpec.Destination, err)
-				}
-				k8sPortSpec.Port = port
 			}
-
-			k8sRule.Spec.Ports[i] = k8sPortSpec
 		}
 	}
 
@@ -271,7 +294,17 @@ func (c *IEAgAgRuleConverter) convertTransportFromDomain(domainTransport models.
 		return "TCP", nil
 	case models.UDP:
 		return "UDP", nil
+	case "": // Handle empty transport - default to TCP
+		log.Printf("⚠️  WARNING: IEAgAgRule has empty Transport field, defaulting to TCP")
+		return "TCP", nil
+	case "Networks_NetIP_TCP": // Handle old protobuf enum name
+		log.Printf("⚠️  WARNING: IEAgAgRule has old protobuf enum name 'Networks_NetIP_TCP', converting to TCP")
+		return "TCP", nil
+	case "Networks_NetIP_UDP": // Handle old protobuf enum name
+		log.Printf("⚠️  WARNING: IEAgAgRule has old protobuf enum name 'Networks_NetIP_UDP', converting to UDP")
+		return "UDP", nil
 	default:
+		log.Printf("❌ ERROR: convertTransportFromDomain - unknown transport protocol: '%s' (length: %d)", domainTransport, len(string(domainTransport)))
 		return "", fmt.Errorf("unknown transport protocol: %s", domainTransport)
 	}
 }
@@ -295,7 +328,17 @@ func (c *IEAgAgRuleConverter) convertTrafficFromDomain(domainTraffic models.Traf
 		return "Ingress", nil
 	case models.EGRESS:
 		return "Egress", nil
+	case "": // Handle empty traffic - default to Ingress
+		log.Printf("⚠️  WARNING: IEAgAgRule has empty Traffic field, defaulting to Ingress")
+		return "Ingress", nil
+	case "Traffic_Ingress": // Handle old protobuf enum name
+		log.Printf("⚠️  WARNING: IEAgAgRule has old protobuf enum name 'Traffic_Ingress', converting to Ingress")
+		return "Ingress", nil
+	case "Traffic_Egress": // Handle old protobuf enum name
+		log.Printf("⚠️  WARNING: IEAgAgRule has old protobuf enum name 'Traffic_Egress', converting to Egress")
+		return "Egress", nil
 	default:
+		log.Printf("❌ ERROR: convertTrafficFromDomain - unknown traffic direction: '%s' (length: %d)", domainTraffic, len(string(domainTraffic)))
 		return "", fmt.Errorf("unknown traffic direction: %s", domainTraffic)
 	}
 }
@@ -319,7 +362,17 @@ func (c *IEAgAgRuleConverter) convertActionFromDomain(domainAction models.RuleAc
 		return netguardv1beta1.ActionAccept, nil
 	case models.ActionDrop:
 		return netguardv1beta1.ActionDrop, nil
+	case "": // Handle empty action - default to ACCEPT
+		log.Printf("⚠️  WARNING: IEAgAgRule has empty Action field, defaulting to ACCEPT")
+		return netguardv1beta1.ActionAccept, nil
+	case "RuleAction_ACCEPT": // Handle old protobuf enum name
+		log.Printf("⚠️  WARNING: IEAgAgRule has old protobuf enum name 'RuleAction_ACCEPT', converting to ACCEPT")
+		return netguardv1beta1.ActionAccept, nil
+	case "RuleAction_DROP": // Handle old protobuf enum name
+		log.Printf("⚠️  WARNING: IEAgAgRule has old protobuf enum name 'RuleAction_DROP', converting to DROP")
+		return netguardv1beta1.ActionDrop, nil
 	default:
+		log.Printf("❌ ERROR: convertActionFromDomain - unknown action: '%s' (length: %d)", domainAction, len(string(domainAction)))
 		return "", fmt.Errorf("unknown action: %s", domainAction)
 	}
 }

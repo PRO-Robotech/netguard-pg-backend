@@ -65,6 +65,16 @@ func (v *DependencyValidator) GetIEAgAgRuleValidator() *IEAgAgRuleValidator {
 	return NewIEAgAgRuleValidator(v.reader)
 }
 
+// GetNetworkValidator returns a validator for networks
+func (v *DependencyValidator) GetNetworkValidator() *NetworkValidator {
+	return NewNetworkValidator(v.reader)
+}
+
+// GetNetworkBindingValidator returns a validator for network bindings
+func (v *DependencyValidator) GetNetworkBindingValidator() *NetworkBindingValidator {
+	return NewNetworkBindingValidator(v.reader)
+}
+
 // ServiceValidator provides methods for validating services
 type ServiceValidator struct {
 	reader        ports.Reader
@@ -75,7 +85,7 @@ type ServiceValidator struct {
 func NewServiceValidator(reader ports.Reader) *ServiceValidator {
 	listFunction := func(ctx context.Context, consume func(entity interface{}) error, scope ports.Scope) error {
 		return reader.ListServices(ctx, func(service models.Service) error {
-			return consume(service)
+			return consume(&service) // Передаем указатель вместо значения
 		}, scope)
 	}
 
@@ -95,7 +105,7 @@ type AddressGroupValidator struct {
 func NewAddressGroupValidator(reader ports.Reader) *AddressGroupValidator {
 	listFunction := func(ctx context.Context, consume func(entity interface{}) error, scope ports.Scope) error {
 		return reader.ListAddressGroups(ctx, func(group models.AddressGroup) error {
-			return consume(group)
+			return consume(&group) // Передаем указатель вместо значения
 		}, scope)
 	}
 
@@ -115,7 +125,7 @@ type AddressGroupBindingValidator struct {
 func NewAddressGroupBindingValidator(reader ports.Reader) *AddressGroupBindingValidator {
 	listFunction := func(ctx context.Context, consume func(entity interface{}) error, scope ports.Scope) error {
 		return reader.ListAddressGroupBindings(ctx, func(binding models.AddressGroupBinding) error {
-			return consume(binding)
+			return consume(&binding) // Передаем указатель вместо значения
 		}, scope)
 	}
 
@@ -135,7 +145,7 @@ type ServiceAliasValidator struct {
 func NewServiceAliasValidator(reader ports.Reader) *ServiceAliasValidator {
 	listFunction := func(ctx context.Context, consume func(entity interface{}) error, scope ports.Scope) error {
 		return reader.ListServiceAliases(ctx, func(alias models.ServiceAlias) error {
-			return consume(alias)
+			return consume(&alias) // Передаем указатель вместо значения
 		}, scope)
 	}
 
@@ -155,7 +165,7 @@ type RuleS2SValidator struct {
 func NewRuleS2SValidator(reader ports.Reader) *RuleS2SValidator {
 	listFunction := func(ctx context.Context, consume func(entity interface{}) error, scope ports.Scope) error {
 		return reader.ListRuleS2S(ctx, func(rule models.RuleS2S) error {
-			return consume(rule)
+			return consume(&rule) // Передаем указатель вместо значения
 		}, scope)
 	}
 
@@ -175,7 +185,7 @@ type AddressGroupPortMappingValidator struct {
 func NewAddressGroupPortMappingValidator(reader ports.Reader) *AddressGroupPortMappingValidator {
 	listFunction := func(ctx context.Context, consume func(entity interface{}) error, scope ports.Scope) error {
 		return reader.ListAddressGroupPortMappings(ctx, func(mapping models.AddressGroupPortMapping) error {
-			return consume(mapping)
+			return consume(&mapping) // Передаем указатель вместо значения
 		}, scope)
 	}
 
@@ -195,7 +205,7 @@ type AddressGroupBindingPolicyValidator struct {
 func NewAddressGroupBindingPolicyValidator(reader ports.Reader) *AddressGroupBindingPolicyValidator {
 	listFunction := func(ctx context.Context, consume func(entity interface{}) error, scope ports.Scope) error {
 		return reader.ListAddressGroupBindingPolicies(ctx, func(policy models.AddressGroupBindingPolicy) error {
-			return consume(policy)
+			return consume(&policy) // Передаем указатель вместо значения
 		}, scope)
 	}
 

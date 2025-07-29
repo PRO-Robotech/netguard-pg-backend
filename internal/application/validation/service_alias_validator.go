@@ -11,7 +11,7 @@ import (
 // ValidateExists checks if a service alias exists
 func (v *ServiceAliasValidator) ValidateExists(ctx context.Context, id models.ResourceIdentifier) error {
 	return v.BaseValidator.ValidateExists(ctx, id, func(entity interface{}) string {
-		return entity.(models.ServiceAlias).Key()
+		return entity.(*models.ServiceAlias).Key() // Используем указатель вместо значения
 	})
 }
 

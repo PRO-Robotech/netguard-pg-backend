@@ -330,6 +330,130 @@
         ]
       }
     },
+    "/v1/network-bindings": {
+      "get": {
+        "summary": "ListNetworkBindings - gets list of network bindings",
+        "description": "ListNetworkBindings: gets list of network bindings",
+        "operationId": "NetguardService_ListNetworkBindings",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListNetworkBindingsResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/network-bindings/{identifier.namespace}/{identifier.name}": {
+      "get": {
+        "summary": "GetNetworkBinding - gets a specific network binding by ID",
+        "description": "GetNetworkBinding: gets a specific network binding by ID",
+        "operationId": "NetguardService_GetNetworkBinding",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetNetworkBindingResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "identifier.namespace",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "identifier.name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/networks": {
+      "get": {
+        "summary": "ListNetworks - gets list of networks",
+        "description": "ListNetworks: gets list of networks",
+        "operationId": "NetguardService_ListNetworks",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListNetworksResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/networks/{identifier.namespace}/{identifier.name}": {
+      "get": {
+        "summary": "GetNetwork - gets a specific network by ID",
+        "description": "GetNetwork: gets a specific network by ID",
+        "operationId": "NetguardService_GetNetwork",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetNetworkResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "identifier.namespace",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "identifier.name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
     "/v1/rule-s2s": {
       "get": {
         "summary": "ListRuleS2S - gets list of rule s2s",
@@ -797,6 +921,24 @@
       },
       "title": "GetIEAgAgRuleResp - response with a specific IEAgAgRule"
     },
+    "v1GetNetworkBindingResp": {
+      "type": "object",
+      "properties": {
+        "networkBinding": {
+          "$ref": "#/definitions/v1NetworkBinding"
+        }
+      },
+      "title": "GetNetworkBindingResp - response with a specific network binding"
+    },
+    "v1GetNetworkResp": {
+      "type": "object",
+      "properties": {
+        "network": {
+          "$ref": "#/definitions/v1Network"
+        }
+      },
+      "title": "GetNetworkResp - response with a specific network"
+    },
     "v1GetRuleS2SResp": {
       "type": "object",
       "properties": {
@@ -953,6 +1095,32 @@
       },
       "title": "ListIEAgAgRulesResp - response with list of IEAgAgRules"
     },
+    "v1ListNetworkBindingsResp": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1NetworkBinding"
+          }
+        }
+      },
+      "title": "ListNetworkBindingsResp - response with list of network bindings"
+    },
+    "v1ListNetworksResp": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Network"
+          }
+        }
+      },
+      "title": "ListNetworksResp - response with list of networks"
+    },
     "v1ListRuleS2SResp": {
       "type": "object",
       "properties": {
@@ -1036,6 +1204,90 @@
       },
       "description": "Meta - kubernetes system metadata stored round-trip."
     },
+    "v1NamespacedObjectReference": {
+      "type": "object",
+      "properties": {
+        "apiVersion": {
+          "type": "string",
+          "title": "APIVersion of the referenced object"
+        },
+        "kind": {
+          "type": "string",
+          "title": "Kind of the referenced object"
+        },
+        "name": {
+          "type": "string",
+          "title": "Name of the referenced object"
+        },
+        "namespace": {
+          "type": "string",
+          "title": "Namespace of the referenced object"
+        }
+      },
+      "title": "NamespacedObjectReference extends ObjectReference with a Namespace field"
+    },
+    "v1Network": {
+      "type": "object",
+      "properties": {
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
+        },
+        "cidr": {
+          "type": "string",
+          "title": "Network in CIDR notation"
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta"
+        },
+        "isBound": {
+          "type": "boolean",
+          "description": "Whether the network is bound to an AddressGroup",
+          "title": "Status fields"
+        },
+        "bindingRef": {
+          "$ref": "#/definitions/v1ObjectReference",
+          "title": "Reference to the NetworkBinding"
+        },
+        "addressGroupRef": {
+          "$ref": "#/definitions/v1NamespacedObjectReference",
+          "title": "Reference to the bound AddressGroup"
+        }
+      },
+      "title": "Network - represents a network configuration for Netguard",
+      "required": [
+        "selfRef",
+        "cidr"
+      ]
+    },
+    "v1NetworkBinding": {
+      "type": "object",
+      "properties": {
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
+        },
+        "networkRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier",
+          "title": "Reference to the Network resource"
+        },
+        "addressGroupRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier",
+          "title": "Reference to the AddressGroup resource"
+        },
+        "networkItem": {
+          "$ref": "#/definitions/v1NetworkItem",
+          "title": "Network item details"
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta"
+        }
+      },
+      "title": "NetworkBinding - binding between a network and an address group",
+      "required": [
+        "selfRef",
+        "networkRef",
+        "addressGroupRef"
+      ]
+    },
     "v1NetworkItem": {
       "type": "object",
       "properties": {
@@ -1056,6 +1308,24 @@
         }
       },
       "title": "NetworkItem - represents a network item in an address group"
+    },
+    "v1ObjectReference": {
+      "type": "object",
+      "properties": {
+        "apiVersion": {
+          "type": "string",
+          "title": "APIVersion of the referenced object"
+        },
+        "kind": {
+          "type": "string",
+          "title": "Kind of the referenced object"
+        },
+        "name": {
+          "type": "string",
+          "title": "Name of the referenced object"
+        }
+      },
+      "title": "ObjectReference contains enough information to let you locate the referenced object"
     },
     "v1PortRange": {
       "type": "object",
@@ -1297,6 +1567,32 @@
       },
       "title": "SyncIEAgAgRules - subject of IEAgAgRules to sync"
     },
+    "v1SyncNetworkBindings": {
+      "type": "object",
+      "properties": {
+        "networkBindings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1NetworkBinding"
+          }
+        }
+      },
+      "title": "SyncNetworkBindings - subject of Network Bindings to sync"
+    },
+    "v1SyncNetworks": {
+      "type": "object",
+      "properties": {
+        "networks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Network"
+          }
+        }
+      },
+      "title": "SyncNetworks - subject of Networks to sync"
+    },
     "v1SyncOp": {
       "type": "string",
       "enum": [
@@ -1347,6 +1643,14 @@
         "ieagagRules": {
           "$ref": "#/definitions/v1SyncIEAgAgRules",
           "title": "Subject of IEAgAgRules"
+        },
+        "networks": {
+          "$ref": "#/definitions/v1SyncNetworks",
+          "title": "Subject of Networks"
+        },
+        "networkBindings": {
+          "$ref": "#/definitions/v1SyncNetworkBindings",
+          "title": "Subject of Network Bindings"
         }
       },
       "title": "SyncReq - request to sync"

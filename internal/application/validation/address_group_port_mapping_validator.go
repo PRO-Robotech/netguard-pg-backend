@@ -12,7 +12,7 @@ import (
 // ValidateExists checks if an address group port mapping exists
 func (v *AddressGroupPortMappingValidator) ValidateExists(ctx context.Context, id models.ResourceIdentifier) error {
 	return v.BaseValidator.ValidateExists(ctx, id, func(entity interface{}) string {
-		return entity.(models.AddressGroupPortMapping).Key()
+		return entity.(*models.AddressGroupPortMapping).Key() // Используем указатель вместо значения
 	})
 }
 

@@ -195,3 +195,45 @@ func (r *GRPCReader) GetAddressGroupBindingPolicyByID(ctx context.Context, id mo
 func (r *GRPCReader) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
 	return r.grpcClient.GetIEAgAgRule(ctx, id)
 }
+
+// GetNetworkByID реализует ports.Reader интерфейс
+func (r *GRPCReader) GetNetworkByID(ctx context.Context, id models.ResourceIdentifier) (*models.Network, error) {
+	return r.grpcClient.GetNetwork(ctx, id)
+}
+
+// GetNetworkBindingByID реализует ports.Reader интерфейс
+func (r *GRPCReader) GetNetworkBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.NetworkBinding, error) {
+	return r.grpcClient.GetNetworkBinding(ctx, id)
+}
+
+// ListNetworks реализует ports.Reader интерфейс
+func (r *GRPCReader) ListNetworks(ctx context.Context, consume func(models.Network) error, scope ports.Scope) error {
+	networks, err := r.grpcClient.ListNetworks(ctx, scope)
+	if err != nil {
+		return err
+	}
+
+	for _, network := range networks {
+		if err := consume(network); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// ListNetworkBindings реализует ports.Reader интерфейс
+func (r *GRPCReader) ListNetworkBindings(ctx context.Context, consume func(models.NetworkBinding) error, scope ports.Scope) error {
+	bindings, err := r.grpcClient.ListNetworkBindings(ctx, scope)
+	if err != nil {
+		return err
+	}
+
+	for _, binding := range bindings {
+		if err := consume(binding); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}

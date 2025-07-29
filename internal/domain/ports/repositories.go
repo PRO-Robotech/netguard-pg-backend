@@ -28,6 +28,8 @@ type (
 		ListServiceAliases(ctx context.Context, consume func(models.ServiceAlias) error, scope Scope) error
 		ListAddressGroupBindingPolicies(ctx context.Context, consume func(models.AddressGroupBindingPolicy) error, scope Scope) error
 		ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAgRule) error, scope Scope) error
+		ListNetworks(ctx context.Context, consume func(models.Network) error, scope Scope) error
+		ListNetworkBindings(ctx context.Context, consume func(models.NetworkBinding) error, scope Scope) error
 		GetSyncStatus(ctx context.Context) (*models.SyncStatus, error)
 
 		// Get methods with ResourceIdentifier
@@ -39,6 +41,8 @@ type (
 		GetServiceAliasByID(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error)
 		GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error)
 		GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error)
+		GetNetworkByID(ctx context.Context, id models.ResourceIdentifier) (*models.Network, error)
+		GetNetworkBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.NetworkBinding, error)
 	}
 
 	// Reader defines read operations
@@ -58,6 +62,8 @@ type (
 		SyncServiceAliases(ctx context.Context, aliases []models.ServiceAlias, scope Scope, opts ...Option) error
 		SyncAddressGroupBindingPolicies(ctx context.Context, policies []models.AddressGroupBindingPolicy, scope Scope, opts ...Option) error
 		SyncIEAgAgRules(ctx context.Context, rules []models.IEAgAgRule, scope Scope, opts ...Option) error
+		SyncNetworks(ctx context.Context, networks []models.Network, scope Scope, opts ...Option) error
+		SyncNetworkBindings(ctx context.Context, bindings []models.NetworkBinding, scope Scope, opts ...Option) error
 
 		// Delete methods with ResourceIdentifier
 		DeleteServicesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
@@ -68,6 +74,8 @@ type (
 		DeleteServiceAliasesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
 		DeleteAddressGroupBindingPoliciesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
 		DeleteIEAgAgRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
+		DeleteNetworksByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
+		DeleteNetworkBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
 
 		Commit() error
 		Abort()

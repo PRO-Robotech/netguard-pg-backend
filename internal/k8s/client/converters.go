@@ -162,6 +162,17 @@ func convertAddressGroupFromProto(protoAG *netguardpb.AddressGroup) models.Addre
 		}
 	}
 
+	// Convert Networks list
+	for _, protoNetworkItem := range protoAG.Networks {
+		addressGroup.Networks = append(addressGroup.Networks, models.NetworkItem{
+			Name:       protoNetworkItem.Name,
+			CIDR:       protoNetworkItem.Cidr,
+			ApiVersion: protoNetworkItem.ApiVersion,
+			Kind:       protoNetworkItem.Kind,
+			Namespace:  protoNetworkItem.Namespace,
+		})
+	}
+
 	return addressGroup
 }
 
@@ -646,6 +657,17 @@ func ConvertIEAgAgRuleFromProto(proto *netguardpb.IEAgAgRule) models.IEAgAgRule 
 		traffic = models.INGRESS // default
 	}
 
+	// Конвертация Action protobuf enum в правильное значение
+	var action models.RuleAction
+	switch proto.Action {
+	case netguardpb.RuleAction_ACCEPT:
+		action = models.ActionAccept
+	case netguardpb.RuleAction_DROP:
+		action = models.ActionDrop
+	default:
+		action = models.ActionAccept // default
+	}
+
 	rule := models.IEAgAgRule{
 		SelfRef: models.SelfRef{
 			ResourceIdentifier: models.NewResourceIdentifier(
@@ -667,7 +689,7 @@ func ConvertIEAgAgRuleFromProto(proto *netguardpb.IEAgAgRule) models.IEAgAgRule 
 				models.WithNamespace(proto.AddressGroup.Identifier.Namespace),
 			),
 		},
-		Action:   models.RuleAction(proto.Action.String()),
+		Action:   action,
 		Logs:     proto.Logs,
 		Priority: proto.Priority,
 	}

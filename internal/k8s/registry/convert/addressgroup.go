@@ -26,8 +26,8 @@ func (c *AddressGroupConverter) ToDomain(ctx context.Context, k8sObj *netguardv1
 	}
 
 	// Convert Networks from K8s to domain
-	networks := make([]models.NetworkItem, len(k8sObj.Networks.Items))
-	for i, item := range k8sObj.Networks.Items {
+	networks := make([]models.NetworkItem, len(k8sObj.Networks))
+	for i, item := range k8sObj.Networks {
 		networks[i] = models.NetworkItem{
 			Name:       item.Name,
 			CIDR:       item.CIDR,
@@ -115,9 +115,7 @@ func (c *AddressGroupConverter) FromDomain(ctx context.Context, domainObj *model
 			Logs:          domainObj.Logs,
 			Trace:         domainObj.Trace,
 		},
-		Networks: netguardv1beta1.NetworksSpec{
-			Items: networks,
-		},
+		Networks: networks,
 	}
 
 	// Copy metadata

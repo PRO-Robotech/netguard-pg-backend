@@ -564,6 +564,148 @@ func (cm *ConditionManager) ProcessIEAgAgRuleConditions(ctx context.Context, rul
 	return nil
 }
 
+// ProcessNetworkConditions формирует условия для Network ПОСЛЕ успешного commit
+func (cm *ConditionManager) ProcessNetworkConditions(ctx context.Context, network *models.Network, syncResult error) error {
+	// Очищаем старые ошибки и обновляем метаданные
+	network.Meta.ClearErrorCondition()
+	network.Meta.TouchOnWrite("v1")
+
+	klog.Infof("🔄 ConditionManager.ProcessNetworkConditions: processing network %s/%s after commit", network.Namespace, network.Name)
+
+	// Получаем reader для валидации (транзакция уже закоммичена)
+	reader, err := cm.registry.Reader(ctx)
+	if err != nil {
+		klog.Errorf("❌ ConditionManager: Failed to get reader for %s/%s: %v", network.Namespace, network.Name, err)
+		network.Meta.SetErrorCondition(models.ReasonBackendError, fmt.Sprintf("Failed to get reader for validation: %v", err))
+		network.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Backend validation unavailable")
+		return nil
+	}
+	defer reader.Close()
+
+	// Проверяем результат синхронизации с sgroups
+	if syncResult != nil {
+		klog.Errorf("❌ ConditionManager: sgroups sync failed for %s/%s: %v", network.Namespace, network.Name, syncResult)
+		network.Meta.SetSyncedCondition(metav1.ConditionFalse, models.ReasonSyncFailed, fmt.Sprintf("Failed to sync with sgroups: %v", syncResult))
+		network.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Network sync with external source failed")
+		network.Meta.SetValidatedCondition(metav1.ConditionFalse, models.ReasonValidating, "Validation skipped due to sync failure")
+		return nil
+	}
+
+	// Backend и sgroups синхронизированы (коммит прошел успешно и sgroups тоже)
+	klog.Infof("✅ ConditionManager: Setting Synced=true for %s/%s", network.Namespace, network.Name)
+	network.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Network committed to backend and synced with sgroups successfully")
+
+	// Создаем валидатор и выполняем валидацию РЕАЛЬНОГО состояния
+	validator := validation.NewDependencyValidator(reader)
+	networkValidator := validator.GetNetworkValidator()
+
+	// Проверяем базовую валидацию коммиченного объекта
+	klog.Infof("🔄 ConditionManager: Validating committed network %s/%s", network.Namespace, network.Name)
+	if err := networkValidator.ValidateForCreation(ctx, *network); err != nil {
+		klog.Errorf("❌ ConditionManager: Network validation failed for %s/%s: %v", network.Namespace, network.Name, err)
+		network.Meta.SetErrorCondition(models.ReasonValidationFailed, fmt.Sprintf("Network validation failed: %v", err))
+		network.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Network has validation errors")
+		network.Meta.SetValidatedCondition(metav1.ConditionFalse, models.ReasonValidationFailed, fmt.Sprintf("Validation failed: %v", err))
+		return nil
+	}
+
+	// Устанавливаем Validated = true
+	klog.Infof("✅ ConditionManager: Setting Validated=true for %s/%s", network.Namespace, network.Name)
+	network.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "Network passed validation")
+
+	// Все проверки пройдены - сеть готова
+	klog.Infof("🎉 ConditionManager: All checks passed, setting Ready=true for %s/%s", network.Namespace, network.Name)
+	network.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Network is ready for use")
+
+	klog.Infof("✅ ConditionManager.ProcessNetworkConditions: network %s/%s processed successfully with %d conditions", network.Namespace, network.Name, len(network.Meta.Conditions))
+	return nil
+}
+
+// ProcessNetworkBindingConditions формирует условия для NetworkBinding ПОСЛЕ успешного commit
+func (cm *ConditionManager) ProcessNetworkBindingConditions(ctx context.Context, binding *models.NetworkBinding) error {
+	// Очищаем старые ошибки и обновляем метаданные
+	binding.Meta.ClearErrorCondition()
+	binding.Meta.TouchOnWrite("v1")
+
+	klog.Infof("🔄 ConditionManager.ProcessNetworkBindingConditions: processing network binding %s/%s after commit", binding.Namespace, binding.Name)
+
+	// Получаем reader для валидации (транзакция уже закоммичена)
+	reader, err := cm.registry.Reader(ctx)
+	if err != nil {
+		klog.Errorf("❌ ConditionManager: Failed to get reader for %s/%s: %v", binding.Namespace, binding.Name, err)
+		binding.Meta.SetErrorCondition(models.ReasonBackendError, fmt.Sprintf("Failed to get reader for validation: %v", err))
+		binding.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Backend validation unavailable")
+		return nil
+	}
+	defer reader.Close()
+
+	// Backend синхронизирован (коммит прошел успешно)
+	klog.Infof("✅ ConditionManager: Setting Synced=true for %s/%s", binding.Namespace, binding.Name)
+	binding.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "NetworkBinding committed to backend successfully")
+
+	// Создаем валидатор и выполняем валидацию РЕАЛЬНОГО состояния
+	validator := validation.NewDependencyValidator(reader)
+	bindingValidator := validator.GetNetworkBindingValidator()
+
+	// Проверяем базовую валидацию коммиченного объекта
+	klog.Infof("🔄 ConditionManager: Validating committed network binding %s/%s", binding.Namespace, binding.Name)
+	if err := bindingValidator.ValidateForCreation(ctx, *binding); err != nil {
+		klog.Errorf("❌ ConditionManager: NetworkBinding validation failed for %s/%s: %v", binding.Namespace, binding.Name, err)
+		binding.Meta.SetErrorCondition(models.ReasonValidationFailed, fmt.Sprintf("NetworkBinding validation failed: %v", err))
+		binding.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "NetworkBinding has validation errors")
+		binding.Meta.SetValidatedCondition(metav1.ConditionFalse, models.ReasonValidationFailed, fmt.Sprintf("Validation failed: %v", err))
+		return nil
+	}
+
+	// Устанавливаем Validated = true
+	klog.Infof("✅ ConditionManager: Setting Validated=true for %s/%s", binding.Namespace, binding.Name)
+	binding.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "NetworkBinding passed validation")
+
+	// Проверяем что Network и AddressGroup РЕАЛЬНО существуют в committed состоянии
+	klog.Infof("🔄 ConditionManager: Checking Network and AddressGroup references for %s/%s", binding.Namespace, binding.Name)
+
+	// Проверяем Network
+	networkID := models.ResourceIdentifier{Name: binding.NetworkRef.Name, Namespace: binding.Namespace}
+	_, err = reader.GetNetworkByID(ctx, networkID)
+	if err == ports.ErrNotFound {
+		klog.Errorf("❌ ConditionManager: Network %s not found for %s/%s", networkID.Key(), binding.Namespace, binding.Name)
+		binding.Meta.SetErrorCondition(models.ReasonDependencyError, fmt.Sprintf("Network %s not found", networkID.Key()))
+		binding.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Referenced Network not found")
+		return nil
+	} else if err != nil {
+		klog.Errorf("❌ ConditionManager: Failed to check Network %s for %s/%s: %v", networkID.Key(), binding.Namespace, binding.Name, err)
+		binding.Meta.SetErrorCondition(models.ReasonDependencyError, fmt.Sprintf("Failed to check Network %s: %v", networkID.Key(), err))
+		binding.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Network validation failed")
+		return nil
+	} else {
+		klog.Infof("✅ ConditionManager: Network %s found for %s/%s", networkID.Key(), binding.Namespace, binding.Name)
+	}
+
+	// Проверяем AddressGroup
+	addressGroupID := models.ResourceIdentifier{Name: binding.AddressGroupRef.Name, Namespace: binding.Namespace}
+	_, err = reader.GetAddressGroupByID(ctx, addressGroupID)
+	if err == ports.ErrNotFound {
+		klog.Errorf("❌ ConditionManager: AddressGroup %s not found for %s/%s", addressGroupID.Key(), binding.Namespace, binding.Name)
+		binding.Meta.SetErrorCondition(models.ReasonDependencyError, fmt.Sprintf("AddressGroup %s not found", addressGroupID.Key()))
+		binding.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Referenced AddressGroup not found")
+		return nil
+	} else if err != nil {
+		klog.Errorf("❌ ConditionManager: Failed to check AddressGroup %s for %s/%s: %v", addressGroupID.Key(), binding.Namespace, binding.Name, err)
+		binding.Meta.SetErrorCondition(models.ReasonDependencyError, fmt.Sprintf("Failed to check AddressGroup %s: %v", addressGroupID.Key(), err))
+		binding.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "AddressGroup validation failed")
+		return nil
+	} else {
+		klog.Infof("✅ ConditionManager: AddressGroup %s found for %s/%s", addressGroupID.Key(), binding.Namespace, binding.Name)
+	}
+
+	// Все проверки пройдены - binding готов
+	klog.Infof("🎉 ConditionManager: All checks passed, setting Ready=true for %s/%s", binding.Namespace, binding.Name)
+	binding.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "NetworkBinding is ready for use")
+
+	klog.Infof("✅ ConditionManager.ProcessNetworkBindingConditions: network binding %s/%s processed successfully with %d conditions", binding.Namespace, binding.Name, len(binding.Meta.Conditions))
+	return nil
+}
+
 // validateServiceAliasReferences проверяет существование ServiceAlias в РЕАЛЬНОМ состоянии
 func (cm *ConditionManager) validateServiceAliasReferences(ctx context.Context, reader ports.Reader, rule *models.RuleS2S) error {
 	// Проверяем локальный ServiceAlias
@@ -650,6 +792,18 @@ func (cm *ConditionManager) SetDefaultConditions(resource interface{}) {
 		r.Meta.SetValidatedCondition(metav1.ConditionUnknown, models.ReasonPending, "Validation pending")
 		r.Meta.SetSyncedCondition(metav1.ConditionUnknown, models.ReasonPending, "Synchronization pending")
 		r.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonPending, "IEAgAgRule is being processed")
+
+	case *models.Network:
+		r.Meta.TouchOnCreate()
+		r.Meta.SetValidatedCondition(metav1.ConditionUnknown, models.ReasonPending, "Validation pending")
+		r.Meta.SetSyncedCondition(metav1.ConditionUnknown, models.ReasonPending, "Synchronization pending")
+		r.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonPending, "Network is being processed")
+
+	case *models.NetworkBinding:
+		r.Meta.TouchOnCreate()
+		r.Meta.SetValidatedCondition(metav1.ConditionUnknown, models.ReasonPending, "Validation pending")
+		r.Meta.SetSyncedCondition(metav1.ConditionUnknown, models.ReasonPending, "Synchronization pending")
+		r.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonPending, "NetworkBinding is being processed")
 	}
 }
 
@@ -696,6 +850,14 @@ func (cm *ConditionManager) saveResourceConditions(ctx context.Context, resource
 		}
 	case *models.IEAgAgRule:
 		if err = writer.SyncIEAgAgRules(ctx, []models.IEAgAgRule{*r}, ports.NewResourceIdentifierScope(r.ResourceIdentifier), ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
+			return err
+		}
+	case *models.Network:
+		if err = writer.SyncNetworks(ctx, []models.Network{*r}, ports.NewResourceIdentifierScope(r.ResourceIdentifier), ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
+			return err
+		}
+	case *models.NetworkBinding:
+		if err = writer.SyncNetworkBindings(ctx, []models.NetworkBinding{*r}, ports.NewResourceIdentifierScope(r.ResourceIdentifier), ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
 			return err
 		}
 	default:
