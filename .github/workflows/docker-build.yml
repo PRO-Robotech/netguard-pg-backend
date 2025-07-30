@@ -28,13 +28,17 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Create sanitized branch name
+        id: sanitize
+        run: echo "branch=$(echo ${GITHUB_REF_NAME} | sed 's/\//-/g')" >> $GITHUB_OUTPUT
+
       - name: Build and push apiserver
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile.apiserver
           push: true
-          tags: ${{ secrets.CUSTOM_DOCKERHUB_USERNAME }}/sgroups.k8s.netguard-apiserver:${{ github.head_ref || github.ref_name }}-${{ steps.short-sha.outputs.sha }}
+          tags: ${{ secrets.CUSTOM_DOCKERHUB_USERNAME }}/sgroups.k8s.netguard-apiserver:${{ steps.sanitize.outputs.branch }}-${{ steps.short-sha.outputs.sha }}
           platforms: linux/amd64,linux/arm64
 
       - name: Build and push backend
@@ -43,7 +47,7 @@ jobs:
           context: .
           file: ./Dockerfile.backend
           push: true
-          tags: ${{ secrets.CUSTOM_DOCKERHUB_USERNAME }}/sgroups.k8s.netguard-backend:${{ github.head_ref || github.ref_name }}-${{ steps.short-sha.outputs.sha }}
+          tags: ${{ secrets.CUSTOM_DOCKERHUB_USERNAME }}/sgroups.k8s.netguard-backend:${{ steps.sanitize.outputs.branch }}-${{ steps.short-sha.outputs.sha }}
           platforms: linux/amd64,linux/arm64
 
       - name: Build and push webhook
@@ -52,5 +56,5 @@ jobs:
           context: .
           file: ./Dockerfile.webhook
           push: true
-          tags: ${{ secrets.CUSTOM_DOCKERHUB_USERNAME }}/sgroups.k8s.netguard-webhook:${{ github.head_ref || github.ref_name }}-${{ steps.short-sha.outputs.sha }}
+          tags: ${{ secrets.CUSTOM_DOCKERHUB_USERNAME }}/sgroups.k8s.netguard-webhook:${{ steps.sanitize.outputs.branch }}-${{ steps.short-sha.outputs.sha }}
           platforms: linux/amd64,linux/arm64
