@@ -16,10 +16,10 @@ COPY protos/ protos/
 
 # Сборка с оптимизациями
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -a -installsuffix cgo \
-   -ldflags='-w -s -extldflags "-static"' -o /app/netguard-apiserver ./cmd/k8s-apiserver
+   -ldflags='-w -s -extldflags "-static"' -o /app/netguard-webhook ./cmd/webhook-server
 
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /
-COPY --from=builder /app/netguard-apiserver /netguard-apiserver
+COPY --from=builder /app/netguard-webhook /netguard-webhook
 USER 65532:65532
-CMD ["/netguard-apiserver"] 
+CMD ["/netguard-webhook"] 
