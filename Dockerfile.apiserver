@@ -1,4 +1,6 @@
 FROM golang:1.24-alpine AS builder
+ARG TARGETOS
+ARG TARGETARCH
 
 WORKDIR /app
 
@@ -12,17 +14,12 @@ COPY internal/ internal/
 COPY pkg/ pkg/
 COPY protos/ protos/
 
-# Сборка обоих бинарных файлов
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo \
-   -ldflags='-w -s -extldflags "-static"' -o /app/k8s-apiserver ./cmd/k8s-apiserver
+# Сборка с оптимизациями
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -a -installsuffix cgo \
+   -ldflags='-w -s -extldflags "-static"' -o /app/netguard-apiserver ./cmd/k8s-apiserver
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo \
-   -ldflags='-w -s -extldflags "-static"' -o /app/webhook-server ./cmd/webhook-server
-
-FROM alpine:latest
-RUN apk --no-cache add ca-certificates
-WORKDIR /root/
-COPY --from=builder /app/k8s-apiserver ./k8s-apiserver
-COPY --from=builder /app/webhook-server ./webhook-server
-EXPOSE 8443 9443
-CMD ["/root/k8s-apiserver"] 
+FROM gcr.io/distroless/static:nonroot
+WORKDIR /
+COPY --from=builder /app/netguard-apiserver /netguard-apiserver
+USER 65532:65532
+CMD ["/netguard-apiserver"] 
