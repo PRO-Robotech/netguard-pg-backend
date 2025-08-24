@@ -1,0 +1,23 @@
+# Basic Service resource for testing
+# No dependencies - can be created independently
+# NOTE: Service v1beta1 ports must be strings, supports ranges like "8080-8090"
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Service
+metadata:
+  name: test-service
+  namespace: netguard-test
+  labels:
+    app: test-service
+    tier: basic
+spec:
+  description: "Basic test service with HTTP and HTTPS ports"
+  ingressPorts:
+    - port: "80"              # String format required (not number)
+      protocol: TCP           # TCP or UDP
+      description: "HTTP port"
+    - port: "443" 
+      protocol: TCP
+      description: "HTTPS port"
+    - port: "8080-8090"       # Port ranges supported
+      protocol: TCP
+      description: "HTTP range for development"

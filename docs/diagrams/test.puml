@@ -1,0 +1,16 @@
+@startuml
+!theme plain
+skinparam backgroundColor #FFFFFF
+
+actor User
+participant "Kubernetes API" as K8S
+participant "Aggregated API" as AGG
+participant "Backend" as Backend
+
+User -> K8S: kubectl apply
+K8S -> AGG: Forward request
+AGG -> Backend: Process request
+Backend --> AGG: Response
+AGG --> K8S: Response
+K8S --> User: Result
+@enduml 

@@ -1,0 +1,12 @@
+# Basic Network resource for testing
+# No dependencies - can be created independently
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Network
+metadata:
+  name: test-network
+  namespace: netguard-test
+  labels:
+    app: test-network
+    tier: basic
+spec:
+  cidr: "10.0.0.0/16"

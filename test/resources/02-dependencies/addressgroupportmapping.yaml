@@ -1,0 +1,14 @@
+# AddressGroupPortMapping resource - depends on AddressGroup
+# PREREQUISITES: test-addressgroup must exist  
+# NOTE: AddressGroupPortMapping v1beta1 has empty spec (controller-managed resource)
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroupPortMapping
+metadata:
+  name: test-addressgroup
+  namespace: netguard-test
+  labels:
+    app: test-agpm  
+    tier: dependency
+  annotations:
+    description: "Port mapping managed by controller - spec intentionally empty"
+spec: {}  # Empty spec - this is controller-managed resource

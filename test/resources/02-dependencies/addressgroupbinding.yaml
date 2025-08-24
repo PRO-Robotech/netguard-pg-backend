@@ -1,0 +1,21 @@
+# AddressGroupBinding resource - depends on Service and AddressGroup
+# PREREQUISITES: test-service and test-addressgroup must exist
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroupBinding
+metadata:
+  name: test-agb
+  namespace: netguard-test
+  labels:
+    app: test-agb
+    tier: dependency
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: test-service
+    namespace: netguard-test
+  addressGroupRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: test-addressgroup
+    namespace: netguard-test

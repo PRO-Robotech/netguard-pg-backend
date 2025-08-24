@@ -1,0 +1,44 @@
+
+FROM golang:1.24-alpine AS builder
+
+# Install git for go modules that use "go get" with vcs
+RUN apk add --no-cache git
+
+# Leverage Docker cache: copy only go.mod/sum first
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Force rebuild by adding timestamp
+RUN echo "Build timestamp: $(date)" > /tmp/build_timestamp
+COPY cmd/ cmd/
+COPY internal/ internal/
+COPY pkg/ pkg/
+COPY protos/ protos/
+COPY config/ config/
+
+# Build statically linked binary
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo \
+    -ldflags='-w -s -extldflags "-static"' \
+    -o /app/server ./cmd/server
+
+FROM alpine:latest
+
+RUN apk --no-cache add ca-certificates netcat-openbsd && \
+    update-ca-certificates
+
+WORKDIR /root/
+
+# Copy compiled binary
+COPY --from=builder /app/server ./server
+
+# Copy configuration file
+COPY --from=builder /src/config/config.yaml ./config/config.yaml
+
+EXPOSE 9090 8080
+
+# 
+# By default run in in-memory mode. Override flags via args or k8s manifest.
+#
+ENTRYPOINT ["/root/server"]
+CMD ["--memory", "--grpc-addr=:9090", "--http-addr=:8080"] 

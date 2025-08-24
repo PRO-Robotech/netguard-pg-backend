@@ -1,0 +1,73 @@
+# Complete web service scenario with all related resources
+# This demonstrates a realistic scenario with Service + AddressGroup + Bindings + Rules
+---
+# 1. Web Service
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Service
+metadata:
+  name: web-service
+  namespace: netguard-test
+  labels:
+    app: web-service
+    tier: web
+spec:
+  description: "Web service with HTTP/HTTPS"
+  ingressPorts:
+    - port: "80"
+      protocol: TCP
+      description: "HTTP"
+    - port: "443"
+      protocol: TCP
+      description: "HTTPS"
+---
+# 2. Web AddressGroup
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroup
+metadata:
+  name: web-addressgroup
+  namespace: netguard-test
+  labels:
+    app: web-service
+    tier: web
+spec:
+  description: "Web tier address group"
+  defaultAction: ACCEPT
+  logs: true
+  trace: false
+---
+# 3. Web Service Alias
+apiVersion: netguard.sgroups.io/v1beta1
+kind: ServiceAlias
+metadata:
+  name: web-service-alias
+  namespace: netguard-test
+  labels:
+    app: web-service
+    tier: web
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: web-service
+    namespace: netguard-test
+---
+# 4. Web AddressGroup Binding
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroupBinding
+metadata:
+  name: web-agb
+  namespace: netguard-test
+  labels:
+    app: web-service
+    tier: web
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: web-service
+    namespace: netguard-test
+  addressGroupRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: web-addressgroup
+    namespace: netguard-test

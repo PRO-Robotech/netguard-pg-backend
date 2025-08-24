@@ -1,0 +1,244 @@
+# Server-Side Apply Test Scenarios Configuration
+# This file defines various test scenarios for E2E testing
+
+scenarios:
+  - name: "basic-service-create"
+    description: "Create a basic service via Server-Side Apply"
+    resource_type: "Service"
+    field_manager: "test-manager-basic"
+    force: false
+    resource:
+      apiVersion: netguard.sgroups.io/v1beta1
+      kind: Service
+      metadata:
+        name: basic-service
+        namespace: ssa-test
+        labels:
+          app: basic
+          test-scenario: basic-service-create
+      spec:
+        description: "Basic service for E2E testing"
+        ingressPorts:
+        - port: "80"
+          protocol: TCP
+
+  - name: "complex-service-with-multiple-ports"
+    description: "Create a service with multiple ingress ports"
+    resource_type: "Service"
+    field_manager: "test-manager-complex"
+    force: false
+    resource:
+      apiVersion: netguard.sgroups.io/v1beta1
+      kind: Service
+      metadata:
+        name: complex-service
+        namespace: ssa-test
+        labels:
+          app: complex
+          version: v1.2.3
+          environment: test
+        annotations:
+          description: "Complex service with annotations"
+          owner: e2e-test-suite
+      spec:
+        description: "Complex service with multiple ports and descriptions"
+        ingressPorts:
+        - port: "80"
+          protocol: TCP
+          description: "HTTP traffic"
+        - port: "443"
+          protocol: TCP
+          description: "HTTPS traffic"
+        - port: "8080"
+          protocol: TCP
+          description: "Management interface"
+        - port: "9090"
+          protocol: TCP
+          description: "Metrics endpoint"
+
+  - name: "address-group-with-networks"
+    description: "Create an address group with multiple networks"
+    resource_type: "AddressGroup"
+    field_manager: "test-manager-ag"
+    force: false
+    resource:
+      apiVersion: netguard.sgroups.io/v1beta1
+      kind: AddressGroup
+      metadata:
+        name: test-address-group
+        namespace: ssa-test
+        labels:
+          security-zone: dmz
+          test-scenario: address-group-with-networks
+      spec:
+        defaultAction: ACCEPT
+        logs: true
+        trace: false
+      networks:
+      - name: dmz-subnet-1
+        cidr: "192.168.1.0/24"
+        namespace: ssa-test
+      - name: dmz-subnet-2
+        cidr: "192.168.2.0/24"
+        namespace: ssa-test
+
+  - name: "service-update-same-manager"
+    description: "Update service with same field manager"
+    resource_type: "Service"
+    field_manager: "test-manager-basic"  # Same as basic-service-create
+    force: false
+    depends_on: "basic-service-create"
+    resource:
+      apiVersion: netguard.sgroups.io/v1beta1
+      kind: Service
+      metadata:
+        name: basic-service
+        namespace: ssa-test
+        labels:
+          app: basic
+          test-scenario: basic-service-create
+          updated: "true"  # New label
+      spec:
+        description: "Updated basic service for E2E testing"
+        ingressPorts:
+        - port: "80"
+          protocol: TCP
+        - port: "443"
+          protocol: TCP
+          description: "Added HTTPS port"
+
+  - name: "service-conflict-scenario"
+    description: "Create conflict with different field manager"
+    resource_type: "Service"
+    field_manager: "test-manager-conflicting"
+    force: false
+    depends_on: "service-update-same-manager"
+    expect_error: true
+    resource:
+      apiVersion: netguard.sgroups.io/v1beta1
+      kind: Service
+      metadata:
+        name: basic-service
+        namespace: ssa-test
+        labels:
+          app: basic-conflicting  # Conflicting change
+          version: v2.0.0  # New conflicting field
+      spec:
+        description: "Conflicting update - should fail"
+        ingressPorts:
+        - port: "8080"  # Conflicting port change
+          protocol: TCP
+
+  - name: "service-force-apply"
+    description: "Resolve conflicts with force apply"
+    resource_type: "Service"
+    field_manager: "test-manager-conflicting"
+    force: true
+    depends_on: "service-conflict-scenario"
+    resource:
+      apiVersion: netguard.sgroups.io/v1beta1
+      kind: Service
+      metadata:
+        name: basic-service
+        namespace: ssa-test
+        labels:
+          app: basic-resolved
+          version: v2.0.0
+          conflict-resolved: "true"
+      spec:
+        description: "Force applied - conflicts resolved"
+        ingressPorts:
+        - port: "8080"
+          protocol: TCP
+          description: "Force applied port"
+
+test_validations:
+  - name: "managedFields_structure"
+    description: "Validate managedFields structure is correct"
+    checks:
+    - field: "managedFields"
+      required: true
+    - field: "managedFields[*].manager"
+      required: true
+      type: string
+    - field: "managedFields[*].operation"
+      required: true
+      enum: ["Apply", "Update"]
+    - field: "managedFields[*].apiVersion"
+      required: true
+      value: "netguard.sgroups.io/v1beta1"
+    - field: "managedFields[*].time"
+      required: true
+      type: time
+    - field: "managedFields[*].fieldsType"
+      required: true
+      value: "FieldsV1"
+    - field: "managedFields[*].fieldsV1"
+      required: true
+    - field: "managedFields[*].fieldsV1.raw"
+      required: true
+      type: json
+
+  - name: "field_ownership_tracking"
+    description: "Validate field ownership is tracked correctly"
+    checks:
+    - field: "managedFields"
+      min_length: 1
+    - description: "Each manager should own specific fields"
+    - description: "FieldsV1 should contain proper field paths"
+    - description: "No duplicate manager+operation combinations"
+
+  - name: "round_trip_consistency"
+    description: "Validate data consistency across operations"
+    checks:
+    - description: "Applied data matches retrieved data"
+    - description: "Special characters preserved (unicode, emojis)"
+    - description: "Complex nested structures preserved"
+    - description: "Array order preserved"
+
+cleanup_policies:
+  after_each_test: true
+  after_suite: true
+  resources_to_cleanup:
+  - Services
+  - AddressGroups
+  - NetworkBindings
+
+error_scenarios:
+  - name: "invalid_field_manager_name"
+    description: "Test invalid field manager names"
+    invalid_managers:
+    - ""
+    - "manager with spaces"
+    - "manager/with/slashes"
+    - "manager.with.dots.but.too.long.to.be.reasonable.and.should.fail.validation"
+
+  - name: "malformed_apply_patches"
+    description: "Test malformed apply patch data"
+    invalid_patches:
+    - '{"invalid": "json'  # Malformed JSON
+    - '{"metadata": {"name": null}}'  # Null required field
+    - '{}'  # Empty patch
+    - 'not-json-at-all'  # Not JSON
+
+performance_scenarios:
+  - name: "large_service_apply"
+    description: "Apply service with many ingress ports"
+    resource_type: "Service"
+    field_manager: "perf-test-manager"
+    resource:
+      # Service with 100+ ingress ports for performance testing
+      spec:
+        description: "Performance test service with many ports"
+        ingressPorts: []  # Will be generated programmatically
+
+  - name: "concurrent_applies"
+    description: "Concurrent Server-Side Apply operations"
+    concurrent_operations: 10
+    resource_type: "Service"
+    base_resource_name: "concurrent-test"
+
+  - name: "large_managed_fields"
+    description: "Test with many field managers"
+    managers_count: 50
+    resource_type: "Service"

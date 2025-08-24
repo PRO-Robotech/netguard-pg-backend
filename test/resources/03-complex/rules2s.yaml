@@ -1,0 +1,26 @@
+# RuleS2S resource - depends on ServiceAliases  
+# PREREQUISITES: test-service-alias must exist (which requires test-service)
+# NOTE: RuleS2S v1beta1 - traffic field is IMMUTABLE, trace field may be IMMUTABLE
+apiVersion: netguard.sgroups.io/v1beta1
+kind: RuleS2S
+metadata:
+  name: test-rules2s
+  namespace: netguard-test
+  labels:
+    app: test-rules2s
+    tier: complex
+  annotations:
+    description: "Service-to-service rule allowing ingress traffic"
+spec:
+  traffic: INGRESS          # IMMUTABLE: INGRESS or EGRESS (cannot be changed after creation)
+  serviceLocalRef:          # NamespacedObjectReference to ServiceAlias
+    apiVersion: netguard.sgroups.io/v1beta1  # Required
+    kind: ServiceAlias       # Required
+    name: test-service-alias # Required
+    namespace: netguard-test # Required
+  serviceRef:              # NamespacedObjectReference to ServiceAlias
+    apiVersion: netguard.sgroups.io/v1beta1  # Required
+    kind: ServiceAlias       # Required
+    name: test-service-alias # Required
+    namespace: netguard-test # Required
+  trace: false             # May be immutable - use annotations for mutable descriptions

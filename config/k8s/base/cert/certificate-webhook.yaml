@@ -1,0 +1,14 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: netguard-apiserver-webhook-cert
+  namespace: netguard-system
+spec:
+  secretName: netguard-webhook-tls          # ← TLS secret
+  duration: 8760h                           # 1 year
+  renewBefore: 720h                         # 30 days
+  issuerRef:
+    name: netguard-selfsigned
+  dnsNames:
+    - netguard-apiserver-webhook.netguard-system.svc
+    - netguard-apiserver-webhook.netguard-system.svc.cluster.local

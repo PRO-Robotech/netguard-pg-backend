@@ -1,0 +1,157 @@
+# config/samples/flow/example-flow.yaml
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: application
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: infra
+# ------------------------------------------------------------
+# Services (namespace application)
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Service
+metadata:
+  name: backend
+  namespace: application
+spec:
+  description: "Backend API service"
+  ingressPorts:
+    - protocol: TCP
+      port: "8080"
+    - protocol: TCP
+      port: "8081"
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Service
+metadata:
+  name: web
+  namespace: application
+spec:
+  description: "Frontend Web service"
+  ingressPorts:
+    - protocol: TCP
+      port: "80"
+# Services (namespace infra)
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Service
+metadata:
+  name: postgress
+  namespace: infra
+spec:
+  description: "PostgreSQL database"
+  ingressPorts:
+    - protocol: TCP
+      port: "5432"
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Service
+metadata:
+  name: logs
+  namespace: infra
+spec:
+  description: "Centralized logging"
+  ingressPorts:
+    - protocol: TCP
+      port: "9200"
+# ------------------------------------------------------------
+# ServiceAliases (application)
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: ServiceAlias
+metadata:
+  name: alias-backend
+  namespace: application
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: backend
+    namespace: application
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: ServiceAlias
+metadata:
+  name: alias-web
+  namespace: application
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: web
+    namespace: application
+# ServiceAliases (infra)
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: ServiceAlias
+metadata:
+  name: alias-postgress
+  namespace: infra
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: postgress
+    namespace: infra
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: ServiceAlias
+metadata:
+  name: alias-logs
+  namespace: infra
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: logs
+    namespace: infra
+# ------------------------------------------------------------
+# AddressGroups (application)
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroup
+metadata:
+  name: ingress-application
+  namespace: application
+spec:
+  defaultAction: ACCEPT  # Required field
+  logs: false
+  trace: false
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroup
+metadata:
+  name: egress-application
+  namespace: application
+spec:
+  defaultAction: ACCEPT  # Required field  
+  logs: false
+  trace: false
+# AddressGroups (infra)
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroup
+metadata:
+  name: ingress-infra
+  namespace: infra
+spec:
+  defaultAction: ACCEPT  # Required field
+  logs: false
+  trace: false
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroup
+metadata:
+  name: egress-infra
+  namespace: infra
+spec:
+  defaultAction: ACCEPT  # Required field
+  logs: false
+  trace: false
+# ------------------------------------------------------------
+# AddressGroupBindingPolicy - temporarily commented out
+# Will be applied later with stage 2 

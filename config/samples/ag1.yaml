@@ -1,0 +1,10 @@
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroup
+metadata:
+  name: web-servers
+  namespace: netguard-test
+spec:
+  description: "All web-server subnets 2"
+  addresses:
+    - address: 10.10.0.0/24
+    - address: 192.168.55.55/32

@@ -1,0 +1,45 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: netguard-base
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+# Namespace для всех ресурсов
+namespace: netguard-system
+
+# Shared resources (no backend deployment - that's overlay-specific)
+resources:
+- namespace.yaml
+- rbac.yaml
+- configmap.yaml
+- cert/issuer-selfsigned.yaml
+- cert/certificate-webhook.yaml
+- deployment.yaml           # API Server deployment (shared)
+- apiservice.yaml
+- validating-webhook.yaml
+- mutating-webhook.yaml
+
+# Общие метки для всех ресурсов
+labels:
+- pairs:
+    app.kubernetes.io/name: netguard-apiserver
+    app.kubernetes.io/part-of: netguard
+    app.kubernetes.io/version: v1.0.0
+
+# Общие аннотации
+commonAnnotations:
+  config.kubernetes.io/origin: |
+    path: config/k8s/base/kustomization.yaml
+  app.kubernetes.io/managed-by: kustomize
+
+# Образы для API Server (shared)
+images:
+- name: netguard/k8s-apiserver
+  newTag: latest
+
+# Replicas для API Server (можно переопределить в overlays)
+replicas:
+- name: netguard-apiserver
+  count: 1

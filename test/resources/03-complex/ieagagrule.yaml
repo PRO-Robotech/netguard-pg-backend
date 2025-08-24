@@ -1,0 +1,29 @@
+# IEAgAgRule resource - depends on AddressGroups
+# PREREQUISITES: test-addressgroup must exist
+apiVersion: netguard.sgroups.io/v1beta1
+kind: IEAgAgRule
+metadata:
+  name: test-ieagag-rule
+  namespace: netguard-test
+  labels:
+    app: test-ieagag-rule
+    tier: complex
+spec:
+  description: "Test IEAgAg rule for HTTP traffic between address groups"
+  transport: TCP
+  traffic: INGRESS
+  addressGroupLocal:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: test-addressgroup
+    namespace: netguard-test
+  addressGroup:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: test-addressgroup
+    namespace: netguard-test
+  action: ACCEPT
+  trace: false
+  priority: 100
+  ports:
+    - port: 80

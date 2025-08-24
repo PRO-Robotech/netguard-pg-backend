@@ -1,0 +1,1807 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "Netguard API",
+    "version": "1.0"
+  },
+  "tags": [
+    {
+      "name": "NetguardService",
+      "description": "Netguard API service"
+    }
+  ],
+  "schemes": [
+    "http"
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/v1/address-group-binding-policies": {
+      "get": {
+        "summary": "ListAddressGroupBindingPolicies - gets list of address group binding policies",
+        "description": "ListAddressGroupBindingPolicies: gets list of address group binding policies",
+        "operationId": "NetguardService_ListAddressGroupBindingPolicies",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListAddressGroupBindingPoliciesResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/address-group-binding-policies/{identifier.namespace}/{identifier.name}": {
+      "get": {
+        "summary": "GetAddressGroupBindingPolicy - gets a specific address group binding policy by ID",
+        "description": "GetAddressGroupBindingPolicy: gets a specific address group binding policy by ID",
+        "operationId": "NetguardService_GetAddressGroupBindingPolicy",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetAddressGroupBindingPolicyResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "identifier.namespace",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "identifier.name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/address-group-bindings": {
+      "get": {
+        "summary": "ListAddressGroupBindings - gets list of address group bindings",
+        "description": "ListAddressGroupBindings: gets list of address group bindings",
+        "operationId": "NetguardService_ListAddressGroupBindings",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListAddressGroupBindingsResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/address-group-bindings/{identifier.namespace}/{identifier.name}": {
+      "get": {
+        "summary": "GetAddressGroupBinding - gets a specific address group binding by ID",
+        "description": "GetAddressGroupBinding: gets a specific address group binding by ID",
+        "operationId": "NetguardService_GetAddressGroupBinding",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetAddressGroupBindingResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "identifier.namespace",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "identifier.name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/address-group-port-mappings": {
+      "get": {
+        "summary": "ListAddressGroupPortMappings - gets list of address group port mappings",
+        "description": "ListAddressGroupPortMappings: gets list of address group port mappings",
+        "operationId": "NetguardService_ListAddressGroupPortMappings",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListAddressGroupPortMappingsResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/address-group-port-mappings/{identifier.namespace}/{identifier.name}": {
+      "get": {
+        "summary": "GetAddressGroupPortMapping - gets a specific address group port mapping by ID",
+        "description": "GetAddressGroupPortMapping: gets a specific address group port mapping by ID",
+        "operationId": "NetguardService_GetAddressGroupPortMapping",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetAddressGroupPortMappingResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "identifier.namespace",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "identifier.name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/address-groups": {
+      "get": {
+        "summary": "ListAddressGroups - gets list of address groups",
+        "description": "ListAddressGroups: gets list of address groups",
+        "operationId": "NetguardService_ListAddressGroups",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListAddressGroupsResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/address-groups/{identifier.namespace}/{identifier.name}": {
+      "get": {
+        "summary": "GetAddressGroup - gets a specific address group by ID",
+        "description": "GetAddressGroup: gets a specific address group by ID",
+        "operationId": "NetguardService_GetAddressGroup",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetAddressGroupResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "identifier.namespace",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "identifier.name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/ieagag-rules": {
+      "get": {
+        "summary": "ListIEAgAgRules - gets list of IEAgAgRules",
+        "description": "ListIEAgAgRules: gets list of IEAgAgRules",
+        "operationId": "NetguardService_ListIEAgAgRules",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListIEAgAgRulesResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/ieagag-rules/{identifier.namespace}/{identifier.name}": {
+      "get": {
+        "summary": "GetIEAgAgRule - gets a specific IEAgAgRule by ID",
+        "description": "GetIEAgAgRule: gets a specific IEAgAgRule by ID",
+        "operationId": "NetguardService_GetIEAgAgRule",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetIEAgAgRuleResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "identifier.namespace",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "identifier.name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/network-bindings": {
+      "get": {
+        "summary": "ListNetworkBindings - gets list of network bindings",
+        "description": "ListNetworkBindings: gets list of network bindings",
+        "operationId": "NetguardService_ListNetworkBindings",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListNetworkBindingsResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/network-bindings/{identifier.namespace}/{identifier.name}": {
+      "get": {
+        "summary": "GetNetworkBinding - gets a specific network binding by ID",
+        "description": "GetNetworkBinding: gets a specific network binding by ID",
+        "operationId": "NetguardService_GetNetworkBinding",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetNetworkBindingResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "identifier.namespace",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "identifier.name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/networks": {
+      "get": {
+        "summary": "ListNetworks - gets list of networks",
+        "description": "ListNetworks: gets list of networks",
+        "operationId": "NetguardService_ListNetworks",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListNetworksResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/networks/{identifier.namespace}/{identifier.name}": {
+      "get": {
+        "summary": "GetNetwork - gets a specific network by ID",
+        "description": "GetNetwork: gets a specific network by ID",
+        "operationId": "NetguardService_GetNetwork",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetNetworkResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "identifier.namespace",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "identifier.name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/rule-s2s": {
+      "get": {
+        "summary": "ListRuleS2S - gets list of rule s2s",
+        "description": "ListRuleS2S: gets list of rule s2s",
+        "operationId": "NetguardService_ListRuleS2S",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListRuleS2SResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/rule-s2s/{identifier.namespace}/{identifier.name}": {
+      "get": {
+        "summary": "GetRuleS2S - gets a specific rule s2s by ID",
+        "description": "GetRuleS2S: gets a specific rule s2s by ID",
+        "operationId": "NetguardService_GetRuleS2S",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetRuleS2SResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "identifier.namespace",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "identifier.name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/service-aliases": {
+      "get": {
+        "summary": "ListServiceAliases - gets list of service aliases",
+        "description": "ListServiceAliases: gets list of service aliases",
+        "operationId": "NetguardService_ListServiceAliases",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListServiceAliasesResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/service-aliases/{identifier.namespace}/{identifier.name}": {
+      "get": {
+        "summary": "GetServiceAlias - gets a specific service alias by ID",
+        "description": "GetServiceAlias: gets a specific service alias by ID",
+        "operationId": "NetguardService_GetServiceAlias",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetServiceAliasResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "identifier.namespace",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "identifier.name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/services": {
+      "get": {
+        "summary": "ListServices - gets list of services",
+        "description": "ListServices: gets list of services",
+        "operationId": "NetguardService_ListServices",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListServicesResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/services/{identifier.namespace}/{identifier.name}": {
+      "get": {
+        "summary": "GetService - gets a specific service by ID",
+        "description": "GetService: gets a specific service by ID",
+        "operationId": "NetguardService_GetService",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetServiceResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "identifier.namespace",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "identifier.name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/sync": {
+      "post": {
+        "summary": "Sync - syncs data in DB",
+        "description": "Sync: makes changes in DB",
+        "operationId": "NetguardService_Sync",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1SyncReq"
+            }
+          }
+        ],
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/sync/status": {
+      "get": {
+        "summary": "SyncStatus - gets last succeeded update DB status",
+        "description": "SyncStatus: gets last succeeded update DB status",
+        "operationId": "NetguardService_SyncStatus",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SyncStatusResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "NetIPTransport": {
+      "type": "string",
+      "enum": [
+        "TCP",
+        "UDP"
+      ],
+      "default": "TCP"
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "v1AddressGroup": {
+      "type": "object",
+      "properties": {
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
+        },
+        "defaultAction": {
+          "$ref": "#/definitions/v1RuleAction",
+          "title": "Default action for the address group (ACCEPT/DROP)"
+        },
+        "logs": {
+          "type": "boolean",
+          "title": "Whether to enable logs"
+        },
+        "trace": {
+          "type": "boolean",
+          "title": "Whether to enable trace"
+        },
+        "networks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1NetworkItem"
+          },
+          "title": "Networks associated with this address group"
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta"
+        }
+      },
+      "title": "AddressGroup - represents an address group configuration for Netguard",
+      "required": [
+        "selfRef",
+        "defaultAction"
+      ]
+    },
+    "v1AddressGroupBinding": {
+      "type": "object",
+      "properties": {
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
+        },
+        "serviceRef": {
+          "$ref": "#/definitions/v1ServiceRef"
+        },
+        "addressGroupRef": {
+          "$ref": "#/definitions/v1AddressGroupRef"
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta"
+        }
+      },
+      "title": "AddressGroupBinding - binding between a service and an address group",
+      "required": [
+        "selfRef",
+        "serviceRef",
+        "addressGroupRef"
+      ]
+    },
+    "v1AddressGroupBindingPolicy": {
+      "type": "object",
+      "properties": {
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
+        },
+        "serviceRef": {
+          "$ref": "#/definitions/v1ServiceRef"
+        },
+        "addressGroupRef": {
+          "$ref": "#/definitions/v1AddressGroupRef"
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta"
+        }
+      },
+      "title": "AddressGroupBindingPolicy - policy allowing binding of a service to an address group",
+      "required": [
+        "selfRef",
+        "serviceRef",
+        "addressGroupRef"
+      ]
+    },
+    "v1AddressGroupPortMapping": {
+      "type": "object",
+      "properties": {
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
+        },
+        "accessPorts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ServicePortsRef"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta"
+        }
+      },
+      "title": "AddressGroupPortMapping - mapping between an address group and allowed ports",
+      "required": [
+        "selfRef"
+      ]
+    },
+    "v1AddressGroupRef": {
+      "type": "object",
+      "properties": {
+        "identifier": {
+          "$ref": "#/definitions/v1ResourceIdentifier",
+          "title": "DEPRECATED: Use object_ref instead"
+        },
+        "objectRef": {
+          "$ref": "#/definitions/v1NamespacedObjectReference",
+          "title": "NEW: Full object reference with apiVersion, kind and namespace"
+        }
+      },
+      "title": "AddressGroupRef - reference to an address group"
+    },
+    "v1Condition": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "observedGeneration": {
+          "type": "string",
+          "format": "int64"
+        },
+        "lastTransitionTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "title": "Condition - kubernetes condition for resource status"
+    },
+    "v1GetAddressGroupBindingPolicyResp": {
+      "type": "object",
+      "properties": {
+        "addressGroupBindingPolicy": {
+          "$ref": "#/definitions/v1AddressGroupBindingPolicy"
+        }
+      },
+      "title": "GetAddressGroupBindingPolicyResp - response with a specific address group binding policy"
+    },
+    "v1GetAddressGroupBindingResp": {
+      "type": "object",
+      "properties": {
+        "addressGroupBinding": {
+          "$ref": "#/definitions/v1AddressGroupBinding"
+        }
+      },
+      "title": "GetAddressGroupBindingResp - response with a specific address group binding"
+    },
+    "v1GetAddressGroupPortMappingResp": {
+      "type": "object",
+      "properties": {
+        "addressGroupPortMapping": {
+          "$ref": "#/definitions/v1AddressGroupPortMapping"
+        }
+      },
+      "title": "GetAddressGroupPortMappingResp - response with a specific address group port mapping"
+    },
+    "v1GetAddressGroupResp": {
+      "type": "object",
+      "properties": {
+        "addressGroup": {
+          "$ref": "#/definitions/v1AddressGroup"
+        }
+      },
+      "title": "GetAddressGroupResp - response with a specific address group"
+    },
+    "v1GetIEAgAgRuleResp": {
+      "type": "object",
+      "properties": {
+        "ieagagRule": {
+          "$ref": "#/definitions/v1IEAgAgRule"
+        }
+      },
+      "title": "GetIEAgAgRuleResp - response with a specific IEAgAgRule"
+    },
+    "v1GetNetworkBindingResp": {
+      "type": "object",
+      "properties": {
+        "networkBinding": {
+          "$ref": "#/definitions/v1NetworkBinding"
+        }
+      },
+      "title": "GetNetworkBindingResp - response with a specific network binding"
+    },
+    "v1GetNetworkResp": {
+      "type": "object",
+      "properties": {
+        "network": {
+          "$ref": "#/definitions/v1Network"
+        }
+      },
+      "title": "GetNetworkResp - response with a specific network"
+    },
+    "v1GetRuleS2SResp": {
+      "type": "object",
+      "properties": {
+        "ruleS2s": {
+          "$ref": "#/definitions/v1RuleS2S"
+        }
+      },
+      "title": "GetRuleS2SResp - response with a specific rule s2s"
+    },
+    "v1GetServiceAliasResp": {
+      "type": "object",
+      "properties": {
+        "serviceAlias": {
+          "$ref": "#/definitions/v1ServiceAlias"
+        }
+      },
+      "title": "GetServiceAliasResp - response with a specific service alias"
+    },
+    "v1GetServiceResp": {
+      "type": "object",
+      "properties": {
+        "service": {
+          "$ref": "#/definitions/v1Service"
+        }
+      },
+      "title": "GetServiceResp - response with a specific service"
+    },
+    "v1IEAgAgRule": {
+      "type": "object",
+      "properties": {
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
+        },
+        "transport": {
+          "$ref": "#/definitions/NetIPTransport"
+        },
+        "traffic": {
+          "$ref": "#/definitions/v1Traffic"
+        },
+        "addressGroupLocal": {
+          "$ref": "#/definitions/v1AddressGroupRef"
+        },
+        "addressGroup": {
+          "$ref": "#/definitions/v1AddressGroupRef"
+        },
+        "ports": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1PortSpec"
+          }
+        },
+        "action": {
+          "$ref": "#/definitions/v1RuleAction"
+        },
+        "logs": {
+          "type": "boolean"
+        },
+        "priority": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta"
+        },
+        "trace": {
+          "type": "boolean"
+        }
+      },
+      "title": "IEAgAgRule - rule between two address groups",
+      "required": [
+        "selfRef",
+        "transport",
+        "traffic",
+        "addressGroupLocal",
+        "addressGroup",
+        "action"
+      ]
+    },
+    "v1IngressPort": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "$ref": "#/definitions/NetIPTransport"
+        },
+        "port": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "title": "IngressPort - defines a port configuration for ingress traffic"
+    },
+    "v1ListAddressGroupBindingPoliciesResp": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1AddressGroupBindingPolicy"
+          }
+        }
+      },
+      "title": "ListAddressGroupBindingPoliciesResp - response with list of address group binding policies"
+    },
+    "v1ListAddressGroupBindingsResp": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1AddressGroupBinding"
+          }
+        }
+      },
+      "title": "ListAddressGroupBindingsResp - response with list of address group bindings"
+    },
+    "v1ListAddressGroupPortMappingsResp": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1AddressGroupPortMapping"
+          }
+        }
+      },
+      "title": "ListAddressGroupPortMappingsResp - response with list of address group port mappings"
+    },
+    "v1ListAddressGroupsResp": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1AddressGroup"
+          }
+        }
+      },
+      "title": "ListAddressGroupsResp - response with list of address groups"
+    },
+    "v1ListIEAgAgRulesResp": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IEAgAgRule"
+          }
+        }
+      },
+      "title": "ListIEAgAgRulesResp - response with list of IEAgAgRules"
+    },
+    "v1ListNetworkBindingsResp": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1NetworkBinding"
+          }
+        }
+      },
+      "title": "ListNetworkBindingsResp - response with list of network bindings"
+    },
+    "v1ListNetworksResp": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Network"
+          }
+        }
+      },
+      "title": "ListNetworksResp - response with list of networks"
+    },
+    "v1ListRuleS2SResp": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1RuleS2S"
+          }
+        }
+      },
+      "title": "ListRuleS2SResp - response with list of rule s2s"
+    },
+    "v1ListServiceAliasesResp": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ServiceAlias"
+          }
+        }
+      },
+      "title": "ListServiceAliasesResp - response with list of service aliases"
+    },
+    "v1ListServicesResp": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Service"
+          }
+        }
+      },
+      "title": "ListServicesResp - response with list of services"
+    },
+    "v1ManagedFieldsEntry": {
+      "type": "object",
+      "properties": {
+        "manager": {
+          "type": "string",
+          "title": "Manager is an identifier of the workflow managing these fields"
+        },
+        "operation": {
+          "type": "string",
+          "title": "Operation is the type of operation which lead to this ManagedFieldsEntry being created\nPossible values: \"Apply\", \"Update\""
+        },
+        "apiVersion": {
+          "type": "string",
+          "title": "APIVersion defines the version of this resource"
+        },
+        "time": {
+          "type": "string",
+          "format": "date-time",
+          "title": "Time is the timestamp of when the ManagedFields entry was added"
+        },
+        "fieldsType": {
+          "type": "string",
+          "title": "FieldsType is the discriminator for the different fields format"
+        },
+        "fieldsV1": {
+          "type": "string",
+          "format": "byte",
+          "title": "FieldsV1 stores a set of fields in a data structure like Patch\nSerialized as JSON bytes for compatibility"
+        },
+        "subresource": {
+          "type": "string",
+          "title": "Subresource is the name of the subresource used to update that object, or empty string if the object was updated through the main resource"
+        }
+      },
+      "title": "ManagedFieldsEntry represents a single entry in the managedFields list\nCompatible with k8s.io/apimachinery/pkg/apis/meta/v1.ManagedFieldsEntry"
+    },
+    "v1Meta": {
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string"
+        },
+        "resourceVersion": {
+          "type": "string"
+        },
+        "generation": {
+          "type": "string",
+          "format": "int64"
+        },
+        "creationTs": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Condition"
+          },
+          "title": "Status management - формируется Backend, отображается в Status клиентам"
+        },
+        "observedGeneration": {
+          "type": "string",
+          "format": "int64"
+        },
+        "generatedName": {
+          "type": "string",
+          "description": "GeneratedName is an optional prefix, used by the server, to generate a unique name\nONLY IF the Name field has not been provided. Stored for round-trip compatibility."
+        },
+        "managedFields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ManagedFieldsEntry"
+          },
+          "title": "ManagedFields stores Server-Side Apply field ownership information\nCompatible with k8s.io/apimachinery/pkg/apis/meta/v1.ManagedFieldsEntry"
+        }
+      },
+      "description": "Meta - kubernetes system metadata stored round-trip."
+    },
+    "v1NamespacedObjectReference": {
+      "type": "object",
+      "properties": {
+        "apiVersion": {
+          "type": "string",
+          "title": "APIVersion of the referenced object"
+        },
+        "kind": {
+          "type": "string",
+          "title": "Kind of the referenced object"
+        },
+        "name": {
+          "type": "string",
+          "title": "Name of the referenced object"
+        },
+        "namespace": {
+          "type": "string",
+          "title": "Namespace of the referenced object"
+        }
+      },
+      "title": "NamespacedObjectReference extends ObjectReference with a Namespace field"
+    },
+    "v1Network": {
+      "type": "object",
+      "properties": {
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
+        },
+        "cidr": {
+          "type": "string",
+          "title": "Network in CIDR notation"
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta"
+        },
+        "isBound": {
+          "type": "boolean",
+          "description": "Whether the network is bound to an AddressGroup",
+          "title": "Status fields"
+        },
+        "bindingRef": {
+          "$ref": "#/definitions/v1ObjectReference",
+          "title": "Reference to the NetworkBinding"
+        },
+        "addressGroupRef": {
+          "$ref": "#/definitions/v1NamespacedObjectReference",
+          "title": "Reference to the bound AddressGroup"
+        }
+      },
+      "title": "Network - represents a network configuration for Netguard",
+      "required": [
+        "selfRef",
+        "cidr"
+      ]
+    },
+    "v1NetworkBinding": {
+      "type": "object",
+      "properties": {
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
+        },
+        "networkRef": {
+          "$ref": "#/definitions/v1ObjectReference",
+          "title": "Reference to the Network resource"
+        },
+        "addressGroupRef": {
+          "$ref": "#/definitions/v1ObjectReference",
+          "title": "Reference to the AddressGroup resource"
+        },
+        "networkItem": {
+          "$ref": "#/definitions/v1NetworkItem",
+          "title": "Network item details"
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta"
+        }
+      },
+      "title": "NetworkBinding - binding between a network and an address group",
+      "required": [
+        "selfRef",
+        "networkRef",
+        "addressGroupRef"
+      ]
+    },
+    "v1NetworkItem": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "cidr": {
+          "type": "string"
+        },
+        "apiVersion": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        }
+      },
+      "title": "NetworkItem - represents a network item in an address group"
+    },
+    "v1ObjectReference": {
+      "type": "object",
+      "properties": {
+        "apiVersion": {
+          "type": "string",
+          "title": "APIVersion of the referenced object"
+        },
+        "kind": {
+          "type": "string",
+          "title": "Kind of the referenced object"
+        },
+        "name": {
+          "type": "string",
+          "title": "Name of the referenced object"
+        }
+      },
+      "title": "ObjectReference contains enough information to let you locate the referenced object"
+    },
+    "v1PortRange": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "end": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "title": "PortRange - range of ports"
+    },
+    "v1PortRanges": {
+      "type": "object",
+      "properties": {
+        "ranges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1PortRange"
+          }
+        }
+      },
+      "title": "PortRanges - list of port ranges"
+    },
+    "v1PortSpec": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "destination": {
+          "type": "string"
+        }
+      },
+      "title": "PortSpec - port specification"
+    },
+    "v1ProtocolPorts": {
+      "type": "object",
+      "properties": {
+        "ports": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/v1PortRanges"
+          }
+        }
+      },
+      "title": "ProtocolPorts - mapping of protocols to port ranges"
+    },
+    "v1ResourceIdentifier": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        }
+      },
+      "title": "ResourceIdentifier - uniquely identifies a resource"
+    },
+    "v1RuleAction": {
+      "type": "string",
+      "enum": [
+        "UNDEFINED",
+        "DROP",
+        "ACCEPT"
+      ],
+      "default": "UNDEFINED",
+      "description": "- UNDEFINED: UNDEFINED - undefined action (should not be used)\n - DROP: DROP - drops network packet\n - ACCEPT: ACCEPT - accepts network packet",
+      "title": "RuleAction - action for rules and address groups"
+    },
+    "v1RuleS2S": {
+      "type": "object",
+      "properties": {
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
+        },
+        "traffic": {
+          "$ref": "#/definitions/v1Traffic"
+        },
+        "serviceLocalRef": {
+          "$ref": "#/definitions/v1ServiceRef",
+          "title": "Now uses NamespacedObjectReference internally"
+        },
+        "serviceRef": {
+          "$ref": "#/definitions/v1ServiceRef",
+          "title": "Now uses NamespacedObjectReference internally"
+        },
+        "ieagAgRuleRefs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ResourceIdentifier"
+          },
+          "title": "DEPRECATED: Use ieag_ag_rule_object_refs"
+        },
+        "ieagAgRuleObjectRefs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1NamespacedObjectReference"
+          },
+          "title": "NEW: Full object references"
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta"
+        },
+        "trace": {
+          "type": "boolean"
+        }
+      },
+      "title": "RuleS2S - rule between two services",
+      "required": [
+        "name",
+        "namespace",
+        "traffic",
+        "serviceLocalRef",
+        "serviceRef"
+      ]
+    },
+    "v1Service": {
+      "type": "object",
+      "properties": {
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
+        },
+        "description": {
+          "type": "string"
+        },
+        "ingressPorts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IngressPort"
+          }
+        },
+        "addressGroups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1AddressGroupRef"
+          }
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta"
+        }
+      },
+      "title": "Service - represents a service with ports",
+      "required": [
+        "selfRef"
+      ]
+    },
+    "v1ServiceAlias": {
+      "type": "object",
+      "properties": {
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
+        },
+        "serviceRef": {
+          "$ref": "#/definitions/v1ServiceRef"
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta"
+        }
+      },
+      "title": "ServiceAlias - alias for a service",
+      "required": [
+        "name",
+        "namespace",
+        "serviceRef"
+      ]
+    },
+    "v1ServicePortsRef": {
+      "type": "object",
+      "properties": {
+        "identifier": {
+          "$ref": "#/definitions/v1ResourceIdentifier",
+          "title": "DEPRECATED: Use object_ref instead"
+        },
+        "objectRef": {
+          "$ref": "#/definitions/v1NamespacedObjectReference",
+          "title": "NEW: Full object reference with apiVersion, kind and namespace"
+        },
+        "ports": {
+          "$ref": "#/definitions/v1ProtocolPorts"
+        }
+      },
+      "title": "ServicePortsRef - reference to a service and its allowed ports"
+    },
+    "v1ServiceRef": {
+      "type": "object",
+      "properties": {
+        "identifier": {
+          "$ref": "#/definitions/v1ResourceIdentifier",
+          "title": "DEPRECATED: Use object_ref instead"
+        },
+        "objectRef": {
+          "$ref": "#/definitions/v1NamespacedObjectReference",
+          "title": "NEW: Full object reference with apiVersion, kind and namespace"
+        }
+      },
+      "title": "ServiceRef - reference to a service"
+    },
+    "v1SyncAddressGroupBindingPolicies": {
+      "type": "object",
+      "properties": {
+        "addressGroupBindingPolicies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1AddressGroupBindingPolicy"
+          }
+        }
+      },
+      "title": "SyncAddressGroupBindingPolicies - subject of Address Group Binding Policies to sync"
+    },
+    "v1SyncAddressGroupBindings": {
+      "type": "object",
+      "properties": {
+        "addressGroupBindings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1AddressGroupBinding"
+          }
+        }
+      },
+      "title": "SyncAddressGroupBindings - subject of Address Group Bindings to sync"
+    },
+    "v1SyncAddressGroupPortMappings": {
+      "type": "object",
+      "properties": {
+        "addressGroupPortMappings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1AddressGroupPortMapping"
+          }
+        }
+      },
+      "title": "SyncAddressGroupPortMappings - subject of Address Group Port Mappings to sync"
+    },
+    "v1SyncAddressGroups": {
+      "type": "object",
+      "properties": {
+        "addressGroups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1AddressGroup"
+          }
+        }
+      },
+      "title": "SyncAddressGroups - subject of Address Groups to sync"
+    },
+    "v1SyncIEAgAgRules": {
+      "type": "object",
+      "properties": {
+        "ieagagRules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IEAgAgRule"
+          }
+        }
+      },
+      "title": "SyncIEAgAgRules - subject of IEAgAgRules to sync"
+    },
+    "v1SyncNetworkBindings": {
+      "type": "object",
+      "properties": {
+        "networkBindings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1NetworkBinding"
+          }
+        }
+      },
+      "title": "SyncNetworkBindings - subject of Network Bindings to sync"
+    },
+    "v1SyncNetworks": {
+      "type": "object",
+      "properties": {
+        "networks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Network"
+          }
+        }
+      },
+      "title": "SyncNetworks - subject of Networks to sync"
+    },
+    "v1SyncOp": {
+      "type": "string",
+      "enum": [
+        "NoOp",
+        "FullSync",
+        "Upsert",
+        "Delete"
+      ],
+      "default": "NoOp",
+      "description": "- NoOp: NoOp - no operation defined (default)\n - FullSync: FullSync - Delete+Insert+Update operations (default)\n - Upsert: Upsert - Insert+Update operations\n - Delete: Delete - Delete operation",
+      "title": "SyncOp - sync operation type"
+    },
+    "v1SyncReq": {
+      "type": "object",
+      "properties": {
+        "syncOp": {
+          "$ref": "#/definitions/v1SyncOp",
+          "title": "Sync operation to apply"
+        },
+        "services": {
+          "$ref": "#/definitions/v1SyncServices",
+          "title": "Subject of Services"
+        },
+        "addressGroups": {
+          "$ref": "#/definitions/v1SyncAddressGroups",
+          "title": "Subject of Address Groups"
+        },
+        "addressGroupBindings": {
+          "$ref": "#/definitions/v1SyncAddressGroupBindings",
+          "title": "Subject of Address Group Bindings"
+        },
+        "addressGroupPortMappings": {
+          "$ref": "#/definitions/v1SyncAddressGroupPortMappings",
+          "title": "Subject of Address Group Port Mappings"
+        },
+        "ruleS2s": {
+          "$ref": "#/definitions/v1SyncRuleS2S",
+          "title": "Subject of Rule S2S"
+        },
+        "serviceAliases": {
+          "$ref": "#/definitions/v1SyncServiceAliases",
+          "title": "Subject of Service Aliases"
+        },
+        "addressGroupBindingPolicies": {
+          "$ref": "#/definitions/v1SyncAddressGroupBindingPolicies",
+          "title": "Subject of Address Group Binding Policies"
+        },
+        "ieagagRules": {
+          "$ref": "#/definitions/v1SyncIEAgAgRules",
+          "title": "Subject of IEAgAgRules"
+        },
+        "networks": {
+          "$ref": "#/definitions/v1SyncNetworks",
+          "title": "Subject of Networks"
+        },
+        "networkBindings": {
+          "$ref": "#/definitions/v1SyncNetworkBindings",
+          "title": "Subject of Network Bindings"
+        }
+      },
+      "title": "SyncReq - request to sync"
+    },
+    "v1SyncRuleS2S": {
+      "type": "object",
+      "properties": {
+        "ruleS2s": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1RuleS2S"
+          }
+        }
+      },
+      "title": "SyncRuleS2S - subject of Rule S2S to sync"
+    },
+    "v1SyncServiceAliases": {
+      "type": "object",
+      "properties": {
+        "serviceAliases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ServiceAlias"
+          }
+        }
+      },
+      "title": "SyncServiceAliases - subject of Service Aliases to sync"
+    },
+    "v1SyncServices": {
+      "type": "object",
+      "properties": {
+        "services": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Service"
+          }
+        }
+      },
+      "title": "SyncServices - subject of Services to sync"
+    },
+    "v1SyncStatusResp": {
+      "type": "object",
+      "properties": {
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "title": "SyncStatusResp - sync status"
+    },
+    "v1Traffic": {
+      "type": "string",
+      "enum": [
+        "Ingress",
+        "Egress"
+      ],
+      "default": "Ingress"
+    }
+  },
+  "externalDocs": {
+    "description": "Documentation",
+    "url": "https://github.com/yourusername/netguard-pg-backend"
+  }
+}

@@ -1,0 +1,42 @@
+@startuml
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam sequenceArrowThickness 2
+skinparam roundcorner 20
+skinparam maxmessagesize 60
+
+actor User
+participant "Kubernetes API Server" as K8S
+participant "Aggregated API Server" as AGG
+participant "Admission Controller" as AC
+participant "gRPC Client" as GRPC
+participant "Business Logic" as BL
+participant "Repository" as REPO
+participant "Database" as DB
+
+User -> K8S: kubectl create -f service.yaml
+K8S -> AGG: POST /apis/netguard.sgroups.io/v1beta1/services
+AGG -> AC: ValidateCreate(service)
+
+AC -> AC: Проверка схемы ресурса
+AC -> AC: Валидация бизнес-правил
+
+alt Валидация успешна
+    AC --> AGG: ValidationResult{Allowed: true}
+    AGG -> GRPC: CreateService(service)
+    GRPC -> BL: CreateService(service)
+    BL -> BL: Дополнительная валидация
+    BL -> REPO: Create(service)
+    REPO -> DB: INSERT INTO services
+    DB --> REPO: Success
+    REPO --> BL: Service created
+    BL --> GRPC: Service created
+    GRPC --> AGG: Service created
+    AGG --> K8S: 201 Created
+    K8S --> User: service "my-service" created
+else Валидация неуспешна
+    AC --> AGG: ValidationResult{Allowed: false, Message: "..."}
+    AGG --> K8S: 400 Bad Request
+    K8S --> User: error: admission webhook denied
+end
+@enduml 

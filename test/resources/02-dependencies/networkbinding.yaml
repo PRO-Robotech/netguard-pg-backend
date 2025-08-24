@@ -1,0 +1,22 @@
+# NetworkBinding resource - depends on Network and AddressGroup
+# PREREQUISITES: test-network and test-addressgroup must exist
+# NOTE: NetworkBinding v1beta1 uses ObjectReference (no namespace field - same namespace assumed)
+apiVersion: netguard.sgroups.io/v1beta1
+kind: NetworkBinding
+metadata:
+  name: test-network-binding
+  namespace: netguard-test
+  labels:
+    app: test-network-binding
+    tier: dependency
+  annotations:
+    description: "Binds test-network CIDR to test-addressgroup security group"
+spec:
+  networkRef:
+    apiVersion: netguard.sgroups.io/v1beta1  # Required
+    kind: Network                            # Required
+    name: test-network                       # Required
+  addressGroupRef:
+    apiVersion: netguard.sgroups.io/v1beta1  # Required  
+    kind: AddressGroup                       # Required
+    name: test-addressgroup                  # Required

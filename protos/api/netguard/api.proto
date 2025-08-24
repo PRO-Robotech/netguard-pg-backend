@@ -1,0 +1,882 @@
+syntax = "proto3";
+package netguard.v1;
+option go_package = "netguard-pg-backend/protos/pkg/api/netguard;netguard";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "google/api/annotations.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+// Temporary definitions for common types to avoid import issues
+message Networks {
+  message NetIP {
+    enum Transport {
+      TCP = 0;
+      UDP = 1;
+    }
+  }
+}
+
+enum Traffic {
+  Ingress = 0;
+  Egress = 1;
+}
+
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  info: {
+    title: "Netguard API";
+    version: "1.0";
+  };
+  external_docs: {
+    url: "https://github.com/yourusername/netguard-pg-backend";
+    description: "Documentation";
+  }
+  schemes: [HTTP];
+  consumes: "application/json";
+  produces: "application/json";
+};
+
+// Service - represents a service with ports
+message Service {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      required: ["self_ref"]
+    }
+  };
+  ResourceIdentifier self_ref = 1;
+  string description = 3;
+  repeated IngressPort ingress_ports = 4;
+  repeated AddressGroupRef address_groups = 5;
+  Meta meta = 6;
+}
+
+// IngressPort - defines a port configuration for ingress traffic
+message IngressPort {
+  Networks.NetIP.Transport protocol = 1;
+  string port = 2;
+  string description = 3;
+}
+
+// ResourceIdentifier - uniquely identifies a resource
+message ResourceIdentifier {
+  string name = 1;
+  string namespace = 2;
+}
+
+// ObjectReference contains enough information to let you locate the referenced object
+message ObjectReference {
+  // APIVersion of the referenced object
+  string api_version = 1;
+  
+  // Kind of the referenced object
+  string kind = 2;
+  
+  // Name of the referenced object
+  string name = 3;
+}
+
+// NamespacedObjectReference extends ObjectReference with a Namespace field
+message NamespacedObjectReference {
+  // APIVersion of the referenced object
+  string api_version = 1;
+  
+  // Kind of the referenced object
+  string kind = 2;
+  
+  // Name of the referenced object
+  string name = 3;
+  
+  // Namespace of the referenced object
+  string namespace = 4;
+}
+
+// Condition - kubernetes condition for resource status
+message Condition {
+  string type = 1;
+  string status = 2;
+  int64 observed_generation = 3;
+  google.protobuf.Timestamp last_transition_time = 4;
+  string reason = 5;
+  string message = 6;
+}
+
+// ManagedFieldsEntry represents a single entry in the managedFields list
+// Compatible with k8s.io/apimachinery/pkg/apis/meta/v1.ManagedFieldsEntry
+message ManagedFieldsEntry {
+  // Manager is an identifier of the workflow managing these fields
+  string manager = 1;
+  
+  // Operation is the type of operation which lead to this ManagedFieldsEntry being created
+  // Possible values: "Apply", "Update"
+  string operation = 2;
+  
+  // APIVersion defines the version of this resource
+  string api_version = 3;
+  
+  // Time is the timestamp of when the ManagedFields entry was added
+  google.protobuf.Timestamp time = 4;
+  
+  // FieldsType is the discriminator for the different fields format
+  string fields_type = 5;
+  
+  // FieldsV1 stores a set of fields in a data structure like Patch
+  // Serialized as JSON bytes for compatibility
+  bytes fields_v1 = 6;
+  
+  // Subresource is the name of the subresource used to update that object, or empty string if the object was updated through the main resource
+  string subresource = 7;
+}
+
+// Meta - kubernetes system metadata stored round-trip.
+message Meta {
+  string uid = 1;
+  string resource_version = 2;
+  int64 generation = 3;
+  google.protobuf.Timestamp creation_ts = 4;
+  map<string,string> labels = 5;
+  map<string,string> annotations = 6;
+  
+  // Status management - формируется Backend, отображается в Status клиентам
+  repeated Condition conditions = 7;
+  int64 observed_generation = 8;
+  
+  // GeneratedName is an optional prefix, used by the server, to generate a unique name
+  // ONLY IF the Name field has not been provided. Stored for round-trip compatibility.
+  string generated_name = 9;
+  
+  // ManagedFields stores Server-Side Apply field ownership information
+  // Compatible with k8s.io/apimachinery/pkg/apis/meta/v1.ManagedFieldsEntry
+  repeated ManagedFieldsEntry managed_fields = 10;
+}
+
+// AddressGroupRef - reference to an address group
+message AddressGroupRef {
+  ResourceIdentifier identifier = 1;        // DEPRECATED: Use object_ref instead
+  NamespacedObjectReference object_ref = 2; // NEW: Full object reference with apiVersion, kind and namespace
+}
+
+// ServiceRef - reference to a service
+message ServiceRef {
+  ResourceIdentifier identifier = 1;        // DEPRECATED: Use object_ref instead
+  NamespacedObjectReference object_ref = 2; // NEW: Full object reference with apiVersion, kind and namespace
+}
+
+// RuleAction - action for rules and address groups
+enum RuleAction {
+  // UNDEFINED - undefined action (should not be used)
+  UNDEFINED = 0;
+  
+  // DROP - drops network packet  
+  DROP = 1;
+  
+  // ACCEPT - accepts network packet
+  ACCEPT = 2;
+}
+
+// NetworkItem - represents a network item in an address group
+message NetworkItem {
+  string name = 1;
+  string cidr = 2;
+  string api_version = 3;
+  string kind = 4;
+  string namespace = 5;
+}
+
+// Network - represents a network configuration for Netguard
+message Network {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      required: ["self_ref", "cidr"]
+    }
+  };
+  ResourceIdentifier self_ref = 1;
+  string cidr = 2;  // Network in CIDR notation
+  Meta meta = 3;
+  
+  // Status fields
+  bool is_bound = 4;                               // Whether the network is bound to an AddressGroup
+  ObjectReference binding_ref = 5;                 // Reference to the NetworkBinding
+  NamespacedObjectReference address_group_ref = 6; // Reference to the bound AddressGroup
+}
+
+// AddressGroup - represents an address group configuration for Netguard
+message AddressGroup {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      required: ["self_ref", "default_action"]
+    }
+  };
+  ResourceIdentifier self_ref = 1;
+  RuleAction default_action = 2;  // Default action for the address group (ACCEPT/DROP)
+  bool logs = 3;                  // Whether to enable logs
+  bool trace = 4;                 // Whether to enable trace
+  repeated NetworkItem networks = 5; // Networks associated with this address group
+  Meta meta = 6;
+}
+
+// AddressGroupBinding - binding between a service and an address group
+message AddressGroupBinding {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      required: ["self_ref", "service_ref", "address_group_ref"]
+    }
+  };
+  ResourceIdentifier self_ref = 1;
+  ServiceRef service_ref = 3;
+  AddressGroupRef address_group_ref = 4;
+  Meta meta = 6;
+}
+
+// NetworkBinding - binding between a network and an address group
+message NetworkBinding {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      required: ["self_ref", "network_ref", "address_group_ref"]
+    }
+  };
+  ResourceIdentifier self_ref = 1;
+  ObjectReference network_ref = 2;  // Reference to the Network resource
+  ObjectReference address_group_ref = 3;  // Reference to the AddressGroup resource
+  NetworkItem network_item = 4;  // Network item details
+  Meta meta = 5;
+}
+
+// ProtocolPorts - mapping of protocols to port ranges
+message ProtocolPorts {
+  map<string, PortRanges> ports = 1;
+}
+
+// PortRange - range of ports
+message PortRange {
+  int32 start = 1;
+  int32 end = 2;
+}
+
+// PortRanges - list of port ranges
+message PortRanges {
+  repeated PortRange ranges = 1;
+}
+
+// ServicePortsRef - reference to a service and its allowed ports
+message ServicePortsRef {
+  ResourceIdentifier identifier = 1;        // DEPRECATED: Use object_ref instead
+  NamespacedObjectReference object_ref = 3; // NEW: Full object reference with apiVersion, kind and namespace
+  ProtocolPorts ports = 2;
+}
+
+// AddressGroupPortMapping - mapping between an address group and allowed ports
+message AddressGroupPortMapping {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      required: ["self_ref"]
+    }
+  };
+  ResourceIdentifier self_ref = 1;
+  repeated ServicePortsRef access_ports = 3;
+  Meta meta = 6;
+}
+
+// ServiceAlias - alias for a service
+message ServiceAlias {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      required: ["name", "namespace", "service_ref"]
+    }
+  };
+  ResourceIdentifier self_ref = 1;
+  ServiceRef service_ref = 2;
+  Meta meta = 6;
+}
+
+// AddressGroupBindingPolicy - policy allowing binding of a service to an address group
+message AddressGroupBindingPolicy {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      required: ["self_ref", "service_ref", "address_group_ref"]
+    }
+  };
+  ResourceIdentifier self_ref = 1;
+  ServiceRef service_ref = 2;
+  AddressGroupRef address_group_ref = 3;
+  Meta meta = 6;
+}
+
+// RuleS2S - rule between two services
+message RuleS2S {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      required: ["name", "namespace", "traffic", "service_local_ref", "service_ref"]
+    }
+  };
+  ResourceIdentifier self_ref = 1;
+  Traffic traffic = 2;
+  ServiceRef service_local_ref = 3;  // Now uses NamespacedObjectReference internally
+  ServiceRef service_ref = 4;         // Now uses NamespacedObjectReference internally
+  repeated ResourceIdentifier ieag_ag_rule_refs = 5;            // DEPRECATED: Use ieag_ag_rule_object_refs
+  repeated NamespacedObjectReference ieag_ag_rule_object_refs = 8;  // NEW: Full object references
+  Meta meta = 6;
+  bool trace = 7;
+}
+
+// IEAgAgRule - rule between two address groups
+message IEAgAgRule {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      required: ["self_ref", "transport", "traffic", "address_group_local", "address_group", "action"]
+    }
+  };
+  ResourceIdentifier self_ref = 1;
+  Networks.NetIP.Transport transport = 2;
+  Traffic traffic = 3;
+  AddressGroupRef address_group_local = 4;
+  AddressGroupRef address_group = 5;
+  repeated PortSpec ports = 6;
+  RuleAction action = 7;
+  bool logs = 8;
+  int32 priority = 9;
+  Meta meta = 10;
+  bool trace = 11;
+}
+
+// PortSpec - port specification
+message PortSpec {
+  string source = 1;
+  string destination = 2;
+}
+
+// SyncStatusResp - sync status
+message SyncStatusResp {
+  google.protobuf.Timestamp updated_at = 1;
+}
+
+// SyncOp - sync operation type
+enum SyncOp {
+  // NoOp - no operation defined (default)
+  NoOp = 0;
+
+  // FullSync - Delete+Insert+Update operations (default)
+  FullSync = 1;
+
+  // Upsert - Insert+Update operations
+  Upsert = 2;
+
+  // Delete - Delete operation
+  Delete = 3;
+}
+
+// SyncServices - subject of Services to sync
+message SyncServices {
+  repeated Service services = 1;
+}
+
+// SyncAddressGroups - subject of Address Groups to sync
+message SyncAddressGroups {
+  repeated AddressGroup address_groups = 1;
+}
+
+// SyncAddressGroupBindings - subject of Address Group Bindings to sync
+message SyncAddressGroupBindings {
+  repeated AddressGroupBinding address_group_bindings = 1;
+}
+
+// SyncAddressGroupPortMappings - subject of Address Group Port Mappings to sync
+message SyncAddressGroupPortMappings {
+  repeated AddressGroupPortMapping address_group_port_mappings = 1;
+}
+
+// SyncRuleS2S - subject of Rule S2S to sync
+message SyncRuleS2S {
+  repeated RuleS2S rule_s2s = 1;
+}
+
+// SyncServiceAliases - subject of Service Aliases to sync
+message SyncServiceAliases {
+  repeated ServiceAlias service_aliases = 1;
+}
+
+// SyncAddressGroupBindingPolicies - subject of Address Group Binding Policies to sync
+message SyncAddressGroupBindingPolicies {
+  repeated AddressGroupBindingPolicy address_group_binding_policies = 1;
+}
+
+// SyncIEAgAgRules - subject of IEAgAgRules to sync
+message SyncIEAgAgRules {
+  repeated IEAgAgRule ieagag_rules = 1;
+}
+
+// SyncNetworks - subject of Networks to sync
+message SyncNetworks {
+  repeated Network networks = 1;
+}
+
+// SyncNetworkBindings - subject of Network Bindings to sync
+message SyncNetworkBindings {
+  repeated NetworkBinding network_bindings = 1;
+}
+
+// Requests and responses for API methods
+
+// ListServicesReq - request to list services
+message ListServicesReq {
+  repeated ResourceIdentifier identifiers = 1;
+}
+
+// ListServicesResp - response with list of services
+message ListServicesResp {
+  repeated Service items = 1;
+}
+
+// GetServiceReq - request to get a specific service
+message GetServiceReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetServiceResp - response with a specific service
+message GetServiceResp {
+  Service service = 1;
+}
+
+// ListAddressGroupsReq - request to list address groups
+message ListAddressGroupsReq {
+  repeated ResourceIdentifier identifiers = 1;
+}
+
+// ListAddressGroupsResp - response with list of address groups
+message ListAddressGroupsResp {
+  repeated AddressGroup items = 1;
+}
+
+// GetAddressGroupReq - request to get a specific address group
+message GetAddressGroupReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetAddressGroupResp - response with a specific address group
+message GetAddressGroupResp {
+  AddressGroup address_group = 1;
+}
+
+// ListAddressGroupBindingsReq - request to list address group bindings
+message ListAddressGroupBindingsReq {
+  repeated ResourceIdentifier identifiers = 1;
+}
+
+// ListAddressGroupBindingsResp - response with list of address group bindings
+message ListAddressGroupBindingsResp {
+  repeated AddressGroupBinding items = 1;
+}
+
+// ListAddressGroupPortMappingsReq - request to list address group port mappings
+message ListAddressGroupPortMappingsReq {
+  repeated ResourceIdentifier identifiers = 1;
+}
+
+// ListAddressGroupPortMappingsResp - response with list of address group port mappings
+message ListAddressGroupPortMappingsResp {
+  repeated AddressGroupPortMapping items = 1;
+}
+
+// ListRuleS2SReq - request to list rule s2s
+message ListRuleS2SReq {
+  repeated ResourceIdentifier identifiers = 1;
+}
+
+// ListRuleS2SResp - response with list of rule s2s
+message ListRuleS2SResp {
+  repeated RuleS2S items = 1;
+}
+
+// ListServiceAliasesReq - request to list service aliases
+message ListServiceAliasesReq {
+  repeated ResourceIdentifier identifiers = 1;
+}
+
+// ListServiceAliasesResp - response with list of service aliases
+message ListServiceAliasesResp {
+  repeated ServiceAlias items = 1;
+}
+
+// GetAddressGroupBindingReq - request to get a specific address group binding
+message GetAddressGroupBindingReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetAddressGroupBindingResp - response with a specific address group binding
+message GetAddressGroupBindingResp {
+  AddressGroupBinding address_group_binding = 1;
+}
+
+// GetAddressGroupPortMappingReq - request to get a specific address group port mapping
+message GetAddressGroupPortMappingReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetAddressGroupPortMappingResp - response with a specific address group port mapping
+message GetAddressGroupPortMappingResp {
+  AddressGroupPortMapping address_group_port_mapping = 1;
+}
+
+// GetRuleS2SReq - request to get a specific rule s2s
+message GetRuleS2SReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetRuleS2SResp - response with a specific rule s2s
+message GetRuleS2SResp {
+  RuleS2S rule_s2s = 1;
+}
+
+// GetServiceAliasReq - request to get a specific service alias
+message GetServiceAliasReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetServiceAliasResp - response with a specific service alias
+message GetServiceAliasResp {
+  ServiceAlias service_alias = 1;
+}
+
+// ListAddressGroupBindingPoliciesReq - request to list address group binding policies
+message ListAddressGroupBindingPoliciesReq {
+  repeated ResourceIdentifier identifiers = 1;
+}
+
+// ListAddressGroupBindingPoliciesResp - response with list of address group binding policies
+message ListAddressGroupBindingPoliciesResp {
+  repeated AddressGroupBindingPolicy items = 1;
+}
+
+// GetAddressGroupBindingPolicyReq - request to get a specific address group binding policy
+message GetAddressGroupBindingPolicyReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetAddressGroupBindingPolicyResp - response with a specific address group binding policy
+message GetAddressGroupBindingPolicyResp {
+  AddressGroupBindingPolicy address_group_binding_policy = 1;
+}
+
+// ListIEAgAgRulesReq - request to list IEAgAgRules
+message ListIEAgAgRulesReq {
+  repeated ResourceIdentifier identifiers = 1;
+}
+
+// ListIEAgAgRulesResp - response with list of IEAgAgRules
+message ListIEAgAgRulesResp {
+  repeated IEAgAgRule items = 1;
+}
+
+// GetIEAgAgRuleReq - request to get a specific IEAgAgRule
+message GetIEAgAgRuleReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetIEAgAgRuleResp - response with a specific IEAgAgRule
+message GetIEAgAgRuleResp {
+  IEAgAgRule ieagag_rule = 1;
+}
+
+// ListNetworksReq - request to list networks
+message ListNetworksReq {
+  repeated ResourceIdentifier identifiers = 1;
+}
+
+// ListNetworksResp - response with list of networks
+message ListNetworksResp {
+  repeated Network items = 1;
+}
+
+// GetNetworkReq - request to get a specific network
+message GetNetworkReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetNetworkResp - response with a specific network
+message GetNetworkResp {
+  Network network = 1;
+}
+
+// ListNetworkBindingsReq - request to list network bindings
+message ListNetworkBindingsReq {
+  repeated ResourceIdentifier identifiers = 1;
+}
+
+// ListNetworkBindingsResp - response with list of network bindings
+message ListNetworkBindingsResp {
+  repeated NetworkBinding items = 1;
+}
+
+// GetNetworkBindingReq - request to get a specific network binding
+message GetNetworkBindingReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetNetworkBindingResp - response with a specific network binding
+message GetNetworkBindingResp {
+  NetworkBinding network_binding = 1;
+}
+
+// SyncReq - request to sync
+message SyncReq {
+  // Sync operation to apply
+  SyncOp sync_op = 1;
+
+  // One of subject
+  oneof subject {
+    // Subject of Services
+    SyncServices services = 2;
+
+    // Subject of Address Groups
+    SyncAddressGroups address_groups = 3;
+
+    // Subject of Address Group Bindings
+    SyncAddressGroupBindings address_group_bindings = 4;
+
+    // Subject of Address Group Port Mappings
+    SyncAddressGroupPortMappings address_group_port_mappings = 5;
+
+    // Subject of Rule S2S
+    SyncRuleS2S rule_s2s = 6;
+
+    // Subject of Service Aliases
+    SyncServiceAliases service_aliases = 7;
+
+    // Subject of Address Group Binding Policies
+    SyncAddressGroupBindingPolicies address_group_binding_policies = 8;
+
+    // Subject of IEAgAgRules
+    SyncIEAgAgRules ieagag_rules = 9;
+
+    // Subject of Networks
+    SyncNetworks networks = 10;
+
+    // Subject of Network Bindings
+    SyncNetworkBindings network_bindings = 11;
+  }
+}
+
+// Service definition
+service NetguardService {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_tag) = {
+    description: "Netguard API service"
+  };
+
+  // Sync - syncs data in DB
+  rpc Sync(SyncReq) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/v1/sync"
+      body: "*"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "Sync: makes changes in DB";
+    };
+  }
+
+  // SyncStatus - gets last succeeded update DB status
+  rpc SyncStatus(google.protobuf.Empty) returns(SyncStatusResp) {
+    option (google.api.http) = {
+      get: "/v1/sync/status"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "SyncStatus: gets last succeeded update DB status";
+    };
+  }
+
+  // ListServices - gets list of services
+  rpc ListServices(ListServicesReq) returns (ListServicesResp) {
+    option (google.api.http) = {
+      get: "/v1/services"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "ListServices: gets list of services";
+    };
+  }
+
+  // GetService - gets a specific service by ID
+  rpc GetService(GetServiceReq) returns (GetServiceResp) {
+    option (google.api.http) = {
+      get: "/v1/services/{identifier.namespace}/{identifier.name}"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "GetService: gets a specific service by ID";
+    };
+  }
+
+  // ListAddressGroups - gets list of address groups
+  rpc ListAddressGroups(ListAddressGroupsReq) returns (ListAddressGroupsResp) {
+    option (google.api.http) = {
+      get: "/v1/address-groups"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "ListAddressGroups: gets list of address groups";
+    };
+  }
+
+  // GetAddressGroup - gets a specific address group by ID
+  rpc GetAddressGroup(GetAddressGroupReq) returns (GetAddressGroupResp) {
+    option (google.api.http) = {
+      get: "/v1/address-groups/{identifier.namespace}/{identifier.name}"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "GetAddressGroup: gets a specific address group by ID";
+    };
+  }
+
+  // ListAddressGroupBindings - gets list of address group bindings
+  rpc ListAddressGroupBindings(ListAddressGroupBindingsReq) returns (ListAddressGroupBindingsResp) {
+    option (google.api.http) = {
+      get: "/v1/address-group-bindings"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "ListAddressGroupBindings: gets list of address group bindings";
+    };
+  }
+
+  // GetAddressGroupBinding - gets a specific address group binding by ID
+  rpc GetAddressGroupBinding(GetAddressGroupBindingReq) returns (GetAddressGroupBindingResp) {
+    option (google.api.http) = {
+      get: "/v1/address-group-bindings/{identifier.namespace}/{identifier.name}"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "GetAddressGroupBinding: gets a specific address group binding by ID";
+    };
+  }
+
+  // ListAddressGroupPortMappings - gets list of address group port mappings
+  rpc ListAddressGroupPortMappings(ListAddressGroupPortMappingsReq) returns (ListAddressGroupPortMappingsResp) {
+    option (google.api.http) = {
+      get: "/v1/address-group-port-mappings"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "ListAddressGroupPortMappings: gets list of address group port mappings";
+    };
+  }
+
+  // GetAddressGroupPortMapping - gets a specific address group port mapping by ID
+  rpc GetAddressGroupPortMapping(GetAddressGroupPortMappingReq) returns (GetAddressGroupPortMappingResp) {
+    option (google.api.http) = {
+      get: "/v1/address-group-port-mappings/{identifier.namespace}/{identifier.name}"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "GetAddressGroupPortMapping: gets a specific address group port mapping by ID";
+    };
+  }
+
+  // ListRuleS2S - gets list of rule s2s
+  rpc ListRuleS2S(ListRuleS2SReq) returns (ListRuleS2SResp) {
+    option (google.api.http) = {
+      get: "/v1/rule-s2s"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "ListRuleS2S: gets list of rule s2s";
+    };
+  }
+
+  // GetRuleS2S - gets a specific rule s2s by ID
+  rpc GetRuleS2S(GetRuleS2SReq) returns (GetRuleS2SResp) {
+    option (google.api.http) = {
+      get: "/v1/rule-s2s/{identifier.namespace}/{identifier.name}"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "GetRuleS2S: gets a specific rule s2s by ID";
+    };
+  }
+
+  // ListServiceAliases - gets list of service aliases
+  rpc ListServiceAliases(ListServiceAliasesReq) returns (ListServiceAliasesResp) {
+    option (google.api.http) = {
+      get: "/v1/service-aliases"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "ListServiceAliases: gets list of service aliases";
+    };
+  }
+
+  // GetServiceAlias - gets a specific service alias by ID
+  rpc GetServiceAlias(GetServiceAliasReq) returns (GetServiceAliasResp) {
+    option (google.api.http) = {
+      get: "/v1/service-aliases/{identifier.namespace}/{identifier.name}"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "GetServiceAlias: gets a specific service alias by ID";
+    };
+  }
+
+  // ListAddressGroupBindingPolicies - gets list of address group binding policies
+  rpc ListAddressGroupBindingPolicies(ListAddressGroupBindingPoliciesReq) returns (ListAddressGroupBindingPoliciesResp) {
+    option (google.api.http) = {
+      get: "/v1/address-group-binding-policies"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "ListAddressGroupBindingPolicies: gets list of address group binding policies";
+    };
+  }
+
+  // GetAddressGroupBindingPolicy - gets a specific address group binding policy by ID
+  rpc GetAddressGroupBindingPolicy(GetAddressGroupBindingPolicyReq) returns (GetAddressGroupBindingPolicyResp) {
+    option (google.api.http) = {
+      get: "/v1/address-group-binding-policies/{identifier.namespace}/{identifier.name}"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "GetAddressGroupBindingPolicy: gets a specific address group binding policy by ID";
+    };
+  }
+
+  // ListIEAgAgRules - gets list of IEAgAgRules
+  rpc ListIEAgAgRules(ListIEAgAgRulesReq) returns (ListIEAgAgRulesResp) {
+    option (google.api.http) = {
+      get: "/v1/ieagag-rules"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "ListIEAgAgRules: gets list of IEAgAgRules";
+    };
+  }
+
+  // GetIEAgAgRule - gets a specific IEAgAgRule by ID
+  rpc GetIEAgAgRule(GetIEAgAgRuleReq) returns (GetIEAgAgRuleResp) {
+    option (google.api.http) = {
+      get: "/v1/ieagag-rules/{identifier.namespace}/{identifier.name}"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "GetIEAgAgRule: gets a specific IEAgAgRule by ID";
+    };
+  }
+
+  // ListNetworks - gets list of networks
+  rpc ListNetworks(ListNetworksReq) returns (ListNetworksResp) {
+    option (google.api.http) = {
+      get: "/v1/networks"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "ListNetworks: gets list of networks";
+    };
+  }
+
+  // GetNetwork - gets a specific network by ID
+  rpc GetNetwork(GetNetworkReq) returns (GetNetworkResp) {
+    option (google.api.http) = {
+      get: "/v1/networks/{identifier.namespace}/{identifier.name}"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "GetNetwork: gets a specific network by ID";
+    };
+  }
+
+  // ListNetworkBindings - gets list of network bindings
+  rpc ListNetworkBindings(ListNetworkBindingsReq) returns (ListNetworkBindingsResp) {
+    option (google.api.http) = {
+      get: "/v1/network-bindings"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "ListNetworkBindings: gets list of network bindings";
+    };
+  }
+
+  // GetNetworkBinding - gets a specific network binding by ID
+  rpc GetNetworkBinding(GetNetworkBindingReq) returns (GetNetworkBindingResp) {
+    option (google.api.http) = {
+      get: "/v1/network-bindings/{identifier.namespace}/{identifier.name}"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "GetNetworkBinding: gets a specific network binding by ID";
+    };
+  }
+}

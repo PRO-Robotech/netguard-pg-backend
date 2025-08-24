@@ -1,0 +1,10 @@
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroup
+metadata:
+  name: db-servers
+  namespace: netguard-test
+spec:
+  description: "PostgreSQL & MySQL nodes"
+  addresses:
+    - address: 172.16.100.0/24
+    - address: 172.16.200.10/32

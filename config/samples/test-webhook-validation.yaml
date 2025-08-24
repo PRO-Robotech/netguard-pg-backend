@@ -1,0 +1,87 @@
+# Test cases for webhook validation
+# Use: kubectl apply -f test-webhook-validation.yaml
+
+---
+# Valid Service - should pass both mutation and validation
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Service
+metadata:
+  name: valid-service
+  namespace: netguard-system
+spec:
+  description: "Valid test service"
+  ingressPorts:
+  - protocol: TCP
+    port: "80"
+    description: "HTTP port"
+
+---
+# Invalid Service - missing required fields, should fail validation
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Service
+metadata:
+  name: invalid-service
+  # namespace missing - webhook should add it or fail
+spec:
+  # description missing - mutation webhook should add default
+  ingressPorts:
+  - protocol: INVALID_PROTOCOL  # Invalid enum - should fail storage validation
+    port: "99999"              # Invalid port - should fail storage validation
+
+---
+# Valid AddressGroup - should pass with default action
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroup
+metadata:
+  name: valid-addressgroup
+  namespace: netguard-system
+spec:
+  # defaultAction missing - mutation webhook should set to ACCEPT
+  logs: true
+  trace: false
+
+---
+# Valid AddressGroupBinding - should pass validation
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroupBinding
+metadata:
+  name: valid-binding
+  namespace: netguard-system
+spec:
+  addressGroupRef:
+    name: valid-addressgroup
+    namespace: netguard-system
+  serviceRef:
+    name: valid-service
+    namespace: netguard-system
+
+---
+# Invalid AddressGroupBinding - nonexistent references, should fail webhook validation
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroupBinding
+metadata:
+  name: invalid-binding
+  namespace: netguard-system
+spec:
+  addressGroupRef:
+    name: nonexistent-addressgroup  # Should fail dependency validation
+    namespace: netguard-system
+  serviceRef:
+    name: nonexistent-service       # Should fail dependency validation
+    namespace: netguard-system
+
+---
+# Test RuleS2S - should pass with namespace normalization
+apiVersion: netguard.sgroups.io/v1beta1
+kind: RuleS2S
+metadata:
+  name: valid-rule
+  namespace: netguard-system
+spec:
+  traffic: Ingress
+  serviceLocalRef:
+    name: valid-service
+    # namespace missing - mutation webhook should add it
+  serviceRef:
+    name: valid-service
+    namespace: netguard-system 

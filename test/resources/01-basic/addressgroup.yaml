@@ -1,0 +1,17 @@
+# Basic AddressGroup resource for testing
+# No dependencies - can be created independently
+# NOTE: AddressGroup v1beta1 spec only contains defaultAction, logs, trace (no description field)
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroup
+metadata:
+  name: test-addressgroup
+  namespace: netguard-test
+  labels:
+    app: test-addressgroup
+    tier: basic
+  annotations:
+    description: "Basic test address group for development environment"
+spec:
+  defaultAction: ACCEPT  # Required: ACCEPT or DROP
+  logs: false           # Optional: enable logging 
+  trace: false          # Optional: enable tracing

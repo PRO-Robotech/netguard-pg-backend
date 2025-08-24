@@ -1,0 +1,233 @@
+package mem
+
+import (
+	"sync"
+
+	"netguard-pg-backend/internal/domain/models"
+)
+
+// MemDB in-memory database
+type MemDB struct {
+	services                    map[string]models.Service
+	serviceAliases              map[string]models.ServiceAlias
+	addressGroups               map[string]models.AddressGroup
+	addressGroupBindings        map[string]models.AddressGroupBinding
+	addressGroupPortMappings    map[string]models.AddressGroupPortMapping
+	addressGroupBindingPolicies map[string]models.AddressGroupBindingPolicy
+	ruleS2S                     map[string]models.RuleS2S
+	ieAgAgRules                 map[string]models.IEAgAgRule
+	networks                    map[string]models.Network
+	networkBindings             map[string]models.NetworkBinding
+	syncStatus                  models.SyncStatus
+	mu                          sync.RWMutex
+}
+
+// NewMemDB creates a new in-memory database
+func NewMemDB() *MemDB {
+	return &MemDB{
+		services:                    make(map[string]models.Service),
+		serviceAliases:              make(map[string]models.ServiceAlias),
+		addressGroups:               make(map[string]models.AddressGroup),
+		addressGroupBindings:        make(map[string]models.AddressGroupBinding),
+		addressGroupPortMappings:    make(map[string]models.AddressGroupPortMapping),
+		addressGroupBindingPolicies: make(map[string]models.AddressGroupBindingPolicy),
+		ruleS2S:                     make(map[string]models.RuleS2S),
+		ieAgAgRules:                 make(map[string]models.IEAgAgRule),
+		networks:                    make(map[string]models.Network),
+		networkBindings:             make(map[string]models.NetworkBinding),
+	}
+}
+
+// GetServices returns all services
+func (db *MemDB) GetServices() map[string]models.Service {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	result := make(map[string]models.Service, len(db.services))
+	for k, v := range db.services {
+		result[k] = v
+	}
+	return result
+}
+
+// GetAddressGroups returns all address groups
+func (db *MemDB) GetAddressGroups() map[string]models.AddressGroup {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	result := make(map[string]models.AddressGroup, len(db.addressGroups))
+	for k, v := range db.addressGroups {
+		result[k] = v
+	}
+	return result
+}
+
+// GetAddressGroupBindings returns all address group bindings
+func (db *MemDB) GetAddressGroupBindings() map[string]models.AddressGroupBinding {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	result := make(map[string]models.AddressGroupBinding, len(db.addressGroupBindings))
+	for k, v := range db.addressGroupBindings {
+		result[k] = v
+	}
+	return result
+}
+
+// GetAddressGroupPortMappings returns all address group port mappings
+func (db *MemDB) GetAddressGroupPortMappings() map[string]models.AddressGroupPortMapping {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	result := make(map[string]models.AddressGroupPortMapping, len(db.addressGroupPortMappings))
+	for k, v := range db.addressGroupPortMappings {
+		result[k] = v
+	}
+	return result
+}
+
+// GetRuleS2S returns all rule s2s
+func (db *MemDB) GetRuleS2S() map[string]models.RuleS2S {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	result := make(map[string]models.RuleS2S, len(db.ruleS2S))
+	for k, v := range db.ruleS2S {
+		result[k] = v
+	}
+	return result
+}
+
+// GetSyncStatus returns the sync status
+func (db *MemDB) GetSyncStatus() models.SyncStatus {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	return db.syncStatus
+}
+
+// SetSyncStatus sets the sync status
+func (db *MemDB) SetSyncStatus(status models.SyncStatus) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.syncStatus = status
+}
+
+// SetServices sets the services
+func (db *MemDB) SetServices(services map[string]models.Service) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.services = services
+}
+
+// SetAddressGroups sets the address groups
+func (db *MemDB) SetAddressGroups(addressGroups map[string]models.AddressGroup) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.addressGroups = addressGroups
+}
+
+// SetAddressGroupBindings sets the address group bindings
+func (db *MemDB) SetAddressGroupBindings(bindings map[string]models.AddressGroupBinding) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.addressGroupBindings = bindings
+}
+
+// SetAddressGroupPortMappings sets the address group port mappings
+func (db *MemDB) SetAddressGroupPortMappings(mappings map[string]models.AddressGroupPortMapping) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.addressGroupPortMappings = mappings
+}
+
+// SetRuleS2S sets the rule s2s
+func (db *MemDB) SetRuleS2S(rules map[string]models.RuleS2S) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.ruleS2S = rules
+}
+
+// GetServiceAliases returns all service aliases
+func (db *MemDB) GetServiceAliases() map[string]models.ServiceAlias {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	result := make(map[string]models.ServiceAlias, len(db.serviceAliases))
+	for k, v := range db.serviceAliases {
+		result[k] = v
+	}
+	return result
+}
+
+// SetServiceAliases sets the service aliases
+func (db *MemDB) SetServiceAliases(aliases map[string]models.ServiceAlias) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.serviceAliases = aliases
+}
+
+// GetAddressGroupBindingPolicies returns all address group binding policies
+func (db *MemDB) GetAddressGroupBindingPolicies() map[string]models.AddressGroupBindingPolicy {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	result := make(map[string]models.AddressGroupBindingPolicy, len(db.addressGroupBindingPolicies))
+	for k, v := range db.addressGroupBindingPolicies {
+		result[k] = v
+	}
+	return result
+}
+
+// SetAddressGroupBindingPolicies sets the address group binding policies
+func (db *MemDB) SetAddressGroupBindingPolicies(policies map[string]models.AddressGroupBindingPolicy) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.addressGroupBindingPolicies = policies
+}
+
+// GetIEAgAgRules returns all IEAgAgRules
+func (db *MemDB) GetIEAgAgRules() map[string]models.IEAgAgRule {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	result := make(map[string]models.IEAgAgRule, len(db.ieAgAgRules))
+	for k, v := range db.ieAgAgRules {
+		result[k] = v
+	}
+	return result
+}
+
+// SetIEAgAgRules sets the IEAgAgRules
+func (db *MemDB) SetIEAgAgRules(rules map[string]models.IEAgAgRule) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.ieAgAgRules = rules
+}
+
+// GetNetworks returns all networks
+func (db *MemDB) GetNetworks() map[string]models.Network {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	result := make(map[string]models.Network, len(db.networks))
+	for k, v := range db.networks {
+		result[k] = v
+	}
+	return result
+}
+
+// SetNetworks sets the networks
+func (db *MemDB) SetNetworks(networks map[string]models.Network) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.networks = networks
+}
+
+// GetNetworkBindings returns all network bindings
+func (db *MemDB) GetNetworkBindings() map[string]models.NetworkBinding {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	result := make(map[string]models.NetworkBinding, len(db.networkBindings))
+	for k, v := range db.networkBindings {
+		result[k] = v
+	}
+	return result
+}
+
+// SetNetworkBindings sets the network bindings
+func (db *MemDB) SetNetworkBindings(bindings map[string]models.NetworkBinding) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.networkBindings = bindings
+}

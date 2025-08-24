@@ -1,0 +1,29 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: netguard-memory
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+# Base configuration
+bases:
+- ../../base
+
+# Memory-specific resources
+resources:
+- backend-memory.yaml    # 🧠 Backend with --memory flag
+
+# Override images for backend
+images:
+- name: netguard/pg-backend
+  newTag: latest
+
+# Memory-specific annotations
+commonAnnotations:
+  netguard.sgroups.io/backend-mode: "memory"
+  netguard.sgroups.io/deployment-type: "development"
+  
+# Labels to identify this as memory deployment
+commonLabels:
+  netguard.sgroups.io/variant: "memory"

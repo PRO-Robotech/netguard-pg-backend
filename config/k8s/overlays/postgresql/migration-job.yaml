@@ -1,0 +1,80 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: netguard-migrations
+  namespace: netguard-system
+  annotations:
+    # Job that runs sgroups-style database migrations
+    migration.netguard.sgroups.io/type: "goose"
+spec:
+  # Job completion settings (like sgroups)
+  completions: 1
+  parallelism: 1
+  backoffLimit: 3
+  activeDeadlineSeconds: 600  # 10 minutes timeout
+  
+  template:
+    metadata:
+      labels:
+        app: netguard-migrations
+        component: database
+    spec:
+      restartPolicy: Never
+      
+      # Wait for PostgreSQL to be ready before running migrations
+      initContainers:
+      - name: wait-for-postgres
+        image: postgres:15
+        command:
+        - /bin/sh
+        - -c 
+        - |
+          echo "🐘 Waiting for PostgreSQL to be ready..."
+          until pg_isready -h postgresql -U postgres; do
+            echo "PostgreSQL is not ready yet. Waiting..."
+            sleep 2
+          done
+          echo "✅ PostgreSQL is ready! Starting migrations..."
+      
+      containers:
+      - name: goose-migrator
+        image: netguard/goose:latest
+        imagePullPolicy: Never  # Use locally built image (minikube pattern)
+        
+        # Run goose migrations (sgroups pattern)
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "🚀 Starting NetGuard database migrations with Goose..."
+          echo "📍 Migration files location: $(ls -la /app/)"
+          echo "🗄️ Database connection: $DATABASE_URL"
+          
+          # Run goose migrations up (sgroups pattern)
+          /app/bin/goose -table=netguard_db_ver postgres "$DATABASE_URL" up
+          
+          echo "✅ NetGuard migrations completed successfully!"
+        
+        env:
+        - name: DATABASE_URL
+          value: "postgres://netguard:netguard@postgresql:5432/netguard?sslmode=disable"
+        
+        # Resource limits (prevent resource exhaustion)
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi" 
+            cpu: "100m"
+        
+        # Security context (sgroups pattern - non-root user)
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 101
+          runAsGroup: 101
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false  # Goose may need temp files

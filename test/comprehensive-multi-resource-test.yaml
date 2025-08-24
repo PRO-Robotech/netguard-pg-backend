@@ -1,0 +1,174 @@
+# Comprehensive multi-resource test scenario
+# Tests multiple AddressGroups, Networks, and NetworkBindings
+
+---
+# Service (required dependency)
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Service
+metadata:
+  name: multi-test-service
+  namespace: netguard-test
+  annotations:
+    description: "Service for comprehensive multi-resource testing"
+spec:
+  description: "Service for comprehensive multi-resource testing"
+  ingressPorts:
+    - port: "80"
+      protocol: TCP
+      description: "HTTP port"
+
+---
+# AddressGroup 1 - Primary (will have multiple networks bound to it)
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroup
+metadata:
+  name: primary-addressgroup
+  namespace: netguard-test
+  annotations:
+    description: "Primary AddressGroup for multi-network binding test"
+spec:
+  defaultAction: ACCEPT
+  logs: false
+  trace: false
+
+---
+# AddressGroup 2 - Secondary (will have one network bound to it)
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroup
+metadata:
+  name: secondary-addressgroup
+  namespace: netguard-test
+  annotations:
+    description: "Secondary AddressGroup for testing isolation"
+spec:
+  defaultAction: DROP
+  logs: false
+  trace: false
+
+---
+# Network 1 - Frontend (will bind to primary-addressgroup)
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Network
+metadata:
+  name: frontend-network
+  namespace: netguard-test
+  annotations:
+    description: "Frontend network CIDR"
+spec:
+  cidr: "10.1.0.0/16"
+
+---
+# Network 2 - Backend (will bind to primary-addressgroup)  
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Network
+metadata:
+  name: backend-network
+  namespace: netguard-test
+  annotations:
+    description: "Backend network CIDR"
+spec:
+  cidr: "10.2.0.0/16"
+
+---
+# Network 3 - Database (will bind to primary-addressgroup, then DELETE this binding)
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Network
+metadata:
+  name: database-network
+  namespace: netguard-test
+  annotations:
+    description: "Database network CIDR"
+spec:
+  cidr: "10.3.0.0/16"
+
+---
+# Network 4 - DMZ (will bind to secondary-addressgroup)
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Network
+metadata:
+  name: dmz-network
+  namespace: netguard-test
+  annotations:
+    description: "DMZ network CIDR"
+spec:
+  cidr: "10.4.0.0/16"
+
+---
+# NetworkBinding 1: frontend-network → primary-addressgroup (should remain after delete test)
+apiVersion: netguard.sgroups.io/v1beta1
+kind: NetworkBinding
+metadata:
+  name: frontend-to-primary
+  namespace: netguard-test
+  labels:
+    app: multi-test
+    binding-type: persistent
+spec:
+  networkRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Network
+    name: frontend-network
+  addressGroupRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: primary-addressgroup
+
+---
+# NetworkBinding 2: backend-network → primary-addressgroup (should remain after delete test)
+apiVersion: netguard.sgroups.io/v1beta1
+kind: NetworkBinding
+metadata:
+  name: backend-to-primary
+  namespace: netguard-test
+  labels:
+    app: multi-test
+    binding-type: persistent
+spec:
+  networkRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Network
+    name: backend-network
+  addressGroupRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: primary-addressgroup
+
+---
+# NetworkBinding 3: database-network → primary-addressgroup (THIS WILL BE DELETED)
+apiVersion: netguard.sgroups.io/v1beta1
+kind: NetworkBinding
+metadata:
+  name: database-to-primary
+  namespace: netguard-test
+  labels:
+    app: multi-test
+    binding-type: temporary
+spec:
+  networkRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Network
+    name: database-network
+  addressGroupRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: primary-addressgroup
+
+---
+# NetworkBinding 4: dmz-network → secondary-addressgroup (should remain after delete test)
+apiVersion: netguard.sgroups.io/v1beta1
+kind: NetworkBinding
+metadata:
+  name: dmz-to-secondary
+  namespace: netguard-test
+  labels:
+    app: multi-test
+    binding-type: isolated
+spec:
+  networkRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Network
+    name: dmz-network
+  addressGroupRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: secondary-addressgroup

@@ -1,0 +1,16 @@
+# ServiceAlias resource - depends on Service
+# PREREQUISITE: test-service must exist
+apiVersion: netguard.sgroups.io/v1beta1
+kind: ServiceAlias
+metadata:
+  name: test-service-alias
+  namespace: netguard-test
+  labels:
+    app: test-service-alias
+    tier: dependency
+spec:
+  serviceRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Service
+    name: test-service
+    namespace: netguard-test
