@@ -16,7 +16,7 @@ func main() {
 	// Basic config; can be overridden via env (handled inside WebhookServerConfig)
 	cfg := admission.WebhookServerConfig{
 		BindAddress: "0.0.0.0",
-		Port:        9443, // default for sidecar
+		Port:        8443, // default for sidecar
 		CertFile:    "/etc/certs/tls.crt",
 		KeyFile:     "/etc/certs/tls.key",
 		TLSEnabled:  true,
