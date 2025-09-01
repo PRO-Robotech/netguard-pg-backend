@@ -210,7 +210,11 @@ func (w *ValidationWebhook) validateAddressGroup(ctx context.Context, req *admis
 
 	switch req.Operation {
 	case admissionv1.Create:
-		// Валидация для создания
+		k8sValidator := k8svalidation.NewAddressGroupValidator()
+		if errs := k8sValidator.ValidateCreate(ctx, &addressGroup); len(errs) > 0 {
+			return w.errorResponse(req.UID, fmt.Sprintf("AddressGroup K8s validation failed: %v", errs.ToAggregate()))
+		}
+
 		if err := addressGroupValidator.ValidateForCreation(ctx, domainAddressGroup); err != nil {
 			return w.errorResponse(req.UID, fmt.Sprintf("AddressGroup validation failed: %v", err))
 		}
@@ -359,7 +363,11 @@ func (w *ValidationWebhook) validateAddressGroupPortMapping(ctx context.Context,
 
 	switch req.Operation {
 	case admissionv1.Create:
-		// Валидация для создания
+		k8sValidator := k8svalidation.NewAddressGroupPortMappingValidator()
+		if errs := k8sValidator.ValidateCreate(ctx, &mapping); len(errs) > 0 {
+			return w.errorResponse(req.UID, fmt.Sprintf("AddressGroupPortMapping K8s validation failed: %v", errs.ToAggregate()))
+		}
+
 		if err := mappingValidator.ValidateForCreation(ctx, domainMapping); err != nil {
 			return w.errorResponse(req.UID, fmt.Sprintf("AddressGroupPortMapping validation failed: %v", err))
 		}
@@ -427,7 +435,11 @@ func (w *ValidationWebhook) validateRuleS2S(ctx context.Context, req *admissionv
 
 	switch req.Operation {
 	case admissionv1.Create:
-		// Валидация для создания
+		k8sValidator := k8svalidation.NewRuleS2SValidator()
+		if errs := k8sValidator.ValidateCreate(ctx, &rule); len(errs) > 0 {
+			return w.errorResponse(req.UID, fmt.Sprintf("RuleS2S K8s validation failed: %v", errs.ToAggregate()))
+		}
+
 		if err := ruleValidator.ValidateForCreation(ctx, domainRule); err != nil {
 			return w.errorResponse(req.UID, fmt.Sprintf("RuleS2S validation failed: %v", err))
 		}
@@ -495,7 +507,11 @@ func (w *ValidationWebhook) validateServiceAlias(ctx context.Context, req *admis
 
 	switch req.Operation {
 	case admissionv1.Create:
-		// Валидация для создания
+		k8sValidator := k8svalidation.NewServiceAliasValidator()
+		if errs := k8sValidator.ValidateCreate(ctx, &alias); len(errs) > 0 {
+			return w.errorResponse(req.UID, fmt.Sprintf("ServiceAlias K8s validation failed: %v", errs.ToAggregate()))
+		}
+
 		if err := aliasValidator.ValidateForCreation(ctx, &domainAlias); err != nil {
 			return w.errorResponse(req.UID, fmt.Sprintf("ServiceAlias validation failed: %v", err))
 		}
@@ -574,7 +590,11 @@ func (w *ValidationWebhook) validateAddressGroupBindingPolicy(ctx context.Contex
 
 	switch req.Operation {
 	case admissionv1.Create:
-		// Валидация для создания
+		k8sValidator := k8svalidation.NewAddressGroupBindingPolicyValidator()
+		if errs := k8sValidator.ValidateCreate(ctx, &policy); len(errs) > 0 {
+			return w.errorResponse(req.UID, fmt.Sprintf("AddressGroupBindingPolicy K8s validation failed: %v", errs.ToAggregate()))
+		}
+
 		if err := policyValidator.ValidateForCreation(ctx, &domainPolicy); err != nil {
 			return w.errorResponse(req.UID, fmt.Sprintf("AddressGroupBindingPolicy validation failed: %v", err))
 		}
@@ -623,7 +643,11 @@ func (w *ValidationWebhook) validateIEAgAgRule(ctx context.Context, req *admissi
 
 	switch req.Operation {
 	case admissionv1.Create:
-		// Валидация для создания
+		k8sValidator := k8svalidation.NewIEAgAgRuleValidator()
+		if errs := k8sValidator.ValidateCreate(ctx, &ieAgAgRule); len(errs) > 0 {
+			return w.errorResponse(req.UID, fmt.Sprintf("IEAgAgRule K8s validation failed: %v", errs.ToAggregate()))
+		}
+
 		if err := ieAgAgRuleValidator.ValidateForCreation(ctx, domainIEAgAgRule); err != nil {
 			return w.errorResponse(req.UID, fmt.Sprintf("IEAgAgRule validation failed: %v", err))
 		}
@@ -672,7 +696,11 @@ func (w *ValidationWebhook) validateNetwork(ctx context.Context, req *admissionv
 
 	switch req.Operation {
 	case admissionv1.Create:
-		// Валидация для создания
+		k8sValidator := k8svalidation.NewNetworkValidator()
+		if errs := k8sValidator.ValidateCreate(ctx, &network); len(errs) > 0 {
+			return w.errorResponse(req.UID, fmt.Sprintf("Network K8s validation failed: %v", errs.ToAggregate()))
+		}
+
 		if err := networkValidator.ValidateForCreation(ctx, domainNetwork); err != nil {
 			return w.errorResponse(req.UID, fmt.Sprintf("Network validation failed: %v", err))
 		}
@@ -721,7 +749,11 @@ func (w *ValidationWebhook) validateNetworkBinding(ctx context.Context, req *adm
 
 	switch req.Operation {
 	case admissionv1.Create:
-		// Валидация для создания
+		k8sValidator := k8svalidation.NewNetworkBindingValidator()
+		if errs := k8sValidator.ValidateCreate(ctx, &networkBinding); len(errs) > 0 {
+			return w.errorResponse(req.UID, fmt.Sprintf("NetworkBinding K8s validation failed: %v", errs.ToAggregate()))
+		}
+
 		if err := networkBindingValidator.ValidateForCreation(ctx, domainNetworkBinding); err != nil {
 			return w.errorResponse(req.UID, fmt.Sprintf("NetworkBinding validation failed: %v", err))
 		}
@@ -812,19 +844,6 @@ func convertAddressGroupToDomain(k8sGroup netguardv1beta1.AddressGroup) models.A
 }
 
 func convertAddressGroupBindingToDomain(k8sBinding netguardv1beta1.AddressGroupBinding) models.AddressGroupBinding {
-	// 🔧 CRITICAL FIX: Use the same approach as the REST API converter
-	// Domain model expects v1beta1.NamespacedObjectReference directly, not custom types
-
-	// 🔍 EXTENSIVE DEBUG: Log every field to identify the issue
-	log.Printf("🔧 CONVERSION_FIX DEBUG: AddressGroupBinding conversion")
-	log.Printf("🔧   Binding metadata: namespace=%s, name=%s", k8sBinding.Namespace, k8sBinding.Name)
-	log.Printf("🔧   ServiceRef raw: apiVersion=%s, kind=%s, name=%s, namespace=%s",
-		k8sBinding.Spec.ServiceRef.APIVersion, k8sBinding.Spec.ServiceRef.Kind,
-		k8sBinding.Spec.ServiceRef.Name, k8sBinding.Spec.ServiceRef.Namespace)
-	log.Printf("🔧   AddressGroupRef raw: apiVersion=%s, kind=%s, name=%s, namespace=%s",
-		k8sBinding.Spec.AddressGroupRef.APIVersion, k8sBinding.Spec.AddressGroupRef.Kind,
-		k8sBinding.Spec.AddressGroupRef.Name, k8sBinding.Spec.AddressGroupRef.Namespace)
-
 	domainBinding := models.AddressGroupBinding{
 		SelfRef: models.SelfRef{
 			ResourceIdentifier: models.ResourceIdentifier{
