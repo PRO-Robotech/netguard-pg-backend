@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package hbf.v1.agent;
+option go_package = "netguard-pg-backend/protos/pkg/api/agent/v1;agentv1";
+
+import "google/protobuf/empty.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+
+// Authentication data
+message SecretData {
+  // Base64-encoded plain value
+  string raw_value = 1;
+  // Base64-encoded encrypted value: BASE64(IV(16 bytes) + ciphertext)
+  string secure_value = 2;
+}
+
+// Methods for ownership verification
+message OwnerCheck {
+  oneof auth {
+    google.protobuf.Empty no_auth = 1;
+    SecretData secret = 2;
+  }
+}
+
+// Basic registration details
+message RegInfo {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      title: "RegInfo"
+      description: "RegInfo - response with basic agent registration details"
+    }
+  };
+  string uuid  = 1 [
+    (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+      pattern: "^.{1,255}$",
+      title: "uuid",
+      description: "host uuid (up to 255 characters)",
+      example: "\"2438ac3c-37eb-4902-adef-ed16b4431030\""
+    }
+  ];
+  string name  = 2 [
+    (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+      title: "hostname",
+      description: "DNS-style host name",
+      pattern: "^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$",
+      example: "\"my-server01.example.com\""
+    }
+  ];
+}
+
+// Registration info request with ownership check
+message RegInfoReq {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      title: "RegistrationInfoRequest"
+      description: "Request object for fetching registration info with optional ownership verification"
+      required: ["condition"]
+    }
+  };
+
+  OwnerCheck condition = 1 [
+    (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+      title: "condition"
+      description: "Ownership verification method (empty or secret data)"
+    }
+  ];
+}
