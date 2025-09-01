@@ -17,7 +17,7 @@ import (
 // ListAddressGroups lists address groups with K8s metadata support
 func (r *Reader) ListAddressGroups(ctx context.Context, consume func(models.AddressGroup) error, scope ports.Scope) error {
 	query := `
-		SELECT ag.namespace, ag.name, ag.default_action, ag.logs, ag.trace, ag.description, ag.networks,
+		SELECT ag.namespace, ag.name, ag.default_action, ag.logs, ag.trace, ag.description, ag.networks, ag.agents,
 			   m.resource_version, m.labels, m.annotations, m.conditions,
 			   m.created_at, m.updated_at
 		FROM address_groups ag
@@ -54,7 +54,7 @@ func (r *Reader) ListAddressGroups(ctx context.Context, consume func(models.Addr
 // GetAddressGroupByID gets an address group by ID
 func (r *Reader) GetAddressGroupByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroup, error) {
 	query := `
-		SELECT ag.namespace, ag.name, ag.default_action, ag.logs, ag.trace, ag.description, ag.networks,
+		SELECT ag.namespace, ag.name, ag.default_action, ag.logs, ag.trace, ag.description, ag.networks, ag.agents,
 			   m.resource_version, m.labels, m.annotations, m.conditions,
 			   m.created_at, m.updated_at
 		FROM address_groups ag
@@ -77,7 +77,7 @@ func (r *Reader) GetAddressGroupByID(ctx context.Context, id models.ResourceIden
 // scanAddressGroup scans an address group from pgx.Rows
 func (r *Reader) scanAddressGroup(rows pgx.Rows) (models.AddressGroup, error) {
 	var addressGroup models.AddressGroup
-	var labelsJSON, annotationsJSON, conditionsJSON, networksJSON []byte
+	var labelsJSON, annotationsJSON, conditionsJSON, networksJSON, agentsJSON []byte
 	var createdAt, updatedAt time.Time // Temporary variables for timestamps
 	var resourceVersion int64          // Scan as int64 from database
 	var description string
@@ -90,6 +90,7 @@ func (r *Reader) scanAddressGroup(rows pgx.Rows) (models.AddressGroup, error) {
 		&addressGroup.Trace,
 		&description,  // AddressGroups don't have description but database schema has it
 		&networksJSON, // Networks field - CRITICAL FIX
+		&agentsJSON,   // Agents field - new addition
 		&resourceVersion,
 		&labelsJSON,
 		&annotationsJSON,
@@ -108,6 +109,13 @@ func (r *Reader) scanAddressGroup(rows pgx.Rows) (models.AddressGroup, error) {
 		}
 	}
 
+	// Unmarshal Agents field
+	if len(agentsJSON) > 0 {
+		if err := json.Unmarshal(agentsJSON, &addressGroup.Agents); err != nil {
+			return addressGroup, errors.Wrap(err, "failed to unmarshal agents")
+		}
+	}
+
 	// Convert K8s metadata (convert int64 to string)
 	addressGroup.Meta, err = utils.ConvertK8sMetadata(fmt.Sprintf("%d", resourceVersion), labelsJSON, annotationsJSON, conditionsJSON, createdAt, updatedAt)
 	if err != nil {
@@ -123,7 +131,7 @@ func (r *Reader) scanAddressGroup(rows pgx.Rows) (models.AddressGroup, error) {
 // scanAddressGroupRow scans an address group from pgx.Row
 func (r *Reader) scanAddressGroupRow(row pgx.Row) (*models.AddressGroup, error) {
 	var addressGroup models.AddressGroup
-	var labelsJSON, annotationsJSON, conditionsJSON, networksJSON []byte
+	var labelsJSON, annotationsJSON, conditionsJSON, networksJSON, agentsJSON []byte
 	var createdAt, updatedAt time.Time // Temporary variables for timestamps
 	var resourceVersion int64          // Scan as int64 from database
 	var description string
@@ -136,6 +144,7 @@ func (r *Reader) scanAddressGroupRow(row pgx.Row) (*models.AddressGroup, error) 
 		&addressGroup.Trace,
 		&description,  // AddressGroups don't have description but database schema has it
 		&networksJSON, // Networks field - CRITICAL FIX
+		&agentsJSON,   // Agents field - new addition
 		&resourceVersion,
 		&labelsJSON,
 		&annotationsJSON,
@@ -151,6 +160,13 @@ func (r *Reader) scanAddressGroupRow(row pgx.Row) (*models.AddressGroup, error) 
 	if len(networksJSON) > 0 {
 		if err := json.Unmarshal(networksJSON, &addressGroup.Networks); err != nil {
 			return nil, errors.Wrap(err, "failed to unmarshal networks")
+		}
+	}
+
+	// Unmarshal Agents field
+	if len(agentsJSON) > 0 {
+		if err := json.Unmarshal(agentsJSON, &addressGroup.Agents); err != nil {
+			return nil, errors.Wrap(err, "failed to unmarshal agents")
 		}
 	}
 

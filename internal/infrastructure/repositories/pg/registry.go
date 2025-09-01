@@ -424,6 +424,22 @@ func (w *simpleWriter) UpdateSyncStatus(ctx context.Context) error {
 	return nil
 }
 
+// Agent methods
+func (w *simpleWriter) SyncAgents(ctx context.Context, agents []models.Agent, scope ports.Scope, opts ...ports.Option) error {
+	return w.modularWriter.SyncAgents(ctx, agents, scope, opts...)
+}
+func (w *simpleWriter) DeleteAgentsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	return w.modularWriter.DeleteAgentsByIDs(ctx, ids, opts...)
+}
+
+// AgentBinding methods
+func (w *simpleWriter) SyncAgentBindings(ctx context.Context, bindings []models.AgentBinding, scope ports.Scope, opts ...ports.Option) error {
+	return w.modularWriter.SyncAgentBindings(ctx, bindings, scope, opts...)
+}
+func (w *simpleWriter) DeleteAgentBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	return w.modularWriter.DeleteAgentBindingsByIDs(ctx, ids, opts...)
+}
+
 // simpleSubject implements the patterns.Subject interface with basic functionality
 type simpleSubject struct {
 	observers []interface{}
