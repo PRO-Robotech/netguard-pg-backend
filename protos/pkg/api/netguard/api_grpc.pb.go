@@ -42,6 +42,10 @@ const (
 	NetguardService_GetNetwork_FullMethodName                      = "/netguard.v1.NetguardService/GetNetwork"
 	NetguardService_ListNetworkBindings_FullMethodName             = "/netguard.v1.NetguardService/ListNetworkBindings"
 	NetguardService_GetNetworkBinding_FullMethodName               = "/netguard.v1.NetguardService/GetNetworkBinding"
+	NetguardService_ListAgents_FullMethodName                      = "/netguard.v1.NetguardService/ListAgents"
+	NetguardService_GetAgent_FullMethodName                        = "/netguard.v1.NetguardService/GetAgent"
+	NetguardService_ListAgentBindings_FullMethodName               = "/netguard.v1.NetguardService/ListAgentBindings"
+	NetguardService_GetAgentBinding_FullMethodName                 = "/netguard.v1.NetguardService/GetAgentBinding"
 )
 
 // NetguardServiceClient is the client API for NetguardService service.
@@ -94,6 +98,14 @@ type NetguardServiceClient interface {
 	ListNetworkBindings(ctx context.Context, in *ListNetworkBindingsReq, opts ...grpc.CallOption) (*ListNetworkBindingsResp, error)
 	// GetNetworkBinding - gets a specific network binding by ID
 	GetNetworkBinding(ctx context.Context, in *GetNetworkBindingReq, opts ...grpc.CallOption) (*GetNetworkBindingResp, error)
+	// ListAgents - gets list of agents
+	ListAgents(ctx context.Context, in *ListAgentsReq, opts ...grpc.CallOption) (*ListAgentsResp, error)
+	// GetAgent - gets a specific agent by ID
+	GetAgent(ctx context.Context, in *GetAgentReq, opts ...grpc.CallOption) (*GetAgentResp, error)
+	// ListAgentBindings - gets list of agent bindings
+	ListAgentBindings(ctx context.Context, in *ListAgentBindingsReq, opts ...grpc.CallOption) (*ListAgentBindingsResp, error)
+	// GetAgentBinding - gets a specific agent binding by ID
+	GetAgentBinding(ctx context.Context, in *GetAgentBindingReq, opts ...grpc.CallOption) (*GetAgentBindingResp, error)
 }
 
 type netguardServiceClient struct {
@@ -324,6 +336,46 @@ func (c *netguardServiceClient) GetNetworkBinding(ctx context.Context, in *GetNe
 	return out, nil
 }
 
+func (c *netguardServiceClient) ListAgents(ctx context.Context, in *ListAgentsReq, opts ...grpc.CallOption) (*ListAgentsResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAgentsResp)
+	err := c.cc.Invoke(ctx, NetguardService_ListAgents_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *netguardServiceClient) GetAgent(ctx context.Context, in *GetAgentReq, opts ...grpc.CallOption) (*GetAgentResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAgentResp)
+	err := c.cc.Invoke(ctx, NetguardService_GetAgent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *netguardServiceClient) ListAgentBindings(ctx context.Context, in *ListAgentBindingsReq, opts ...grpc.CallOption) (*ListAgentBindingsResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAgentBindingsResp)
+	err := c.cc.Invoke(ctx, NetguardService_ListAgentBindings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *netguardServiceClient) GetAgentBinding(ctx context.Context, in *GetAgentBindingReq, opts ...grpc.CallOption) (*GetAgentBindingResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAgentBindingResp)
+	err := c.cc.Invoke(ctx, NetguardService_GetAgentBinding_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // NetguardServiceServer is the server API for NetguardService service.
 // All implementations must embed UnimplementedNetguardServiceServer
 // for forward compatibility.
@@ -374,6 +426,14 @@ type NetguardServiceServer interface {
 	ListNetworkBindings(context.Context, *ListNetworkBindingsReq) (*ListNetworkBindingsResp, error)
 	// GetNetworkBinding - gets a specific network binding by ID
 	GetNetworkBinding(context.Context, *GetNetworkBindingReq) (*GetNetworkBindingResp, error)
+	// ListAgents - gets list of agents
+	ListAgents(context.Context, *ListAgentsReq) (*ListAgentsResp, error)
+	// GetAgent - gets a specific agent by ID
+	GetAgent(context.Context, *GetAgentReq) (*GetAgentResp, error)
+	// ListAgentBindings - gets list of agent bindings
+	ListAgentBindings(context.Context, *ListAgentBindingsReq) (*ListAgentBindingsResp, error)
+	// GetAgentBinding - gets a specific agent binding by ID
+	GetAgentBinding(context.Context, *GetAgentBindingReq) (*GetAgentBindingResp, error)
 	mustEmbedUnimplementedNetguardServiceServer()
 }
 
@@ -449,6 +509,18 @@ func (UnimplementedNetguardServiceServer) ListNetworkBindings(context.Context, *
 }
 func (UnimplementedNetguardServiceServer) GetNetworkBinding(context.Context, *GetNetworkBindingReq) (*GetNetworkBindingResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetNetworkBinding not implemented")
+}
+func (UnimplementedNetguardServiceServer) ListAgents(context.Context, *ListAgentsReq) (*ListAgentsResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListAgents not implemented")
+}
+func (UnimplementedNetguardServiceServer) GetAgent(context.Context, *GetAgentReq) (*GetAgentResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetAgent not implemented")
+}
+func (UnimplementedNetguardServiceServer) ListAgentBindings(context.Context, *ListAgentBindingsReq) (*ListAgentBindingsResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListAgentBindings not implemented")
+}
+func (UnimplementedNetguardServiceServer) GetAgentBinding(context.Context, *GetAgentBindingReq) (*GetAgentBindingResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetAgentBinding not implemented")
 }
 func (UnimplementedNetguardServiceServer) mustEmbedUnimplementedNetguardServiceServer() {}
 func (UnimplementedNetguardServiceServer) testEmbeddedByValue()                         {}
@@ -867,6 +939,78 @@ func _NetguardService_GetNetworkBinding_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NetguardService_ListAgents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAgentsReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).ListAgents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_ListAgents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).ListAgents(ctx, req.(*ListAgentsReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NetguardService_GetAgent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAgentReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).GetAgent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_GetAgent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).GetAgent(ctx, req.(*GetAgentReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NetguardService_ListAgentBindings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAgentBindingsReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).ListAgentBindings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_ListAgentBindings_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).ListAgentBindings(ctx, req.(*ListAgentBindingsReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NetguardService_GetAgentBinding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAgentBindingReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).GetAgentBinding(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_GetAgentBinding_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).GetAgentBinding(ctx, req.(*GetAgentBindingReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // NetguardService_ServiceDesc is the grpc.ServiceDesc for NetguardService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -961,6 +1105,22 @@ var NetguardService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetNetworkBinding",
 			Handler:    _NetguardService_GetNetworkBinding_Handler,
+		},
+		{
+			MethodName: "ListAgents",
+			Handler:    _NetguardService_ListAgents_Handler,
+		},
+		{
+			MethodName: "GetAgent",
+			Handler:    _NetguardService_GetAgent_Handler,
+		},
+		{
+			MethodName: "ListAgentBindings",
+			Handler:    _NetguardService_ListAgentBindings_Handler,
+		},
+		{
+			MethodName: "GetAgentBinding",
+			Handler:    _NetguardService_GetAgentBinding_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

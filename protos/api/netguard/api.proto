@@ -180,6 +180,16 @@ message NetworkItem {
   string namespace = 5;
 }
 
+// AgentItem - represents an agent item in an address group
+message AgentItem {
+  string name = 1;
+  string uuid = 2;
+  string hostname = 3;
+  string api_version = 4;
+  string kind = 5;
+  string namespace = 6;
+}
+
 // Network - represents a network configuration for Netguard
 message Network {
   option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
@@ -197,6 +207,24 @@ message Network {
   NamespacedObjectReference address_group_ref = 6; // Reference to the bound AddressGroup
 }
 
+// Agent - represents an agent configuration for Netguard
+message Agent {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      required: ["self_ref", "uuid", "name"]
+    }
+  };
+  ResourceIdentifier self_ref = 1;
+  string uuid = 2;  // Agent unique identifier
+  string name = 3;  // DNS-style hostname
+  Meta meta = 4;
+  
+  // Status fields
+  bool is_bound = 5;                               // Whether the agent is bound to an AddressGroup
+  ObjectReference binding_ref = 6;                 // Reference to the AgentBinding
+  NamespacedObjectReference address_group_ref = 7; // Reference to the bound AddressGroup
+}
+
 // AddressGroup - represents an address group configuration for Netguard
 message AddressGroup {
   option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
@@ -210,6 +238,7 @@ message AddressGroup {
   bool trace = 4;                 // Whether to enable trace
   repeated NetworkItem networks = 5; // Networks associated with this address group
   Meta meta = 6;
+  repeated AgentItem agents = 7;     // Agents associated with this address group
 }
 
 // AddressGroupBinding - binding between a service and an address group
@@ -236,6 +265,20 @@ message NetworkBinding {
   ObjectReference network_ref = 2;  // Reference to the Network resource
   ObjectReference address_group_ref = 3;  // Reference to the AddressGroup resource
   NetworkItem network_item = 4;  // Network item details
+  Meta meta = 5;
+}
+
+// AgentBinding - binding between an agent and an address group
+message AgentBinding {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      required: ["self_ref", "agent_ref", "address_group_ref"]
+    }
+  };
+  ResourceIdentifier self_ref = 1;
+  ObjectReference agent_ref = 2;  // Reference to the Agent resource
+  ObjectReference address_group_ref = 3;  // Reference to the AddressGroup resource
+  AgentItem agent_item = 4;  // Agent item details
   Meta meta = 5;
 }
 
@@ -410,6 +453,16 @@ message SyncNetworks {
 // SyncNetworkBindings - subject of Network Bindings to sync
 message SyncNetworkBindings {
   repeated NetworkBinding network_bindings = 1;
+}
+
+// SyncAgents - subject of Agents to sync
+message SyncAgents {
+  repeated Agent agents = 1;
+}
+
+// SyncAgentBindings - subject of Agent Bindings to sync
+message SyncAgentBindings {
+  repeated AgentBinding agent_bindings = 1;
 }
 
 // Requests and responses for API methods
@@ -614,6 +667,46 @@ message GetNetworkBindingResp {
   NetworkBinding network_binding = 1;
 }
 
+// ListAgentsReq - request to list agents
+message ListAgentsReq {
+  repeated ResourceIdentifier identifiers = 1;
+}
+
+// ListAgentsResp - response with list of agents
+message ListAgentsResp {
+  repeated Agent items = 1;
+}
+
+// GetAgentReq - request to get a specific agent
+message GetAgentReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetAgentResp - response with a specific agent
+message GetAgentResp {
+  Agent agent = 1;
+}
+
+// ListAgentBindingsReq - request to list agent bindings
+message ListAgentBindingsReq {
+  repeated ResourceIdentifier identifiers = 1;
+}
+
+// ListAgentBindingsResp - response with list of agent bindings
+message ListAgentBindingsResp {
+  repeated AgentBinding items = 1;
+}
+
+// GetAgentBindingReq - request to get a specific agent binding
+message GetAgentBindingReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetAgentBindingResp - response with a specific agent binding
+message GetAgentBindingResp {
+  AgentBinding agent_binding = 1;
+}
+
 // SyncReq - request to sync
 message SyncReq {
   // Sync operation to apply
@@ -650,6 +743,12 @@ message SyncReq {
 
     // Subject of Network Bindings
     SyncNetworkBindings network_bindings = 11;
+
+    // Subject of Agents
+    SyncAgents agents = 12;
+
+    // Subject of Agent Bindings
+    SyncAgentBindings agent_bindings = 13;
   }
 }
 
@@ -877,6 +976,46 @@ service NetguardService {
     };
     option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
       description: "GetNetworkBinding: gets a specific network binding by ID";
+    };
+  }
+
+  // ListAgents - gets list of agents
+  rpc ListAgents(ListAgentsReq) returns (ListAgentsResp) {
+    option (google.api.http) = {
+      get: "/v1/agents"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "ListAgents: gets list of agents";
+    };
+  }
+
+  // GetAgent - gets a specific agent by ID
+  rpc GetAgent(GetAgentReq) returns (GetAgentResp) {
+    option (google.api.http) = {
+      get: "/v1/agents/{identifier.namespace}/{identifier.name}"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "GetAgent: gets a specific agent by ID";
+    };
+  }
+
+  // ListAgentBindings - gets list of agent bindings
+  rpc ListAgentBindings(ListAgentBindingsReq) returns (ListAgentBindingsResp) {
+    option (google.api.http) = {
+      get: "/v1/agent-bindings"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "ListAgentBindings: gets list of agent bindings";
+    };
+  }
+
+  // GetAgentBinding - gets a specific agent binding by ID
+  rpc GetAgentBinding(GetAgentBindingReq) returns (GetAgentBindingResp) {
+    option (google.api.http) = {
+      get: "/v1/agent-bindings/{identifier.namespace}/{identifier.name}"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "GetAgentBinding: gets a specific agent binding by ID";
     };
   }
 }

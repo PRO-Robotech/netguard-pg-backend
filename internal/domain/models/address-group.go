@@ -25,6 +25,7 @@ type AddressGroup struct {
 	Logs             bool          `json:"logs,omitempty"`             // Whether to enable logs
 	Trace            bool          `json:"trace,omitempty"`            // Whether to enable trace
 	Networks         []NetworkItem `json:"networks,omitempty"`         // Networks associated with this address group
+	Agents           []AgentItem   `json:"agents,omitempty"`           // Agents associated with this address group
 	AddressGroupName string        `json:"addressGroupName,omitempty"` // Name used in sgroups synchronization
 	Meta             Meta
 }
@@ -159,6 +160,13 @@ func (ag *AddressGroup) DeepCopy() Resource {
 		copy.Networks = make([]NetworkItem, len(ag.Networks))
 		for i, network := range ag.Networks {
 			copy.Networks[i] = network
+		}
+	}
+
+	if ag.Agents != nil {
+		copy.Agents = make([]AgentItem, len(ag.Agents))
+		for i, agent := range ag.Agents {
+			copy.Agents[i] = agent
 		}
 	}
 

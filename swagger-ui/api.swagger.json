@@ -268,6 +268,130 @@
         ]
       }
     },
+    "/v1/agent-bindings": {
+      "get": {
+        "summary": "ListAgentBindings - gets list of agent bindings",
+        "description": "ListAgentBindings: gets list of agent bindings",
+        "operationId": "NetguardService_ListAgentBindings",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListAgentBindingsResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/agent-bindings/{identifier.namespace}/{identifier.name}": {
+      "get": {
+        "summary": "GetAgentBinding - gets a specific agent binding by ID",
+        "description": "GetAgentBinding: gets a specific agent binding by ID",
+        "operationId": "NetguardService_GetAgentBinding",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetAgentBindingResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "identifier.namespace",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "identifier.name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/agents": {
+      "get": {
+        "summary": "ListAgents - gets list of agents",
+        "description": "ListAgents: gets list of agents",
+        "operationId": "NetguardService_ListAgents",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListAgentsResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/agents/{identifier.namespace}/{identifier.name}": {
+      "get": {
+        "summary": "GetAgent - gets a specific agent by ID",
+        "description": "GetAgent: gets a specific agent by ID",
+        "operationId": "NetguardService_GetAgent",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetAgentResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "identifier.namespace",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "identifier.name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
     "/v1/ieagag-rules": {
       "get": {
         "summary": "ListIEAgAgRules - gets list of IEAgAgRules",
@@ -765,6 +889,14 @@
         },
         "meta": {
           "$ref": "#/definitions/v1Meta"
+        },
+        "agents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1AgentItem"
+          },
+          "title": "Agents associated with this address group"
         }
       },
       "title": "AddressGroup - represents an address group configuration for Netguard",
@@ -855,6 +987,97 @@
       },
       "title": "AddressGroupRef - reference to an address group"
     },
+    "v1Agent": {
+      "type": "object",
+      "properties": {
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
+        },
+        "uuid": {
+          "type": "string",
+          "title": "Agent unique identifier"
+        },
+        "name": {
+          "type": "string",
+          "title": "DNS-style hostname"
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta"
+        },
+        "isBound": {
+          "type": "boolean",
+          "description": "Whether the agent is bound to an AddressGroup",
+          "title": "Status fields"
+        },
+        "bindingRef": {
+          "$ref": "#/definitions/v1ObjectReference",
+          "title": "Reference to the AgentBinding"
+        },
+        "addressGroupRef": {
+          "$ref": "#/definitions/v1NamespacedObjectReference",
+          "title": "Reference to the bound AddressGroup"
+        }
+      },
+      "title": "Agent - represents an agent configuration for Netguard",
+      "required": [
+        "selfRef",
+        "uuid",
+        "name"
+      ]
+    },
+    "v1AgentBinding": {
+      "type": "object",
+      "properties": {
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
+        },
+        "agentRef": {
+          "$ref": "#/definitions/v1ObjectReference",
+          "title": "Reference to the Agent resource"
+        },
+        "addressGroupRef": {
+          "$ref": "#/definitions/v1ObjectReference",
+          "title": "Reference to the AddressGroup resource"
+        },
+        "agentItem": {
+          "$ref": "#/definitions/v1AgentItem",
+          "title": "Agent item details"
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta"
+        }
+      },
+      "title": "AgentBinding - binding between an agent and an address group",
+      "required": [
+        "selfRef",
+        "agentRef",
+        "addressGroupRef"
+      ]
+    },
+    "v1AgentItem": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "uuid": {
+          "type": "string"
+        },
+        "hostname": {
+          "type": "string"
+        },
+        "apiVersion": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        }
+      },
+      "title": "AgentItem - represents an agent item in an address group"
+    },
     "v1Condition": {
       "type": "object",
       "properties": {
@@ -916,6 +1139,24 @@
         }
       },
       "title": "GetAddressGroupResp - response with a specific address group"
+    },
+    "v1GetAgentBindingResp": {
+      "type": "object",
+      "properties": {
+        "agentBinding": {
+          "$ref": "#/definitions/v1AgentBinding"
+        }
+      },
+      "title": "GetAgentBindingResp - response with a specific agent binding"
+    },
+    "v1GetAgentResp": {
+      "type": "object",
+      "properties": {
+        "agent": {
+          "$ref": "#/definitions/v1Agent"
+        }
+      },
+      "title": "GetAgentResp - response with a specific agent"
     },
     "v1GetIEAgAgRuleResp": {
       "type": "object",
@@ -1089,6 +1330,32 @@
         }
       },
       "title": "ListAddressGroupsResp - response with list of address groups"
+    },
+    "v1ListAgentBindingsResp": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1AgentBinding"
+          }
+        }
+      },
+      "title": "ListAgentBindingsResp - response with list of agent bindings"
+    },
+    "v1ListAgentsResp": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Agent"
+          }
+        }
+      },
+      "title": "ListAgentsResp - response with list of agents"
     },
     "v1ListIEAgAgRulesResp": {
       "type": "object",
@@ -1641,6 +1908,32 @@
       },
       "title": "SyncAddressGroups - subject of Address Groups to sync"
     },
+    "v1SyncAgentBindings": {
+      "type": "object",
+      "properties": {
+        "agentBindings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1AgentBinding"
+          }
+        }
+      },
+      "title": "SyncAgentBindings - subject of Agent Bindings to sync"
+    },
+    "v1SyncAgents": {
+      "type": "object",
+      "properties": {
+        "agents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Agent"
+          }
+        }
+      },
+      "title": "SyncAgents - subject of Agents to sync"
+    },
     "v1SyncIEAgAgRules": {
       "type": "object",
       "properties": {
@@ -1738,6 +2031,14 @@
         "networkBindings": {
           "$ref": "#/definitions/v1SyncNetworkBindings",
           "title": "Subject of Network Bindings"
+        },
+        "agents": {
+          "$ref": "#/definitions/v1SyncAgents",
+          "title": "Subject of Agents"
+        },
+        "agentBindings": {
+          "$ref": "#/definitions/v1SyncAgentBindings",
+          "title": "Subject of Agent Bindings"
         }
       },
       "title": "SyncReq - request to sync"

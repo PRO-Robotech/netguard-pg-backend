@@ -99,6 +99,18 @@ const (
 	// NetguardServiceGetNetworkBindingProcedure is the fully-qualified name of the NetguardService's
 	// GetNetworkBinding RPC.
 	NetguardServiceGetNetworkBindingProcedure = "/netguard.v1.NetguardService/GetNetworkBinding"
+	// NetguardServiceListAgentsProcedure is the fully-qualified name of the NetguardService's
+	// ListAgents RPC.
+	NetguardServiceListAgentsProcedure = "/netguard.v1.NetguardService/ListAgents"
+	// NetguardServiceGetAgentProcedure is the fully-qualified name of the NetguardService's GetAgent
+	// RPC.
+	NetguardServiceGetAgentProcedure = "/netguard.v1.NetguardService/GetAgent"
+	// NetguardServiceListAgentBindingsProcedure is the fully-qualified name of the NetguardService's
+	// ListAgentBindings RPC.
+	NetguardServiceListAgentBindingsProcedure = "/netguard.v1.NetguardService/ListAgentBindings"
+	// NetguardServiceGetAgentBindingProcedure is the fully-qualified name of the NetguardService's
+	// GetAgentBinding RPC.
+	NetguardServiceGetAgentBindingProcedure = "/netguard.v1.NetguardService/GetAgentBinding"
 )
 
 // NetguardServiceClient is a client for the netguard.v1.NetguardService service.
@@ -147,6 +159,14 @@ type NetguardServiceClient interface {
 	ListNetworkBindings(context.Context, *connect.Request[netguard.ListNetworkBindingsReq]) (*connect.Response[netguard.ListNetworkBindingsResp], error)
 	// GetNetworkBinding - gets a specific network binding by ID
 	GetNetworkBinding(context.Context, *connect.Request[netguard.GetNetworkBindingReq]) (*connect.Response[netguard.GetNetworkBindingResp], error)
+	// ListAgents - gets list of agents
+	ListAgents(context.Context, *connect.Request[netguard.ListAgentsReq]) (*connect.Response[netguard.ListAgentsResp], error)
+	// GetAgent - gets a specific agent by ID
+	GetAgent(context.Context, *connect.Request[netguard.GetAgentReq]) (*connect.Response[netguard.GetAgentResp], error)
+	// ListAgentBindings - gets list of agent bindings
+	ListAgentBindings(context.Context, *connect.Request[netguard.ListAgentBindingsReq]) (*connect.Response[netguard.ListAgentBindingsResp], error)
+	// GetAgentBinding - gets a specific agent binding by ID
+	GetAgentBinding(context.Context, *connect.Request[netguard.GetAgentBindingReq]) (*connect.Response[netguard.GetAgentBindingResp], error)
 }
 
 // NewNetguardServiceClient constructs a client for the netguard.v1.NetguardService service. By
@@ -292,6 +312,30 @@ func NewNetguardServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(netguardServiceMethods.ByName("GetNetworkBinding")),
 			connect.WithClientOptions(opts...),
 		),
+		listAgents: connect.NewClient[netguard.ListAgentsReq, netguard.ListAgentsResp](
+			httpClient,
+			baseURL+NetguardServiceListAgentsProcedure,
+			connect.WithSchema(netguardServiceMethods.ByName("ListAgents")),
+			connect.WithClientOptions(opts...),
+		),
+		getAgent: connect.NewClient[netguard.GetAgentReq, netguard.GetAgentResp](
+			httpClient,
+			baseURL+NetguardServiceGetAgentProcedure,
+			connect.WithSchema(netguardServiceMethods.ByName("GetAgent")),
+			connect.WithClientOptions(opts...),
+		),
+		listAgentBindings: connect.NewClient[netguard.ListAgentBindingsReq, netguard.ListAgentBindingsResp](
+			httpClient,
+			baseURL+NetguardServiceListAgentBindingsProcedure,
+			connect.WithSchema(netguardServiceMethods.ByName("ListAgentBindings")),
+			connect.WithClientOptions(opts...),
+		),
+		getAgentBinding: connect.NewClient[netguard.GetAgentBindingReq, netguard.GetAgentBindingResp](
+			httpClient,
+			baseURL+NetguardServiceGetAgentBindingProcedure,
+			connect.WithSchema(netguardServiceMethods.ByName("GetAgentBinding")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -319,6 +363,10 @@ type netguardServiceClient struct {
 	getNetwork                      *connect.Client[netguard.GetNetworkReq, netguard.GetNetworkResp]
 	listNetworkBindings             *connect.Client[netguard.ListNetworkBindingsReq, netguard.ListNetworkBindingsResp]
 	getNetworkBinding               *connect.Client[netguard.GetNetworkBindingReq, netguard.GetNetworkBindingResp]
+	listAgents                      *connect.Client[netguard.ListAgentsReq, netguard.ListAgentsResp]
+	getAgent                        *connect.Client[netguard.GetAgentReq, netguard.GetAgentResp]
+	listAgentBindings               *connect.Client[netguard.ListAgentBindingsReq, netguard.ListAgentBindingsResp]
+	getAgentBinding                 *connect.Client[netguard.GetAgentBindingReq, netguard.GetAgentBindingResp]
 }
 
 // Sync calls netguard.v1.NetguardService.Sync.
@@ -432,6 +480,26 @@ func (c *netguardServiceClient) GetNetworkBinding(ctx context.Context, req *conn
 	return c.getNetworkBinding.CallUnary(ctx, req)
 }
 
+// ListAgents calls netguard.v1.NetguardService.ListAgents.
+func (c *netguardServiceClient) ListAgents(ctx context.Context, req *connect.Request[netguard.ListAgentsReq]) (*connect.Response[netguard.ListAgentsResp], error) {
+	return c.listAgents.CallUnary(ctx, req)
+}
+
+// GetAgent calls netguard.v1.NetguardService.GetAgent.
+func (c *netguardServiceClient) GetAgent(ctx context.Context, req *connect.Request[netguard.GetAgentReq]) (*connect.Response[netguard.GetAgentResp], error) {
+	return c.getAgent.CallUnary(ctx, req)
+}
+
+// ListAgentBindings calls netguard.v1.NetguardService.ListAgentBindings.
+func (c *netguardServiceClient) ListAgentBindings(ctx context.Context, req *connect.Request[netguard.ListAgentBindingsReq]) (*connect.Response[netguard.ListAgentBindingsResp], error) {
+	return c.listAgentBindings.CallUnary(ctx, req)
+}
+
+// GetAgentBinding calls netguard.v1.NetguardService.GetAgentBinding.
+func (c *netguardServiceClient) GetAgentBinding(ctx context.Context, req *connect.Request[netguard.GetAgentBindingReq]) (*connect.Response[netguard.GetAgentBindingResp], error) {
+	return c.getAgentBinding.CallUnary(ctx, req)
+}
+
 // NetguardServiceHandler is an implementation of the netguard.v1.NetguardService service.
 type NetguardServiceHandler interface {
 	// Sync - syncs data in DB
@@ -478,6 +546,14 @@ type NetguardServiceHandler interface {
 	ListNetworkBindings(context.Context, *connect.Request[netguard.ListNetworkBindingsReq]) (*connect.Response[netguard.ListNetworkBindingsResp], error)
 	// GetNetworkBinding - gets a specific network binding by ID
 	GetNetworkBinding(context.Context, *connect.Request[netguard.GetNetworkBindingReq]) (*connect.Response[netguard.GetNetworkBindingResp], error)
+	// ListAgents - gets list of agents
+	ListAgents(context.Context, *connect.Request[netguard.ListAgentsReq]) (*connect.Response[netguard.ListAgentsResp], error)
+	// GetAgent - gets a specific agent by ID
+	GetAgent(context.Context, *connect.Request[netguard.GetAgentReq]) (*connect.Response[netguard.GetAgentResp], error)
+	// ListAgentBindings - gets list of agent bindings
+	ListAgentBindings(context.Context, *connect.Request[netguard.ListAgentBindingsReq]) (*connect.Response[netguard.ListAgentBindingsResp], error)
+	// GetAgentBinding - gets a specific agent binding by ID
+	GetAgentBinding(context.Context, *connect.Request[netguard.GetAgentBindingReq]) (*connect.Response[netguard.GetAgentBindingResp], error)
 }
 
 // NewNetguardServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -619,6 +695,30 @@ func NewNetguardServiceHandler(svc NetguardServiceHandler, opts ...connect.Handl
 		connect.WithSchema(netguardServiceMethods.ByName("GetNetworkBinding")),
 		connect.WithHandlerOptions(opts...),
 	)
+	netguardServiceListAgentsHandler := connect.NewUnaryHandler(
+		NetguardServiceListAgentsProcedure,
+		svc.ListAgents,
+		connect.WithSchema(netguardServiceMethods.ByName("ListAgents")),
+		connect.WithHandlerOptions(opts...),
+	)
+	netguardServiceGetAgentHandler := connect.NewUnaryHandler(
+		NetguardServiceGetAgentProcedure,
+		svc.GetAgent,
+		connect.WithSchema(netguardServiceMethods.ByName("GetAgent")),
+		connect.WithHandlerOptions(opts...),
+	)
+	netguardServiceListAgentBindingsHandler := connect.NewUnaryHandler(
+		NetguardServiceListAgentBindingsProcedure,
+		svc.ListAgentBindings,
+		connect.WithSchema(netguardServiceMethods.ByName("ListAgentBindings")),
+		connect.WithHandlerOptions(opts...),
+	)
+	netguardServiceGetAgentBindingHandler := connect.NewUnaryHandler(
+		NetguardServiceGetAgentBindingProcedure,
+		svc.GetAgentBinding,
+		connect.WithSchema(netguardServiceMethods.ByName("GetAgentBinding")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/netguard.v1.NetguardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case NetguardServiceSyncProcedure:
@@ -665,6 +765,14 @@ func NewNetguardServiceHandler(svc NetguardServiceHandler, opts ...connect.Handl
 			netguardServiceListNetworkBindingsHandler.ServeHTTP(w, r)
 		case NetguardServiceGetNetworkBindingProcedure:
 			netguardServiceGetNetworkBindingHandler.ServeHTTP(w, r)
+		case NetguardServiceListAgentsProcedure:
+			netguardServiceListAgentsHandler.ServeHTTP(w, r)
+		case NetguardServiceGetAgentProcedure:
+			netguardServiceGetAgentHandler.ServeHTTP(w, r)
+		case NetguardServiceListAgentBindingsProcedure:
+			netguardServiceListAgentBindingsHandler.ServeHTTP(w, r)
+		case NetguardServiceGetAgentBindingProcedure:
+			netguardServiceGetAgentBindingHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -760,4 +868,20 @@ func (UnimplementedNetguardServiceHandler) ListNetworkBindings(context.Context, 
 
 func (UnimplementedNetguardServiceHandler) GetNetworkBinding(context.Context, *connect.Request[netguard.GetNetworkBindingReq]) (*connect.Response[netguard.GetNetworkBindingResp], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetNetworkBinding is not implemented"))
+}
+
+func (UnimplementedNetguardServiceHandler) ListAgents(context.Context, *connect.Request[netguard.ListAgentsReq]) (*connect.Response[netguard.ListAgentsResp], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.ListAgents is not implemented"))
+}
+
+func (UnimplementedNetguardServiceHandler) GetAgent(context.Context, *connect.Request[netguard.GetAgentReq]) (*connect.Response[netguard.GetAgentResp], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetAgent is not implemented"))
+}
+
+func (UnimplementedNetguardServiceHandler) ListAgentBindings(context.Context, *connect.Request[netguard.ListAgentBindingsReq]) (*connect.Response[netguard.ListAgentBindingsResp], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.ListAgentBindings is not implemented"))
+}
+
+func (UnimplementedNetguardServiceHandler) GetAgentBinding(context.Context, *connect.Request[netguard.GetAgentBindingReq]) (*connect.Response[netguard.GetAgentBindingResp], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetAgentBinding is not implemented"))
 }
