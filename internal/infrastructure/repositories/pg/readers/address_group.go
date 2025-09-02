@@ -117,6 +117,12 @@ func (r *Reader) scanAddressGroup(rows pgx.Rows) (models.AddressGroup, error) {
 	// Set SelfRef
 	addressGroup.SelfRef = models.NewSelfRef(models.NewResourceIdentifier(addressGroup.Name, models.WithNamespace(addressGroup.Namespace)))
 
+	if addressGroup.Namespace != "" {
+		addressGroup.AddressGroupName = fmt.Sprintf("%s/%s", addressGroup.Namespace, addressGroup.Name)
+	} else {
+		addressGroup.AddressGroupName = addressGroup.Name
+	}
+
 	return addressGroup, nil
 }
 
@@ -162,6 +168,12 @@ func (r *Reader) scanAddressGroupRow(row pgx.Row) (*models.AddressGroup, error) 
 
 	// Set SelfRef
 	addressGroup.SelfRef = models.NewSelfRef(models.NewResourceIdentifier(addressGroup.Name, models.WithNamespace(addressGroup.Namespace)))
+
+	if addressGroup.Namespace != "" {
+		addressGroup.AddressGroupName = fmt.Sprintf("%s/%s", addressGroup.Namespace, addressGroup.Name)
+	} else {
+		addressGroup.AddressGroupName = addressGroup.Name
+	}
 
 	return &addressGroup, nil
 }
