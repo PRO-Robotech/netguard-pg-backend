@@ -507,6 +507,12 @@ func (w *ValidationWebhook) validateServiceAlias(ctx context.Context, req *admis
 
 	switch req.Operation {
 	case admissionv1.Create:
+		// Auto-populate ServiceRef namespace if not specified (similar to IEAgAgRule pattern)
+		if alias.Spec.ServiceRef.Namespace == "" {
+			alias.Spec.ServiceRef.Namespace = alias.Namespace
+			log.Printf("🔧 Auto-populated ServiceRef namespace to %s for ServiceAlias %s/%s", alias.Namespace, req.Namespace, req.Name)
+		}
+
 		k8sValidator := k8svalidation.NewServiceAliasValidator()
 		if errs := k8sValidator.ValidateCreate(ctx, &alias); len(errs) > 0 {
 			return w.errorResponse(req.UID, fmt.Sprintf("ServiceAlias K8s validation failed: %v", errs.ToAggregate()))
@@ -517,6 +523,12 @@ func (w *ValidationWebhook) validateServiceAlias(ctx context.Context, req *admis
 		}
 
 	case admissionv1.Update:
+		// Auto-populate ServiceRef namespace if not specified (similar to IEAgAgRule pattern)
+		if alias.Spec.ServiceRef.Namespace == "" {
+			alias.Spec.ServiceRef.Namespace = alias.Namespace
+			log.Printf("🔧 Auto-populated ServiceRef namespace to %s for ServiceAlias %s/%s during UPDATE", alias.Namespace, req.Namespace, req.Name)
+		}
+
 		// Получаем старую версию для валидации обновления
 		var oldAlias netguardv1beta1.ServiceAlias
 		if err := json.Unmarshal(req.OldObject.Raw, &oldAlias); err != nil {
@@ -968,7 +980,7 @@ func convertRuleS2SToDomain(k8sRule netguardv1beta1.RuleS2S) models.RuleS2S {
 func convertServiceAliasToDomain(k8sAlias netguardv1beta1.ServiceAlias) models.ServiceAlias {
 	var serviceRef models.ServiceRef
 	serviceRef.Name = k8sAlias.Spec.ServiceRef.Name
-	serviceRef.Namespace = k8sAlias.Namespace // ObjectReference не имеет Namespace, используем namespace самого объекта
+	serviceRef.Namespace = k8sAlias.Spec.ServiceRef.Namespace // Use the actual namespace from NamespacedObjectReference (auto-populated by admission webhook)
 
 	return models.ServiceAlias{
 		SelfRef: models.SelfRef{
