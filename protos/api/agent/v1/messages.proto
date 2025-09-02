@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 package hbf.v1.agent;
-option go_package = "netguard-pg-backend/protos/pkg/api/agent/v1;agentv1";
+option go_package = "github.com/PRO-Robotech/protos/pkg/api/agent/v1;agentv1";
 
 import "google/protobuf/empty.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";

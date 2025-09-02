@@ -8,8 +8,8 @@ import (
 	connect "connectrpc.com/connect"
 	context "context"
 	errors "errors"
+	v1 "github.com/PRO-Robotech/protos/pkg/api/agent/v1"
 	http "net/http"
-	v1 "netguard-pg-backend/protos/pkg/api/agent/v1"
 	strings "strings"
 )
 

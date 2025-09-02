@@ -1016,6 +1016,15 @@
         "addressGroupRef": {
           "$ref": "#/definitions/v1NamespacedObjectReference",
           "title": "Reference to the bound AddressGroup"
+        },
+        "secretData": {
+          "$ref": "#/definitions/v1SecretData",
+          "description": "Authentication data (optional)",
+          "title": "Authentication fields"
+        },
+        "ownerCheck": {
+          "$ref": "#/definitions/v1OwnerCheck",
+          "title": "Ownership verification method (optional)"
         }
       },
       "title": "Agent - represents an agent configuration for Netguard",
@@ -1650,6 +1659,19 @@
       },
       "title": "ObjectReference contains enough information to let you locate the referenced object"
     },
+    "v1OwnerCheck": {
+      "type": "object",
+      "properties": {
+        "noAuth": {
+          "type": "object",
+          "properties": {}
+        },
+        "secret": {
+          "$ref": "#/definitions/v1SecretData"
+        }
+      },
+      "title": "Methods for ownership verification"
+    },
     "v1PortRange": {
       "type": "object",
       "properties": {
@@ -1772,6 +1794,20 @@
         "serviceLocalRef",
         "serviceRef"
       ]
+    },
+    "v1SecretData": {
+      "type": "object",
+      "properties": {
+        "rawValue": {
+          "type": "string",
+          "title": "Base64-encoded plain value"
+        },
+        "secureValue": {
+          "type": "string",
+          "title": "Base64-encoded encrypted value: BASE64(IV(16 bytes) + ciphertext)"
+        }
+      },
+      "title": "Authentication data for agents"
     },
     "v1Service": {
       "type": "object",

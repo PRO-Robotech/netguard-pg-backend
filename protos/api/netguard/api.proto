@@ -207,6 +207,22 @@ message Network {
   NamespacedObjectReference address_group_ref = 6; // Reference to the bound AddressGroup
 }
 
+// Authentication data for agents
+message SecretData {
+  // Base64-encoded plain value
+  string raw_value = 1;
+  // Base64-encoded encrypted value: BASE64(IV(16 bytes) + ciphertext)
+  string secure_value = 2;
+}
+
+// Methods for ownership verification
+message OwnerCheck {
+  oneof auth {
+    google.protobuf.Empty no_auth = 1;
+    SecretData secret = 2;
+  }
+}
+
 // Agent - represents an agent configuration for Netguard
 message Agent {
   option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
@@ -223,6 +239,10 @@ message Agent {
   bool is_bound = 5;                               // Whether the agent is bound to an AddressGroup
   ObjectReference binding_ref = 6;                 // Reference to the AgentBinding
   NamespacedObjectReference address_group_ref = 7; // Reference to the bound AddressGroup
+  
+  // Authentication fields
+  SecretData secret_data = 8;                      // Authentication data (optional)
+  OwnerCheck owner_check = 9;                      // Ownership verification method (optional)
 }
 
 // AddressGroup - represents an address group configuration for Netguard

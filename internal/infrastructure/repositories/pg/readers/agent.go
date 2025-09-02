@@ -20,6 +20,7 @@ func (r *Reader) ListAgents(ctx context.Context, consume func(models.Agent) erro
 		SELECT a.namespace, a.name, a.uuid, a.hostname, a.is_bound,
 		       a.binding_ref_namespace, a.binding_ref_name,
 		       a.address_group_ref_namespace, a.address_group_ref_name,
+		       a.raw_value, a.secure_value, a.auth_method,
 			   m.resource_version, m.labels, m.annotations, m.conditions,
 			   m.created_at, m.updated_at
 		FROM agents a
@@ -59,6 +60,7 @@ func (r *Reader) GetAgentByID(ctx context.Context, id models.ResourceIdentifier)
 		SELECT a.namespace, a.name, a.uuid, a.hostname, a.is_bound,
 		       a.binding_ref_namespace, a.binding_ref_name,
 		       a.address_group_ref_namespace, a.address_group_ref_name,
+		       a.raw_value, a.secure_value, a.auth_method,
 			   m.resource_version, m.labels, m.annotations, m.conditions,
 			   m.created_at, m.updated_at
 		FROM agents a
@@ -91,6 +93,10 @@ func (r *Reader) scanAgent(rows pgx.Rows) (models.Agent, error) {
 	var bindingRefNamespace, bindingRefName *string           // Nullable references
 	var addressGroupRefNamespace, addressGroupRefName *string // Nullable references
 
+	// Authentication fields
+	var rawValue, secureValue *string // Nullable authentication fields
+	var authMethod string             // Authentication method
+
 	err := rows.Scan(
 		&agent.Namespace,
 		&agent.Name,
@@ -101,6 +107,9 @@ func (r *Reader) scanAgent(rows pgx.Rows) (models.Agent, error) {
 		&bindingRefName,
 		&addressGroupRefNamespace,
 		&addressGroupRefName,
+		&rawValue,
+		&secureValue,
+		&authMethod,
 		&resourceVersion,
 		&labelsJSON,
 		&annotationsJSON,
@@ -135,6 +144,23 @@ func (r *Reader) scanAgent(rows pgx.Rows) (models.Agent, error) {
 		}
 	}
 
+	// Handle authentication fields
+	agent.OwnerCheck = &models.OwnerCheck{
+		AuthMethod: models.AuthMethod(authMethod),
+	}
+
+	if authMethod == string(models.AuthMethodSecret) && (rawValue != nil || secureValue != nil) {
+		secretData := &models.SecretData{}
+		if rawValue != nil {
+			secretData.RawValue = *rawValue
+		}
+		if secureValue != nil {
+			secretData.SecureValue = *secureValue
+		}
+		agent.SecretData = secretData
+		agent.OwnerCheck.SecretData = secretData
+	}
+
 	// Convert K8s metadata (convert int64 to string)
 	agent.Meta, err = utils.ConvertK8sMetadata(fmt.Sprintf("%d", resourceVersion), labelsJSON, annotationsJSON, conditionsJSON, createdAt, updatedAt)
 	if err != nil {
@@ -160,6 +186,10 @@ func (r *Reader) scanAgentRow(row pgx.Row) (*models.Agent, error) {
 	var bindingRefNamespace, bindingRefName *string           // Nullable references
 	var addressGroupRefNamespace, addressGroupRefName *string // Nullable references
 
+	// Authentication fields
+	var rawValue, secureValue *string // Nullable authentication fields
+	var authMethod string             // Authentication method
+
 	err := row.Scan(
 		&agent.Namespace,
 		&agent.Name,
@@ -170,6 +200,9 @@ func (r *Reader) scanAgentRow(row pgx.Row) (*models.Agent, error) {
 		&bindingRefName,
 		&addressGroupRefNamespace,
 		&addressGroupRefName,
+		&rawValue,
+		&secureValue,
+		&authMethod,
 		&resourceVersion,
 		&labelsJSON,
 		&annotationsJSON,
@@ -202,6 +235,23 @@ func (r *Reader) scanAgentRow(row pgx.Row) (*models.Agent, error) {
 			Kind:       "AddressGroup",
 			Name:       *addressGroupRefName,
 		}
+	}
+
+	// Handle authentication fields
+	agent.OwnerCheck = &models.OwnerCheck{
+		AuthMethod: models.AuthMethod(authMethod),
+	}
+
+	if authMethod == string(models.AuthMethodSecret) && (rawValue != nil || secureValue != nil) {
+		secretData := &models.SecretData{}
+		if rawValue != nil {
+			secretData.RawValue = *rawValue
+		}
+		if secureValue != nil {
+			secretData.SecureValue = *secureValue
+		}
+		agent.SecretData = secretData
+		agent.OwnerCheck.SecretData = secretData
 	}
 
 	// Convert K8s metadata (convert int64 to string)

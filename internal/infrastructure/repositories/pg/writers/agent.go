@@ -70,6 +70,22 @@ func (w *Writer) upsertAgent(ctx context.Context, agent models.Agent) error {
 		addressGroupRefName = &agent.AddressGroupRef.Name
 	}
 
+	// Handle authentication fields
+	var rawValue, secureValue *string
+	authMethod := string(models.AuthMethodNoAuth) // Default to no_auth
+
+	if agent.OwnerCheck != nil {
+		authMethod = string(agent.OwnerCheck.AuthMethod)
+		if agent.OwnerCheck.AuthMethod == models.AuthMethodSecret && agent.SecretData != nil {
+			if agent.SecretData.RawValue != "" {
+				rawValue = &agent.SecretData.RawValue
+			}
+			if agent.SecretData.SecureValue != "" {
+				secureValue = &agent.SecretData.SecureValue
+			}
+		}
+	}
+
 	query := `
 		WITH metadata AS (
 			INSERT INTO k8s_metadata (labels, annotations, finalizers, conditions)
@@ -86,8 +102,9 @@ func (w *Writer) upsertAgent(ctx context.Context, agent models.Agent) error {
 			namespace, name, uuid, hostname, is_bound,
 			binding_ref_namespace, binding_ref_name,
 			address_group_ref_namespace, address_group_ref_name,
+			raw_value, secure_value, auth_method,
 			resource_version
-		) SELECT $5, $6, $7, $8, $9, $10, $11, $12, $13, resource_version FROM metadata
+		) SELECT $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, resource_version FROM metadata
 		ON CONFLICT (namespace, name) DO UPDATE SET
 			uuid = EXCLUDED.uuid,
 			hostname = EXCLUDED.hostname,
@@ -96,6 +113,9 @@ func (w *Writer) upsertAgent(ctx context.Context, agent models.Agent) error {
 			binding_ref_name = EXCLUDED.binding_ref_name,
 			address_group_ref_namespace = EXCLUDED.address_group_ref_namespace,
 			address_group_ref_name = EXCLUDED.address_group_ref_name,
+			raw_value = EXCLUDED.raw_value,
+			secure_value = EXCLUDED.secure_value,
+			auth_method = EXCLUDED.auth_method,
 			resource_version = EXCLUDED.resource_version`
 
 	err = w.exec(ctx, query,
@@ -112,6 +132,9 @@ func (w *Writer) upsertAgent(ctx context.Context, agent models.Agent) error {
 		bindingRefName,           // $11
 		addressGroupRefNamespace, // $12
 		addressGroupRefName,      // $13
+		rawValue,                 // $14
+		secureValue,              // $15
+		authMethod,               // $16
 	)
 	if err != nil {
 		return errors.Wrapf(err, "failed to upsert agent %s/%s", agent.Namespace, agent.Name)

@@ -9,6 +9,26 @@ import (
 	"netguard-pg-backend/internal/sync/types"
 )
 
+// AuthMethod represents the authentication method for an agent
+type AuthMethod string
+
+const (
+	AuthMethodNoAuth AuthMethod = "no_auth"
+	AuthMethodSecret AuthMethod = "secret"
+)
+
+// SecretData represents authentication data for agents
+type SecretData struct {
+	RawValue    string `json:"rawValue,omitempty"`    // Base64-encoded plain value
+	SecureValue string `json:"secureValue,omitempty"` // Base64-encoded encrypted value
+}
+
+// OwnerCheck represents methods for ownership verification
+type OwnerCheck struct {
+	AuthMethod AuthMethod  `json:"authMethod"`
+	SecretData *SecretData `json:"secretData,omitempty"`
+}
+
 // Agent represents an agent resource in the domain
 type Agent struct {
 	SelfRef
@@ -21,6 +41,10 @@ type Agent struct {
 	IsBound         bool                     `json:"isBound"`
 	BindingRef      *v1beta1.ObjectReference `json:"bindingRef,omitempty"`
 	AddressGroupRef *v1beta1.ObjectReference `json:"addressGroupRef,omitempty"`
+
+	// Authentication
+	SecretData *SecretData `json:"secretData,omitempty"`
+	OwnerCheck *OwnerCheck `json:"ownerCheck,omitempty"`
 
 	// Metadata
 	Meta Meta `json:"meta"`
@@ -38,7 +62,10 @@ func NewAgent(name, namespace, uuid, hostname string) *Agent {
 		UUID:    uuid,
 		Name:    hostname,
 		IsBound: false,
-		Meta:    Meta{},
+		OwnerCheck: &OwnerCheck{
+			AuthMethod: AuthMethodNoAuth,
+		},
+		Meta: Meta{},
 	}
 }
 
@@ -77,6 +104,42 @@ func (a *Agent) ClearBinding() {
 	a.IsBound = false
 	a.BindingRef = nil
 	a.AddressGroupRef = nil
+}
+
+// SetSecretData sets the authentication secret data
+func (a *Agent) SetSecretData(rawValue, secureValue string) {
+	a.SecretData = &SecretData{
+		RawValue:    rawValue,
+		SecureValue: secureValue,
+	}
+	if a.OwnerCheck == nil {
+		a.OwnerCheck = &OwnerCheck{}
+	}
+	a.OwnerCheck.AuthMethod = AuthMethodSecret
+	a.OwnerCheck.SecretData = a.SecretData
+}
+
+// ClearSecretData clears authentication data
+func (a *Agent) ClearSecretData() {
+	a.SecretData = nil
+	if a.OwnerCheck == nil {
+		a.OwnerCheck = &OwnerCheck{}
+	}
+	a.OwnerCheck.AuthMethod = AuthMethodNoAuth
+	a.OwnerCheck.SecretData = nil
+}
+
+// GetAuthMethod returns the current authentication method
+func (a *Agent) GetAuthMethod() AuthMethod {
+	if a.OwnerCheck == nil {
+		return AuthMethodNoAuth
+	}
+	return a.OwnerCheck.AuthMethod
+}
+
+// HasSecretAuth returns true if agent uses secret authentication
+func (a *Agent) HasSecretAuth() bool {
+	return a.GetAuthMethod() == AuthMethodSecret && a.SecretData != nil
 }
 
 // IsReady returns true if the agent is ready
@@ -130,6 +193,21 @@ func (a *Agent) DeepCopy() Resource {
 	if a.AddressGroupRef != nil {
 		addressGroupRefCopy := *a.AddressGroupRef
 		copy.AddressGroupRef = &addressGroupRefCopy
+	}
+
+	// Deep copy authentication data
+	if a.SecretData != nil {
+		secretDataCopy := *a.SecretData
+		copy.SecretData = &secretDataCopy
+	}
+
+	if a.OwnerCheck != nil {
+		ownerCheckCopy := *a.OwnerCheck
+		if a.OwnerCheck.SecretData != nil {
+			secretDataCopy := *a.OwnerCheck.SecretData
+			ownerCheckCopy.SecretData = &secretDataCopy
+		}
+		copy.OwnerCheck = &ownerCheckCopy
 	}
 
 	return &copy
