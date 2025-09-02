@@ -147,6 +147,13 @@ func (s *AddressGroupResourceService) CreateAddressGroup(ctx context.Context, ad
 		}
 	}()
 
+	// Set AddressGroupName before syncing
+	if addressGroup.Namespace != "" {
+		addressGroup.AddressGroupName = fmt.Sprintf("%s/%s", addressGroup.Namespace, addressGroup.Name)
+	} else {
+		addressGroup.AddressGroupName = addressGroup.Name
+	}
+
 	// Sync address group (this will create it)
 	if err = s.syncAddressGroups(ctx, writer, []models.AddressGroup{addressGroup}, models.SyncOpUpsert); err != nil {
 		return errors.Wrap(err, "failed to create address group")
@@ -206,6 +213,13 @@ func (s *AddressGroupResourceService) UpdateAddressGroup(ctx context.Context, ad
 			writer.Abort()
 		}
 	}()
+
+	// Set AddressGroupName before syncing
+	if addressGroup.Namespace != "" {
+		addressGroup.AddressGroupName = fmt.Sprintf("%s/%s", addressGroup.Namespace, addressGroup.Name)
+	} else {
+		addressGroup.AddressGroupName = addressGroup.Name
+	}
 
 	// Sync address group (this will update it)
 	if err = s.syncAddressGroups(ctx, writer, []models.AddressGroup{addressGroup}, models.SyncOpUpsert); err != nil {
@@ -1663,6 +1677,15 @@ func (s *AddressGroupResourceService) RegeneratePortMappingsForService(ctx conte
 // syncAddressGroups handles the actual address group synchronization logic
 func (s *AddressGroupResourceService) syncAddressGroups(ctx context.Context, writer ports.Writer, addressGroups []models.AddressGroup, syncOp models.SyncOp) error {
 	log.Printf("syncAddressGroups: Syncing %d address groups with operation %s", len(addressGroups), syncOp)
+
+	// Set AddressGroupName for all address groups before syncing
+	for i := range addressGroups {
+		if addressGroups[i].Namespace != "" {
+			addressGroups[i].AddressGroupName = fmt.Sprintf("%s/%s", addressGroups[i].Namespace, addressGroups[i].Name)
+		} else {
+			addressGroups[i].AddressGroupName = addressGroups[i].Name
+		}
+	}
 
 	// Validation based on operation
 	if syncOp != models.SyncOpDelete {
