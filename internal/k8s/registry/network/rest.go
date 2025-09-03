@@ -56,8 +56,8 @@ func (r *REST) NamespaceScoped() bool {
 // Get retrieves a Network by name
 func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
 	// Extract namespace from context
-	namespace, ok := NamespaceFrom(ctx)
-	if !ok {
+	namespace := utils.NamespaceFrom(ctx)
+	if namespace == "" {
 		return nil, errors.NewBadRequest("namespace is required")
 	}
 
@@ -80,8 +80,8 @@ func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions)
 // List retrieves a list of Networks
 func (r *REST) List(ctx context.Context, options *metainternalversion.ListOptions) (runtime.Object, error) {
 	// Extract namespace from context
-	namespace, ok := NamespaceFrom(ctx)
-	if !ok {
+	namespace := utils.NamespaceFrom(ctx)
+	if namespace == "" {
 		return nil, errors.NewBadRequest("namespace is required")
 	}
 
@@ -222,8 +222,8 @@ func (r *REST) Update(ctx context.Context, name string, objInfo rest.UpdatedObje
 // Delete deletes a Network
 func (r *REST) Delete(ctx context.Context, name string, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions) (runtime.Object, bool, error) {
 	// Extract namespace from context
-	namespace, ok := NamespaceFrom(ctx)
-	if !ok {
+	namespace := utils.NamespaceFrom(ctx)
+	if namespace == "" {
 		return nil, false, errors.NewBadRequest("namespace is required")
 	}
 
@@ -313,11 +313,4 @@ func (r *REST) Watch(ctx context.Context, options *metainternalversion.ListOptio
 	// For now, return a no-op watch implementation
 	// In a real implementation, you would return a proper watch interface
 	return watch.NewEmptyWatch(), nil
-}
-
-// NamespaceFrom extracts namespace from context
-func NamespaceFrom(ctx context.Context) (string, bool) {
-	// This is a simplified implementation
-	// In a real implementation, you would extract namespace from the request context
-	return "default", true
 }

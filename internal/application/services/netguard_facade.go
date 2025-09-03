@@ -629,21 +629,31 @@ func (f *NetguardFacade) Sync(ctx context.Context, syncOp models.SyncOp, resourc
 	case []models.IEAgAgRule:
 		return f.ruleS2SResourceService.SyncIEAgAgRules(ctx, typedResources, ports.EmptyScope{})
 	case []models.Network:
+		log.Printf("🔥 DEBUG: Processing %d Network(s) with syncOp=%v", len(typedResources), syncOp)
 		// Handle different sync operations for Networks
-		for _, network := range typedResources {
+		for i, network := range typedResources {
+			log.Printf("🔥 DEBUG: Processing Network[%d]: %s with syncOp=%v", i, network.Key(), syncOp)
 			switch syncOp {
 			case models.SyncOpDelete:
+				log.Printf("🔥 DEBUG: Calling NetworkResourceService.DeleteNetwork for %s", network.Key())
 				if err := f.networkResourceService.DeleteNetwork(ctx, network.SelfRef.ResourceIdentifier); err != nil {
+					log.Printf("❌ DEBUG: NetworkResourceService.DeleteNetwork failed for %s: %v", network.Key(), err)
 					return errors.Wrapf(err, "failed to delete network %s", network.Key())
 				}
+				log.Printf("✅ DEBUG: NetworkResourceService.DeleteNetwork completed successfully for %s", network.Key())
 			case models.SyncOpUpsert, models.SyncOpFullSync:
+				log.Printf("🔥 DEBUG: Calling NetworkResourceService.CreateNetwork for %s", network.Key())
 				if err := f.networkResourceService.CreateNetwork(ctx, &network); err != nil {
+					log.Printf("❌ DEBUG: NetworkResourceService.CreateNetwork failed for %s: %v", network.Key(), err)
 					return errors.Wrapf(err, "failed to create network %s", network.Key())
 				}
+				log.Printf("✅ DEBUG: NetworkResourceService.CreateNetwork completed successfully for %s", network.Key())
 			default:
+				log.Printf("❌ DEBUG: Unsupported sync operation for Network: %v", syncOp)
 				return errors.New(fmt.Sprintf("unsupported sync operation for Network: %v", syncOp))
 			}
 		}
+		log.Printf("✅ DEBUG: All Network operations completed successfully")
 		return nil
 	case []models.NetworkBinding:
 		log.Printf("🔥 DEBUG: Processing %d NetworkBinding(s) with syncOp=%v", len(typedResources), syncOp)
@@ -681,6 +691,12 @@ func (f *NetguardFacade) Sync(ctx context.Context, syncOp models.SyncOp, resourc
 // ProcessConditionsIfNeeded processes conditions for resources (preserved from original)
 func (f *NetguardFacade) ProcessConditionsIfNeeded(ctx context.Context, resource interface{}, syncOp models.SyncOp) {
 	if f.conditionManager == nil {
+		return
+	}
+
+	// SKIP condition processing for DELETE operations to prevent recreation of deleted resources
+	if syncOp == models.SyncOpDelete {
+		log.Printf("🚫 ConditionManager: Skipping condition processing for DELETE operation to prevent recreation of deleted resources")
 		return
 	}
 
