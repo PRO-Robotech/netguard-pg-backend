@@ -79,32 +79,34 @@ func (ag *AddressGroup) ToSGroupsProto() (interface{}, error) {
 	case ActionAccept:
 		defaultAction = pb.SecGroup_ACCEPT
 	default:
-		// Используем ACCEPT как безопасное значение по умолчанию вместо DEFAULT
+		// Use ACCEPT as safe default value instead of DEFAULT
 		defaultAction = pb.SecGroup_ACCEPT
 	}
 
 	// Convert Networks to network names for SecGroup
 	var networkNames []string
-	fmt.Printf("🔧 DEBUG: AddressGroup.ToSGroupsProto - Converting %d networks for %s (object: %p)\n", len(ag.Networks), ag.GetSyncKey(), ag)
-	for i, network := range ag.Networks {
+	for _, network := range ag.Networks {
 		// Use network.Name as is (already contains namespace)
-		fmt.Printf("  🔧 DEBUG: AddressGroup.ToSGroupsProto - network[%d] Name=%s CIDR=%s\n", i, network.Name, network.CIDR)
 		networkNames = append(networkNames, network.Name)
 	}
-	fmt.Printf("🔧 DEBUG: AddressGroup.ToSGroupsProto - Final networkNames: %v (object: %p)\n", networkNames, ag)
+
+	// Use AddressGroupName if set, otherwise compute from namespace/name
+	protoName := ag.AddressGroupName
+	if protoName == "" {
+		if ag.Namespace != "" {
+			protoName = fmt.Sprintf("%s/%s", ag.Namespace, ag.Name)
+		} else {
+			protoName = ag.Name
+		}
+	}
 
 	// Convert to single sgroups protobuf element (batch aggregation will be handled by syncer)
 	protoGroup := &pb.SecGroup{
-		Name:          ag.Name,
-		Networks:      networkNames, // Используем имена networks
+		Name:          protoName,
+		Networks:      networkNames,
 		DefaultAction: defaultAction,
 		Trace:         ag.Trace,
 		Logs:          ag.Logs,
-	}
-
-	// Если есть namespace, добавляем его к имени группы
-	if ag.Namespace != "" {
-		protoGroup.Name = fmt.Sprintf("%s/%s", ag.Namespace, ag.Name)
 	}
 
 	// Return single group element (not wrapped in SyncSecurityGroups)

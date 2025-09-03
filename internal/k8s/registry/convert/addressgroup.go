@@ -28,6 +28,28 @@ func (c *AddressGroupConverter) ToDomain(ctx context.Context, k8sObj *netguardv1
 	networkHelper := &NetworkItemConversionHelper{}
 	networks := networkHelper.ConvertNetworkItemsToDomain(k8sObj.Networks)
 
+	// Log incoming AddressGroupName value
+	fmt.Printf("🔍 REGISTRY_DEBUG: AddressGroupConverter.ToDomain for %s/%s - incoming Status.AddressGroupName: '%s'\n",
+		k8sObj.Namespace, k8sObj.Name, k8sObj.Status.AddressGroupName)
+
+	// Compute the expected AddressGroupName pattern
+	var computedAddressGroupName string
+	if k8sObj.Namespace != "" {
+		computedAddressGroupName = fmt.Sprintf("%s/%s", k8sObj.Namespace, k8sObj.Name)
+	} else {
+		computedAddressGroupName = k8sObj.Name
+	}
+
+	// Use computed value if status field is empty, otherwise use status field
+	finalAddressGroupName := k8sObj.Status.AddressGroupName
+	if finalAddressGroupName == "" {
+		finalAddressGroupName = computedAddressGroupName
+		fmt.Printf("🔧 REGISTRY_DEBUG: Status.AddressGroupName was empty, using computed value: '%s'\n", finalAddressGroupName)
+	} else {
+		fmt.Printf("✅ REGISTRY_DEBUG: Using existing Status.AddressGroupName: '%s' (computed would be: '%s')\n",
+			finalAddressGroupName, computedAddressGroupName)
+	}
+
 	// Create domain address group with standard metadata conversion
 	domainAddressGroup := &models.AddressGroup{
 		SelfRef: models.SelfRef{
@@ -40,7 +62,7 @@ func (c *AddressGroupConverter) ToDomain(ctx context.Context, k8sObj *netguardv1
 		Logs:             k8sObj.Spec.Logs,
 		Trace:            k8sObj.Spec.Trace,
 		Networks:         networks,
-		AddressGroupName: k8sObj.Status.AddressGroupName,
+		AddressGroupName: finalAddressGroupName,
 		Meta:             ConvertMetadataToDomain(k8sObj.ObjectMeta, k8sObj.Status.Conditions, k8sObj.Status.ObservedGeneration),
 	}
 
@@ -71,6 +93,7 @@ func (c *AddressGroupConverter) FromDomain(ctx context.Context, domainObj *model
 
 	// Convert status using standard helper
 	conditions, observedGeneration := ConvertStatusFromDomain(domainObj.Meta)
+
 	k8sAddressGroup.Status = netguardv1beta1.AddressGroupStatus{
 		AddressGroupName:   domainObj.AddressGroupName,
 		ObservedGeneration: observedGeneration,

@@ -840,6 +840,19 @@ func convertAddressGroupToDomain(k8sGroup netguardv1beta1.AddressGroup) models.A
 		}
 	}
 
+	// Compute the AddressGroupName pattern
+	var addressGroupName string
+	if k8sGroup.Namespace != "" {
+		addressGroupName = fmt.Sprintf("%s/%s", k8sGroup.Namespace, k8sGroup.Name)
+	} else {
+		addressGroupName = k8sGroup.Name
+	}
+
+	// Use status field if provided, otherwise use computed value
+	if k8sGroup.Status.AddressGroupName != "" {
+		addressGroupName = k8sGroup.Status.AddressGroupName
+	}
+
 	return models.AddressGroup{
 		SelfRef: models.SelfRef{
 			ResourceIdentifier: models.ResourceIdentifier{
@@ -851,7 +864,7 @@ func convertAddressGroupToDomain(k8sGroup netguardv1beta1.AddressGroup) models.A
 		Logs:             k8sGroup.Spec.Logs,
 		Trace:            k8sGroup.Spec.Trace,
 		Networks:         networks,
-		AddressGroupName: k8sGroup.Status.AddressGroupName,
+		AddressGroupName: addressGroupName,
 	}
 }
 

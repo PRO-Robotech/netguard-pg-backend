@@ -865,9 +865,10 @@ func convertAddressGroupToPB(ag models.AddressGroup) *netguardpb.AddressGroup {
 			Name:      ag.ResourceIdentifier.Name,
 			Namespace: ag.ResourceIdentifier.Namespace,
 		},
-		DefaultAction: defaultAction,
-		Logs:          ag.Logs,
-		Trace:         ag.Trace,
+		DefaultAction:    defaultAction,
+		Logs:             ag.Logs,
+		Trace:            ag.Trace,
+		AddressGroupName: ag.AddressGroupName,
 		Meta: &netguardpb.Meta{
 			Uid:                ag.Meta.UID,
 			ResourceVersion:    ag.Meta.ResourceVersion,
