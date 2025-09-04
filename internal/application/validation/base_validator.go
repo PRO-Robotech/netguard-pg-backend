@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/pkg/errors"
+	"k8s.io/klog/v2"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
@@ -44,6 +46,87 @@ func (v *BaseValidator) ValidateExists(ctx context.Context, id models.ResourceId
 	if !exists {
 		return NewEntityNotFoundError(v.entityType, id.Key())
 	}
+
+	return nil
+}
+
+// CheckEntityExists verifies if an entity with the given ID already exists
+// This is specifically designed for creation validation to prevent duplicates
+func (v *BaseValidator) CheckEntityExists(ctx context.Context, id models.ResourceIdentifier, keyExtractor func(interface{}) string) (bool, interface{}, error) {
+	startTime := time.Now()
+
+	// Log validation start with detailed context
+	klog.V(2).Infof("🔍 VALIDATION: Checking existence for %s entity: %s", v.entityType, id.Key())
+
+	var foundEntity interface{}
+	exists := false
+	queryCount := 0
+
+	err := v.listFunction(ctx, func(entity interface{}) error {
+		queryCount++
+		if keyExtractor(entity) == id.Key() {
+			exists = true
+			foundEntity = entity
+			klog.V(3).Infof("🚨 CONFLICT: Found existing %s entity: %s", v.entityType, id.Key())
+		}
+		return nil
+	}, ports.NewResourceIdentifierScope(id))
+
+	duration := time.Since(startTime)
+
+	// Log performance metrics and results
+	if err != nil {
+		klog.Errorf("❌ VALIDATION ERROR: Failed existence check for %s %s after %v (queries: %d): %v",
+			v.entityType, id.Key(), duration, queryCount, err)
+		return false, nil, errors.Wrap(err, fmt.Sprintf("failed to check %s existence", v.entityType))
+	}
+
+	if exists {
+		klog.V(2).Infof("⚠️  VALIDATION CONFLICT: %s entity %s already exists (check took %v, queries: %d)",
+			v.entityType, id.Key(), duration, queryCount)
+	} else {
+		klog.V(2).Infof("✅ VALIDATION PASS: %s entity %s does not exist (check took %v, queries: %d)",
+			v.entityType, id.Key(), duration, queryCount)
+	}
+
+	return exists, foundEntity, nil
+}
+
+// ValidateEntityDoesNotExistForCreation performs comprehensive existence validation for entity creation
+// This is the main method that should be called during creation validation
+func (v *BaseValidator) ValidateEntityDoesNotExistForCreation(ctx context.Context, id models.ResourceIdentifier, keyExtractor func(interface{}) string) error {
+	startTime := time.Now()
+
+	// Log validation entry with full context
+	klog.V(1).Infof("🚀 CREATION VALIDATION: Starting existence validation for %s: %s", v.entityType, id.Key())
+
+	exists, foundEntity, err := v.CheckEntityExists(ctx, id, keyExtractor)
+	if err != nil {
+		klog.Errorf("❌ CREATION VALIDATION FAILED: Database error during existence check for %s %s: %v",
+			v.entityType, id.Key(), err)
+		return err
+	}
+
+	if exists {
+		// Generate detailed conflict information
+		conflictDetails := fmt.Sprintf("Entity was found in namespace '%s' with name '%s'", id.Namespace, id.Name)
+		suggestedAction := fmt.Sprintf("Use a different name or update the existing %s instead", v.entityType)
+
+		// Log detailed conflict information for troubleshooting
+		klog.Warningf("🚨 CREATION VALIDATION REJECTED: %s %s already exists - rejecting duplicate creation (validation took %v)",
+			v.entityType, id.Key(), time.Since(startTime))
+
+		if klog.V(3).Enabled() {
+			// In verbose mode, log details about the existing entity for debugging
+			klog.V(3).Infof("🔍 EXISTING ENTITY DETAILS: %+v", foundEntity)
+		}
+
+		return NewEntityAlreadyExistsError(v.entityType, id.Key(), foundEntity, conflictDetails, suggestedAction)
+	}
+
+	// Log successful validation
+	klog.V(1).Infof("✅ CREATION VALIDATION PASSED: %s %s is available for creation (validation took %v)",
+		v.entityType, id.Key(), time.Since(startTime))
 
 	return nil
 }

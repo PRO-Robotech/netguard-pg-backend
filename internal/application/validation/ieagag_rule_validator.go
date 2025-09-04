@@ -70,12 +70,46 @@ func (v *IEAgAgRuleValidator) ValidatePortSpec(ctx context.Context, portSpec mod
 
 // ValidateForCreation валидирует правило перед созданием
 func (v *IEAgAgRuleValidator) ValidateForCreation(ctx context.Context, rule models.IEAgAgRule) error {
-	// Валидация ссылок
+	// PHASE 1: Check for duplicate entity (CRITICAL FIX for overwrite issue)
+	// This prevents creation of entities with the same namespace/name combination
+	keyExtractor := func(entity interface{}) string {
+		if ieagag, ok := entity.(*models.IEAgAgRule); ok {
+			return ieagag.Key()
+		}
+		return ""
+	}
+
+	if err := v.BaseValidator.ValidateEntityDoesNotExistForCreation(ctx, rule.ResourceIdentifier, keyExtractor); err != nil {
+		return err // Return the detailed EntityAlreadyExistsError with logging and context
+	}
+
+	// PHASE 2: Validate references (existing validation)
 	if err := v.ValidateReferences(ctx, rule); err != nil {
 		return err
 	}
 
-	// Валидация портов
+	// PHASE 3: Validate ports (existing validation)
+	for _, port := range rule.Ports {
+		if err := v.ValidatePortSpec(ctx, port); err != nil {
+			return errors.Wrapf(err, "invalid port specification in rule %s", rule.Key())
+		}
+	}
+
+	return nil
+}
+
+// ValidateForPostCommit validates an IEAgAgRule after it has been committed to database
+// This skips duplicate checking since the entity already exists in the database
+func (v *IEAgAgRuleValidator) ValidateForPostCommit(ctx context.Context, rule models.IEAgAgRule) error {
+	// PHASE 1: Skip duplicate entity check (entity is already committed)
+	// This method is called AFTER the entity is saved to database, so existence is expected
+
+	// PHASE 2: Validate references (existing validation)
+	if err := v.ValidateReferences(ctx, rule); err != nil {
+		return err
+	}
+
+	// PHASE 3: Validate ports (existing validation)
 	for _, port := range rule.Ports {
 		if err := v.ValidatePortSpec(ctx, port); err != nil {
 			return errors.Wrapf(err, "invalid port specification in rule %s", rule.Key())

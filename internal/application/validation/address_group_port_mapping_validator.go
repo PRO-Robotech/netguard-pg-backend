@@ -90,12 +90,44 @@ func (v *AddressGroupPortMappingValidator) CheckInternalPortOverlaps(mapping mod
 
 // ValidateForCreation validates an address group port mapping before creation
 func (v *AddressGroupPortMappingValidator) ValidateForCreation(ctx context.Context, mapping models.AddressGroupPortMapping) error {
-	// Проверяем ссылки
+	// PHASE 1: Check for duplicate entity (CRITICAL FIX for overwrite issue)
+	// This prevents creation of entities with the same namespace/name combination
+	keyExtractor := func(entity interface{}) string {
+		if agpm, ok := entity.(*models.AddressGroupPortMapping); ok {
+			return agpm.Key()
+		}
+		return ""
+	}
+
+	if err := v.BaseValidator.ValidateEntityDoesNotExistForCreation(ctx, mapping.ResourceIdentifier, keyExtractor); err != nil {
+		return err // Return the detailed EntityAlreadyExistsError with logging and context
+	}
+
+	// PHASE 2: Validate references (existing validation)
 	if err := v.ValidateReferences(ctx, mapping); err != nil {
 		return err
 	}
 
-	// Проверяем внутренние перекрытия портов
+	// PHASE 3: Check internal port overlaps (existing validation)
+	if err := v.CheckInternalPortOverlaps(mapping); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ValidateForPostCommit validates an address group port mapping after it has been committed to database
+// This skips duplicate checking since the entity already exists in the database
+func (v *AddressGroupPortMappingValidator) ValidateForPostCommit(ctx context.Context, mapping models.AddressGroupPortMapping) error {
+	// PHASE 1: Skip duplicate entity check (entity is already committed)
+	// This method is called AFTER the entity is saved to database, so existence is expected
+
+	// PHASE 2: Validate references (existing validation)
+	if err := v.ValidateReferences(ctx, mapping); err != nil {
+		return err
+	}
+
+	// PHASE 3: Check internal port overlaps (existing validation)
 	if err := v.CheckInternalPortOverlaps(mapping); err != nil {
 		return err
 	}

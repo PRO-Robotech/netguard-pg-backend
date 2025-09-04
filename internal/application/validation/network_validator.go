@@ -2,7 +2,6 @@ package validation
 
 import (
 	"context"
-	"fmt"
 	"net"
 
 	"netguard-pg-backend/internal/domain/models"
@@ -52,18 +51,22 @@ func (v *NetworkValidator) ValidateCIDR(cidr string) error {
 
 // ValidateForCreation validates a network for creation
 func (v *NetworkValidator) ValidateForCreation(ctx context.Context, network models.Network) error {
-	// Validate CIDR
-	if err := v.ValidateCIDR(network.CIDR); err != nil {
-		return err
+	// PHASE 1: Check for duplicate entity (CRITICAL FIX for overwrite issue)
+	// This prevents creation of entities with the same namespace/name combination
+	keyExtractor := func(entity interface{}) string {
+		if n, ok := entity.(*models.Network); ok {
+			return n.Key()
+		}
+		return ""
 	}
 
-	// Check for duplicate network
-	existingNetwork, err := v.reader.GetNetworkByID(ctx, network.ResourceIdentifier)
-	if err == nil && existingNetwork != nil {
-		return NewValidationError(fmt.Sprintf("Network %s already exists", network.Key()))
+	if err := v.BaseValidator.ValidateEntityDoesNotExistForCreation(ctx, network.ResourceIdentifier, keyExtractor); err != nil {
+		return err // Return the detailed EntityAlreadyExistsError with logging and context
 	}
-	if err != nil && err != ports.ErrNotFound {
-		return errors.Wrap(err, "failed to check for existing network")
+
+	// PHASE 2: Validate CIDR (existing validation)
+	if err := v.ValidateCIDR(network.CIDR); err != nil {
+		return err
 	}
 
 	return nil

@@ -269,19 +269,22 @@ func (v *AddressGroupBindingValidator) ValidateNoDuplicateBindings(ctx context.C
 // This method is used during CREATE operations via webhook and should avoid backend service lookups
 // to prevent circular dependency issues during resource creation
 func (v *AddressGroupBindingValidator) ValidateForCreation(ctx context.Context, binding *models.AddressGroupBinding) error {
-	// 🔍 BACKEND VALIDATOR ENTRY POINT - COMPREHENSIVE TRACING
-	klog.Infof("🔍 BACKEND ValidateForCreation ENTRY: binding %s - caller investigation needed", binding.Key())
+	// PHASE 1: Check for duplicate entity (CRITICAL FIX for overwrite issue)
+	// This prevents creation of entities with the same namespace/name combination
+	keyExtractor := func(entity interface{}) string {
+		if agb, ok := entity.(*models.AddressGroupBinding); ok {
+			return agb.Key()
+		}
+		return ""
+	}
 
-	// Add stack trace to understand who is calling this
-	klog.Infof("🔍 BACKEND ValidateForCreation: Attempting to identify caller for binding %s", binding.Key())
+	if err := v.BaseValidator.ValidateEntityDoesNotExistForCreation(ctx, binding.ResourceIdentifier, keyExtractor); err != nil {
+		return err // Return the detailed EntityAlreadyExistsError with logging and context
+	}
 
-	// Skip service and AddressGroup existence validation during CREATE operations
-	// to prevent circular dependency - these resources may not exist in backend yet during creation
-	// The Kubernetes webhook validation ensures basic field validation and format checking
+	// PHASE 2: Basic field validation (existing validation)
+	klog.Infof("🔍 BACKEND ValidateForCreation: binding %s - performing basic field validation", binding.Key())
 
-	klog.Infof("🔍 BACKEND ValidateForCreation: binding %s - skipping backend service/AddressGroup lookups to avoid circular dependency", binding.Key())
-
-	// Only perform basic validation that doesn't require backend lookups
 	if binding.ServiceRef.Name == "" {
 		return fmt.Errorf("serviceRef.name is required in binding %s", binding.Key())
 	}
@@ -396,6 +399,67 @@ func (v *AddressGroupBindingValidator) ValidateForCreation(ctx context.Context, 
 	}
 
 	klog.Infof("✅ ValidateForCreation completed for binding %s - all validation passed including cross-namespace policy and port conflicts", binding.Key())
+	return nil
+}
+
+// ValidateForPostCommit validates an address group binding after it has been committed to database
+// This skips duplicate checking since the entity already exists in the database
+func (v *AddressGroupBindingValidator) ValidateForPostCommit(ctx context.Context, binding *models.AddressGroupBinding) error {
+	// PHASE 1: Skip duplicate entity check (entity is already committed)
+	// This method is called AFTER the entity is saved to database, so existence is expected
+
+	// PHASE 2: Validate references (existing validation)
+	if err := v.ValidateReferences(ctx, *binding); err != nil {
+		return err
+	}
+
+	// PHASE 3: Check for cross-namespace policy requirement (existing validation)
+	// Get address group to determine namespace
+	addressGroupRef := models.ResourceIdentifier{Name: binding.AddressGroupRef.Name, Namespace: binding.AddressGroupRef.Namespace}
+	addressGroup, err := v.reader.GetAddressGroupByID(ctx, addressGroupRef)
+	if err != nil {
+		return errors.Wrapf(err, "failed to get address group for cross-namespace validation")
+	}
+	if addressGroup == nil {
+		return fmt.Errorf("address group not found: %s", addressGroupRef.Key())
+	}
+
+	// Check if cross-namespace validation is needed
+	if addressGroup.Namespace != binding.ServiceRef.Namespace {
+		klog.Infof("🔧 Cross-namespace binding detected in post-commit validation: AddressGroup=%s, Service=%s",
+			addressGroup.Namespace, binding.ServiceRef.Namespace)
+
+		// Check for required policy
+		policyFound := false
+		namespaceScope := ports.ResourceIdentifierScope{
+			Identifiers: []models.ResourceIdentifier{
+				{Namespace: addressGroup.Namespace},
+			},
+		}
+		err := v.reader.ListAddressGroupBindingPolicies(ctx, func(policy models.AddressGroupBindingPolicy) error {
+			if policy.AddressGroupRefKey() == binding.AddressGroupRefKey() &&
+				policy.ServiceRefKey() == binding.ServiceRefKey() {
+				policyFound = true
+				return fmt.Errorf("policy found")
+			}
+			return nil
+		}, namespaceScope)
+
+		if err != nil && err.Error() != "policy found" {
+			return fmt.Errorf("failed to check for binding policies: %v", err)
+		}
+
+		if !policyFound {
+			return fmt.Errorf("cross-namespace binding not allowed: no AddressGroupBindingPolicy found")
+		}
+	}
+
+	// PHASE 4: Check for business logic duplicates
+	if err := v.ValidateNoDuplicateBindings(ctx, *binding); err != nil {
+		return err
+	}
+
+	klog.Infof("✅ ValidateForPostCommit completed for binding %s", binding.Key())
 	return nil
 }
 

@@ -81,6 +81,30 @@ func (v *ServiceValidator) ValidateNoDuplicatePorts(ingressPorts []models.Ingres
 	return nil
 }
 
+// ValidateForPostCommit validates a service after it has been committed to database
+// This skips duplicate checking since the entity already exists in the database
+func (v *ServiceValidator) ValidateForPostCommit(ctx context.Context, service models.Service) error {
+	// PHASE 1: Skip duplicate entity check (entity is already committed)
+	// This method is called AFTER the entity is saved to database, so existence is expected
+
+	// PHASE 2: Validate references (existing validation)
+	if err := v.ValidateReferences(ctx, service); err != nil {
+		return err
+	}
+
+	// PHASE 3: Validate internal port consistency (existing validation)
+	if err := v.ValidateNoDuplicatePorts(service.IngressPorts); err != nil {
+		return err
+	}
+
+	// PHASE 4: Validate port conflicts with other services (existing validation)
+	if err := v.CheckPortOverlaps(ctx, service); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // CheckPortOverlaps проверяет перекрытие портов между сервисом и существующими сервисами в AddressGroup
 func (v *ServiceValidator) CheckPortOverlaps(ctx context.Context, service models.Service) error {
 	// Для каждой AddressGroup, к которой привязан сервис
@@ -146,17 +170,30 @@ func (v *ServiceValidator) CheckPortOverlaps(ctx context.Context, service models
 
 // ValidateForCreation validates a service before creation
 func (v *ServiceValidator) ValidateForCreation(ctx context.Context, service models.Service) error {
-	// Проверяем ссылки
+	// PHASE 1: Check for duplicate entity (CRITICAL FIX for overwrite issue)
+	// This prevents creation of entities with the same namespace/name combination
+	keyExtractor := func(entity interface{}) string {
+		if svc, ok := entity.(*models.Service); ok {
+			return svc.Key()
+		}
+		return ""
+	}
+
+	if err := v.BaseValidator.ValidateEntityDoesNotExistForCreation(ctx, service.ResourceIdentifier, keyExtractor); err != nil {
+		return err // Return the detailed EntityAlreadyExistsError with logging and context
+	}
+
+	// PHASE 2: Validate references (existing validation)
 	if err := v.ValidateReferences(ctx, service); err != nil {
 		return err
 	}
 
-	// Проверяем на дубликаты портов внутри сервиса
+	// PHASE 3: Validate internal port consistency (existing validation)
 	if err := v.ValidateNoDuplicatePorts(service.IngressPorts); err != nil {
 		return err
 	}
 
-	// Проверяем на перекрытие портов с другими сервисами
+	// PHASE 4: Validate port conflicts with other services (existing validation)
 	if err := v.CheckPortOverlaps(ctx, service); err != nil {
 		return err
 	}
