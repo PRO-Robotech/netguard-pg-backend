@@ -46,6 +46,7 @@ type (
 		GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error)
 		GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error)
 		GetNetworkByID(ctx context.Context, id models.ResourceIdentifier) (*models.Network, error)
+		GetNetworkByCIDR(ctx context.Context, cidr string) (*models.Network, error)
 		GetNetworkBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.NetworkBinding, error)
 	}
 

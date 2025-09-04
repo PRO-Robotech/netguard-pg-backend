@@ -7,11 +7,40 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pkg/errors"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 )
+
+// CIDRAlreadyExistsError represents a CIDR uniqueness violation error
+type CIDRAlreadyExistsError struct {
+	CIDR        string
+	NetworkName string
+	Err         error
+}
+
+func (e *CIDRAlreadyExistsError) Error() string {
+	return fmt.Sprintf("CIDR '%s' already exists (attempted to create/update network %s)", e.CIDR, e.NetworkName)
+}
+
+func (e *CIDRAlreadyExistsError) Unwrap() error {
+	return e.Err
+}
+
+// isUniqueViolation checks if the error is a PostgreSQL unique constraint violation
+// for the specified constraint name
+func isUniqueViolation(err error, constraintName string) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		// PostgreSQL unique_violation error code is "23505"
+		if pgErr.Code == "23505" && strings.Contains(pgErr.ConstraintName, constraintName) {
+			return true
+		}
+	}
+	return false
+}
 
 // SyncNetworks syncs networks to PostgreSQL with K8s metadata support
 func (w *Writer) SyncNetworks(ctx context.Context, networks []models.Network, scope ports.Scope, options ...ports.Option) error {
@@ -102,25 +131,27 @@ func (w *Writer) upsertNetwork(ctx context.Context, network models.Network) erro
 		agRefName = network.AddressGroupRef.Name
 	}
 
-	// Then, upsert the network using the resource version
+	// Then, upsert the network using the resource version (including new cidr column)
 	networkQuery := `
-		INSERT INTO networks (namespace, name, network_items, is_bound, 
+		INSERT INTO networks (namespace, name, cidr, network_items, is_bound, 
 			binding_ref_namespace, binding_ref_name, 
 			address_group_ref_namespace, address_group_ref_name, 
 			resource_version)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		ON CONFLICT (namespace, name) DO UPDATE SET
-			network_items = $3,
-			is_bound = $4,
-			binding_ref_namespace = $5,
-			binding_ref_name = $6,
-			address_group_ref_namespace = $7,
-			address_group_ref_name = $8,
-			resource_version = $9`
+			cidr = $3,
+			network_items = $4,
+			is_bound = $5,
+			binding_ref_namespace = $6,
+			binding_ref_name = $7,
+			address_group_ref_namespace = $8,
+			address_group_ref_name = $9,
+			resource_version = $10`
 
 	if err := w.exec(ctx, networkQuery,
 		network.Namespace,
 		network.Name,
+		network.CIDR, // Add CIDR as separate column
 		networkItemsJSON,
 		network.IsBound,
 		bindingRefNamespace,
@@ -129,6 +160,14 @@ func (w *Writer) upsertNetwork(ctx context.Context, network models.Network) erro
 		agRefName,
 		resourceVersion,
 	); err != nil {
+		// Check if this is a UNIQUE constraint violation on CIDR
+		if isUniqueViolation(err, "idx_networks_cidr_unique") {
+			return &CIDRAlreadyExistsError{
+				CIDR:        network.CIDR,
+				NetworkName: network.Key(),
+				Err:         err,
+			}
+		}
 		return errors.Wrapf(err, "failed to upsert network %s/%s", network.Namespace, network.Name)
 	}
 

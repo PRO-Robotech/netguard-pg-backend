@@ -17,7 +17,7 @@ import (
 // ListNetworks lists networks with K8s metadata support
 func (r *Reader) ListNetworks(ctx context.Context, consume func(models.Network) error, scope ports.Scope) error {
 	query := `
-		SELECT n.namespace, n.name, n.network_items, n.is_bound,
+		SELECT n.namespace, n.name, n.cidr::text, n.network_items, n.is_bound,
 		       n.binding_ref_namespace, n.binding_ref_name,
 		       n.address_group_ref_namespace, n.address_group_ref_name,
 			   m.resource_version, m.labels, m.annotations, m.conditions,
@@ -56,7 +56,7 @@ func (r *Reader) ListNetworks(ctx context.Context, consume func(models.Network) 
 // GetNetworkByID gets a network by ID
 func (r *Reader) GetNetworkByID(ctx context.Context, id models.ResourceIdentifier) (*models.Network, error) {
 	query := `
-		SELECT n.namespace, n.name, n.network_items, n.is_bound,
+		SELECT n.namespace, n.name, n.cidr::text, n.network_items, n.is_bound,
 		       n.binding_ref_namespace, n.binding_ref_name,
 		       n.address_group_ref_namespace, n.address_group_ref_name,
 			   m.resource_version, m.labels, m.annotations, m.conditions,
@@ -86,6 +86,7 @@ func (r *Reader) scanNetwork(rows pgx.Rows) (models.Network, error) {
 	var resourceVersion int64          // Scan as int64 from database
 
 	// Network-specific fields
+	var cidr string                                           // Direct CIDR column cast to text in query
 	var networkItemsJSON []byte                               // JSONB for NetworkItem[]
 	var isBound bool                                          // Boolean field
 	var bindingRefNamespace, bindingRefName *string           // Nullable references
@@ -94,6 +95,7 @@ func (r *Reader) scanNetwork(rows pgx.Rows) (models.Network, error) {
 	err := rows.Scan(
 		&network.Namespace,
 		&network.Name,
+		&cidr, // Read CIDR from dedicated column
 		&networkItemsJSON,
 		&isBound,
 		&bindingRefNamespace,
@@ -120,16 +122,8 @@ func (r *Reader) scanNetwork(rows pgx.Rows) (models.Network, error) {
 	// Set SelfRef
 	network.SelfRef = models.NewSelfRef(models.NewResourceIdentifier(network.Name, models.WithNamespace(network.Namespace)))
 
-	// Parse network items from JSONB - extract CIDR from first item
-	if len(networkItemsJSON) > 0 {
-		networkItems, err := utils.ParseNetworkItems(networkItemsJSON)
-		if err != nil {
-			return network, errors.Wrap(err, "failed to unmarshal network_items")
-		}
-		if len(networkItems) > 0 {
-			network.CIDR = networkItems[0].CIDR // Use CIDR from first NetworkItem
-		}
-	}
+	// Set CIDR directly from dedicated column (no need to parse JSONB)
+	network.CIDR = cidr
 
 	// Set Network-specific fields
 	network.IsBound = isBound
@@ -162,6 +156,7 @@ func (r *Reader) scanNetworkRow(row pgx.Row) (*models.Network, error) {
 	var resourceVersion int64          // Scan as int64 from database
 
 	// Network-specific fields
+	var cidr string                                           // Direct CIDR column cast to text in query
 	var networkItemsJSON []byte                               // JSONB for NetworkItem[]
 	var isBound bool                                          // Boolean field
 	var bindingRefNamespace, bindingRefName *string           // Nullable references
@@ -170,6 +165,7 @@ func (r *Reader) scanNetworkRow(row pgx.Row) (*models.Network, error) {
 	err := row.Scan(
 		&network.Namespace,
 		&network.Name,
+		&cidr, // Read CIDR from dedicated column
 		&networkItemsJSON,
 		&isBound,
 		&bindingRefNamespace,
@@ -196,16 +192,8 @@ func (r *Reader) scanNetworkRow(row pgx.Row) (*models.Network, error) {
 	// Set SelfRef
 	network.SelfRef = models.NewSelfRef(models.NewResourceIdentifier(network.Name, models.WithNamespace(network.Namespace)))
 
-	// Parse network items from JSONB - extract CIDR from first item
-	if len(networkItemsJSON) > 0 {
-		networkItems, err := utils.ParseNetworkItems(networkItemsJSON)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to unmarshal network_items")
-		}
-		if len(networkItems) > 0 {
-			network.CIDR = networkItems[0].CIDR // Use CIDR from first NetworkItem
-		}
-	}
+	// Set CIDR directly from dedicated column (no need to parse JSONB)
+	network.CIDR = cidr
 
 	// Set Network-specific fields
 	network.IsBound = isBound
@@ -228,4 +216,29 @@ func (r *Reader) scanNetworkRow(row pgx.Row) (*models.Network, error) {
 	}
 
 	return &network, nil
+}
+
+// GetNetworkByCIDR gets a network by CIDR (useful for uniqueness validation)
+func (r *Reader) GetNetworkByCIDR(ctx context.Context, cidr string) (*models.Network, error) {
+	query := `
+		SELECT n.namespace, n.name, n.cidr::text, n.network_items, n.is_bound,
+		       n.binding_ref_namespace, n.binding_ref_name,
+		       n.address_group_ref_namespace, n.address_group_ref_name,
+			   m.resource_version, m.labels, m.annotations, m.conditions,
+			   m.created_at, m.updated_at
+		FROM networks n
+		INNER JOIN k8s_metadata m ON n.resource_version = m.resource_version
+		WHERE n.cidr = $1::CIDR`
+
+	row := r.queryRow(ctx, query, cidr)
+
+	network, err := r.scanNetworkRow(row)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ports.ErrNotFound
+		}
+		return nil, errors.Wrap(err, "failed to scan network by CIDR")
+	}
+
+	return network, nil
 }
