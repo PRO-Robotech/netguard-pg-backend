@@ -145,9 +145,9 @@ func (cm *ConditionManager) ProcessServiceConditions(ctx context.Context, servic
 	validator := validation.NewDependencyValidator(reader)
 	serviceValidator := validator.GetServiceValidator()
 
-	// Проверяем базовую валидацию коммиченного объекта (без проверки существования)
+	// Проверяем валидацию коммиченного объекта
 	klog.Infof("🔄 ConditionManager: Validating committed service %s/%s", service.Namespace, service.Name)
-	if err := serviceValidator.ValidateForCreation(ctx, *service); err != nil {
+	if err := serviceValidator.ValidateForPostCommit(ctx, *service); err != nil {
 		klog.Errorf("❌ ConditionManager: Service validation failed for %s/%s: %v", service.Namespace, service.Name, err)
 		service.Meta.SetErrorCondition(models.ReasonValidationFailed, fmt.Sprintf("Service validation failed: %v", err))
 		service.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Service has validation errors")
@@ -220,9 +220,9 @@ func (cm *ConditionManager) ProcessAddressGroupConditions(ctx context.Context, a
 	validator := validation.NewDependencyValidator(reader)
 	addressGroupValidator := validator.GetAddressGroupValidator()
 
-	// Выполняем post-commit валидацию (без проверки существования)
+	// Выполняем post-commit валидацию (без проверки дубликатов)
 	klog.Infof("🔍 ConditionManager: Validating address group %s/%s after commit", ag.Namespace, ag.Name)
-	if err := addressGroupValidator.ValidateForCreation(ctx, *ag); err != nil {
+	if err := addressGroupValidator.ValidateForPostCommit(ctx, *ag); err != nil {
 		klog.Errorf("❌ ConditionManager: Post-commit validation failed for %s/%s: %v", ag.Namespace, ag.Name, err)
 		ag.Meta.SetErrorCondition(models.ReasonValidationFailed, fmt.Sprintf("Post-commit validation failed: %v", err))
 		ag.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Address group validation failed")
@@ -290,8 +290,8 @@ func (cm *ConditionManager) ProcessRuleS2SConditions(ctx context.Context, rule *
 	validator := validation.NewDependencyValidator(reader)
 	ruleValidator := validator.GetRuleS2SValidator()
 
-	// Проверяем базовую валидацию коммиченного объекта (без проверки существования)
-	if err := ruleValidator.ValidateForCreation(ctx, *rule); err != nil {
+	// Проверяем валидацию коммиченного объекта (без проверки дубликатов)
+	if err := ruleValidator.ValidateForPostCommit(ctx, *rule); err != nil {
 		rule.Meta.SetErrorCondition(models.ReasonValidationFailed, fmt.Sprintf("RuleS2S validation failed: %v", err))
 		rule.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "RuleS2S has validation errors")
 		rule.Meta.SetValidatedCondition(metav1.ConditionFalse, models.ReasonValidationFailed, fmt.Sprintf("Validation failed: %v", err))
@@ -455,9 +455,9 @@ func (cm *ConditionManager) ProcessIEAgAgRuleConditions(ctx context.Context, rul
 	validator := validation.NewDependencyValidator(reader)
 	ruleValidator := validator.GetIEAgAgRuleValidator()
 
-	// Проверяем базовую валидацию коммиченного объекта
+	// Проверяем валидацию коммиченного объекта (без проверки дубликатов)
 	klog.Infof("🔄 IEAGAG_CONDITIONS: Validating IEAgAgRule %s/%s", rule.Namespace, rule.Name)
-	if err := ruleValidator.ValidateForCreation(ctx, *rule); err != nil {
+	if err := ruleValidator.ValidateForPostCommit(ctx, *rule); err != nil {
 		klog.Errorf("❌ IEAGAG_CONDITIONS: Validation failed for %s/%s: %v", rule.Namespace, rule.Name, err)
 		rule.Meta.SetErrorCondition(models.ReasonValidationFailed, fmt.Sprintf("IEAgAgRule validation failed: %v", err))
 		rule.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "IEAgAgRule has validation errors")
@@ -537,9 +537,9 @@ func (cm *ConditionManager) ProcessAddressGroupBindingConditions(ctx context.Con
 	validator := validation.NewDependencyValidator(reader)
 	bindingValidator := validator.GetAddressGroupBindingValidator()
 
-	// Проверяем базовую валидацию коммиченного объекта (без проверки существования)
+	// Проверяем валидацию коммиченного объекта (без проверки дубликатов)
 	klog.Infof("🔄 Step 2: Starting validation for binding %s/%s", binding.Namespace, binding.Name)
-	if err := bindingValidator.ValidateForCreation(ctx, binding); err != nil {
+	if err := bindingValidator.ValidateForPostCommit(ctx, binding); err != nil {
 		klog.Errorf("❌ Step 2: Validation failed for binding %s/%s: %v", binding.Namespace, binding.Name, err)
 		binding.Meta.SetErrorCondition(models.ReasonValidationFailed, fmt.Sprintf("AddressGroupBinding validation failed: %v", err))
 		binding.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "AddressGroupBinding has validation errors")
@@ -652,8 +652,8 @@ func (cm *ConditionManager) ProcessServiceAliasConditions(ctx context.Context, a
 	validator := validation.NewDependencyValidator(reader)
 	aliasValidator := validator.GetServiceAliasValidator()
 
-	// Проверяем базовую валидацию коммиченного объекта
-	if err := aliasValidator.ValidateForCreation(ctx, alias); err != nil {
+	// Проверяем валидацию коммиченного объекта (без проверки дубликатов)
+	if err := aliasValidator.ValidateForPostCommit(ctx, *alias); err != nil {
 		alias.Meta.SetErrorCondition(models.ReasonValidationFailed, fmt.Sprintf("ServiceAlias validation failed: %v", err))
 		alias.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "ServiceAlias has validation errors")
 		alias.Meta.SetValidatedCondition(metav1.ConditionFalse, models.ReasonValidationFailed, fmt.Sprintf("Validation failed: %v", err))
@@ -715,8 +715,8 @@ func (cm *ConditionManager) ProcessAddressGroupPortMappingConditions(ctx context
 	validator := validation.NewDependencyValidator(reader)
 	mappingValidator := validator.GetAddressGroupPortMappingValidator()
 
-	// Проверяем базовую валидацию коммиченного объекта (без проверки существования)
-	if err := mappingValidator.ValidateForCreation(ctx, *mapping); err != nil {
+	// Проверяем валидацию коммиченного объекта (без проверки дубликатов)
+	if err := mappingValidator.ValidateForPostCommit(ctx, *mapping); err != nil {
 		mapping.Meta.SetErrorCondition(models.ReasonValidationFailed, fmt.Sprintf("AddressGroupPortMapping validation failed: %v", err))
 		mapping.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "AddressGroupPortMapping has validation errors")
 		mapping.Meta.SetValidatedCondition(metav1.ConditionFalse, models.ReasonValidationFailed, fmt.Sprintf("Validation failed: %v", err))
@@ -790,8 +790,8 @@ func (cm *ConditionManager) ProcessAddressGroupBindingPolicyConditions(ctx conte
 	validator := validation.NewDependencyValidator(reader)
 	policyValidator := validator.GetAddressGroupBindingPolicyValidator()
 
-	// Проверяем базовую валидацию коммиченного объекта (без проверки существования)
-	if err := policyValidator.ValidateForCreation(ctx, policy); err != nil {
+	// Проверяем валидацию коммиченного объекта (без проверки дубликатов)
+	if err := policyValidator.ValidateForPostCommit(ctx, *policy); err != nil {
 		policy.Meta.SetErrorCondition(models.ReasonValidationFailed, fmt.Sprintf("AddressGroupBindingPolicy validation failed: %v", err))
 		policy.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "AddressGroupBindingPolicy has validation errors")
 		policy.Meta.SetValidatedCondition(metav1.ConditionFalse, models.ReasonValidationFailed, fmt.Sprintf("Validation failed: %v", err))
@@ -935,9 +935,9 @@ func (cm *ConditionManager) ProcessNetworkBindingConditions(ctx context.Context,
 	validator := validation.NewDependencyValidator(reader)
 	bindingValidator := validator.GetNetworkBindingValidator()
 
-	// Проверяем базовую валидацию коммиченного объекта
+	// Проверяем валидацию коммиченного объекта (без проверки дубликатов)
 	klog.Infof("🔄 ConditionManager: Validating committed network binding %s/%s", binding.Namespace, binding.Name)
-	if err := bindingValidator.ValidateForCreation(ctx, *binding); err != nil {
+	if err := bindingValidator.ValidateForPostCommit(ctx, *binding); err != nil {
 		klog.Errorf("❌ ConditionManager: NetworkBinding validation failed for %s/%s: %v", binding.Namespace, binding.Name, err)
 		binding.Meta.SetErrorCondition(models.ReasonValidationFailed, fmt.Sprintf("NetworkBinding validation failed: %v", err))
 		binding.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "NetworkBinding has validation errors")

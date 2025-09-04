@@ -182,6 +182,27 @@ func (s *NetworkResourceService) DeleteNetwork(ctx context.Context, id models.Re
 
 	// Check if Network is bound and handle cleanup
 	if existing.IsBound {
+		// Capture AddressGroupRef before clearing it for cleanup
+		var addressGroupRef models.ResourceIdentifier
+		if existing.AddressGroupRef != nil {
+			addressGroupRef = models.ResourceIdentifier{
+				Name:      existing.AddressGroupRef.Name,
+				Namespace: existing.Namespace, // AddressGroup is in same namespace as Network
+			}
+			log.Printf("🔍 DEBUG: Captured AddressGroupRef for cleanup: %s", addressGroupRef.Key())
+		}
+
+		// Remove Network from AddressGroup.Networks before deleting
+		if existing.AddressGroupRef != nil {
+			networkRef := models.ResourceIdentifier{Name: existing.Name, Namespace: existing.Namespace}
+			log.Printf("🔧 DEBUG: Removing Network %s from AddressGroup %s", networkRef.Key(), addressGroupRef.Key())
+			if err := s.removeNetworkFromAddressGroup(ctx, addressGroupRef, networkRef); err != nil {
+				log.Printf("❌ DEBUG: Failed to remove network from AddressGroup: %v", err)
+				return fmt.Errorf("failed to remove network from address group: %w", err)
+			}
+			log.Printf("✅ DEBUG: Successfully removed Network from AddressGroup")
+		}
+
 		// Clear binding references
 		existing.BindingRef = nil
 		existing.AddressGroupRef = nil
@@ -526,6 +547,61 @@ func (s *NetworkResourceService) RemoveNetworkBinding(ctx context.Context, netwo
 }
 
 // Helper methods
+
+// removeNetworkFromAddressGroup removes a network from AddressGroup.Networks field
+func (s *NetworkResourceService) removeNetworkFromAddressGroup(ctx context.Context, addressGroupRef, networkRef models.ResourceIdentifier) error {
+	reader, err := s.repo.Reader(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get reader: %w", err)
+	}
+	defer reader.Close()
+
+	// Get the AddressGroup
+	addressGroup, err := reader.GetAddressGroupByID(ctx, addressGroupRef)
+	if err != nil {
+		return fmt.Errorf("failed to get address group: %w", err)
+	}
+	if addressGroup == nil {
+		log.Printf("ℹ️  AddressGroup %s not found, skipping network removal", addressGroupRef.Key())
+		return nil // AddressGroup doesn't exist, nothing to clean up
+	}
+
+	// Generate network name (namespace/name format) to match the pattern used in NetworkBinding
+	networkName := fmt.Sprintf("%s/%s", networkRef.Namespace, networkRef.Name)
+
+	// Remove network from AddressGroup.Networks.Items
+	log.Printf("🔗 Removing network %s from AddressGroup %s", networkName, addressGroupRef.Key())
+
+	var updatedNetworks []models.NetworkItem
+	found := false
+	for _, existingNetwork := range addressGroup.Networks {
+		if existingNetwork.Name != networkName {
+			updatedNetworks = append(updatedNetworks, existingNetwork)
+		} else {
+			found = true
+		}
+	}
+
+	if found {
+		addressGroup.Networks = updatedNetworks
+		log.Printf("✅ Removed network %s from AddressGroup %s", networkName, addressGroupRef.Key())
+
+		// Update metadata
+		addressGroup.Meta.TouchOnWrite(fmt.Sprintf("%d", time.Now().UnixNano()))
+
+		// Sync the updated AddressGroup (commits to database)
+		log.Printf("🔧 removeNetworkFromAddressGroup: About to call UpdateAddressGroup for %s", addressGroupRef.Key())
+		if err := s.UpdateAddressGroup(ctx, addressGroup); err != nil {
+			return fmt.Errorf("failed to update address group: %w", err)
+		}
+		log.Printf("✅ removeNetworkFromAddressGroup: UpdateAddressGroup completed for %s", addressGroupRef.Key())
+	} else {
+		log.Printf("ℹ️  Network %s not found in AddressGroup %s", networkName, addressGroupRef.Key())
+	}
+
+	log.Printf("✅ removeNetworkFromAddressGroup: AddressGroup Networks field updated successfully")
+	return nil
+}
 
 func (s *NetworkResourceService) getNetworkByID(ctx context.Context, id string) (*models.Network, error) {
 	log.Printf("🔍 DEBUG: getNetworkByID called with id=%s", id)
