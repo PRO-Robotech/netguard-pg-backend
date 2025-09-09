@@ -45,6 +45,10 @@ build-k8s-apiserver:
 docker-build-k8s-apiserver:
 	docker build -f Dockerfile.apiserver -t netguard/k8s-apiserver:latest .
 
+.PHONY: docker-build-webhook
+docker-build-webhook:
+	docker build -f Dockerfile.webhook -t netguard/webhook:latest .
+
 .PHONY: docker-push-k8s-apiserver
 docker-push-k8s-apiserver:
 	docker push netguard/k8s-apiserver:latest
@@ -227,6 +231,103 @@ docker-build-goose: ## Build Goose migration container
 
 .PHONY: pg-setup
 pg-setup: ## Setup PostgreSQL development environment
+
+# =============================================================================
+# Local Development Targets (with ArgoCD integration)
+# =============================================================================
+
+.PHONY: dev-start
+dev-start: ## Start local development session (suspend ArgoCD, deploy local images)
+	@echo "🚀 Starting local development session..."
+	./scripts/dev-local.sh start
+
+.PHONY: dev-stop  
+dev-stop: ## Stop local development session (restore ArgoCD control)
+	@echo "🔄 Stopping local development session..."
+	./scripts/dev-restore.sh restore
+
+.PHONY: dev-backend
+dev-backend: ## Quick backend-only local deployment
+	@echo "🏗️  Quick backend deployment..."
+	./scripts/dev-backend-only.sh deploy
+
+.PHONY: dev-backend-fast
+dev-backend-fast: ## Super fast backend-only deployment (alias)
+	@echo "⚡ Super fast backend deployment..."
+	./scripts/dev-backend-only.sh deploy
+
+.PHONY: dev-webhook
+dev-webhook: ## Quick webhook-only local deployment
+	@echo "🔗 Quick webhook deployment..."
+	./scripts/dev-webhook-only.sh deploy
+
+.PHONY: dev-webhook-fast
+dev-webhook-fast: ## Super fast webhook-only deployment (alias)
+	@echo "⚡ Super fast webhook deployment..."
+	./scripts/dev-webhook-only.sh deploy
+
+.PHONY: dev-apiserver
+dev-apiserver: ## Quick API server-only local deployment
+	@echo "🌐 Quick API server deployment..."
+	./scripts/dev-apiserver-only.sh deploy
+
+.PHONY: dev-apiserver-fast
+dev-apiserver-fast: ## Super fast API server-only deployment (alias)
+	@echo "⚡ Super fast API server deployment..."
+	./scripts/dev-apiserver-only.sh deploy
+
+.PHONY: dev-status
+dev-status: ## Show current development deployment status
+	@echo "📊 Development deployment status..."
+	./scripts/dev-local.sh status
+
+.PHONY: dev-logs
+dev-logs: ## Follow backend logs
+	@echo "📋 Following backend logs..."
+	./scripts/dev-local.sh logs
+
+.PHONY: dev-logs-api
+dev-logs-api: ## Follow API server logs
+	@echo "📋 Following API server logs..."
+	./scripts/dev-local.sh logs-api
+
+.PHONY: dev-logs-webhook
+dev-logs-webhook: ## Follow webhook logs
+	@echo "📋 Following webhook logs..."
+	./scripts/dev-local.sh logs-webhook
+
+.PHONY: dev-restore
+dev-restore: ## Restore ArgoCD control (alias for dev-stop)
+	@echo "🔄 Restoring ArgoCD control..."
+	./scripts/dev-restore.sh restore
+
+.PHONY: dev-clean
+dev-clean: dev-stop ## Clean up development session and restore production
+	@echo "🧹 Development session cleaned up!"
+
+.PHONY: dev-help
+dev-help: ## Show development workflow help
+	@echo ""
+	@echo "🛠️  Local Development Workflow Commands:"
+	@echo "========================================="
+	@echo "  make dev-start     - Start development session (builds & deploys local images)"
+	@echo "  make dev-stop      - Stop development session (restores ArgoCD control)" 
+	@echo "  make dev-status    - Show current deployment status"
+	@echo "  make dev-logs      - Follow backend logs"
+	@echo "  make dev-logs-api  - Follow API server logs"  
+	@echo "  make dev-logs-webhook - Follow webhook logs"
+	@echo "  make dev-restore   - Restore ArgoCD control (same as dev-stop)"
+	@echo "  make dev-clean     - Complete cleanup"
+	@echo ""
+	@echo "  make dev-backend-fast  - Super fast backend-only deployment"
+	@echo "  make dev-apiserver-fast - Super fast API server-only deployment"
+	@echo "  make dev-webhook-fast  - Super fast webhook-only deployment"
+	@echo ""
+	@echo "🔄 Workflow:"
+	@echo "  Full: make dev-start → develop → make dev-stop"
+	@echo "  Fast: make dev-backend-fast | dev-apiserver-fast | dev-webhook-fast"
+	@echo "  Restore: make dev-stop (restore ArgoCD control)"
+	@echo ""
 	@echo "🐘 Setting up PostgreSQL development environment..."
 	docker run --name netguard-postgres -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=netguard postgres:15
 	@echo "⏳ Waiting for PostgreSQL to be ready..."

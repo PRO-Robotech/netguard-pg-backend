@@ -32,6 +32,15 @@ jobs:
         id: sanitize
         run: echo "branch=$(echo ${GITHUB_REF_NAME} | sed 's/\//-/g')" >> $GITHUB_OUTPUT
 
+      - name: Build and push goose
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.goose
+          push: true
+          tags: ${{ secrets.CUSTOM_DOCKERHUB_USERNAME }}/sgroups.k8s.netguard-goose:${{ steps.sanitize.outputs.branch }}-${{ steps.short-sha.outputs.sha }}
+          platforms: linux/amd64,linux/arm64
+
       - name: Build and push apiserver
         uses: docker/build-push-action@v6
         with:

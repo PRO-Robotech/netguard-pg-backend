@@ -100,9 +100,6 @@ func (s *NetguardServer) Run(stopCh <-chan struct{}) error {
 // NewServer builds and returns a ready-to-run aggregated API server instance.
 // It mirrors the construction flow used in Kubernetes sample-apiserver, but
 // disables embedded etcd because an aggregated server stores no state locally.
-// The returned server has one namespace-scoped resource (AddressGroup) wired to
-// a dummy SimpleRESTStorage, which is enough for health-checks and kubectl to
-// succeed. Replace SimpleRESTStorage with real implementations later.
 func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServer, error) {
 	// Generate self-signed certs for localhost if the user didn't provide any.
 	if err := opts.SecureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, []net.IP{netutils.ParseIPSloppy("127.0.0.1")}); err != nil {
@@ -171,7 +168,7 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 	rules2sStore := rules2sstorage.NewRuleS2SStorage(bClient)
 	ieagagStore := ieagagstorage.NewIEAgAgRuleStorage(bClient)
 
-	// Use old BackendClient approach for Network resources for now
+	// Use BaseStorage approach for Network resources (supports generateName)
 	networkStore := networkstorage.NewNetworkStorageWithClient(bClient)
 	networkBindingStore := networkbindingstorage.NewNetworkBindingStorageWithClient(bClient)
 

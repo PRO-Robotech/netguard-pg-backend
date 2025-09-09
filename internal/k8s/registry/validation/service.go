@@ -111,18 +111,6 @@ func (v *ServiceValidator) validateIngressPortsDuplicates(ports []v1beta1.Ingres
 	return allErrs
 }
 
-// Note: Individual ingress port validation is now handled by ValidateIngressPorts standard function
-
-// Note: Protocol validation is now handled by ValidateTransportProtocol standard function
-
-// Note: Port string validation is now handled by ValidateIngressPorts standard function
-
-// Note: Single port validation is now handled by standard validation functions
-
-// Note: Port range validation is now handled by standard validation functions
-
-// Note: isDNS1123Subdomain function is defined in utils.go and shared across validators
-
 // NewServiceValidator creates a new ServiceValidator instance
 func NewServiceValidator() *ServiceValidator {
 	return &ServiceValidator{

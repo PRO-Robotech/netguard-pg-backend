@@ -20,16 +20,43 @@ func (v *AddressGroupValidator) ValidateExists(ctx context.Context, id models.Re
 
 // ValidateReferences checks if all references in an address group are valid
 func (v *AddressGroupValidator) ValidateReferences(ctx context.Context, group models.AddressGroup) error {
-	// AddressGroup doesn't have references to other resources
-	// Networks field contains only CIDR addresses, not resource references
 	return nil
 }
 
 // ValidateForCreation validates an address group before creation
 func (v *AddressGroupValidator) ValidateForCreation(ctx context.Context, group models.AddressGroup) error {
-	if err := v.validateNetworks(group.Networks); err != nil {
-		return err
+	// PHASE 1: Check for duplicate entity (CRITICAL FIX for overwrite issue)
+	// This prevents creation of entities with the same namespace/name combination
+	keyExtractor := func(entity interface{}) string {
+		if ag, ok := entity.(*models.AddressGroup); ok {
+			return ag.Key()
+		}
+		return ""
 	}
+
+	if err := v.BaseValidator.ValidateEntityDoesNotExistForCreation(ctx, group.ResourceIdentifier, keyExtractor); err != nil {
+		return err // Return the detailed EntityAlreadyExistsError with logging and context
+	}
+
+	// Networks can't be modified or added during creation
+	if group.Networks != nil && len(group.Networks) > 0 {
+		return fmt.Errorf("networks can't be modified or added during creation")
+	}
+
+	// PHASE 3: Validate references (existing validation)
+	return v.ValidateReferences(ctx, group)
+}
+
+// ValidateForPostCommit validates an address group after it has been committed to database
+// This skips duplicate checking since the entity already exists in the database
+func (v *AddressGroupValidator) ValidateForPostCommit(ctx context.Context, group models.AddressGroup) error {
+	// PHASE 1: Skip duplicate entity check (entity is already committed)
+	// This method is called AFTER the entity is saved to database, so existence is expected
+
+	// PHASE 2: Skip networks check (networks are managed by the system, not validated post-commit)
+	// Networks are added/removed by NetworkBinding operations, not direct user input
+
+	// PHASE 3: Validate references (existing validation)
 	return v.ValidateReferences(ctx, group)
 }
 
@@ -60,10 +87,8 @@ func (v *AddressGroupValidator) validateNetworks(networks []models.NetworkItem) 
 			return fmt.Errorf("network item %d (%s): invalid CIDR format '%s': %v", i, network.Name, network.CIDR, err)
 		}
 
-		// NetworkItem should not have Kind field for AddressGroup
-		// Kind field is used in other contexts, not here
-		if network.Kind != "" {
-			return fmt.Errorf("network item %d (%s): kind field should not be used in AddressGroup networks", i, network.Name)
+		if network.Kind == "" {
+			return fmt.Errorf("network item %d (%s): kind is required", i, network.Name)
 		}
 	}
 

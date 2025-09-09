@@ -20,13 +20,13 @@ func (v *ServiceAliasValidator) ValidateExists(ctx context.Context, id models.Re
 func (v *ServiceAliasValidator) ValidateReferences(ctx context.Context, alias models.ServiceAlias) error {
 	serviceValidator := NewServiceValidator(v.reader)
 
-	// Create ResourceIdentifier from ObjectReference - service is in same namespace as alias
-	serviceID := models.NewResourceIdentifier(alias.ServiceRef.Name, models.WithNamespace(alias.Namespace))
+	// Create ResourceIdentifier from ServiceRef - namespace should be already populated by mutation webhook
+	serviceID := models.NewResourceIdentifier(alias.ServiceRef.Name, models.WithNamespace(alias.ServiceRef.Namespace))
 	if err := serviceValidator.ValidateExists(ctx, serviceID); err != nil {
 		return errors.Wrapf(err, "invalid service reference in service alias %s", alias.Key())
 	}
 
-	// Получаем сервис для проверки namespace
+	// Получаем сервис для проверки namespace соответствия
 	service, err := v.reader.GetServiceByID(ctx, serviceID)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get service for namespace validation in service alias %s", alias.Key())
@@ -35,10 +35,16 @@ func (v *ServiceAliasValidator) ValidateReferences(ctx context.Context, alias mo
 		return fmt.Errorf("service not found or is nil for service alias %s", alias.Key())
 	}
 
-	// Проверяем соответствие namespace, если он указан в алиасе
-	if alias.Namespace != "" && alias.Namespace != service.Namespace {
-		return fmt.Errorf("service alias namespace '%s' must match service namespace '%s'",
-			alias.Namespace, service.Namespace)
+	// Проверяем соответствие namespace между ServiceAlias и Service - они должны совпадать
+	if alias.Namespace != alias.ServiceRef.Namespace {
+		return fmt.Errorf("service alias namespace '%s' must match service reference namespace '%s'",
+			alias.Namespace, alias.ServiceRef.Namespace)
+	}
+
+	// Проверяем соответствие namespace ServiceRef с реальным сервисом
+	if alias.ServiceRef.Namespace != service.Namespace {
+		return fmt.Errorf("service reference namespace '%s' must match actual service namespace '%s'",
+			alias.ServiceRef.Namespace, service.Namespace)
 	}
 
 	return nil
@@ -46,30 +52,36 @@ func (v *ServiceAliasValidator) ValidateReferences(ctx context.Context, alias mo
 
 // ValidateForCreation validates a service alias before creation
 func (v *ServiceAliasValidator) ValidateForCreation(ctx context.Context, alias *models.ServiceAlias) error {
-	// Проверяем существование сервиса
-	serviceValidator := NewServiceValidator(v.reader)
-	// Create ResourceIdentifier from ObjectReference - service is in same namespace as alias
-	serviceID := models.NewResourceIdentifier(alias.ServiceRef.Name, models.WithNamespace(alias.Namespace))
-	if err := serviceValidator.ValidateExists(ctx, serviceID); err != nil {
-		return errors.Wrapf(err, "invalid service reference in service alias %s", alias.Key())
+	// PHASE 1: Check for duplicate entity (CRITICAL FIX for overwrite issue)
+	// This prevents creation of entities with the same namespace/name combination
+	keyExtractor := func(entity interface{}) string {
+		if sa, ok := entity.(*models.ServiceAlias); ok {
+			return sa.Key()
+		}
+		return ""
 	}
 
-	// Получаем сервис для проверки и/или установки namespace
-	service, err := v.reader.GetServiceByID(ctx, serviceID)
-	if err != nil {
-		return errors.Wrapf(err, "failed to get service for namespace validation in service alias %s", alias.Key())
-	}
-	if service == nil {
-		return fmt.Errorf("service not found or is nil for service alias %s", alias.Key())
+	if err := v.BaseValidator.ValidateEntityDoesNotExistForCreation(ctx, alias.ResourceIdentifier, keyExtractor); err != nil {
+		return err // Return the detailed EntityAlreadyExistsError with logging and context
 	}
 
-	// Если namespace не указан, берем его из сервиса
-	if alias.Namespace == "" {
-		alias.Namespace = service.Namespace
-	} else if alias.Namespace != service.Namespace {
-		// Если namespace указан, проверяем соответствие
-		return fmt.Errorf("service alias namespace '%s' must match service namespace '%s'",
-			alias.Namespace, service.Namespace)
+	// PHASE 2: Validate references (existing validation)
+	if err := v.ValidateReferences(ctx, *alias); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ValidateForPostCommit validates a service alias after it has been committed to database
+// This skips duplicate checking since the entity already exists in the database
+func (v *ServiceAliasValidator) ValidateForPostCommit(ctx context.Context, alias models.ServiceAlias) error {
+	// PHASE 1: Skip duplicate entity check (entity is already committed)
+	// This method is called AFTER the entity is saved to database, so existence is expected
+
+	// PHASE 2: Validate references (existing validation)
+	if err := v.ValidateReferences(ctx, alias); err != nil {
+		return err
 	}
 
 	return nil

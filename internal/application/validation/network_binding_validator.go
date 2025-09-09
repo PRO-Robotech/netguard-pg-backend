@@ -59,12 +59,38 @@ func (v *NetworkBindingValidator) ValidateReferences(ctx context.Context, bindin
 
 // ValidateForCreation validates a network binding for creation
 func (v *NetworkBindingValidator) ValidateForCreation(ctx context.Context, binding models.NetworkBinding) error {
-	// Validate references
+	// PHASE 1: Check for duplicate entity (CRITICAL FIX for overwrite issue)
+	// This prevents creation of entities with the same namespace/name combination
+	keyExtractor := func(entity interface{}) string {
+		if nb, ok := entity.(*models.NetworkBinding); ok {
+			return nb.Key()
+		}
+		return ""
+	}
+
+	if err := v.BaseValidator.ValidateEntityDoesNotExistForCreation(ctx, binding.ResourceIdentifier, keyExtractor); err != nil {
+		return err // Return the detailed EntityAlreadyExistsError with logging and context
+	}
+
+	// PHASE 2: Validate references (existing validation)
 	if err := v.ValidateReferences(ctx, binding); err != nil {
 		return err
 	}
 
-	// No additional validation needed for creation
+	return nil
+}
+
+// ValidateForPostCommit validates a network binding after it has been committed to database
+// This skips duplicate checking since the entity already exists in the database
+func (v *NetworkBindingValidator) ValidateForPostCommit(ctx context.Context, binding models.NetworkBinding) error {
+	// PHASE 1: Skip duplicate entity check (entity is already committed)
+	// This method is called AFTER the entity is saved to database, so existence is expected
+
+	// PHASE 2: Validate references (existing validation)
+	if err := v.ValidateReferences(ctx, binding); err != nil {
+		return err
+	}
+
 	return nil
 }
 

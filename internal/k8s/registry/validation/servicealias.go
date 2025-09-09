@@ -2,6 +2,7 @@ package validation
 
 import (
 	"context"
+	"fmt"
 
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
@@ -58,7 +59,7 @@ func (v *ServiceAliasValidator) validate(ctx context.Context, obj *v1beta1.Servi
 	allErrs = append(allErrs, v.validateMetadata(obj)...)
 
 	// Validate spec
-	allErrs = append(allErrs, v.validateSpec(obj.Spec, field.NewPath("spec"))...)
+	allErrs = append(allErrs, v.validateSpec(obj, field.NewPath("spec"))...)
 
 	return allErrs
 }
@@ -70,20 +71,31 @@ func (v *ServiceAliasValidator) validateMetadata(obj *v1beta1.ServiceAlias) fiel
 }
 
 // validateSpec validates the ServiceAlias spec
-func (v *ServiceAliasValidator) validateSpec(spec v1beta1.ServiceAliasSpec, fldPath *field.Path) field.ErrorList {
+func (v *ServiceAliasValidator) validateSpec(obj *v1beta1.ServiceAlias, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
 	// Validate ServiceRef (required)
-	allErrs = append(allErrs, v.validateServiceRef(spec.ServiceRef, fldPath.Child("serviceRef"))...)
+	allErrs = append(allErrs, v.validateServiceRef(obj.Spec.ServiceRef, fldPath.Child("serviceRef"), obj.Namespace)...)
 
 	return allErrs
 }
 
 // validateServiceRef validates the Service object reference using standard validation
-func (v *ServiceAliasValidator) validateServiceRef(ref v1beta1.NamespacedObjectReference, fldPath *field.Path) field.ErrorList {
+func (v *ServiceAliasValidator) validateServiceRef(ref v1beta1.NamespacedObjectReference, fldPath *field.Path, serviceAliasNamespace string) field.ErrorList {
 	allErrs := field.ErrorList{}
 
-	// Use standard NamespacedObjectReference validation
+	// Автоматически устанавливаем namespace, если он не указан
+	if ref.Namespace == "" {
+		ref.Namespace = serviceAliasNamespace
+	} else {
+		// Если namespace указан, проверяем что он соответствует namespace ServiceAlias
+		if ref.Namespace != serviceAliasNamespace {
+			allErrs = append(allErrs, field.Invalid(fldPath.Child("namespace"), ref.Namespace,
+				fmt.Sprintf("namespace must match ServiceAlias namespace '%s'", serviceAliasNamespace)))
+		}
+	}
+
+	// Use standard NamespacedObjectReference validation with filled namespace
 	allErrs = append(allErrs, ValidateNamespacedObjectReference(&ref, fldPath)...)
 
 	// Domain-specific validation: APIVersion must be netguard.sgroups.io/v1beta1

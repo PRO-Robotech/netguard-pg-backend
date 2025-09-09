@@ -83,17 +83,19 @@ func (s *NetworkResourceService) CreateNetwork(ctx context.Context, network *mod
 		return fmt.Errorf("failed to commit network creation: %w", err)
 	}
 
-	// Process conditions after successful commit
+	// Sync with external systems
+	syncErr := s.syncNetworkWithExternal(ctx, network, types.SyncOperationUpsert)
+
+	// Process conditions after sync (so sync result can be included in conditions)
 	if s.conditionManager != nil {
-		if err := s.conditionManager.ProcessNetworkConditions(ctx, network, nil); err != nil {
+		if err := s.conditionManager.ProcessNetworkConditions(ctx, network, syncErr); err != nil {
 			klog.Errorf("Failed to process network conditions for %s/%s: %v",
 				network.Namespace, network.Name, err)
 			// Don't fail the operation if condition processing fails
 		}
 	}
 
-	// Sync with external systems
-	return s.syncNetworkWithExternal(ctx, network, "create")
+	return syncErr
 }
 
 // UpdateNetwork updates an existing Network with business logic validation
@@ -140,33 +142,67 @@ func (s *NetworkResourceService) UpdateNetwork(ctx context.Context, network *mod
 		return fmt.Errorf("failed to commit network update: %w", err)
 	}
 
-	// Process conditions after successful commit
+	// Sync with external systems
+	syncErr := s.syncNetworkWithExternal(ctx, network, types.SyncOperationUpsert)
+
+	// Process conditions after sync (so sync result can be included in conditions)
 	if s.conditionManager != nil {
-		if err := s.conditionManager.ProcessNetworkConditions(ctx, network, nil); err != nil {
+		if err := s.conditionManager.ProcessNetworkConditions(ctx, network, syncErr); err != nil {
 			klog.Errorf("Failed to process network conditions for %s/%s: %v",
 				network.Namespace, network.Name, err)
 			// Don't fail the operation if condition processing fails
 		}
 	}
 
-	// Sync with external systems
-	return s.syncNetworkWithExternal(ctx, network, "update")
+	return syncErr
 }
 
 // DeleteNetwork deletes a Network with cleanup logic
 func (s *NetworkResourceService) DeleteNetwork(ctx context.Context, id models.ResourceIdentifier) error {
+	log.Printf("🔥 DEBUG: NetworkResourceService.DeleteNetwork called for %s", id.Key())
+
 	// Check if Network exists
+	log.Printf("🔍 DEBUG: Checking if Network %s exists", id.Key())
 	existing, err := s.getNetworkByID(ctx, id.Key())
+	log.Printf("🔍 DEBUG: getNetworkByID returned: existing=%v, err=%v", existing != nil, err)
+	if existing != nil {
+		log.Printf("🔍 DEBUG: Found Network %s: IsBound=%v, CIDR=%s", id.Key(), existing.IsBound, existing.CIDR)
+	}
 	if err != nil && !errors.Is(err, ports.ErrNotFound) {
+		log.Printf("❌ DEBUG: Failed to get network %s: %v", id.Key(), err)
 		return fmt.Errorf("failed to get network: %w", err)
 	}
 	if existing == nil || errors.Is(err, ports.ErrNotFound) {
 		// Network doesn't exist - delete is idempotent, so this is success
+		log.Printf("ℹ️ DEBUG: Network %s not found (existing=%v, err=%v), treating as success (idempotent delete)", id.Key(), existing != nil, err)
 		return nil
 	}
 
+	log.Printf("✅ DEBUG: Found Network %s for deletion", id.Key())
+
 	// Check if Network is bound and handle cleanup
 	if existing.IsBound {
+		// Capture AddressGroupRef before clearing it for cleanup
+		var addressGroupRef models.ResourceIdentifier
+		if existing.AddressGroupRef != nil {
+			addressGroupRef = models.ResourceIdentifier{
+				Name:      existing.AddressGroupRef.Name,
+				Namespace: existing.Namespace, // AddressGroup is in same namespace as Network
+			}
+			log.Printf("🔍 DEBUG: Captured AddressGroupRef for cleanup: %s", addressGroupRef.Key())
+		}
+
+		// Remove Network from AddressGroup.Networks before deleting
+		if existing.AddressGroupRef != nil {
+			networkRef := models.ResourceIdentifier{Name: existing.Name, Namespace: existing.Namespace}
+			log.Printf("🔧 DEBUG: Removing Network %s from AddressGroup %s", networkRef.Key(), addressGroupRef.Key())
+			if err := s.removeNetworkFromAddressGroup(ctx, addressGroupRef, networkRef); err != nil {
+				log.Printf("❌ DEBUG: Failed to remove network from AddressGroup: %v", err)
+				return fmt.Errorf("failed to remove network from address group: %w", err)
+			}
+			log.Printf("✅ DEBUG: Successfully removed Network from AddressGroup")
+		}
+
 		// Clear binding references
 		existing.BindingRef = nil
 		existing.AddressGroupRef = nil
@@ -190,22 +226,38 @@ func (s *NetworkResourceService) DeleteNetwork(ctx context.Context, id models.Re
 	}
 
 	// Delete the network
+	log.Printf("🗑️ DEBUG: Starting Network deletion from storage for %s", id.Key())
 	writer, err := s.repo.Writer(ctx)
 	if err != nil {
+		log.Printf("❌ DEBUG: Failed to get writer for Network %s: %v", id.Key(), err)
 		return fmt.Errorf("failed to get writer: %w", err)
 	}
 	defer writer.Abort()
 
+	log.Printf("🔥 DEBUG: Calling writer.DeleteNetworksByIDs for %s", id.Key())
 	if err := writer.DeleteNetworksByIDs(ctx, []models.ResourceIdentifier{id}); err != nil {
+		log.Printf("❌ DEBUG: writer.DeleteNetworksByIDs failed for %s: %v", id.Key(), err)
 		return fmt.Errorf("failed to delete network: %w", err)
 	}
 
+	log.Printf("💾 DEBUG: Committing Network deletion for %s", id.Key())
 	if err := writer.Commit(); err != nil {
+		log.Printf("❌ DEBUG: Failed to commit Network deletion for %s: %v", id.Key(), err)
 		return fmt.Errorf("failed to commit network deletion: %w", err)
 	}
 
+	log.Printf("✅ DEBUG: Network %s successfully deleted from storage", id.Key())
+
 	// Sync deletion with external systems
-	return s.syncNetworkWithExternal(ctx, existing, "delete")
+	log.Printf("🔗 DEBUG: Starting external sync for Network %s deletion", id.Key())
+	err = s.syncNetworkWithExternal(ctx, existing, types.SyncOperationDelete)
+	if err != nil {
+		log.Printf("❌ DEBUG: External sync failed for Network %s: %v", id.Key(), err)
+		return err
+	}
+
+	log.Printf("🎉 DEBUG: Network %s deletion completed successfully (storage + external sync)", id.Key())
+	return nil
 }
 
 // GetNetwork retrieves a Network by ID
@@ -496,15 +548,84 @@ func (s *NetworkResourceService) RemoveNetworkBinding(ctx context.Context, netwo
 
 // Helper methods
 
-func (s *NetworkResourceService) getNetworkByID(ctx context.Context, id string) (*models.Network, error) {
+// removeNetworkFromAddressGroup removes a network from AddressGroup.Networks field
+func (s *NetworkResourceService) removeNetworkFromAddressGroup(ctx context.Context, addressGroupRef, networkRef models.ResourceIdentifier) error {
 	reader, err := s.repo.Reader(ctx)
 	if err != nil {
+		return fmt.Errorf("failed to get reader: %w", err)
+	}
+	defer reader.Close()
+
+	// Get the AddressGroup
+	addressGroup, err := reader.GetAddressGroupByID(ctx, addressGroupRef)
+	if err != nil {
+		return fmt.Errorf("failed to get address group: %w", err)
+	}
+	if addressGroup == nil {
+		log.Printf("ℹ️  AddressGroup %s not found, skipping network removal", addressGroupRef.Key())
+		return nil // AddressGroup doesn't exist, nothing to clean up
+	}
+
+	// Generate network name (namespace/name format) to match the pattern used in NetworkBinding
+	networkName := fmt.Sprintf("%s/%s", networkRef.Namespace, networkRef.Name)
+
+	// Remove network from AddressGroup.Networks.Items
+	log.Printf("🔗 Removing network %s from AddressGroup %s", networkName, addressGroupRef.Key())
+
+	var updatedNetworks []models.NetworkItem
+	found := false
+	for _, existingNetwork := range addressGroup.Networks {
+		if existingNetwork.Name != networkName {
+			updatedNetworks = append(updatedNetworks, existingNetwork)
+		} else {
+			found = true
+		}
+	}
+
+	if found {
+		addressGroup.Networks = updatedNetworks
+		log.Printf("✅ Removed network %s from AddressGroup %s", networkName, addressGroupRef.Key())
+
+		// Update metadata
+		addressGroup.Meta.TouchOnWrite(fmt.Sprintf("%d", time.Now().UnixNano()))
+
+		// Sync the updated AddressGroup (commits to database)
+		log.Printf("🔧 removeNetworkFromAddressGroup: About to call UpdateAddressGroup for %s", addressGroupRef.Key())
+		if err := s.UpdateAddressGroup(ctx, addressGroup); err != nil {
+			return fmt.Errorf("failed to update address group: %w", err)
+		}
+		log.Printf("✅ removeNetworkFromAddressGroup: UpdateAddressGroup completed for %s", addressGroupRef.Key())
+	} else {
+		log.Printf("ℹ️  Network %s not found in AddressGroup %s", networkName, addressGroupRef.Key())
+	}
+
+	log.Printf("✅ removeNetworkFromAddressGroup: AddressGroup Networks field updated successfully")
+	return nil
+}
+
+func (s *NetworkResourceService) getNetworkByID(ctx context.Context, id string) (*models.Network, error) {
+	log.Printf("🔍 DEBUG: getNetworkByID called with id=%s", id)
+	reader, err := s.repo.Reader(ctx)
+	if err != nil {
+		log.Printf("❌ DEBUG: getNetworkByID failed to get reader: %v", err)
 		return nil, err
 	}
 	defer reader.Close()
 
-	resourceID := models.ResourceIdentifier{Name: id}
-	return reader.GetNetworkByID(ctx, resourceID)
+	// Parse namespace/name from id (format: "namespace/name")
+	parts := strings.Split(id, "/")
+	var resourceID models.ResourceIdentifier
+	if len(parts) == 2 {
+		resourceID = models.ResourceIdentifier{Namespace: parts[0], Name: parts[1]}
+		log.Printf("🔍 DEBUG: getNetworkByID parsed resourceID: namespace=%s, name=%s", parts[0], parts[1])
+	} else {
+		resourceID = models.ResourceIdentifier{Name: id}
+		log.Printf("🔍 DEBUG: getNetworkByID using single name: %s", id)
+	}
+
+	network, err := reader.GetNetworkByID(ctx, resourceID)
+	log.Printf("🔍 DEBUG: reader.GetNetworkByID returned: network=%v, err=%v", network != nil, err)
+	return network, err
 }
 
 func (s *NetworkResourceService) validateCIDR(cidr string) error {
@@ -522,7 +643,7 @@ func (s *NetworkResourceService) validateCIDR(cidr string) error {
 }
 
 // syncNetworkWithExternal syncs a Network with external systems
-func (s *NetworkResourceService) syncNetworkWithExternal(ctx context.Context, network *models.Network, operation string) error {
+func (s *NetworkResourceService) syncNetworkWithExternal(ctx context.Context, network *models.Network, operation types.SyncOperation) error {
 	syncKey := fmt.Sprintf("%s-%s", operation, network.Key())
 
 	// Check debouncing
@@ -534,12 +655,12 @@ func (s *NetworkResourceService) syncNetworkWithExternal(ctx context.Context, ne
 	err := utils.ExecuteWithRetry(ctx, s.retryConfig, func() error {
 		// Sync Network with SGROUP
 		if s.syncManager != nil {
-			log.Printf("🔄 Syncing Network %s with SGROUP", network.Key())
-			if syncErr := s.syncManager.SyncEntity(ctx, network, types.SyncOperationUpsert); syncErr != nil {
+			log.Printf("🔄 Syncing Network %s with SGROUP (operation: %s)", network.Key(), operation)
+			if syncErr := s.syncManager.SyncEntity(ctx, network, operation); syncErr != nil {
 				log.Printf("❌ Failed to sync Network %s with SGROUP: %v", network.Key(), syncErr)
 				return syncErr
 			}
-			log.Printf("✅ Successfully synced Network %s with SGROUP", network.Key())
+			log.Printf("✅ Successfully synced Network %s with SGROUP (operation: %s)", network.Key(), operation)
 		}
 		return nil
 	})

@@ -2,7 +2,6 @@ package validation
 
 import (
 	"context"
-	"fmt"
 	"net"
 
 	"netguard-pg-backend/internal/domain/models"
@@ -50,20 +49,52 @@ func (v *NetworkValidator) ValidateCIDR(cidr string) error {
 	return nil
 }
 
+// ValidateCIDRUniqueness validates that CIDR is unique across all networks
+func (v *NetworkValidator) ValidateCIDRUniqueness(ctx context.Context, cidr string, excludeNetwork *models.ResourceIdentifier) error {
+	// Search for existing network with the same CIDR
+	existingNetwork, err := v.reader.GetNetworkByCIDR(ctx, cidr)
+	if err != nil {
+		if errors.Is(err, ports.ErrNotFound) {
+			// No network with this CIDR exists - validation passes
+			return nil
+		}
+		// Other error occurred
+		return errors.Wrapf(err, "failed to check CIDR uniqueness for %s", cidr)
+	}
+
+	// If we found a network with this CIDR, check if it's the same network we're updating
+	if excludeNetwork != nil && existingNetwork.Key() == excludeNetwork.Key() {
+		// The network with this CIDR is the same one we're updating - validation passes
+		return nil
+	}
+
+	// Another network already uses this CIDR
+	return errors.Errorf("CIDR '%s' is already in use by network %s", cidr, existingNetwork.Key())
+}
+
 // ValidateForCreation validates a network for creation
 func (v *NetworkValidator) ValidateForCreation(ctx context.Context, network models.Network) error {
-	// Validate CIDR
+	// PHASE 1: Check for duplicate entity (CRITICAL FIX for overwrite issue)
+	// This prevents creation of entities with the same namespace/name combination
+	keyExtractor := func(entity interface{}) string {
+		if n, ok := entity.(*models.Network); ok {
+			return n.Key()
+		}
+		return ""
+	}
+
+	if err := v.BaseValidator.ValidateEntityDoesNotExistForCreation(ctx, network.ResourceIdentifier, keyExtractor); err != nil {
+		return err // Return the detailed EntityAlreadyExistsError with logging and context
+	}
+
+	// PHASE 2: Validate CIDR format (existing validation)
 	if err := v.ValidateCIDR(network.CIDR); err != nil {
 		return err
 	}
 
-	// Check for duplicate network
-	existingNetwork, err := v.reader.GetNetworkByID(ctx, network.ResourceIdentifier)
-	if err == nil && existingNetwork != nil {
-		return NewValidationError(fmt.Sprintf("Network %s already exists", network.Key()))
-	}
-	if err != nil && err != ports.ErrNotFound {
-		return errors.Wrap(err, "failed to check for existing network")
+	// PHASE 3: Validate CIDR uniqueness
+	if err := v.ValidateCIDRUniqueness(ctx, network.CIDR, nil); err != nil {
+		return err
 	}
 
 	return nil
@@ -71,8 +102,14 @@ func (v *NetworkValidator) ValidateForCreation(ctx context.Context, network mode
 
 // ValidateForUpdate validates a network for update
 func (v *NetworkValidator) ValidateForUpdate(ctx context.Context, oldNetwork, newNetwork models.Network) error {
-	// Validate CIDR
+	// Validate CIDR format
 	if err := v.ValidateCIDR(newNetwork.CIDR); err != nil {
+		return err
+	}
+
+	// Validate CIDR uniqueness (exclude current network from check)
+	networkID := &models.ResourceIdentifier{Name: newNetwork.Name, Namespace: newNetwork.Namespace}
+	if err := v.ValidateCIDRUniqueness(ctx, newNetwork.CIDR, networkID); err != nil {
 		return err
 	}
 

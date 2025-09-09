@@ -634,44 +634,121 @@ func (s *BaseStorage[K, D]) Update(ctx context.Context, name string, objInfo res
 // Delete deletes a resource
 func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions) (runtime.Object, bool, error) {
 	namespace := utils.NamespaceFrom(ctx)
+	klog.InfoS("🔥 DELETE METHOD CALLED - STARTING DELETE OPERATION",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace)
 
 	// Get the object to delete
+	klog.InfoS("🔍 DELETE: Getting object from backend",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace)
 	domainObj, err := s.getFromBackend(ctx, namespace, name)
 	if err != nil {
+		klog.InfoS("❌ DELETE: Failed to get object from backend",
+			"resource", s.resourceName,
+			"name", name,
+			"namespace", namespace,
+			"error", err.Error())
 		return nil, false, err
 	}
+	klog.InfoS("✅ DELETE: Successfully got object from backend",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace)
 
 	// Convert to k8s object for validation
+	klog.InfoS("🔄 DELETE: Converting domain object to k8s object",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace)
 	k8sObj, err := s.converter.FromDomain(ctx, *domainObj)
 	if err != nil {
+		klog.InfoS("❌ DELETE: Failed to convert domain object to k8s object",
+			"resource", s.resourceName,
+			"name", name,
+			"namespace", namespace,
+			"error", err.Error())
 		return nil, false, fmt.Errorf("failed to convert domain object to k8s object: %w", err)
 	}
+	klog.InfoS("✅ DELETE: Successfully converted domain object to k8s object",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace)
 
 	// Validate deletion
+	klog.InfoS("🔍 DELETE: Validating deletion",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace)
 	if errs := s.validator.ValidateDelete(ctx, k8sObj); len(errs) > 0 {
+		klog.InfoS("❌ DELETE: Validation failed",
+			"resource", s.resourceName,
+			"name", name,
+			"namespace", namespace,
+			"validationErrors", len(errs))
 		return nil, false, errors.NewInvalid(
 			schema.GroupKind{Group: "netguard.sgroups.io", Kind: s.kindName},
 			getObjectName(k8sObj),
 			errs,
 		)
 	}
+	klog.InfoS("✅ DELETE: Validation passed",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace)
 
 	// Run additional validation if provided
 	if deleteValidation != nil {
+		klog.InfoS("🔍 DELETE: Running additional validation",
+			"resource", s.resourceName,
+			"name", name,
+			"namespace", namespace)
 		if err := deleteValidation(ctx, k8sObj); err != nil {
+			klog.InfoS("❌ DELETE: Additional validation failed",
+				"resource", s.resourceName,
+				"name", name,
+				"namespace", namespace,
+				"error", err.Error())
 			return nil, false, err
 		}
+		klog.InfoS("✅ DELETE: Additional validation passed",
+			"resource", s.resourceName,
+			"name", name,
+			"namespace", namespace)
 	}
 
 	// Delete from backend
+	klog.InfoS("🗑️ DELETE: Calling deleteFromBackend",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace)
 	err = s.deleteFromBackend(ctx, namespace, name)
 	if err != nil {
+		klog.InfoS("❌ DELETE: deleteFromBackend failed",
+			"resource", s.resourceName,
+			"name", name,
+			"namespace", namespace,
+			"error", err.Error())
 		return nil, false, err
 	}
+	klog.InfoS("✅ DELETE: deleteFromBackend succeeded",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace)
 
 	// Broadcast watch event
+	klog.InfoS("📡 DELETE: Broadcasting watch event",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace)
 	s.broadcastWatchEvent(watch.Deleted, k8sObj)
 
+	klog.InfoS("🎉 DELETE: Delete operation completed successfully",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace)
 	return k8sObj, true, nil
 }
 
@@ -954,7 +1031,29 @@ func (s *BaseStorage[K, D]) updateInBackend(ctx context.Context, obj *D) (*D, er
 
 func (s *BaseStorage[K, D]) deleteFromBackend(ctx context.Context, namespace, name string) error {
 	id := models.NewResourceIdentifier(name, models.WithNamespace(namespace))
-	return s.backendOps.Delete(ctx, id)
+	klog.InfoS("🔧 deleteFromBackend: Calling backendOps.Delete",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace,
+		"resourceId", fmt.Sprintf("%+v", id))
+
+	err := s.backendOps.Delete(ctx, id)
+	if err != nil {
+		klog.InfoS("❌ deleteFromBackend: backendOps.Delete failed",
+			"resource", s.resourceName,
+			"name", name,
+			"namespace", namespace,
+			"resourceId", fmt.Sprintf("%+v", id),
+			"error", err.Error())
+		return err
+	}
+
+	klog.InfoS("✅ deleteFromBackend: backendOps.Delete succeeded",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace,
+		"resourceId", fmt.Sprintf("%+v", id))
+	return nil
 }
 
 // Helper methods

@@ -686,6 +686,33 @@ func (r *reader) GetNetworkByID(ctx context.Context, id models.ResourceIdentifie
 	return nil, ports.ErrNotFound
 }
 
+// GetNetworkByCIDR gets a network by CIDR (for uniqueness validation)
+func (r *reader) GetNetworkByCIDR(ctx context.Context, cidr string) (*models.Network, error) {
+	log.Printf("GetNetworkByCIDR: looking for CIDR=%q", cidr)
+
+	var networks map[string]models.Network
+
+	// Use data from writer if available
+	if r.writer != nil && r.writer.networks != nil {
+		networks = r.writer.networks
+		log.Printf("GetNetworkByCIDR: using writer data")
+	} else {
+		networks = r.registry.db.GetNetworks()
+		log.Printf("GetNetworkByCIDR: using registry db data")
+	}
+
+	// Search through all networks to find matching CIDR
+	for key, network := range networks {
+		if network.CIDR == cidr {
+			log.Printf("🔍 GetNetworkByCIDR: Found Network with CIDR %s: %s", cidr, key)
+			return &network, nil
+		}
+	}
+
+	log.Printf("GetNetworkByCIDR: No network found with CIDR=%q", cidr)
+	return nil, ports.ErrNotFound
+}
+
 func (r *reader) ListNetworkBindings(ctx context.Context, consume func(models.NetworkBinding) error, scope ports.Scope) error {
 	var bindings map[string]models.NetworkBinding
 

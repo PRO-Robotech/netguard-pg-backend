@@ -57,3 +57,61 @@ func NewDependencyExistsError(entityType, entityID, dependencyType string) *Depe
 		DependencyType: dependencyType,
 	}
 }
+
+// EntityAlreadyExistsError represents an error when trying to create an entity that already exists
+type EntityAlreadyExistsError struct {
+	EntityType      string
+	EntityID        string
+	ExistingEntity  interface{} // Store details of existing entity for debugging
+	ConflictDetails string      // Human-readable conflict description
+	SuggestedAction string      // Actionable guidance for the user
+}
+
+func (e *EntityAlreadyExistsError) Error() string {
+	if e.SuggestedAction != "" {
+		return fmt.Sprintf("%s with id %s already exists. %s. Suggested action: %s",
+			e.EntityType, e.EntityID, e.ConflictDetails, e.SuggestedAction)
+	}
+	return fmt.Sprintf("%s with id %s already exists. %s",
+		e.EntityType, e.EntityID, e.ConflictDetails)
+}
+
+// NewEntityAlreadyExistsError creates a new entity already exists error with detailed context
+func NewEntityAlreadyExistsError(entityType, entityID string, existingEntity interface{}, conflictDetails, suggestedAction string) *EntityAlreadyExistsError {
+	return &EntityAlreadyExistsError{
+		EntityType:      entityType,
+		EntityID:        entityID,
+		ExistingEntity:  existingEntity,
+		ConflictDetails: conflictDetails,
+		SuggestedAction: suggestedAction,
+	}
+}
+
+// ValidationConflictError represents a conflict during validation that's not specifically about existence
+type ValidationConflictError struct {
+	EntityType       string
+	EntityID         string
+	ConflictType     string // e.g., "port_conflict", "name_collision", "circular_reference"
+	ConflictDetails  string
+	AffectedEntities []string // IDs of other entities involved in the conflict
+}
+
+func (e *ValidationConflictError) Error() string {
+	if len(e.AffectedEntities) > 0 {
+		return fmt.Sprintf("%s validation conflict for %s with id %s: %s. Affected entities: %v",
+			e.ConflictType, e.EntityType, e.EntityID, e.ConflictDetails, e.AffectedEntities)
+	}
+	return fmt.Sprintf("%s validation conflict for %s with id %s: %s",
+		e.ConflictType, e.EntityType, e.EntityID, e.ConflictDetails)
+}
+
+// NewValidationConflictError creates a new validation conflict error
+func NewValidationConflictError(entityType, entityID, conflictType, conflictDetails string, affectedEntities []string) *ValidationConflictError {
+	return &ValidationConflictError{
+		EntityType:       entityType,
+		EntityID:         entityID,
+		ConflictType:     conflictType,
+		ConflictDetails:  conflictDetails,
+		AffectedEntities: affectedEntities,
+	}
+}

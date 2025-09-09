@@ -211,9 +211,10 @@ func convertAddressGroupFromProto(protoAG *netguardpb.AddressGroup) models.Addre
 				models.WithNamespace(protoAG.SelfRef.Namespace),
 			),
 		},
-		DefaultAction: defaultAction,
-		Logs:          protoAG.Logs,
-		Trace:         protoAG.Trace,
+		DefaultAction:    defaultAction,
+		Logs:             protoAG.Logs,
+		Trace:            protoAG.Trace,
+		AddressGroupName: protoAG.AddressGroupName,
 	}
 
 	// meta

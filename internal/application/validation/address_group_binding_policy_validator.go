@@ -44,27 +44,25 @@ func (v *AddressGroupBindingPolicyValidator) ValidateReferences(ctx context.Cont
 
 // ValidateForCreation validates an address group binding policy before creation
 func (v *AddressGroupBindingPolicyValidator) ValidateForCreation(ctx context.Context, policy *models.AddressGroupBindingPolicy) error {
-	// Проверяем существование сервиса
-	serviceValidator := NewServiceValidator(v.reader)
-	serviceID := models.NewResourceIdentifier(policy.ServiceRef.Name, models.WithNamespace(policy.ServiceRef.Namespace))
-	if err := serviceValidator.ValidateExists(ctx, serviceID); err != nil {
-		return errors.Wrapf(err, "invalid service reference in policy %s", policy.Key())
+	// PHASE 1: Check for duplicate entity (CRITICAL FIX for overwrite issue)
+	// This prevents creation of entities with the same namespace/name combination
+	keyExtractor := func(entity interface{}) string {
+		if agbp, ok := entity.(*models.AddressGroupBindingPolicy); ok {
+			return agbp.Key()
+		}
+		return ""
 	}
 
-	// Проверяем существование address group
-	addressGroupValidator := NewAddressGroupValidator(v.reader)
-	agID := models.NewResourceIdentifier(policy.AddressGroupRef.Name, models.WithNamespace(policy.AddressGroupRef.Namespace))
-	if err := addressGroupValidator.ValidateExists(ctx, agID); err != nil {
-		return errors.Wrapf(err, "invalid address group reference in policy %s", policy.Key())
+	if err := v.BaseValidator.ValidateEntityDoesNotExistForCreation(ctx, policy.ResourceIdentifier, keyExtractor); err != nil {
+		return err // Return the detailed EntityAlreadyExistsError with logging and context
 	}
 
-	// Проверяем, что политика находится в том же namespace, что и AddressGroup
-	if policy.Namespace != policy.AddressGroupRef.Namespace {
-		return fmt.Errorf("policy namespace '%s' must match address group namespace '%s'",
-			policy.Namespace, policy.AddressGroupRef.Namespace)
+	// PHASE 2: Validate references (existing validation)
+	if err := v.ValidateReferences(ctx, *policy); err != nil {
+		return err
 	}
 
-	// Проверяем, что нет дубликатов политик
+	// PHASE 3: Check for duplicate policies with same service/address group combination (business logic validation)
 	var duplicateFound bool
 	err := v.reader.ListAddressGroupBindingPolicies(ctx, func(existingPolicy models.AddressGroupBindingPolicy) error {
 		// Пропускаем текущую политику
@@ -74,6 +72,48 @@ func (v *AddressGroupBindingPolicyValidator) ValidateForCreation(ctx context.Con
 
 		// Проверяем, совпадают ли ключевые поля
 		// Сравниваем namespace/name для обоих references
+		if existingPolicy.ServiceRef.Namespace == policy.ServiceRef.Namespace &&
+			existingPolicy.ServiceRef.Name == policy.ServiceRef.Name &&
+			existingPolicy.AddressGroupRef.Namespace == policy.AddressGroupRef.Namespace &&
+			existingPolicy.AddressGroupRef.Name == policy.AddressGroupRef.Name {
+			duplicateFound = true
+			return fmt.Errorf("duplicate policy found")
+		}
+
+		return nil
+	}, nil)
+
+	if err != nil && !duplicateFound {
+		return errors.Wrap(err, "failed to check for duplicate policies")
+	}
+
+	if duplicateFound {
+		return fmt.Errorf("duplicate policy found: a policy with the same service and address group already exists")
+	}
+
+	return nil
+}
+
+// ValidateForPostCommit validates an address group binding policy after it has been committed to database
+// This skips duplicate checking since the entity already exists in the database
+func (v *AddressGroupBindingPolicyValidator) ValidateForPostCommit(ctx context.Context, policy models.AddressGroupBindingPolicy) error {
+	// PHASE 1: Skip duplicate entity check (entity is already committed)
+	// This method is called AFTER the entity is saved to database, so existence is expected
+
+	// PHASE 2: Validate references (existing validation)
+	if err := v.ValidateReferences(ctx, policy); err != nil {
+		return err
+	}
+
+	// PHASE 3: Check for business logic duplicates (same service/address group combination)
+	var duplicateFound bool
+	err := v.reader.ListAddressGroupBindingPolicies(ctx, func(existingPolicy models.AddressGroupBindingPolicy) error {
+		// Skip the current policy (it's the one we just committed)
+		if existingPolicy.Name == policy.Name && existingPolicy.Namespace == policy.Namespace {
+			return nil
+		}
+
+		// Check if key fields match with other policies
 		if existingPolicy.ServiceRef.Namespace == policy.ServiceRef.Namespace &&
 			existingPolicy.ServiceRef.Name == policy.ServiceRef.Name &&
 			existingPolicy.AddressGroupRef.Namespace == policy.AddressGroupRef.Namespace &&

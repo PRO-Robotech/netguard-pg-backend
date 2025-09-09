@@ -158,6 +158,15 @@ func (w *MutationWebhook) mutateAddressGroupBinding(ctx context.Context, req *ad
 		})
 	}
 
+	// Normalize namespace in ServiceRef if empty
+	if binding.Spec.ServiceRef.Namespace == "" {
+		patches = append(patches, map[string]interface{}{
+			"op":    "replace",
+			"path":  "/spec/serviceRef/namespace",
+			"value": binding.Namespace,
+		})
+	}
+
 	return w.createPatchResponse(req.UID, patches)
 }
 
@@ -238,6 +247,15 @@ func (w *MutationWebhook) mutateServiceAlias(ctx context.Context, req *admission
 
 	// Add finalizer for graceful deletion
 	patches = append(patches, w.addFinalizer(&alias, "netguard.sgroups.io/backend-sync")...)
+
+	// Normalize namespace in ServiceRef if empty - ServiceAlias and Service must be in same namespace
+	if alias.Spec.ServiceRef.Namespace == "" {
+		patches = append(patches, map[string]interface{}{
+			"op":    "replace",
+			"path":  "/spec/serviceRef/namespace",
+			"value": alias.Namespace,
+		})
+	}
 
 	return w.createPatchResponse(req.UID, patches)
 }

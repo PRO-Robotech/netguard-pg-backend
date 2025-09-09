@@ -103,17 +103,54 @@ func (v *RuleS2SValidator) ValidateNamespaceRules(ctx context.Context, rule mode
 
 // ValidateForCreation validates a rule s2s before creation
 func (v *RuleS2SValidator) ValidateForCreation(ctx context.Context, rule models.RuleS2S) error {
-	// Validate namespace rules
+	// PHASE 1: Check for duplicate entity (CRITICAL FIX for overwrite issue)
+	// This prevents creation of entities with the same namespace/name combination
+	keyExtractor := func(entity interface{}) string {
+		if rs2s, ok := entity.(*models.RuleS2S); ok {
+			return rs2s.Key()
+		}
+		return ""
+	}
+
+	if err := v.BaseValidator.ValidateEntityDoesNotExistForCreation(ctx, rule.ResourceIdentifier, keyExtractor); err != nil {
+		return err // Return the detailed EntityAlreadyExistsError with logging and context
+	}
+
+	// PHASE 2: Validate namespace rules (existing validation)
 	if err := v.ValidateNamespaceRules(ctx, rule); err != nil {
 		return err
 	}
 
-	// Validate references
+	// PHASE 3: Validate references (existing validation)
 	if err := v.ValidateReferences(ctx, rule); err != nil {
 		return err
 	}
 
-	// Check for duplicates
+	// PHASE 4: Check for business logic duplicates (existing validation)
+	if err := v.ValidateNoDuplicates(ctx, rule); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ValidateForPostCommit validates a rule s2s after it has been committed to database
+// This skips duplicate checking since the entity already exists in the database
+func (v *RuleS2SValidator) ValidateForPostCommit(ctx context.Context, rule models.RuleS2S) error {
+	// PHASE 1: Skip duplicate entity check (entity is already committed)
+	// This method is called AFTER the entity is saved to database, so existence is expected
+
+	// PHASE 2: Validate namespace rules (existing validation)
+	if err := v.ValidateNamespaceRules(ctx, rule); err != nil {
+		return err
+	}
+
+	// PHASE 3: Validate references (existing validation)
+	if err := v.ValidateReferences(ctx, rule); err != nil {
+		return err
+	}
+
+	// PHASE 4: Check for business logic duplicates (existing validation)
 	if err := v.ValidateNoDuplicates(ctx, rule); err != nil {
 		return err
 	}

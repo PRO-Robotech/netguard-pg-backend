@@ -234,12 +234,12 @@ message Agent {
   string uuid = 2;  // Agent unique identifier
   string name = 3;  // DNS-style hostname
   Meta meta = 4;
-  
+
   // Status fields
   bool is_bound = 5;                               // Whether the agent is bound to an AddressGroup
   ObjectReference binding_ref = 6;                 // Reference to the AgentBinding
   NamespacedObjectReference address_group_ref = 7; // Reference to the bound AddressGroup
-  
+
   // Authentication fields
   SecretData secret_data = 8;                      // Authentication data (optional)
   OwnerCheck owner_check = 9;                      // Ownership verification method (optional)
@@ -259,6 +259,7 @@ message AddressGroup {
   repeated NetworkItem networks = 5; // Networks associated with this address group
   Meta meta = 6;
   repeated AgentItem agents = 7;     // Agents associated with this address group
+  string address_group_name = 8;  // Computed address group name (e.g., "namespace/name")
 }
 
 // AddressGroupBinding - binding between a service and an address group
@@ -685,46 +686,6 @@ message GetNetworkBindingReq {
 // GetNetworkBindingResp - response with a specific network binding
 message GetNetworkBindingResp {
   NetworkBinding network_binding = 1;
-}
-
-// ListAgentsReq - request to list agents
-message ListAgentsReq {
-  repeated ResourceIdentifier identifiers = 1;
-}
-
-// ListAgentsResp - response with list of agents
-message ListAgentsResp {
-  repeated Agent items = 1;
-}
-
-// GetAgentReq - request to get a specific agent
-message GetAgentReq {
-  ResourceIdentifier identifier = 1;
-}
-
-// GetAgentResp - response with a specific agent
-message GetAgentResp {
-  Agent agent = 1;
-}
-
-// ListAgentBindingsReq - request to list agent bindings
-message ListAgentBindingsReq {
-  repeated ResourceIdentifier identifiers = 1;
-}
-
-// ListAgentBindingsResp - response with list of agent bindings
-message ListAgentBindingsResp {
-  repeated AgentBinding items = 1;
-}
-
-// GetAgentBindingReq - request to get a specific agent binding
-message GetAgentBindingReq {
-  ResourceIdentifier identifier = 1;
-}
-
-// GetAgentBindingResp - response with a specific agent binding
-message GetAgentBindingResp {
-  AgentBinding agent_binding = 1;
 }
 
 // SyncReq - request to sync

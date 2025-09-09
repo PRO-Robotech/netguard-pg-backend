@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"fmt"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -199,6 +200,35 @@ func (r *GRPCReader) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceId
 // GetNetworkByID реализует ports.Reader интерфейс
 func (r *GRPCReader) GetNetworkByID(ctx context.Context, id models.ResourceIdentifier) (*models.Network, error) {
 	return r.grpcClient.GetNetwork(ctx, id)
+}
+
+// GetNetworkByCIDR реализует ports.Reader интерфейс
+func (r *GRPCReader) GetNetworkByCIDR(ctx context.Context, cidr string) (*models.Network, error) {
+	// For now, implement this by listing all networks and filtering by CIDR
+	// In a production system, you might want to add a dedicated gRPC method
+	var foundNetwork *models.Network
+	err := r.ListNetworks(ctx, func(network models.Network) error {
+		if network.CIDR == cidr {
+			foundNetwork = &network
+			return fmt.Errorf("found") // Use error to break early
+		}
+		return nil
+	}, ports.EmptyScope{})
+
+	if foundNetwork != nil {
+		return foundNetwork, nil
+	}
+
+	// If no error occurred during iteration, no network was found
+	if err != nil && err.Error() == "found" {
+		return foundNetwork, nil
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return nil, ports.ErrNotFound
 }
 
 // GetNetworkBindingByID реализует ports.Reader интерфейс
