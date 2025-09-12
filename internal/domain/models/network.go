@@ -3,8 +3,8 @@ package models
 import (
 	"fmt"
 
-	"github.com/H-BF/protos/pkg/api/common"
-	pb "github.com/H-BF/protos/pkg/api/sgroups"
+	"github.com/PRO-Robotech/protos/pkg/api/common"
+	pb "github.com/PRO-Robotech/protos/pkg/api/sgroups"
 
 	"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 	"netguard-pg-backend/internal/sync/types"

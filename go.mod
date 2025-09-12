@@ -29,23 +29,22 @@ require (
 
 require (
 	github.com/H-BF/corlib v0.0.12
+	github.com/evanphx/json-patch/v5 v5.9.11
 	google.golang.org/genproto/googleapis/api v0.0.0-20250324211829-b45e905df463
 )
 
 require (
-	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/jonboulle/clockwork v0.5.0 // indirect
-	github.com/rogpeppe/go-internal v1.14.1 // indirect
 )
 
 require (
 	cel.dev/expr v0.23.0 // indirect
 	github.com/BurntSushi/toml v1.2.1 // indirect
-	github.com/H-BF/protos v0.0.0-00000000000000-000000000000
 	github.com/NYTimes/gziphandler v1.1.1 // indirect
+	github.com/PRO-Robotech/protos v1.0.0-dev.8
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
@@ -78,7 +77,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_golang v1.22.0 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
@@ -126,4 +125,4 @@ require (
 	sigs.k8s.io/yaml v1.4.0
 )
 
-replace github.com/H-BF/protos => github.com/H-BF/protos/v2 v2.0.0
+// replace github.com/H-BF/protos => github.com/H-BF/protos/v2 v2.0.0

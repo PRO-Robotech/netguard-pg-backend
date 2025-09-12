@@ -419,6 +419,22 @@ func (w *simpleWriter) DeleteNetworkBindingsByIDs(ctx context.Context, ids []mod
 	return w.modularWriter.DeleteNetworkBindingsByIDs(ctx, ids) // modularWriter doesn't accept opts
 }
 
+func (w *simpleWriter) SyncHosts(ctx context.Context, hosts []models.Host, scope ports.Scope, opts ...ports.Option) error {
+	return w.modularWriter.SyncHosts(ctx, hosts, scope, opts...)
+}
+
+func (w *simpleWriter) DeleteHostsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	return w.modularWriter.DeleteHostsByIDs(ctx, ids)
+}
+
+func (w *simpleWriter) SyncHostBindings(ctx context.Context, hostBindings []models.HostBinding, scope ports.Scope, opts ...ports.Option) error {
+	return w.modularWriter.SyncHostBindings(ctx, hostBindings, scope, opts...)
+}
+
+func (w *simpleWriter) DeleteHostBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	return w.modularWriter.DeleteHostBindingsByIDs(ctx, ids)
+}
+
 func (w *simpleWriter) UpdateSyncStatus(ctx context.Context) error {
 	// For simplified approach, just return success
 	return nil

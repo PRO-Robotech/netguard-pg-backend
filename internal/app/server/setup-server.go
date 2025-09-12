@@ -38,7 +38,7 @@ func SetupServer(ctx context.Context, grpcAddr string, httpAddr string, service 
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 	err := netguardpb.RegisterNetguardServiceHandlerFromEndpoint(ctx, gwmux, grpcAddr, opts)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to register gateway")
+		return nil, errors.Wrap(err, "failed to register netguard gateway")
 	}
 
 	httpMux := http.NewServeMux()

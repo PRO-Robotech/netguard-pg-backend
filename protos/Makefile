@@ -40,9 +40,10 @@ generate-api: | .grpc-plugins
 	mkdir -p $$dest && \
 	echo generating API in \"$$dest\" ... && \
 	for p in $(proto_dirs); do \
-		for v in $$apis/$$p/*.proto; do \
-			echo  "  - " \"$$p/$$(basename $$v)\" ;\
-   protoc \
+		if [ "$$p" = "agent" ]; then \
+			for v in $$apis/$$p/v1/*.proto; do \
+				echo  "  - " \"$$p/v1/$$(basename $$v)\" ;\
+				protoc \
                                 -I $(CURDIR)/vendor/github.com/grpc-ecosystem/grpc-gateway/v2/ \
                                 -I $(CURDIR)/3d-party \
                                 -I /usr/local/include \
@@ -61,7 +62,31 @@ generate-api: | .grpc-plugins
 				--connect-go_opt=paths=source_relative \
 				"$$v" ||\
 			exit 1;\
-		done; \
+			done; \
+		else \
+			for v in $$apis/$$p/*.proto; do \
+				echo  "  - " \"$$p/$$(basename $$v)\" ;\
+				protoc \
+                                -I $(CURDIR)/vendor/github.com/grpc-ecosystem/grpc-gateway/v2/ \
+                                -I $(CURDIR)/3d-party \
+                                -I /usr/local/include \
+				--go_opt=paths=source_relative \
+				--go-grpc_opt=paths=source_relative \
+				--go_out $$dest \
+				--go-grpc_out $$dest \
+				--proto_path=$$apis \
+				--grpc-gateway_out $$dest \
+				--grpc-gateway_opt paths=source_relative \
+				--grpc-gateway_opt logtostderr=true \
+				--grpc-gateway_opt standalone=false \
+				--openapiv2_out $$dest \
+				--openapiv2_opt logtostderr=true \
+				--connect-go_out=$$dest \
+				--connect-go_opt=paths=source_relative \
+				"$$v" ||\
+			exit 1;\
+			done; \
+		fi; \
 	done; \
 	echo -=OK=- ;\
 	)

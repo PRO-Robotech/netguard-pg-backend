@@ -32,6 +32,8 @@ type NetguardV1beta1Interface interface {
 	AddressGroupBindingsGetter
 	AddressGroupBindingPoliciesGetter
 	AddressGroupPortMappingsGetter
+	HostsGetter
+	HostBindingsGetter
 	IEAgAgRulesGetter
 	NetworksGetter
 	NetworkBindingsGetter
@@ -59,6 +61,14 @@ func (c *NetguardV1beta1Client) AddressGroupBindingPolicies(namespace string) Ad
 
 func (c *NetguardV1beta1Client) AddressGroupPortMappings(namespace string) AddressGroupPortMappingInterface {
 	return newAddressGroupPortMappings(c, namespace)
+}
+
+func (c *NetguardV1beta1Client) Hosts(namespace string) HostInterface {
+	return newHosts(c, namespace)
+}
+
+func (c *NetguardV1beta1Client) HostBindings(namespace string) HostBindingInterface {
+	return newHostBindings(c, namespace)
 }
 
 func (c *NetguardV1beta1Client) IEAgAgRules(namespace string) IEAgAgRuleInterface {

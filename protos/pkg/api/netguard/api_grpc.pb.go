@@ -42,6 +42,10 @@ const (
 	NetguardService_GetNetwork_FullMethodName                      = "/netguard.v1.NetguardService/GetNetwork"
 	NetguardService_ListNetworkBindings_FullMethodName             = "/netguard.v1.NetguardService/ListNetworkBindings"
 	NetguardService_GetNetworkBinding_FullMethodName               = "/netguard.v1.NetguardService/GetNetworkBinding"
+	NetguardService_ListHosts_FullMethodName                       = "/netguard.v1.NetguardService/ListHosts"
+	NetguardService_GetHost_FullMethodName                         = "/netguard.v1.NetguardService/GetHost"
+	NetguardService_ListHostBindings_FullMethodName                = "/netguard.v1.NetguardService/ListHostBindings"
+	NetguardService_GetHostBinding_FullMethodName                  = "/netguard.v1.NetguardService/GetHostBinding"
 )
 
 // NetguardServiceClient is the client API for NetguardService service.
@@ -94,6 +98,14 @@ type NetguardServiceClient interface {
 	ListNetworkBindings(ctx context.Context, in *ListNetworkBindingsReq, opts ...grpc.CallOption) (*ListNetworkBindingsResp, error)
 	// GetNetworkBinding - gets a specific network binding by ID
 	GetNetworkBinding(ctx context.Context, in *GetNetworkBindingReq, opts ...grpc.CallOption) (*GetNetworkBindingResp, error)
+	// ListHosts - gets list of hosts
+	ListHosts(ctx context.Context, in *ListHostsReq, opts ...grpc.CallOption) (*ListHostsResp, error)
+	// GetHost - gets a specific host by ID
+	GetHost(ctx context.Context, in *GetHostReq, opts ...grpc.CallOption) (*GetHostResp, error)
+	// ListHostBindings - gets list of host bindings
+	ListHostBindings(ctx context.Context, in *ListHostBindingsReq, opts ...grpc.CallOption) (*ListHostBindingsResp, error)
+	// GetHostBinding - gets a specific host binding by ID
+	GetHostBinding(ctx context.Context, in *GetHostBindingReq, opts ...grpc.CallOption) (*GetHostBindingResp, error)
 }
 
 type netguardServiceClient struct {
@@ -324,6 +336,46 @@ func (c *netguardServiceClient) GetNetworkBinding(ctx context.Context, in *GetNe
 	return out, nil
 }
 
+func (c *netguardServiceClient) ListHosts(ctx context.Context, in *ListHostsReq, opts ...grpc.CallOption) (*ListHostsResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListHostsResp)
+	err := c.cc.Invoke(ctx, NetguardService_ListHosts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *netguardServiceClient) GetHost(ctx context.Context, in *GetHostReq, opts ...grpc.CallOption) (*GetHostResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetHostResp)
+	err := c.cc.Invoke(ctx, NetguardService_GetHost_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *netguardServiceClient) ListHostBindings(ctx context.Context, in *ListHostBindingsReq, opts ...grpc.CallOption) (*ListHostBindingsResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListHostBindingsResp)
+	err := c.cc.Invoke(ctx, NetguardService_ListHostBindings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *netguardServiceClient) GetHostBinding(ctx context.Context, in *GetHostBindingReq, opts ...grpc.CallOption) (*GetHostBindingResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetHostBindingResp)
+	err := c.cc.Invoke(ctx, NetguardService_GetHostBinding_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // NetguardServiceServer is the server API for NetguardService service.
 // All implementations must embed UnimplementedNetguardServiceServer
 // for forward compatibility.
@@ -374,6 +426,14 @@ type NetguardServiceServer interface {
 	ListNetworkBindings(context.Context, *ListNetworkBindingsReq) (*ListNetworkBindingsResp, error)
 	// GetNetworkBinding - gets a specific network binding by ID
 	GetNetworkBinding(context.Context, *GetNetworkBindingReq) (*GetNetworkBindingResp, error)
+	// ListHosts - gets list of hosts
+	ListHosts(context.Context, *ListHostsReq) (*ListHostsResp, error)
+	// GetHost - gets a specific host by ID
+	GetHost(context.Context, *GetHostReq) (*GetHostResp, error)
+	// ListHostBindings - gets list of host bindings
+	ListHostBindings(context.Context, *ListHostBindingsReq) (*ListHostBindingsResp, error)
+	// GetHostBinding - gets a specific host binding by ID
+	GetHostBinding(context.Context, *GetHostBindingReq) (*GetHostBindingResp, error)
 	mustEmbedUnimplementedNetguardServiceServer()
 }
 
@@ -449,6 +509,18 @@ func (UnimplementedNetguardServiceServer) ListNetworkBindings(context.Context, *
 }
 func (UnimplementedNetguardServiceServer) GetNetworkBinding(context.Context, *GetNetworkBindingReq) (*GetNetworkBindingResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetNetworkBinding not implemented")
+}
+func (UnimplementedNetguardServiceServer) ListHosts(context.Context, *ListHostsReq) (*ListHostsResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListHosts not implemented")
+}
+func (UnimplementedNetguardServiceServer) GetHost(context.Context, *GetHostReq) (*GetHostResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetHost not implemented")
+}
+func (UnimplementedNetguardServiceServer) ListHostBindings(context.Context, *ListHostBindingsReq) (*ListHostBindingsResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListHostBindings not implemented")
+}
+func (UnimplementedNetguardServiceServer) GetHostBinding(context.Context, *GetHostBindingReq) (*GetHostBindingResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetHostBinding not implemented")
 }
 func (UnimplementedNetguardServiceServer) mustEmbedUnimplementedNetguardServiceServer() {}
 func (UnimplementedNetguardServiceServer) testEmbeddedByValue()                         {}
@@ -867,6 +939,78 @@ func _NetguardService_GetNetworkBinding_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NetguardService_ListHosts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListHostsReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).ListHosts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_ListHosts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).ListHosts(ctx, req.(*ListHostsReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NetguardService_GetHost_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetHostReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).GetHost(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_GetHost_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).GetHost(ctx, req.(*GetHostReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NetguardService_ListHostBindings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListHostBindingsReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).ListHostBindings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_ListHostBindings_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).ListHostBindings(ctx, req.(*ListHostBindingsReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NetguardService_GetHostBinding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetHostBindingReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).GetHostBinding(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_GetHostBinding_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).GetHostBinding(ctx, req.(*GetHostBindingReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // NetguardService_ServiceDesc is the grpc.ServiceDesc for NetguardService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -961,6 +1105,22 @@ var NetguardService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetNetworkBinding",
 			Handler:    _NetguardService_GetNetworkBinding_Handler,
+		},
+		{
+			MethodName: "ListHosts",
+			Handler:    _NetguardService_ListHosts_Handler,
+		},
+		{
+			MethodName: "GetHost",
+			Handler:    _NetguardService_GetHost_Handler,
+		},
+		{
+			MethodName: "ListHostBindings",
+			Handler:    _NetguardService_ListHostBindings_Handler,
+		},
+		{
+			MethodName: "GetHostBinding",
+			Handler:    _NetguardService_GetHostBinding_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

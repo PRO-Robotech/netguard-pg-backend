@@ -26,6 +26,10 @@ type AddressGroupBindingPolicyExpansion interface{}
 
 type AddressGroupPortMappingExpansion interface{}
 
+type HostExpansion interface{}
+
+type HostBindingExpansion interface{}
+
 type IEAgAgRuleExpansion interface{}
 
 type NetworkExpansion interface{}

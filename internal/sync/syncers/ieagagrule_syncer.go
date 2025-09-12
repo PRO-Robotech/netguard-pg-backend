@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	pb "github.com/H-BF/protos/pkg/api/sgroups"
+	pb "github.com/PRO-Robotech/protos/pkg/api/sgroups"
 	"github.com/go-logr/logr"
 
 	"netguard-pg-backend/internal/sync/interfaces"

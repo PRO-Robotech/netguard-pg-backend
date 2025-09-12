@@ -30,6 +30,10 @@ type NetguardFacade struct {
 	networkResourceService        *resources.NetworkResourceService
 	networkBindingResourceService *resources.NetworkBindingResourceService
 
+	// Host resource services
+	hostResourceService        *resources.HostResourceService
+	hostBindingResourceService *resources.HostBindingResourceService
+
 	// Internal dependencies (preserved from original)
 	registry         ports.Registry
 	conditionManager *ConditionManager
@@ -53,6 +57,8 @@ func NewNetguardFacade(
 	addressGroupConditionAdapter := &addressGroupConditionManagerAdapter{conditionManager}
 	networkConditionAdapter := &networkConditionManagerAdapter{conditionManager}
 	networkBindingConditionAdapter := &networkBindingConditionManagerAdapter{conditionManager}
+	hostConditionAdapter := &hostConditionManagerAdapter{conditionManager}
+	hostBindingConditionAdapter := &hostBindingConditionManagerAdapter{conditionManager}
 	ruleConditionAdapter := &ruleConditionManager{conditionManager}
 
 	// Create validation service (no condition manager needed) - MUST be created first
@@ -66,6 +72,10 @@ func NewNetguardFacade(
 	networkResourceService := resources.NewNetworkResourceService(registry, syncManager, networkConditionAdapter)
 	networkBindingResourceService := resources.NewNetworkBindingResourceService(registry, networkResourceService, syncManager, networkBindingConditionAdapter)
 
+	// Create host resource services with condition managers
+	hostResourceService := resources.NewHostResourceService(registry, syncManager, hostConditionAdapter)
+	hostBindingResourceService := resources.NewHostBindingResourceService(registry, hostResourceService, syncManager, hostBindingConditionAdapter)
+
 	// Create RuleS2S service with condition manager
 	ruleS2SResourceService := resources.NewRuleS2SResourceService(registry, syncManager, ruleConditionAdapter)
 
@@ -77,6 +87,8 @@ func NewNetguardFacade(
 		validationService:             validationService,
 		networkResourceService:        networkResourceService,
 		networkBindingResourceService: networkBindingResourceService,
+		hostResourceService:           hostResourceService,
+		hostBindingResourceService:    hostBindingResourceService,
 		registry:                      registry,
 		conditionManager:              conditionManager,
 		syncManager:                   syncManager,
@@ -567,6 +579,122 @@ func (f *NetguardFacade) DeleteNetworkBinding(ctx context.Context, id models.Res
 }
 
 // =============================================================================
+// Host Operations - Direct Registry Access (TODO: Create HostResourceService)
+// =============================================================================
+
+func (f *NetguardFacade) GetHosts(ctx context.Context, scope ports.Scope) ([]models.Host, error) {
+	reader, err := f.registry.Reader(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create registry reader")
+	}
+	defer reader.Close()
+
+	var hosts []models.Host
+	err = reader.ListHosts(ctx, func(host models.Host) error {
+		hosts = append(hosts, host)
+		return nil
+	}, scope)
+
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to list hosts from registry")
+	}
+
+	return hosts, nil
+}
+
+func (f *NetguardFacade) GetHostByID(ctx context.Context, id models.ResourceIdentifier) (*models.Host, error) {
+	reader, err := f.registry.Reader(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create registry reader")
+	}
+	defer reader.Close()
+
+	host, err := reader.GetHostByID(ctx, id)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get host from registry")
+	}
+
+	return host, nil
+}
+
+func (f *NetguardFacade) CreateHost(ctx context.Context, host models.Host) error {
+	// Use Sync API with Upsert operation
+	return f.Sync(ctx, models.SyncOpUpsert, []models.Host{host})
+}
+
+func (f *NetguardFacade) UpdateHost(ctx context.Context, host models.Host) error {
+	// Use Sync API with Upsert operation
+	return f.Sync(ctx, models.SyncOpUpsert, []models.Host{host})
+}
+
+func (f *NetguardFacade) DeleteHost(ctx context.Context, id models.ResourceIdentifier) error {
+	// Get the host first to pass to sync for deletion
+	host, err := f.GetHostByID(ctx, id)
+	if err != nil {
+		return errors.Wrap(err, "failed to get host for deletion")
+	}
+
+	// Use Sync API with Delete operation
+	return f.Sync(ctx, models.SyncOpDelete, []models.Host{*host})
+}
+
+func (f *NetguardFacade) GetHostBindings(ctx context.Context, scope ports.Scope) ([]models.HostBinding, error) {
+	reader, err := f.registry.Reader(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create registry reader")
+	}
+	defer reader.Close()
+
+	var hostBindings []models.HostBinding
+	err = reader.ListHostBindings(ctx, func(hostBinding models.HostBinding) error {
+		hostBindings = append(hostBindings, hostBinding)
+		return nil
+	}, scope)
+
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to list host bindings from registry")
+	}
+
+	return hostBindings, nil
+}
+
+func (f *NetguardFacade) GetHostBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.HostBinding, error) {
+	reader, err := f.registry.Reader(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create registry reader")
+	}
+	defer reader.Close()
+
+	hostBinding, err := reader.GetHostBindingByID(ctx, id)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get host binding from registry")
+	}
+
+	return hostBinding, nil
+}
+
+func (f *NetguardFacade) CreateHostBinding(ctx context.Context, binding models.HostBinding) error {
+	// Use Sync API with Upsert operation
+	return f.Sync(ctx, models.SyncOpUpsert, []models.HostBinding{binding})
+}
+
+func (f *NetguardFacade) UpdateHostBinding(ctx context.Context, binding models.HostBinding) error {
+	// Use Sync API with Upsert operation
+	return f.Sync(ctx, models.SyncOpUpsert, []models.HostBinding{binding})
+}
+
+func (f *NetguardFacade) DeleteHostBinding(ctx context.Context, id models.ResourceIdentifier) error {
+	// Get the host binding first to pass to sync for deletion
+	hostBinding, err := f.GetHostBindingByID(ctx, id)
+	if err != nil {
+		return errors.Wrap(err, "failed to get host binding for deletion")
+	}
+
+	// Use Sync API with Delete operation
+	return f.Sync(ctx, models.SyncOpDelete, []models.HostBinding{*hostBinding})
+}
+
+// =============================================================================
 // Cross-Service Coordination Methods
 // =============================================================================
 
@@ -682,6 +810,62 @@ func (f *NetguardFacade) Sync(ctx context.Context, syncOp models.SyncOp, resourc
 			}
 		}
 		log.Printf("✅ DEBUG: All NetworkBinding operations completed successfully")
+		return nil
+	case []models.Host:
+		log.Printf("🔥 DEBUG: Processing %d Host(s) with syncOp=%v", len(typedResources), syncOp)
+
+		// Handle different sync operations for Hosts
+		for i, host := range typedResources {
+			log.Printf("🔥 DEBUG: Processing Host[%d]: %s with syncOp=%v", i, host.Key(), syncOp)
+			switch syncOp {
+			case models.SyncOpDelete:
+				log.Printf("🔥 DEBUG: Calling DeleteHost for %s", host.Key())
+				if err := f.hostResourceService.DeleteHost(ctx, host.SelfRef.ResourceIdentifier); err != nil {
+					log.Printf("❌ DEBUG: DeleteHost failed for %s: %v", host.Key(), err)
+					return errors.Wrapf(err, "failed to delete host %s", host.Key())
+				}
+				log.Printf("✅ DEBUG: DeleteHost completed successfully for %s", host.Key())
+			case models.SyncOpUpsert, models.SyncOpFullSync:
+				log.Printf("🔥 DEBUG: Calling CreateHost for %s", host.Key())
+				if err := f.hostResourceService.CreateHost(ctx, &host); err != nil {
+					log.Printf("❌ DEBUG: CreateHost failed for %s: %v", host.Key(), err)
+					return errors.Wrapf(err, "failed to create host %s", host.Key())
+				}
+				log.Printf("✅ DEBUG: CreateHost completed successfully for %s", host.Key())
+			default:
+				log.Printf("❌ DEBUG: Unsupported sync operation for Host: %v", syncOp)
+				return errors.New(fmt.Sprintf("unsupported sync operation for Host: %v", syncOp))
+			}
+		}
+		log.Printf("✅ DEBUG: All Host operations completed successfully")
+		return nil
+	case []models.HostBinding:
+		log.Printf("🔥 DEBUG: Processing %d HostBinding(s) with syncOp=%v", len(typedResources), syncOp)
+
+		// Handle different sync operations for HostBindings
+		for i, hostBinding := range typedResources {
+			log.Printf("🔥 DEBUG: Processing HostBinding[%d]: %s with syncOp=%v", i, hostBinding.Key(), syncOp)
+			switch syncOp {
+			case models.SyncOpDelete:
+				log.Printf("🔥 DEBUG: Calling DeleteHostBinding for %s", hostBinding.Key())
+				if err := f.hostBindingResourceService.DeleteHostBinding(ctx, hostBinding.SelfRef.ResourceIdentifier); err != nil {
+					log.Printf("❌ DEBUG: DeleteHostBinding failed for %s: %v", hostBinding.Key(), err)
+					return errors.Wrapf(err, "failed to delete host binding %s", hostBinding.Key())
+				}
+				log.Printf("✅ DEBUG: DeleteHostBinding completed successfully for %s", hostBinding.Key())
+			case models.SyncOpUpsert, models.SyncOpFullSync:
+				log.Printf("🔥 DEBUG: Calling CreateHostBinding for %s", hostBinding.Key())
+				if err := f.hostBindingResourceService.CreateHostBinding(ctx, &hostBinding); err != nil {
+					log.Printf("❌ DEBUG: CreateHostBinding failed for %s: %v", hostBinding.Key(), err)
+					return errors.Wrapf(err, "failed to create host binding %s", hostBinding.Key())
+				}
+				log.Printf("✅ DEBUG: CreateHostBinding completed successfully for %s", hostBinding.Key())
+			default:
+				log.Printf("❌ DEBUG: Unsupported sync operation for HostBinding: %v", syncOp)
+				return errors.New(fmt.Sprintf("unsupported sync operation for HostBinding: %v", syncOp))
+			}
+		}
+		log.Printf("✅ DEBUG: All HostBinding operations completed successfully")
 		return nil
 	default:
 		return errors.New(fmt.Sprintf("unsupported resource type: %T", resources))
@@ -815,6 +999,28 @@ type networkBindingConditionManagerAdapter struct {
 
 func (a *networkBindingConditionManagerAdapter) ProcessNetworkBindingConditions(ctx context.Context, networkBinding *models.NetworkBinding) error {
 	return a.conditionManager.ProcessNetworkBindingConditions(ctx, networkBinding)
+}
+
+// hostConditionManagerAdapter adapts the existing ConditionManager to the interface expected by HostResourceService
+type hostConditionManagerAdapter struct {
+	conditionManager *ConditionManager
+}
+
+func (a *hostConditionManagerAdapter) ProcessHostConditions(ctx context.Context, host *models.Host, syncResult error) error {
+	// For now, just return nil as host conditions are not yet implemented
+	// This can be extended when host condition processing is needed
+	return nil
+}
+
+// hostBindingConditionManagerAdapter adapts the existing ConditionManager to the interface expected by HostBindingResourceService
+type hostBindingConditionManagerAdapter struct {
+	conditionManager *ConditionManager
+}
+
+func (a *hostBindingConditionManagerAdapter) ProcessHostBindingConditions(ctx context.Context, hostBinding *models.HostBinding, syncResult error) error {
+	// For now, just return nil as host binding conditions are not yet implemented
+	// This can be extended when host binding condition processing is needed
+	return nil
 }
 
 // ruleConditionManager adapts the existing ConditionManager to the interface expected by RuleS2SResourceService

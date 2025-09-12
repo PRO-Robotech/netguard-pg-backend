@@ -6,7 +6,7 @@ import (
 
 	"github.com/go-logr/logr"
 
-	pb "github.com/H-BF/protos/pkg/api/sgroups"
+	pb "github.com/PRO-Robotech/protos/pkg/api/sgroups"
 	"netguard-pg-backend/internal/sync/interfaces"
 	"netguard-pg-backend/internal/sync/types"
 )

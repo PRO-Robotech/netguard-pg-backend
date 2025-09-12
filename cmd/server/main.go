@@ -210,6 +210,13 @@ func setupSyncManager(ctx context.Context, cfg *config.Config) interfaces.SyncMa
 		return nil
 	}
 
+	// Register Host syncer
+	hostSyncer := syncers.NewHostSyncer(sgroupsClient, logger)
+	if err := syncManager.RegisterSyncer(types.SyncSubjectTypeHosts, hostSyncer); err != nil {
+		log.Printf("❌ ERROR: Failed to register Host syncer: %v", err)
+		return nil
+	}
+
 	// Register IEAgAgRule syncer
 	ieagagRuleSyncer := syncers.NewIEAgAgRuleSyncer(sgroupsClient, logger)
 	if err := syncManager.RegisterSyncer(types.SyncSubjectTypeIEAgAgRules, ieagagRuleSyncer); err != nil {

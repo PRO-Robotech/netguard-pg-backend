@@ -6,7 +6,7 @@ import (
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 	"netguard-pg-backend/internal/sync/types"
 
-	pb "github.com/H-BF/protos/pkg/api/sgroups"
+	pb "github.com/PRO-Robotech/protos/pkg/api/sgroups"
 )
 
 // NetworkItem represents a network item in an address group

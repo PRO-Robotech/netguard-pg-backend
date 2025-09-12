@@ -23,6 +23,8 @@ type writer struct {
 	ieAgAgRules                 map[string]models.IEAgAgRule
 	networks                    map[string]models.Network
 	networkBindings             map[string]models.NetworkBinding
+	hosts                       map[string]models.Host
+	hostBindings                map[string]models.HostBinding
 }
 
 func (w *writer) SyncServices(ctx context.Context, services []models.Service, scope ports.Scope, opts ...ports.Option) error {
@@ -791,6 +793,16 @@ func (w *writer) Commit() error {
 		w.registry.db.SetNetworkBindings(w.networkBindings)
 	}
 
+	if w.hosts != nil {
+		log.Printf("💾 COMMIT: Committing %d hosts to database", len(w.hosts))
+		w.registry.db.SetHosts(w.hosts)
+	}
+
+	if w.hostBindings != nil {
+		log.Printf("💾 COMMIT: Committing %d host bindings to database", len(w.hostBindings))
+		w.registry.db.SetHostBindings(w.hostBindings)
+	}
+
 	w.registry.db.SetSyncStatus(models.SyncStatus{
 		UpdatedAt: time.Now(),
 	})
@@ -1278,6 +1290,234 @@ func (w *writer) DeleteNetworkBindingsByIDs(ctx context.Context, ids []models.Re
 	return nil
 }
 
+func (w *writer) SyncHosts(ctx context.Context, hosts []models.Host, scope ports.Scope, opts ...ports.Option) error {
+	// Определение операции (по умолчанию FullSync)
+	syncOp := models.SyncOpFullSync
+
+	// Извлечение опций
+	for _, opt := range opts {
+		if so, ok := opt.(ports.SyncOption); ok {
+			syncOp = so.Operation
+		}
+	}
+
+	// Инициализация карты, если она еще не создана
+	if w.hosts == nil {
+		w.hosts = make(map[string]models.Host)
+		// Всегда копируем существующие хосты, чтобы иметь полную карту для работы
+		for k, v := range w.registry.db.GetHosts() {
+			w.hosts[k] = v
+		}
+	}
+
+	// Обработка в зависимости от типа операции
+	switch syncOp {
+	case models.SyncOpFullSync:
+		// Если scope не пустой, удаляем только хосты в указанной области
+		if scope != nil && !scope.IsEmpty() {
+			// Проверяем, что scope имеет тип ResourceIdentifierScope
+			if ris, ok := scope.(ports.ResourceIdentifierScope); ok && !ris.IsEmpty() {
+				// Создаем временную карту для хранения хостов вне области видимости
+				tempHosts := make(map[string]models.Host)
+
+				// Создаем карту идентификаторов в области видимости для быстрого поиска
+				scopeIds := make(map[string]bool)
+				for _, id := range ris.Identifiers {
+					scopeIds[id.Key()] = true
+				}
+
+				// Сохраняем хосты вне области видимости
+				for k, v := range w.hosts {
+					// Проверяем, входит ли хост в область видимости
+					hostKey := v.Key()
+					if !scopeIds[hostKey] {
+						// Сохраняем хосты, которые не входят в область видимости
+						tempHosts[k] = v
+					}
+				}
+
+				// Очищаем карту и восстанавливаем хосты вне области видимости
+				w.hosts = make(map[string]models.Host)
+				for k, v := range tempHosts {
+					w.hosts[k] = v
+				}
+			}
+		} else {
+			// Если область пуста, очищаем всю карту
+			w.hosts = make(map[string]models.Host)
+		}
+
+		// Добавляем новые хосты
+		for _, host := range hosts {
+			if existing, ok := w.hosts[host.Key()]; ok {
+				if host.Meta.CreationTS.IsZero() {
+					host.Meta.CreationTS = existing.Meta.CreationTS
+				}
+				if host.Meta.UID == "" {
+					host.Meta.UID = existing.Meta.UID
+				}
+			}
+			ensureMetaFill(&host.Meta)
+			w.hosts[host.Key()] = host
+		}
+
+	case models.SyncOpUpsert:
+		// Добавляем или обновляем хосты
+		for _, host := range hosts {
+			if existing, ok := w.hosts[host.Key()]; ok {
+				if host.Meta.CreationTS.IsZero() {
+					host.Meta.CreationTS = existing.Meta.CreationTS
+				}
+				if host.Meta.UID == "" {
+					host.Meta.UID = existing.Meta.UID
+				}
+			}
+			ensureMetaFill(&host.Meta)
+			w.hosts[host.Key()] = host
+		}
+
+	case models.SyncOpDelete:
+		// Удаляем хосты
+		for _, host := range hosts {
+			delete(w.hosts, host.Key())
+		}
+	}
+
+	return nil
+}
+
+func (w *writer) SyncHostBindings(ctx context.Context, hostBindings []models.HostBinding, scope ports.Scope, opts ...ports.Option) error {
+	// Определение операции (по умолчанию FullSync)
+	syncOp := models.SyncOpFullSync
+
+	// Извлечение опций
+	for _, opt := range opts {
+		if so, ok := opt.(ports.SyncOption); ok {
+			syncOp = so.Operation
+		}
+	}
+
+	// Инициализация карты, если она еще не создана
+	if w.hostBindings == nil {
+		w.hostBindings = make(map[string]models.HostBinding)
+		// Всегда копируем существующие binding'и хостов, чтобы иметь полную карту для работы
+		for k, v := range w.registry.db.GetHostBindings() {
+			w.hostBindings[k] = v
+		}
+	}
+
+	// Обработка в зависимости от типа операции
+	switch syncOp {
+	case models.SyncOpFullSync:
+		// Если scope не пустой, удаляем только binding'и хостов в указанной области
+		if scope != nil && !scope.IsEmpty() {
+			// Проверяем, что scope имеет тип ResourceIdentifierScope
+			if ris, ok := scope.(ports.ResourceIdentifierScope); ok && !ris.IsEmpty() {
+				// Создаем временную карту для хранения binding'ов хостов вне области видимости
+				tempHostBindings := make(map[string]models.HostBinding)
+
+				// Создаем карту идентификаторов в области видимости для быстрого поиска
+				scopeIds := make(map[string]bool)
+				for _, id := range ris.Identifiers {
+					scopeIds[id.Key()] = true
+				}
+
+				// Сохраняем binding'и хостов вне области видимости
+				for k, v := range w.hostBindings {
+					// Проверяем, входит ли binding хоста в область видимости
+					bindingKey := v.Key()
+					if !scopeIds[bindingKey] {
+						// Сохраняем binding'и хостов, которые не входят в область видимости
+						tempHostBindings[k] = v
+					}
+				}
+
+				// Очищаем карту и восстанавливаем binding'и хостов вне области видимости
+				w.hostBindings = make(map[string]models.HostBinding)
+				for k, v := range tempHostBindings {
+					w.hostBindings[k] = v
+				}
+			}
+		} else {
+			// Если область пуста, очищаем всю карту
+			w.hostBindings = make(map[string]models.HostBinding)
+		}
+
+		// Добавляем новые binding'и хостов
+		for _, hostBinding := range hostBindings {
+			if existing, ok := w.hostBindings[hostBinding.Key()]; ok {
+				if hostBinding.Meta.CreationTS.IsZero() {
+					hostBinding.Meta.CreationTS = existing.Meta.CreationTS
+				}
+				if hostBinding.Meta.UID == "" {
+					hostBinding.Meta.UID = existing.Meta.UID
+				}
+			}
+			ensureMetaFill(&hostBinding.Meta)
+			w.hostBindings[hostBinding.Key()] = hostBinding
+		}
+
+	case models.SyncOpUpsert:
+		// Добавляем или обновляем binding'и хостов
+		for _, hostBinding := range hostBindings {
+			if existing, ok := w.hostBindings[hostBinding.Key()]; ok {
+				if hostBinding.Meta.CreationTS.IsZero() {
+					hostBinding.Meta.CreationTS = existing.Meta.CreationTS
+				}
+				if hostBinding.Meta.UID == "" {
+					hostBinding.Meta.UID = existing.Meta.UID
+				}
+			}
+			ensureMetaFill(&hostBinding.Meta)
+			w.hostBindings[hostBinding.Key()] = hostBinding
+		}
+
+	case models.SyncOpDelete:
+		// Удаляем binding'и хостов
+		for _, hostBinding := range hostBindings {
+			delete(w.hostBindings, hostBinding.Key())
+		}
+	}
+
+	return nil
+}
+
+func (w *writer) DeleteHostsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	// Инициализация карты, если она еще не создана
+	if w.hosts == nil {
+		w.hosts = make(map[string]models.Host)
+		// Всегда копируем существующие хосты, чтобы иметь полную карту для работы
+		for k, v := range w.registry.db.GetHosts() {
+			w.hosts[k] = v
+		}
+	}
+
+	// Удаляем хосты по идентификаторам
+	for _, id := range ids {
+		delete(w.hosts, id.Key())
+	}
+
+	return nil
+}
+
+func (w *writer) DeleteHostBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	// Инициализация карты, если она еще не создана
+	if w.hostBindings == nil {
+		w.hostBindings = make(map[string]models.HostBinding)
+		// Всегда копируем существующие binding'и хостов, чтобы иметь полную карту для работы
+		for k, v := range w.registry.db.GetHostBindings() {
+			w.hostBindings[k] = v
+		}
+	}
+
+	// Удаляем binding'и хостов по идентификаторам
+	for _, id := range ids {
+		delete(w.hostBindings, id.Key())
+	}
+
+	return nil
+}
+
 func (w *writer) Abort() {
 	w.services = nil
 	w.addressGroups = nil
@@ -1289,4 +1529,6 @@ func (w *writer) Abort() {
 	w.ieAgAgRules = nil
 	w.networks = nil
 	w.networkBindings = nil
+	w.hosts = nil
+	w.hostBindings = nil
 }

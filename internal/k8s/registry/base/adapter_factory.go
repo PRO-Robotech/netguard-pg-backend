@@ -84,3 +84,19 @@ func NewIEAgAgRulePtrOps(client client.BackendClient) BackendOperations[*models.
 func NewServicePtrOps(client client.BackendClient) BackendOperations[*models.Service] {
 	return NewPtrBackendOperations(NewServiceBackendOperations(client))
 }
+
+func NewNetworkPtrOps(client client.BackendClient) BackendOperations[*models.Network] {
+	return NewPtrBackendOperations(NewNetworkBackendOperations(client))
+}
+
+func NewNetworkBindingPtrOps(client client.BackendClient) BackendOperations[*models.NetworkBinding] {
+	return NewPtrBackendOperations(NewNetworkBindingBackendOperations(client))
+}
+
+func NewHostPtrOps(client client.BackendClient) BackendOperations[*models.Host] {
+	return NewPtrBackendOperations(NewHostBackendOperations(client))
+}
+
+func NewHostBindingPtrOps(client client.BackendClient) BackendOperations[*models.HostBinding] {
+	return NewPtrBackendOperations(NewHostBindingBackendOperations(client))
+}

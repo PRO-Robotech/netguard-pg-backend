@@ -151,3 +151,19 @@ func (w *writer) DeleteNetworksByIDs(ctx context.Context, ids []models.ResourceI
 func (w *writer) DeleteNetworkBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
 	return w.modularWriter.DeleteNetworkBindingsByIDs(ctx, ids)
 }
+
+func (w *writer) SyncHosts(ctx context.Context, hosts []models.Host, scope ports.Scope, opts ...ports.Option) error {
+	return w.modularWriter.SyncHosts(ctx, hosts, scope, opts...)
+}
+
+func (w *writer) DeleteHostsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	return w.modularWriter.DeleteHostsByIDs(ctx, ids)
+}
+
+func (w *writer) SyncHostBindings(ctx context.Context, hostBindings []models.HostBinding, scope ports.Scope, opts ...ports.Option) error {
+	return w.modularWriter.SyncHostBindings(ctx, hostBindings, scope, opts...)
+}
+
+func (w *writer) DeleteHostBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	return w.modularWriter.DeleteHostBindingsByIDs(ctx, ids)
+}

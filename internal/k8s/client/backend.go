@@ -72,6 +72,18 @@ type BackendClient interface {
 	UpdateNetworkBinding(ctx context.Context, binding *models.NetworkBinding) error
 	DeleteNetworkBinding(ctx context.Context, id models.ResourceIdentifier) error
 
+	GetHost(ctx context.Context, id models.ResourceIdentifier) (*models.Host, error)
+	ListHosts(ctx context.Context, scope ports.Scope) ([]models.Host, error)
+	CreateHost(ctx context.Context, host *models.Host) error
+	UpdateHost(ctx context.Context, host *models.Host) error
+	DeleteHost(ctx context.Context, id models.ResourceIdentifier) error
+
+	GetHostBinding(ctx context.Context, id models.ResourceIdentifier) (*models.HostBinding, error)
+	ListHostBindings(ctx context.Context, scope ports.Scope) ([]models.HostBinding, error)
+	CreateHostBinding(ctx context.Context, binding *models.HostBinding) error
+	UpdateHostBinding(ctx context.Context, binding *models.HostBinding) error
+	DeleteHostBinding(ctx context.Context, id models.ResourceIdentifier) error
+
 	// Sync операции
 	Sync(ctx context.Context, syncOp models.SyncOp, resources interface{}) error
 	GetSyncStatus(ctx context.Context) (*models.SyncStatus, error)
@@ -98,6 +110,8 @@ type BackendClient interface {
 
 	UpdateNetworkMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
 	UpdateNetworkBindingMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
+	UpdateHostMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
+	UpdateHostBindingMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
 
 	// Helper методы для subresources (оптимизированные запросы)
 	ListAddressGroupsForService(ctx context.Context, serviceID models.ResourceIdentifier) ([]models.AddressGroup, error)

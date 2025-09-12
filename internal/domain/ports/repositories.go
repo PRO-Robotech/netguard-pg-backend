@@ -34,6 +34,8 @@ type (
 		ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAgRule) error, scope Scope) error
 		ListNetworks(ctx context.Context, consume func(models.Network) error, scope Scope) error
 		ListNetworkBindings(ctx context.Context, consume func(models.NetworkBinding) error, scope Scope) error
+		ListHosts(ctx context.Context, consume func(models.Host) error, scope Scope) error
+		ListHostBindings(ctx context.Context, consume func(models.HostBinding) error, scope Scope) error
 		GetSyncStatus(ctx context.Context) (*models.SyncStatus, error)
 
 		// Get methods with ResourceIdentifier
@@ -48,6 +50,8 @@ type (
 		GetNetworkByID(ctx context.Context, id models.ResourceIdentifier) (*models.Network, error)
 		GetNetworkByCIDR(ctx context.Context, cidr string) (*models.Network, error)
 		GetNetworkBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.NetworkBinding, error)
+		GetHostByID(ctx context.Context, id models.ResourceIdentifier) (*models.Host, error)
+		GetHostBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.HostBinding, error)
 	}
 
 	// Reader defines read operations
@@ -69,6 +73,8 @@ type (
 		SyncIEAgAgRules(ctx context.Context, rules []models.IEAgAgRule, scope Scope, opts ...Option) error
 		SyncNetworks(ctx context.Context, networks []models.Network, scope Scope, opts ...Option) error
 		SyncNetworkBindings(ctx context.Context, bindings []models.NetworkBinding, scope Scope, opts ...Option) error
+		SyncHosts(ctx context.Context, hosts []models.Host, scope Scope, opts ...Option) error
+		SyncHostBindings(ctx context.Context, bindings []models.HostBinding, scope Scope, opts ...Option) error
 
 		// Delete methods with ResourceIdentifier
 		DeleteServicesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
@@ -81,6 +87,8 @@ type (
 		DeleteIEAgAgRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
 		DeleteNetworksByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
 		DeleteNetworkBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
+		DeleteHostsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
+		DeleteHostBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
 
 		Commit() error
 		Abort()

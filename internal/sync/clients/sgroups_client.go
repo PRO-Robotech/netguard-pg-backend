@@ -8,8 +8,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/H-BF/protos/pkg/api/common"
-	pb "github.com/H-BF/protos/pkg/api/sgroups"
+	"github.com/PRO-Robotech/protos/pkg/api/common"
+	pb "github.com/PRO-Robotech/protos/pkg/api/sgroups"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"

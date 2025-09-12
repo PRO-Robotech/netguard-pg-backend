@@ -17,6 +17,8 @@ type MockBackendClient struct {
 	addressGroupBindings []models.AddressGroupBinding
 	networks             []models.Network
 	networkBindings      []models.NetworkBinding
+	hosts                []models.Host
+	hostBindings         []models.HostBinding
 }
 
 func NewMockBackendClient() *MockBackendClient {
@@ -122,6 +124,8 @@ func NewMockBackendClient() *MockBackendClient {
 				},
 			},
 		},
+		hosts:        []models.Host{},
+		hostBindings: []models.HostBinding{},
 	}
 }
 
@@ -566,6 +570,105 @@ func (m *MockBackendClient) ListAccessPorts(ctx context.Context, mappingID model
 			},
 		},
 	}, nil
+}
+
+// Host operations
+func (m *MockBackendClient) GetHost(ctx context.Context, id models.ResourceIdentifier) (*models.Host, error) {
+	for _, host := range m.hosts {
+		if host.ResourceIdentifier.Key() == id.Key() {
+			return &host, nil
+		}
+	}
+	return nil, fmt.Errorf("host not found: %s", id.Key())
+}
+
+func (m *MockBackendClient) ListHosts(ctx context.Context, scope ports.Scope) ([]models.Host, error) {
+	return m.hosts, nil
+}
+
+func (m *MockBackendClient) CreateHost(ctx context.Context, host *models.Host) error {
+	m.hosts = append(m.hosts, *host)
+	return nil
+}
+
+func (m *MockBackendClient) UpdateHost(ctx context.Context, host *models.Host) error {
+	for i, existingHost := range m.hosts {
+		if existingHost.ResourceIdentifier.Key() == host.ResourceIdentifier.Key() {
+			m.hosts[i] = *host
+			return nil
+		}
+	}
+	return fmt.Errorf("host not found for update: %s", host.ResourceIdentifier.Key())
+}
+
+func (m *MockBackendClient) DeleteHost(ctx context.Context, id models.ResourceIdentifier) error {
+	for i, host := range m.hosts {
+		if host.ResourceIdentifier.Key() == id.Key() {
+			m.hosts = append(m.hosts[:i], m.hosts[i+1:]...)
+			return nil
+		}
+	}
+	return fmt.Errorf("host not found for deletion: %s", id.Key())
+}
+
+// HostBinding operations
+func (m *MockBackendClient) GetHostBinding(ctx context.Context, id models.ResourceIdentifier) (*models.HostBinding, error) {
+	for _, binding := range m.hostBindings {
+		if binding.ResourceIdentifier.Key() == id.Key() {
+			return &binding, nil
+		}
+	}
+	return nil, fmt.Errorf("host binding not found: %s", id.Key())
+}
+
+func (m *MockBackendClient) ListHostBindings(ctx context.Context, scope ports.Scope) ([]models.HostBinding, error) {
+	return m.hostBindings, nil
+}
+
+func (m *MockBackendClient) CreateHostBinding(ctx context.Context, binding *models.HostBinding) error {
+	m.hostBindings = append(m.hostBindings, *binding)
+	return nil
+}
+
+func (m *MockBackendClient) UpdateHostBinding(ctx context.Context, binding *models.HostBinding) error {
+	for i, existingBinding := range m.hostBindings {
+		if existingBinding.ResourceIdentifier.Key() == binding.ResourceIdentifier.Key() {
+			m.hostBindings[i] = *binding
+			return nil
+		}
+	}
+	return fmt.Errorf("host binding not found for update: %s", binding.ResourceIdentifier.Key())
+}
+
+func (m *MockBackendClient) DeleteHostBinding(ctx context.Context, id models.ResourceIdentifier) error {
+	for i, binding := range m.hostBindings {
+		if binding.ResourceIdentifier.Key() == id.Key() {
+			m.hostBindings = append(m.hostBindings[:i], m.hostBindings[i+1:]...)
+			return nil
+		}
+	}
+	return fmt.Errorf("host binding not found for deletion: %s", id.Key())
+}
+
+// Host and HostBinding Meta operations
+func (m *MockBackendClient) UpdateHostMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	for i, host := range m.hosts {
+		if host.ResourceIdentifier.Key() == id.Key() {
+			m.hosts[i].Meta = meta
+			return nil
+		}
+	}
+	return fmt.Errorf("host not found for meta update: %s", id.Key())
+}
+
+func (m *MockBackendClient) UpdateHostBindingMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	for i, binding := range m.hostBindings {
+		if binding.ResourceIdentifier.Key() == id.Key() {
+			m.hostBindings[i].Meta = meta
+			return nil
+		}
+	}
+	return fmt.Errorf("host binding not found for meta update: %s", id.Key())
 }
 
 func (m *MockBackendClient) Close() error {

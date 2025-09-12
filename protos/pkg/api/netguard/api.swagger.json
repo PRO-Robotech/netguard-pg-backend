@@ -268,6 +268,130 @@
         ]
       }
     },
+    "/v1/host-bindings": {
+      "get": {
+        "summary": "ListHostBindings - gets list of host bindings",
+        "description": "ListHostBindings: gets list of host bindings",
+        "operationId": "NetguardService_ListHostBindings",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListHostBindingsResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/host-bindings/{identifier.namespace}/{identifier.name}": {
+      "get": {
+        "summary": "GetHostBinding - gets a specific host binding by ID",
+        "description": "GetHostBinding: gets a specific host binding by ID",
+        "operationId": "NetguardService_GetHostBinding",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetHostBindingResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "identifier.namespace",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "identifier.name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/hosts": {
+      "get": {
+        "summary": "ListHosts - gets list of hosts",
+        "description": "ListHosts: gets list of hosts",
+        "operationId": "NetguardService_ListHosts",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListHostsResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/hosts/{identifier.namespace}/{identifier.name}": {
+      "get": {
+        "summary": "GetHost - gets a specific host by ID",
+        "description": "GetHost: gets a specific host by ID",
+        "operationId": "NetguardService_GetHost",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetHostResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "identifier.namespace",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "identifier.name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
     "/v1/ieagag-rules": {
       "get": {
         "summary": "ListIEAgAgRules - gets list of IEAgAgRules",
@@ -765,6 +889,10 @@
         },
         "meta": {
           "$ref": "#/definitions/v1Meta"
+        },
+        "addressGroupName": {
+          "type": "string",
+          "title": "Computed address group name (e.g., \"namespace/name\")"
         }
       },
       "title": "AddressGroup - represents an address group configuration for Netguard",
@@ -917,6 +1045,24 @@
       },
       "title": "GetAddressGroupResp - response with a specific address group"
     },
+    "v1GetHostBindingResp": {
+      "type": "object",
+      "properties": {
+        "hostBinding": {
+          "$ref": "#/definitions/v1HostBinding"
+        }
+      },
+      "title": "GetHostBindingResp - response with a specific host binding"
+    },
+    "v1GetHostResp": {
+      "type": "object",
+      "properties": {
+        "host": {
+          "$ref": "#/definitions/v1Host"
+        }
+      },
+      "title": "GetHostResp - response with a specific host"
+    },
     "v1GetIEAgAgRuleResp": {
       "type": "object",
       "properties": {
@@ -970,6 +1116,72 @@
         }
       },
       "title": "GetServiceResp - response with a specific service"
+    },
+    "v1Host": {
+      "type": "object",
+      "properties": {
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
+        },
+        "uuid": {
+          "type": "string",
+          "title": "Unique identifier of the host"
+        },
+        "hostNameSync": {
+          "type": "string",
+          "description": "Host name for synchronization (avoiding conflict with hostname)",
+          "title": "Status fields"
+        },
+        "addressGroupName": {
+          "type": "string",
+          "title": "Name of bound AddressGroup"
+        },
+        "isBound": {
+          "type": "boolean",
+          "title": "Whether the host is bound to an AddressGroup"
+        },
+        "bindingRef": {
+          "$ref": "#/definitions/v1ObjectReference",
+          "title": "Reference to the HostBinding"
+        },
+        "addressGroupRef": {
+          "$ref": "#/definitions/v1ObjectReference",
+          "title": "Reference to the bound AddressGroup"
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta"
+        }
+      },
+      "title": "Host - represents a host resource (K8s representation of Agent)",
+      "required": [
+        "selfRef",
+        "uuid"
+      ]
+    },
+    "v1HostBinding": {
+      "type": "object",
+      "properties": {
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
+        },
+        "hostRef": {
+          "$ref": "#/definitions/v1NamespacedObjectReference",
+          "title": "Reference to the Host resource"
+        },
+        "addressGroupRef": {
+          "$ref": "#/definitions/v1NamespacedObjectReference",
+          "title": "Reference to the AddressGroup resource"
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta"
+        }
+      },
+      "title": "HostBinding - represents a host binding resource",
+      "required": [
+        "selfRef",
+        "hostRef",
+        "addressGroupRef"
+      ]
     },
     "v1IEAgAgRule": {
       "type": "object",
@@ -1089,6 +1301,32 @@
         }
       },
       "title": "ListAddressGroupsResp - response with list of address groups"
+    },
+    "v1ListHostBindingsResp": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1HostBinding"
+          }
+        }
+      },
+      "title": "ListHostBindingsResp - response with list of host bindings"
+    },
+    "v1ListHostsResp": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Host"
+          }
+        }
+      },
+      "title": "ListHostsResp - response with list of hosts"
     },
     "v1ListIEAgAgRulesResp": {
       "type": "object",
@@ -1641,6 +1879,32 @@
       },
       "title": "SyncAddressGroups - subject of Address Groups to sync"
     },
+    "v1SyncHostBindings": {
+      "type": "object",
+      "properties": {
+        "hostBindings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1HostBinding"
+          }
+        }
+      },
+      "title": "SyncHostBindings - subject of Host Bindings to sync"
+    },
+    "v1SyncHosts": {
+      "type": "object",
+      "properties": {
+        "hosts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Host"
+          }
+        }
+      },
+      "title": "SyncHosts - subject of Hosts to sync"
+    },
     "v1SyncIEAgAgRules": {
       "type": "object",
       "properties": {
@@ -1738,6 +2002,14 @@
         "networkBindings": {
           "$ref": "#/definitions/v1SyncNetworkBindings",
           "title": "Subject of Network Bindings"
+        },
+        "hosts": {
+          "$ref": "#/definitions/v1SyncHosts",
+          "title": "Subject of Hosts"
+        },
+        "hostBindings": {
+          "$ref": "#/definitions/v1SyncHostBindings",
+          "title": "Subject of Host Bindings"
         }
       },
       "title": "SyncReq - request to sync"

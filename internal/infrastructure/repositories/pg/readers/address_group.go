@@ -108,6 +108,8 @@ func (r *Reader) scanAddressGroup(rows pgx.Rows) (models.AddressGroup, error) {
 		}
 	}
 
+	// Note: Agents field was removed - no longer unmarshalling agents
+
 	// Convert K8s metadata (convert int64 to string)
 	addressGroup.Meta, err = utils.ConvertK8sMetadata(fmt.Sprintf("%d", resourceVersion), labelsJSON, annotationsJSON, conditionsJSON, createdAt, updatedAt)
 	if err != nil {
@@ -159,6 +161,8 @@ func (r *Reader) scanAddressGroupRow(row pgx.Row) (*models.AddressGroup, error) 
 			return nil, errors.Wrap(err, "failed to unmarshal networks")
 		}
 	}
+
+	// Note: Agents field was removed - no longer unmarshalling agents
 
 	// Convert K8s metadata (convert int64 to string)
 	addressGroup.Meta, err = utils.ConvertK8sMetadata(fmt.Sprintf("%d", resourceVersion), labelsJSON, annotationsJSON, conditionsJSON, createdAt, updatedAt)

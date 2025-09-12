@@ -700,3 +700,118 @@ type NetworkBindingList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []NetworkBinding `json:"items"`
 }
+
+// HostSpec defines the desired state of Host
+type HostSpec struct {
+	// UUID is the unique identifier of the host
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=`^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$`
+	UUID string `json:"uuid"`
+}
+
+// HostStatus defines the observed state of Host
+type HostStatus struct {
+	// HostName is the name used for host synchronization
+	// +optional
+	HostName string `json:"hostName,omitempty"`
+
+	// AddressGroupName is the name of bound AddressGroup
+	// +optional
+	AddressGroupName string `json:"addressGroupName,omitempty"`
+
+	// IsBound indicates if the host is bound to an AddressGroup
+	IsBound bool `json:"isBound"`
+
+	// BindingRef is a reference to the HostBinding that binds this host
+	// +optional
+	BindingRef *ObjectReference `json:"bindingRef,omitempty"`
+
+	// AddressGroupRef is a reference to the AddressGroup this host is bound to
+	// +optional
+	AddressGroupRef *ObjectReference `json:"addressGroupRef,omitempty"`
+
+	// Conditions represent the latest available observations of the resource's state
+	// +optional
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+
+	// ObservedGeneration is the most recent generation observed by the controller
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+}
+
+type IPItem struct {
+	IP string `json:"ip"`
+}
+
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// Host is the Schema for the hosts API
+type Host struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   HostSpec   `json:"spec,omitempty"`
+	Status HostStatus `json:"status,omitempty"`
+	IPList []IPItem   `json:"ipList,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// HostList contains a list of Host
+type HostList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []Host `json:"items"`
+}
+
+// HostBindingSpec defines the desired state of HostBinding
+type HostBindingSpec struct {
+	// HostRef is a reference to the Host resource
+	HostRef NamespacedObjectReference `json:"hostRef"`
+
+	// AddressGroupRef is a reference to the AddressGroup resource
+	AddressGroupRef NamespacedObjectReference `json:"addressGroupRef"`
+}
+
+// HostBindingStatus defines the observed state of HostBinding
+type HostBindingStatus struct {
+	// Conditions represent the latest available observations of the resource's state
+	// +optional
+	// +patchMergeKey=type
+	// +patchStrategy=merge
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+
+	// ObservedGeneration is the most recent generation observed by the controller
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// HostBinding is the Schema for the hostbindings API
+type HostBinding struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   HostBindingSpec   `json:"spec,omitempty"`
+	Status HostBindingStatus `json:"status,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// HostBindingList contains a list of HostBinding
+type HostBindingList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []HostBinding `json:"items"`
+}
