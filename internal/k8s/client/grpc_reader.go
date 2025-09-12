@@ -231,6 +231,44 @@ func (r *GRPCReader) GetNetworkByCIDR(ctx context.Context, cidr string) (*models
 	return nil, ports.ErrNotFound
 }
 
+func (r *GRPCReader) ListHosts(ctx context.Context, consume func(models.Host) error, scope ports.Scope) error {
+	hosts, err := r.grpcClient.ListHosts(ctx, scope)
+	if err != nil {
+		return err
+	}
+
+	for _, host := range hosts {
+		if err := consume(host); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *GRPCReader) GetHostByID(ctx context.Context, id models.ResourceIdentifier) (*models.Host, error) {
+	return r.grpcClient.GetHost(ctx, id)
+}
+
+func (r *GRPCReader) ListHostBindings(ctx context.Context, consume func(models.HostBinding) error, scope ports.Scope) error {
+	hostBindings, err := r.grpcClient.ListHostBindings(ctx, scope)
+	if err != nil {
+		return err
+	}
+
+	for _, hostBinding := range hostBindings {
+		if err := consume(hostBinding); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *GRPCReader) GetHostBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.HostBinding, error) {
+	return r.grpcClient.GetHostBinding(ctx, id)
+}
+
 // GetNetworkBindingByID реализует ports.Reader интерфейс
 func (r *GRPCReader) GetNetworkBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.NetworkBinding, error) {
 	return r.grpcClient.GetNetworkBinding(ctx, id)

@@ -18,6 +18,8 @@ type MemDB struct {
 	ieAgAgRules                 map[string]models.IEAgAgRule
 	networks                    map[string]models.Network
 	networkBindings             map[string]models.NetworkBinding
+	hosts                       map[string]models.Host
+	hostBindings                map[string]models.HostBinding
 	syncStatus                  models.SyncStatus
 	mu                          sync.RWMutex
 }
@@ -35,6 +37,8 @@ func NewMemDB() *MemDB {
 		ieAgAgRules:                 make(map[string]models.IEAgAgRule),
 		networks:                    make(map[string]models.Network),
 		networkBindings:             make(map[string]models.NetworkBinding),
+		hosts:                       make(map[string]models.Host),
+		hostBindings:                make(map[string]models.HostBinding),
 	}
 }
 
@@ -230,4 +234,40 @@ func (db *MemDB) SetNetworkBindings(bindings map[string]models.NetworkBinding) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	db.networkBindings = bindings
+}
+
+// GetHosts returns all hosts
+func (db *MemDB) GetHosts() map[string]models.Host {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	result := make(map[string]models.Host, len(db.hosts))
+	for k, v := range db.hosts {
+		result[k] = v
+	}
+	return result
+}
+
+// SetHosts sets the hosts
+func (db *MemDB) SetHosts(hosts map[string]models.Host) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.hosts = hosts
+}
+
+// GetHostBindings returns all host bindings
+func (db *MemDB) GetHostBindings() map[string]models.HostBinding {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	result := make(map[string]models.HostBinding, len(db.hostBindings))
+	for k, v := range db.hostBindings {
+		result[k] = v
+	}
+	return result
+}
+
+// SetHostBindings sets the host bindings
+func (db *MemDB) SetHostBindings(bindings map[string]models.HostBinding) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.hostBindings = bindings
 }

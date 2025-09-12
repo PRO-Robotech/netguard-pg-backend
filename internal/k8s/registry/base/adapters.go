@@ -430,3 +430,63 @@ func (nb *NetworkBindingBackendOperations) Delete(ctx context.Context, id models
 func NewNetworkBindingPtrOpsOld(client client.BackendClient) BackendOperations[*models.NetworkBinding] {
 	return NewPtrBackendOperations[models.NetworkBinding](NewNetworkBindingBackendOperations(client))
 }
+
+// HostBackendOperations implements BackendOperations for Host resources
+type HostBackendOperations struct {
+	client client.BackendClient
+}
+
+// NewHostBackendOperations creates a new HostBackendOperations
+func NewHostBackendOperations(client client.BackendClient) *HostBackendOperations {
+	return &HostBackendOperations{client: client}
+}
+
+func (h *HostBackendOperations) Get(ctx context.Context, id models.ResourceIdentifier) (*models.Host, error) {
+	return h.client.GetHost(ctx, id)
+}
+
+func (h *HostBackendOperations) List(ctx context.Context, scope ports.Scope) ([]models.Host, error) {
+	return h.client.ListHosts(ctx, scope)
+}
+
+func (h *HostBackendOperations) Create(ctx context.Context, obj *models.Host) error {
+	return h.client.CreateHost(ctx, obj)
+}
+
+func (h *HostBackendOperations) Update(ctx context.Context, obj *models.Host) error {
+	return h.client.UpdateHost(ctx, obj)
+}
+
+func (h *HostBackendOperations) Delete(ctx context.Context, id models.ResourceIdentifier) error {
+	return h.client.DeleteHost(ctx, id)
+}
+
+// HostBindingBackendOperations implements BackendOperations for HostBinding resources
+type HostBindingBackendOperations struct {
+	client client.BackendClient
+}
+
+// NewHostBindingBackendOperations creates a new HostBindingBackendOperations
+func NewHostBindingBackendOperations(client client.BackendClient) *HostBindingBackendOperations {
+	return &HostBindingBackendOperations{client: client}
+}
+
+func (hb *HostBindingBackendOperations) Get(ctx context.Context, id models.ResourceIdentifier) (*models.HostBinding, error) {
+	return hb.client.GetHostBinding(ctx, id)
+}
+
+func (hb *HostBindingBackendOperations) List(ctx context.Context, scope ports.Scope) ([]models.HostBinding, error) {
+	return hb.client.ListHostBindings(ctx, scope)
+}
+
+func (hb *HostBindingBackendOperations) Create(ctx context.Context, obj *models.HostBinding) error {
+	return hb.client.CreateHostBinding(ctx, obj)
+}
+
+func (hb *HostBindingBackendOperations) Update(ctx context.Context, obj *models.HostBinding) error {
+	return hb.client.UpdateHostBinding(ctx, obj)
+}
+
+func (hb *HostBindingBackendOperations) Delete(ctx context.Context, id models.ResourceIdentifier) error {
+	return hb.client.DeleteHostBinding(ctx, id)
+}

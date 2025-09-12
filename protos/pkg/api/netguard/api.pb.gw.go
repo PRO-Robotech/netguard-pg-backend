@@ -1345,47 +1345,47 @@ func local_request_NetguardService_GetNetworkBinding_0(ctx context.Context, mars
 }
 
 var (
-	filter_NetguardService_ListAgents_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int(nil), Check: []int(nil)}
+	filter_NetguardService_ListHosts_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int(nil), Check: []int(nil)}
 )
 
-func request_NetguardService_ListAgents_0(ctx context.Context, marshaler runtime.Marshaler, client NetguardServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq ListAgentsReq
+func request_NetguardService_ListHosts_0(ctx context.Context, marshaler runtime.Marshaler, client NetguardServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq ListHostsReq
 	var metadata runtime.ServerMetadata
 
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_NetguardService_ListAgents_0); err != nil {
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_NetguardService_ListHosts_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
-	msg, err := client.ListAgents(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	msg, err := client.ListHosts(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 
 }
 
-func local_request_NetguardService_ListAgents_0(ctx context.Context, marshaler runtime.Marshaler, server NetguardServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq ListAgentsReq
+func local_request_NetguardService_ListHosts_0(ctx context.Context, marshaler runtime.Marshaler, server NetguardServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq ListHostsReq
 	var metadata runtime.ServerMetadata
 
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_NetguardService_ListAgents_0); err != nil {
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_NetguardService_ListHosts_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
-	msg, err := server.ListAgents(ctx, &protoReq)
+	msg, err := server.ListHosts(ctx, &protoReq)
 	return msg, metadata, err
 
 }
 
 var (
-	filter_NetguardService_GetAgent_0 = &utilities.DoubleArray{Encoding: map[string]int{"identifier": 0, "namespace": 1, "name": 2}, Base: []int{1, 4, 5, 6, 2, 0, 4, 0, 0, 0}, Check: []int{0, 1, 1, 1, 2, 5, 2, 7, 3, 4}}
+	filter_NetguardService_GetHost_0 = &utilities.DoubleArray{Encoding: map[string]int{"identifier": 0, "namespace": 1, "name": 2}, Base: []int{1, 4, 5, 6, 2, 0, 4, 0, 0, 0}, Check: []int{0, 1, 1, 1, 2, 5, 2, 7, 3, 4}}
 )
 
-func request_NetguardService_GetAgent_0(ctx context.Context, marshaler runtime.Marshaler, client NetguardServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetAgentReq
+func request_NetguardService_GetHost_0(ctx context.Context, marshaler runtime.Marshaler, client NetguardServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq GetHostReq
 	var metadata runtime.ServerMetadata
 
 	var (
@@ -1418,17 +1418,17 @@ func request_NetguardService_GetAgent_0(ctx context.Context, marshaler runtime.M
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_NetguardService_GetAgent_0); err != nil {
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_NetguardService_GetHost_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
-	msg, err := client.GetAgent(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	msg, err := client.GetHost(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 
 }
 
-func local_request_NetguardService_GetAgent_0(ctx context.Context, marshaler runtime.Marshaler, server NetguardServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetAgentReq
+func local_request_NetguardService_GetHost_0(ctx context.Context, marshaler runtime.Marshaler, server NetguardServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq GetHostReq
 	var metadata runtime.ServerMetadata
 
 	var (
@@ -1461,57 +1461,57 @@ func local_request_NetguardService_GetAgent_0(ctx context.Context, marshaler run
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_NetguardService_GetAgent_0); err != nil {
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_NetguardService_GetHost_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
-	msg, err := server.GetAgent(ctx, &protoReq)
+	msg, err := server.GetHost(ctx, &protoReq)
 	return msg, metadata, err
 
 }
 
 var (
-	filter_NetguardService_ListAgentBindings_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int(nil), Check: []int(nil)}
+	filter_NetguardService_ListHostBindings_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int(nil), Check: []int(nil)}
 )
 
-func request_NetguardService_ListAgentBindings_0(ctx context.Context, marshaler runtime.Marshaler, client NetguardServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq ListAgentBindingsReq
+func request_NetguardService_ListHostBindings_0(ctx context.Context, marshaler runtime.Marshaler, client NetguardServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq ListHostBindingsReq
 	var metadata runtime.ServerMetadata
 
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_NetguardService_ListAgentBindings_0); err != nil {
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_NetguardService_ListHostBindings_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
-	msg, err := client.ListAgentBindings(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	msg, err := client.ListHostBindings(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 
 }
 
-func local_request_NetguardService_ListAgentBindings_0(ctx context.Context, marshaler runtime.Marshaler, server NetguardServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq ListAgentBindingsReq
+func local_request_NetguardService_ListHostBindings_0(ctx context.Context, marshaler runtime.Marshaler, server NetguardServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq ListHostBindingsReq
 	var metadata runtime.ServerMetadata
 
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_NetguardService_ListAgentBindings_0); err != nil {
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_NetguardService_ListHostBindings_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
-	msg, err := server.ListAgentBindings(ctx, &protoReq)
+	msg, err := server.ListHostBindings(ctx, &protoReq)
 	return msg, metadata, err
 
 }
 
 var (
-	filter_NetguardService_GetAgentBinding_0 = &utilities.DoubleArray{Encoding: map[string]int{"identifier": 0, "namespace": 1, "name": 2}, Base: []int{1, 4, 5, 6, 2, 0, 4, 0, 0, 0}, Check: []int{0, 1, 1, 1, 2, 5, 2, 7, 3, 4}}
+	filter_NetguardService_GetHostBinding_0 = &utilities.DoubleArray{Encoding: map[string]int{"identifier": 0, "namespace": 1, "name": 2}, Base: []int{1, 4, 5, 6, 2, 0, 4, 0, 0, 0}, Check: []int{0, 1, 1, 1, 2, 5, 2, 7, 3, 4}}
 )
 
-func request_NetguardService_GetAgentBinding_0(ctx context.Context, marshaler runtime.Marshaler, client NetguardServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetAgentBindingReq
+func request_NetguardService_GetHostBinding_0(ctx context.Context, marshaler runtime.Marshaler, client NetguardServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq GetHostBindingReq
 	var metadata runtime.ServerMetadata
 
 	var (
@@ -1544,17 +1544,17 @@ func request_NetguardService_GetAgentBinding_0(ctx context.Context, marshaler ru
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_NetguardService_GetAgentBinding_0); err != nil {
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_NetguardService_GetHostBinding_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
-	msg, err := client.GetAgentBinding(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	msg, err := client.GetHostBinding(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 
 }
 
-func local_request_NetguardService_GetAgentBinding_0(ctx context.Context, marshaler runtime.Marshaler, server NetguardServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetAgentBindingReq
+func local_request_NetguardService_GetHostBinding_0(ctx context.Context, marshaler runtime.Marshaler, server NetguardServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq GetHostBindingReq
 	var metadata runtime.ServerMetadata
 
 	var (
@@ -1587,11 +1587,11 @@ func local_request_NetguardService_GetAgentBinding_0(ctx context.Context, marsha
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_NetguardService_GetAgentBinding_0); err != nil {
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_NetguardService_GetHostBinding_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
-	msg, err := server.GetAgentBinding(ctx, &protoReq)
+	msg, err := server.GetHostBinding(ctx, &protoReq)
 	return msg, metadata, err
 
 }
@@ -2152,7 +2152,7 @@ func RegisterNetguardServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 
 	})
 
-	mux.Handle("GET", pattern_NetguardService_ListAgents_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("GET", pattern_NetguardService_ListHosts_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
@@ -2160,12 +2160,12 @@ func RegisterNetguardServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/netguard.v1.NetguardService/ListAgents", runtime.WithHTTPPathPattern("/v1/agents"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/netguard.v1.NetguardService/ListHosts", runtime.WithHTTPPathPattern("/v1/hosts"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := local_request_NetguardService_ListAgents_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		resp, md, err := local_request_NetguardService_ListHosts_0(annotatedContext, inboundMarshaler, server, req, pathParams)
 		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
@@ -2173,11 +2173,11 @@ func RegisterNetguardServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 			return
 		}
 
-		forward_NetguardService_ListAgents_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_NetguardService_ListHosts_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
-	mux.Handle("GET", pattern_NetguardService_GetAgent_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("GET", pattern_NetguardService_GetHost_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
@@ -2185,12 +2185,12 @@ func RegisterNetguardServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/netguard.v1.NetguardService/GetAgent", runtime.WithHTTPPathPattern("/v1/agents/{identifier.namespace}/{identifier.name}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/netguard.v1.NetguardService/GetHost", runtime.WithHTTPPathPattern("/v1/hosts/{identifier.namespace}/{identifier.name}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := local_request_NetguardService_GetAgent_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		resp, md, err := local_request_NetguardService_GetHost_0(annotatedContext, inboundMarshaler, server, req, pathParams)
 		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
@@ -2198,11 +2198,11 @@ func RegisterNetguardServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 			return
 		}
 
-		forward_NetguardService_GetAgent_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_NetguardService_GetHost_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
-	mux.Handle("GET", pattern_NetguardService_ListAgentBindings_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("GET", pattern_NetguardService_ListHostBindings_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
@@ -2210,12 +2210,12 @@ func RegisterNetguardServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/netguard.v1.NetguardService/ListAgentBindings", runtime.WithHTTPPathPattern("/v1/agent-bindings"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/netguard.v1.NetguardService/ListHostBindings", runtime.WithHTTPPathPattern("/v1/host-bindings"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := local_request_NetguardService_ListAgentBindings_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		resp, md, err := local_request_NetguardService_ListHostBindings_0(annotatedContext, inboundMarshaler, server, req, pathParams)
 		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
@@ -2223,11 +2223,11 @@ func RegisterNetguardServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 			return
 		}
 
-		forward_NetguardService_ListAgentBindings_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_NetguardService_ListHostBindings_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
-	mux.Handle("GET", pattern_NetguardService_GetAgentBinding_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("GET", pattern_NetguardService_GetHostBinding_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
@@ -2235,12 +2235,12 @@ func RegisterNetguardServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/netguard.v1.NetguardService/GetAgentBinding", runtime.WithHTTPPathPattern("/v1/agent-bindings/{identifier.namespace}/{identifier.name}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/netguard.v1.NetguardService/GetHostBinding", runtime.WithHTTPPathPattern("/v1/host-bindings/{identifier.namespace}/{identifier.name}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := local_request_NetguardService_GetAgentBinding_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		resp, md, err := local_request_NetguardService_GetHostBinding_0(annotatedContext, inboundMarshaler, server, req, pathParams)
 		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
@@ -2248,7 +2248,7 @@ func RegisterNetguardServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 			return
 		}
 
-		forward_NetguardService_GetAgentBinding_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_NetguardService_GetHostBinding_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
@@ -2777,91 +2777,91 @@ func RegisterNetguardServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 
 	})
 
-	mux.Handle("GET", pattern_NetguardService_ListAgents_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("GET", pattern_NetguardService_ListHosts_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/netguard.v1.NetguardService/ListAgents", runtime.WithHTTPPathPattern("/v1/agents"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/netguard.v1.NetguardService/ListHosts", runtime.WithHTTPPathPattern("/v1/hosts"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := request_NetguardService_ListAgents_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		resp, md, err := request_NetguardService_ListHosts_0(annotatedContext, inboundMarshaler, client, req, pathParams)
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
 
-		forward_NetguardService_ListAgents_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_NetguardService_ListHosts_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
-	mux.Handle("GET", pattern_NetguardService_GetAgent_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("GET", pattern_NetguardService_GetHost_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/netguard.v1.NetguardService/GetAgent", runtime.WithHTTPPathPattern("/v1/agents/{identifier.namespace}/{identifier.name}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/netguard.v1.NetguardService/GetHost", runtime.WithHTTPPathPattern("/v1/hosts/{identifier.namespace}/{identifier.name}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := request_NetguardService_GetAgent_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		resp, md, err := request_NetguardService_GetHost_0(annotatedContext, inboundMarshaler, client, req, pathParams)
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
 
-		forward_NetguardService_GetAgent_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_NetguardService_GetHost_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
-	mux.Handle("GET", pattern_NetguardService_ListAgentBindings_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("GET", pattern_NetguardService_ListHostBindings_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/netguard.v1.NetguardService/ListAgentBindings", runtime.WithHTTPPathPattern("/v1/agent-bindings"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/netguard.v1.NetguardService/ListHostBindings", runtime.WithHTTPPathPattern("/v1/host-bindings"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := request_NetguardService_ListAgentBindings_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		resp, md, err := request_NetguardService_ListHostBindings_0(annotatedContext, inboundMarshaler, client, req, pathParams)
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
 
-		forward_NetguardService_ListAgentBindings_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_NetguardService_ListHostBindings_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
-	mux.Handle("GET", pattern_NetguardService_GetAgentBinding_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle("GET", pattern_NetguardService_GetHostBinding_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/netguard.v1.NetguardService/GetAgentBinding", runtime.WithHTTPPathPattern("/v1/agent-bindings/{identifier.namespace}/{identifier.name}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/netguard.v1.NetguardService/GetHostBinding", runtime.WithHTTPPathPattern("/v1/host-bindings/{identifier.namespace}/{identifier.name}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := request_NetguardService_GetAgentBinding_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		resp, md, err := request_NetguardService_GetHostBinding_0(annotatedContext, inboundMarshaler, client, req, pathParams)
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
 
-		forward_NetguardService_GetAgentBinding_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_NetguardService_GetHostBinding_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
@@ -2913,13 +2913,13 @@ var (
 
 	pattern_NetguardService_GetNetworkBinding_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 1, 0, 4, 1, 5, 3}, []string{"v1", "network-bindings", "identifier.namespace", "identifier.name"}, ""))
 
-	pattern_NetguardService_ListAgents_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "agents"}, ""))
+	pattern_NetguardService_ListHosts_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "hosts"}, ""))
 
-	pattern_NetguardService_GetAgent_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 1, 0, 4, 1, 5, 3}, []string{"v1", "agents", "identifier.namespace", "identifier.name"}, ""))
+	pattern_NetguardService_GetHost_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 1, 0, 4, 1, 5, 3}, []string{"v1", "hosts", "identifier.namespace", "identifier.name"}, ""))
 
-	pattern_NetguardService_ListAgentBindings_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "agent-bindings"}, ""))
+	pattern_NetguardService_ListHostBindings_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "host-bindings"}, ""))
 
-	pattern_NetguardService_GetAgentBinding_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 1, 0, 4, 1, 5, 3}, []string{"v1", "agent-bindings", "identifier.namespace", "identifier.name"}, ""))
+	pattern_NetguardService_GetHostBinding_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 1, 0, 4, 1, 5, 3}, []string{"v1", "host-bindings", "identifier.namespace", "identifier.name"}, ""))
 )
 
 var (
@@ -2967,11 +2967,11 @@ var (
 
 	forward_NetguardService_GetNetworkBinding_0 = runtime.ForwardResponseMessage
 
-	forward_NetguardService_ListAgents_0 = runtime.ForwardResponseMessage
+	forward_NetguardService_ListHosts_0 = runtime.ForwardResponseMessage
 
-	forward_NetguardService_GetAgent_0 = runtime.ForwardResponseMessage
+	forward_NetguardService_GetHost_0 = runtime.ForwardResponseMessage
 
-	forward_NetguardService_ListAgentBindings_0 = runtime.ForwardResponseMessage
+	forward_NetguardService_ListHostBindings_0 = runtime.ForwardResponseMessage
 
-	forward_NetguardService_GetAgentBinding_0 = runtime.ForwardResponseMessage
+	forward_NetguardService_GetHostBinding_0 = runtime.ForwardResponseMessage
 )

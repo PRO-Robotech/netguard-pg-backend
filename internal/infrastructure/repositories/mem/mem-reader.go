@@ -783,3 +783,129 @@ func (r *reader) GetNetworkBindingByID(ctx context.Context, id models.ResourceId
 
 	return nil, ports.ErrNotFound
 }
+
+func (r *reader) ListHosts(ctx context.Context, consume func(models.Host) error, scope ports.Scope) error {
+	var hosts map[string]models.Host
+
+	// Use data from writer if available
+	if r.writer != nil && r.writer.hosts != nil {
+		hosts = r.writer.hosts
+	} else {
+		hosts = r.registry.db.GetHosts()
+	}
+
+	if scope != nil && !scope.IsEmpty() {
+		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && !ris.IsEmpty() {
+			for _, id := range ris.Identifiers {
+				// If only namespace is set, return all hosts in that namespace
+				if id.Name == "" && id.Namespace != "" {
+					for _, host := range hosts {
+						if host.Namespace == id.Namespace {
+							if err := consume(host); err != nil {
+								return err
+							}
+						}
+					}
+					return nil
+				}
+
+				// Otherwise, look for the host by exact key
+				if host, ok := hosts[id.Key()]; ok {
+					if err := consume(host); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		}
+	}
+
+	// If no scope or empty scope, return all hosts
+	for _, host := range hosts {
+		if err := consume(host); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *reader) GetHostByID(ctx context.Context, id models.ResourceIdentifier) (*models.Host, error) {
+	var hosts map[string]models.Host
+
+	// Use data from writer if available
+	if r.writer != nil && r.writer.hosts != nil {
+		hosts = r.writer.hosts
+	} else {
+		hosts = r.registry.db.GetHosts()
+	}
+
+	if host, ok := hosts[id.Key()]; ok {
+		return &host, nil
+	}
+
+	return nil, ports.ErrNotFound
+}
+
+func (r *reader) ListHostBindings(ctx context.Context, consume func(models.HostBinding) error, scope ports.Scope) error {
+	var hostBindings map[string]models.HostBinding
+
+	// Use data from writer if available
+	if r.writer != nil && r.writer.hostBindings != nil {
+		hostBindings = r.writer.hostBindings
+	} else {
+		hostBindings = r.registry.db.GetHostBindings()
+	}
+
+	if scope != nil && !scope.IsEmpty() {
+		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && !ris.IsEmpty() {
+			for _, id := range ris.Identifiers {
+				// If only namespace is set, return all host bindings in that namespace
+				if id.Name == "" && id.Namespace != "" {
+					for _, hostBinding := range hostBindings {
+						if hostBinding.Namespace == id.Namespace {
+							if err := consume(hostBinding); err != nil {
+								return err
+							}
+						}
+					}
+					return nil
+				}
+
+				// Otherwise, look for the host binding by exact key
+				if hostBinding, ok := hostBindings[id.Key()]; ok {
+					if err := consume(hostBinding); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		}
+	}
+
+	// If no scope or empty scope, return all host bindings
+	for _, hostBinding := range hostBindings {
+		if err := consume(hostBinding); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *reader) GetHostBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.HostBinding, error) {
+	var hostBindings map[string]models.HostBinding
+
+	// Use data from writer if available
+	if r.writer != nil && r.writer.hostBindings != nil {
+		hostBindings = r.writer.hostBindings
+	} else {
+		hostBindings = r.registry.db.GetHostBindings()
+	}
+
+	if hostBinding, ok := hostBindings[id.Key()]; ok {
+		return &hostBinding, nil
+	}
+
+	return nil, ports.ErrNotFound
+}

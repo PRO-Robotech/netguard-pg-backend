@@ -34,8 +34,8 @@ const (
 	SyncSubjectTypeRulesS2S             SyncSubjectType = "RulesS2S"
 	SyncSubjectTypeAddressGroupBindings SyncSubjectType = "AddressGroupBindings"
 	SyncSubjectTypeNetworkBindings      SyncSubjectType = "NetworkBindings"
-	SyncSubjectTypeAgents               SyncSubjectType = "Agents"
-	SyncSubjectTypeAgentBindings        SyncSubjectType = "AgentBindings"
+	SyncSubjectTypeHosts                SyncSubjectType = "Hosts"
+	SyncSubjectTypeHostBindings         SyncSubjectType = "HostBindings"
 )
 
 // SyncRequest represents a synchronization request

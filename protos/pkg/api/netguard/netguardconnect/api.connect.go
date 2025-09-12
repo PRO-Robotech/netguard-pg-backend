@@ -99,18 +99,17 @@ const (
 	// NetguardServiceGetNetworkBindingProcedure is the fully-qualified name of the NetguardService's
 	// GetNetworkBinding RPC.
 	NetguardServiceGetNetworkBindingProcedure = "/netguard.v1.NetguardService/GetNetworkBinding"
-	// NetguardServiceListAgentsProcedure is the fully-qualified name of the NetguardService's
-	// ListAgents RPC.
-	NetguardServiceListAgentsProcedure = "/netguard.v1.NetguardService/ListAgents"
-	// NetguardServiceGetAgentProcedure is the fully-qualified name of the NetguardService's GetAgent
+	// NetguardServiceListHostsProcedure is the fully-qualified name of the NetguardService's ListHosts
 	// RPC.
-	NetguardServiceGetAgentProcedure = "/netguard.v1.NetguardService/GetAgent"
-	// NetguardServiceListAgentBindingsProcedure is the fully-qualified name of the NetguardService's
-	// ListAgentBindings RPC.
-	NetguardServiceListAgentBindingsProcedure = "/netguard.v1.NetguardService/ListAgentBindings"
-	// NetguardServiceGetAgentBindingProcedure is the fully-qualified name of the NetguardService's
-	// GetAgentBinding RPC.
-	NetguardServiceGetAgentBindingProcedure = "/netguard.v1.NetguardService/GetAgentBinding"
+	NetguardServiceListHostsProcedure = "/netguard.v1.NetguardService/ListHosts"
+	// NetguardServiceGetHostProcedure is the fully-qualified name of the NetguardService's GetHost RPC.
+	NetguardServiceGetHostProcedure = "/netguard.v1.NetguardService/GetHost"
+	// NetguardServiceListHostBindingsProcedure is the fully-qualified name of the NetguardService's
+	// ListHostBindings RPC.
+	NetguardServiceListHostBindingsProcedure = "/netguard.v1.NetguardService/ListHostBindings"
+	// NetguardServiceGetHostBindingProcedure is the fully-qualified name of the NetguardService's
+	// GetHostBinding RPC.
+	NetguardServiceGetHostBindingProcedure = "/netguard.v1.NetguardService/GetHostBinding"
 )
 
 // NetguardServiceClient is a client for the netguard.v1.NetguardService service.
@@ -159,14 +158,14 @@ type NetguardServiceClient interface {
 	ListNetworkBindings(context.Context, *connect.Request[netguard.ListNetworkBindingsReq]) (*connect.Response[netguard.ListNetworkBindingsResp], error)
 	// GetNetworkBinding - gets a specific network binding by ID
 	GetNetworkBinding(context.Context, *connect.Request[netguard.GetNetworkBindingReq]) (*connect.Response[netguard.GetNetworkBindingResp], error)
-	// ListAgents - gets list of agents
-	ListAgents(context.Context, *connect.Request[netguard.ListAgentsReq]) (*connect.Response[netguard.ListAgentsResp], error)
-	// GetAgent - gets a specific agent by ID
-	GetAgent(context.Context, *connect.Request[netguard.GetAgentReq]) (*connect.Response[netguard.GetAgentResp], error)
-	// ListAgentBindings - gets list of agent bindings
-	ListAgentBindings(context.Context, *connect.Request[netguard.ListAgentBindingsReq]) (*connect.Response[netguard.ListAgentBindingsResp], error)
-	// GetAgentBinding - gets a specific agent binding by ID
-	GetAgentBinding(context.Context, *connect.Request[netguard.GetAgentBindingReq]) (*connect.Response[netguard.GetAgentBindingResp], error)
+	// ListHosts - gets list of hosts
+	ListHosts(context.Context, *connect.Request[netguard.ListHostsReq]) (*connect.Response[netguard.ListHostsResp], error)
+	// GetHost - gets a specific host by ID
+	GetHost(context.Context, *connect.Request[netguard.GetHostReq]) (*connect.Response[netguard.GetHostResp], error)
+	// ListHostBindings - gets list of host bindings
+	ListHostBindings(context.Context, *connect.Request[netguard.ListHostBindingsReq]) (*connect.Response[netguard.ListHostBindingsResp], error)
+	// GetHostBinding - gets a specific host binding by ID
+	GetHostBinding(context.Context, *connect.Request[netguard.GetHostBindingReq]) (*connect.Response[netguard.GetHostBindingResp], error)
 }
 
 // NewNetguardServiceClient constructs a client for the netguard.v1.NetguardService service. By
@@ -312,28 +311,28 @@ func NewNetguardServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(netguardServiceMethods.ByName("GetNetworkBinding")),
 			connect.WithClientOptions(opts...),
 		),
-		listAgents: connect.NewClient[netguard.ListAgentsReq, netguard.ListAgentsResp](
+		listHosts: connect.NewClient[netguard.ListHostsReq, netguard.ListHostsResp](
 			httpClient,
-			baseURL+NetguardServiceListAgentsProcedure,
-			connect.WithSchema(netguardServiceMethods.ByName("ListAgents")),
+			baseURL+NetguardServiceListHostsProcedure,
+			connect.WithSchema(netguardServiceMethods.ByName("ListHosts")),
 			connect.WithClientOptions(opts...),
 		),
-		getAgent: connect.NewClient[netguard.GetAgentReq, netguard.GetAgentResp](
+		getHost: connect.NewClient[netguard.GetHostReq, netguard.GetHostResp](
 			httpClient,
-			baseURL+NetguardServiceGetAgentProcedure,
-			connect.WithSchema(netguardServiceMethods.ByName("GetAgent")),
+			baseURL+NetguardServiceGetHostProcedure,
+			connect.WithSchema(netguardServiceMethods.ByName("GetHost")),
 			connect.WithClientOptions(opts...),
 		),
-		listAgentBindings: connect.NewClient[netguard.ListAgentBindingsReq, netguard.ListAgentBindingsResp](
+		listHostBindings: connect.NewClient[netguard.ListHostBindingsReq, netguard.ListHostBindingsResp](
 			httpClient,
-			baseURL+NetguardServiceListAgentBindingsProcedure,
-			connect.WithSchema(netguardServiceMethods.ByName("ListAgentBindings")),
+			baseURL+NetguardServiceListHostBindingsProcedure,
+			connect.WithSchema(netguardServiceMethods.ByName("ListHostBindings")),
 			connect.WithClientOptions(opts...),
 		),
-		getAgentBinding: connect.NewClient[netguard.GetAgentBindingReq, netguard.GetAgentBindingResp](
+		getHostBinding: connect.NewClient[netguard.GetHostBindingReq, netguard.GetHostBindingResp](
 			httpClient,
-			baseURL+NetguardServiceGetAgentBindingProcedure,
-			connect.WithSchema(netguardServiceMethods.ByName("GetAgentBinding")),
+			baseURL+NetguardServiceGetHostBindingProcedure,
+			connect.WithSchema(netguardServiceMethods.ByName("GetHostBinding")),
 			connect.WithClientOptions(opts...),
 		),
 	}
@@ -363,10 +362,10 @@ type netguardServiceClient struct {
 	getNetwork                      *connect.Client[netguard.GetNetworkReq, netguard.GetNetworkResp]
 	listNetworkBindings             *connect.Client[netguard.ListNetworkBindingsReq, netguard.ListNetworkBindingsResp]
 	getNetworkBinding               *connect.Client[netguard.GetNetworkBindingReq, netguard.GetNetworkBindingResp]
-	listAgents                      *connect.Client[netguard.ListAgentsReq, netguard.ListAgentsResp]
-	getAgent                        *connect.Client[netguard.GetAgentReq, netguard.GetAgentResp]
-	listAgentBindings               *connect.Client[netguard.ListAgentBindingsReq, netguard.ListAgentBindingsResp]
-	getAgentBinding                 *connect.Client[netguard.GetAgentBindingReq, netguard.GetAgentBindingResp]
+	listHosts                       *connect.Client[netguard.ListHostsReq, netguard.ListHostsResp]
+	getHost                         *connect.Client[netguard.GetHostReq, netguard.GetHostResp]
+	listHostBindings                *connect.Client[netguard.ListHostBindingsReq, netguard.ListHostBindingsResp]
+	getHostBinding                  *connect.Client[netguard.GetHostBindingReq, netguard.GetHostBindingResp]
 }
 
 // Sync calls netguard.v1.NetguardService.Sync.
@@ -480,24 +479,24 @@ func (c *netguardServiceClient) GetNetworkBinding(ctx context.Context, req *conn
 	return c.getNetworkBinding.CallUnary(ctx, req)
 }
 
-// ListAgents calls netguard.v1.NetguardService.ListAgents.
-func (c *netguardServiceClient) ListAgents(ctx context.Context, req *connect.Request[netguard.ListAgentsReq]) (*connect.Response[netguard.ListAgentsResp], error) {
-	return c.listAgents.CallUnary(ctx, req)
+// ListHosts calls netguard.v1.NetguardService.ListHosts.
+func (c *netguardServiceClient) ListHosts(ctx context.Context, req *connect.Request[netguard.ListHostsReq]) (*connect.Response[netguard.ListHostsResp], error) {
+	return c.listHosts.CallUnary(ctx, req)
 }
 
-// GetAgent calls netguard.v1.NetguardService.GetAgent.
-func (c *netguardServiceClient) GetAgent(ctx context.Context, req *connect.Request[netguard.GetAgentReq]) (*connect.Response[netguard.GetAgentResp], error) {
-	return c.getAgent.CallUnary(ctx, req)
+// GetHost calls netguard.v1.NetguardService.GetHost.
+func (c *netguardServiceClient) GetHost(ctx context.Context, req *connect.Request[netguard.GetHostReq]) (*connect.Response[netguard.GetHostResp], error) {
+	return c.getHost.CallUnary(ctx, req)
 }
 
-// ListAgentBindings calls netguard.v1.NetguardService.ListAgentBindings.
-func (c *netguardServiceClient) ListAgentBindings(ctx context.Context, req *connect.Request[netguard.ListAgentBindingsReq]) (*connect.Response[netguard.ListAgentBindingsResp], error) {
-	return c.listAgentBindings.CallUnary(ctx, req)
+// ListHostBindings calls netguard.v1.NetguardService.ListHostBindings.
+func (c *netguardServiceClient) ListHostBindings(ctx context.Context, req *connect.Request[netguard.ListHostBindingsReq]) (*connect.Response[netguard.ListHostBindingsResp], error) {
+	return c.listHostBindings.CallUnary(ctx, req)
 }
 
-// GetAgentBinding calls netguard.v1.NetguardService.GetAgentBinding.
-func (c *netguardServiceClient) GetAgentBinding(ctx context.Context, req *connect.Request[netguard.GetAgentBindingReq]) (*connect.Response[netguard.GetAgentBindingResp], error) {
-	return c.getAgentBinding.CallUnary(ctx, req)
+// GetHostBinding calls netguard.v1.NetguardService.GetHostBinding.
+func (c *netguardServiceClient) GetHostBinding(ctx context.Context, req *connect.Request[netguard.GetHostBindingReq]) (*connect.Response[netguard.GetHostBindingResp], error) {
+	return c.getHostBinding.CallUnary(ctx, req)
 }
 
 // NetguardServiceHandler is an implementation of the netguard.v1.NetguardService service.
@@ -546,14 +545,14 @@ type NetguardServiceHandler interface {
 	ListNetworkBindings(context.Context, *connect.Request[netguard.ListNetworkBindingsReq]) (*connect.Response[netguard.ListNetworkBindingsResp], error)
 	// GetNetworkBinding - gets a specific network binding by ID
 	GetNetworkBinding(context.Context, *connect.Request[netguard.GetNetworkBindingReq]) (*connect.Response[netguard.GetNetworkBindingResp], error)
-	// ListAgents - gets list of agents
-	ListAgents(context.Context, *connect.Request[netguard.ListAgentsReq]) (*connect.Response[netguard.ListAgentsResp], error)
-	// GetAgent - gets a specific agent by ID
-	GetAgent(context.Context, *connect.Request[netguard.GetAgentReq]) (*connect.Response[netguard.GetAgentResp], error)
-	// ListAgentBindings - gets list of agent bindings
-	ListAgentBindings(context.Context, *connect.Request[netguard.ListAgentBindingsReq]) (*connect.Response[netguard.ListAgentBindingsResp], error)
-	// GetAgentBinding - gets a specific agent binding by ID
-	GetAgentBinding(context.Context, *connect.Request[netguard.GetAgentBindingReq]) (*connect.Response[netguard.GetAgentBindingResp], error)
+	// ListHosts - gets list of hosts
+	ListHosts(context.Context, *connect.Request[netguard.ListHostsReq]) (*connect.Response[netguard.ListHostsResp], error)
+	// GetHost - gets a specific host by ID
+	GetHost(context.Context, *connect.Request[netguard.GetHostReq]) (*connect.Response[netguard.GetHostResp], error)
+	// ListHostBindings - gets list of host bindings
+	ListHostBindings(context.Context, *connect.Request[netguard.ListHostBindingsReq]) (*connect.Response[netguard.ListHostBindingsResp], error)
+	// GetHostBinding - gets a specific host binding by ID
+	GetHostBinding(context.Context, *connect.Request[netguard.GetHostBindingReq]) (*connect.Response[netguard.GetHostBindingResp], error)
 }
 
 // NewNetguardServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -695,28 +694,28 @@ func NewNetguardServiceHandler(svc NetguardServiceHandler, opts ...connect.Handl
 		connect.WithSchema(netguardServiceMethods.ByName("GetNetworkBinding")),
 		connect.WithHandlerOptions(opts...),
 	)
-	netguardServiceListAgentsHandler := connect.NewUnaryHandler(
-		NetguardServiceListAgentsProcedure,
-		svc.ListAgents,
-		connect.WithSchema(netguardServiceMethods.ByName("ListAgents")),
+	netguardServiceListHostsHandler := connect.NewUnaryHandler(
+		NetguardServiceListHostsProcedure,
+		svc.ListHosts,
+		connect.WithSchema(netguardServiceMethods.ByName("ListHosts")),
 		connect.WithHandlerOptions(opts...),
 	)
-	netguardServiceGetAgentHandler := connect.NewUnaryHandler(
-		NetguardServiceGetAgentProcedure,
-		svc.GetAgent,
-		connect.WithSchema(netguardServiceMethods.ByName("GetAgent")),
+	netguardServiceGetHostHandler := connect.NewUnaryHandler(
+		NetguardServiceGetHostProcedure,
+		svc.GetHost,
+		connect.WithSchema(netguardServiceMethods.ByName("GetHost")),
 		connect.WithHandlerOptions(opts...),
 	)
-	netguardServiceListAgentBindingsHandler := connect.NewUnaryHandler(
-		NetguardServiceListAgentBindingsProcedure,
-		svc.ListAgentBindings,
-		connect.WithSchema(netguardServiceMethods.ByName("ListAgentBindings")),
+	netguardServiceListHostBindingsHandler := connect.NewUnaryHandler(
+		NetguardServiceListHostBindingsProcedure,
+		svc.ListHostBindings,
+		connect.WithSchema(netguardServiceMethods.ByName("ListHostBindings")),
 		connect.WithHandlerOptions(opts...),
 	)
-	netguardServiceGetAgentBindingHandler := connect.NewUnaryHandler(
-		NetguardServiceGetAgentBindingProcedure,
-		svc.GetAgentBinding,
-		connect.WithSchema(netguardServiceMethods.ByName("GetAgentBinding")),
+	netguardServiceGetHostBindingHandler := connect.NewUnaryHandler(
+		NetguardServiceGetHostBindingProcedure,
+		svc.GetHostBinding,
+		connect.WithSchema(netguardServiceMethods.ByName("GetHostBinding")),
 		connect.WithHandlerOptions(opts...),
 	)
 	return "/netguard.v1.NetguardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -765,14 +764,14 @@ func NewNetguardServiceHandler(svc NetguardServiceHandler, opts ...connect.Handl
 			netguardServiceListNetworkBindingsHandler.ServeHTTP(w, r)
 		case NetguardServiceGetNetworkBindingProcedure:
 			netguardServiceGetNetworkBindingHandler.ServeHTTP(w, r)
-		case NetguardServiceListAgentsProcedure:
-			netguardServiceListAgentsHandler.ServeHTTP(w, r)
-		case NetguardServiceGetAgentProcedure:
-			netguardServiceGetAgentHandler.ServeHTTP(w, r)
-		case NetguardServiceListAgentBindingsProcedure:
-			netguardServiceListAgentBindingsHandler.ServeHTTP(w, r)
-		case NetguardServiceGetAgentBindingProcedure:
-			netguardServiceGetAgentBindingHandler.ServeHTTP(w, r)
+		case NetguardServiceListHostsProcedure:
+			netguardServiceListHostsHandler.ServeHTTP(w, r)
+		case NetguardServiceGetHostProcedure:
+			netguardServiceGetHostHandler.ServeHTTP(w, r)
+		case NetguardServiceListHostBindingsProcedure:
+			netguardServiceListHostBindingsHandler.ServeHTTP(w, r)
+		case NetguardServiceGetHostBindingProcedure:
+			netguardServiceGetHostBindingHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -870,18 +869,18 @@ func (UnimplementedNetguardServiceHandler) GetNetworkBinding(context.Context, *c
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetNetworkBinding is not implemented"))
 }
 
-func (UnimplementedNetguardServiceHandler) ListAgents(context.Context, *connect.Request[netguard.ListAgentsReq]) (*connect.Response[netguard.ListAgentsResp], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.ListAgents is not implemented"))
+func (UnimplementedNetguardServiceHandler) ListHosts(context.Context, *connect.Request[netguard.ListHostsReq]) (*connect.Response[netguard.ListHostsResp], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.ListHosts is not implemented"))
 }
 
-func (UnimplementedNetguardServiceHandler) GetAgent(context.Context, *connect.Request[netguard.GetAgentReq]) (*connect.Response[netguard.GetAgentResp], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetAgent is not implemented"))
+func (UnimplementedNetguardServiceHandler) GetHost(context.Context, *connect.Request[netguard.GetHostReq]) (*connect.Response[netguard.GetHostResp], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetHost is not implemented"))
 }
 
-func (UnimplementedNetguardServiceHandler) ListAgentBindings(context.Context, *connect.Request[netguard.ListAgentBindingsReq]) (*connect.Response[netguard.ListAgentBindingsResp], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.ListAgentBindings is not implemented"))
+func (UnimplementedNetguardServiceHandler) ListHostBindings(context.Context, *connect.Request[netguard.ListHostBindingsReq]) (*connect.Response[netguard.ListHostBindingsResp], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.ListHostBindings is not implemented"))
 }
 
-func (UnimplementedNetguardServiceHandler) GetAgentBinding(context.Context, *connect.Request[netguard.GetAgentBindingReq]) (*connect.Response[netguard.GetAgentBindingResp], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetAgentBinding is not implemented"))
+func (UnimplementedNetguardServiceHandler) GetHostBinding(context.Context, *connect.Request[netguard.GetHostBindingReq]) (*connect.Response[netguard.GetHostBindingResp], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetHostBinding is not implemented"))
 }

@@ -45,6 +45,14 @@ func (c *FakeNetguardV1beta1) AddressGroupPortMappings(namespace string) v1beta1
 	return newFakeAddressGroupPortMappings(c, namespace)
 }
 
+func (c *FakeNetguardV1beta1) Hosts(namespace string) v1beta1.HostInterface {
+	return newFakeHosts(c, namespace)
+}
+
+func (c *FakeNetguardV1beta1) HostBindings(namespace string) v1beta1.HostBindingInterface {
+	return newFakeHostBindings(c, namespace)
+}
+
 func (c *FakeNetguardV1beta1) IEAgAgRules(namespace string) v1beta1.IEAgAgRuleInterface {
 	return newFakeIEAgAgRules(c, namespace)
 }

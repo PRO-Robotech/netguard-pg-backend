@@ -61,6 +61,10 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Netguard().V1beta1().AddressGroupBindingPolicies().Informer()}, nil
 	case v1beta1.SchemeGroupVersion.WithResource("addressgroupportmappings"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Netguard().V1beta1().AddressGroupPortMappings().Informer()}, nil
+	case v1beta1.SchemeGroupVersion.WithResource("hosts"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Netguard().V1beta1().Hosts().Informer()}, nil
+	case v1beta1.SchemeGroupVersion.WithResource("hostbindings"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Netguard().V1beta1().HostBindings().Informer()}, nil
 	case v1beta1.SchemeGroupVersion.WithResource("ieagagrules"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Netguard().V1beta1().IEAgAgRules().Informer()}, nil
 	case v1beta1.SchemeGroupVersion.WithResource("networks"):

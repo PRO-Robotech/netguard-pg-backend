@@ -1227,6 +1227,18 @@ func (c *GRPCBackendClient) Sync(ctx context.Context, syncOp models.SyncOp, reso
 			ptrs = append(ptrs, &res[i])
 		}
 		return c.syncNetworkBinding(ctx, syncOp, ptrs)
+	case []models.Host:
+		ptrs := make([]*models.Host, 0, len(res))
+		for i := range res {
+			ptrs = append(ptrs, &res[i])
+		}
+		return c.syncHost(ctx, syncOp, ptrs)
+	case []models.HostBinding:
+		ptrs := make([]*models.HostBinding, 0, len(res))
+		for i := range res {
+			ptrs = append(ptrs, &res[i])
+		}
+		return c.syncHostBinding(ctx, syncOp, ptrs)
 	default:
 		return fmt.Errorf("generic sync not implemented for %T", resources)
 	}
@@ -1471,6 +1483,234 @@ func (c *GRPCBackendClient) Close() error {
 		return c.conn.Close()
 	}
 	return nil
+}
+
+func (c *GRPCBackendClient) GetHost(ctx context.Context, id models.ResourceIdentifier) (*models.Host, error) {
+	if !c.limiter.Allow() {
+		return nil, fmt.Errorf("rate limit exceeded")
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+	req := &netguardpb.GetHostReq{
+		Identifier: &netguardpb.ResourceIdentifier{
+			Namespace: id.Namespace,
+			Name:      id.Name,
+		},
+	}
+	resp, err := c.client.GetHost(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get host: %w", err)
+	}
+	host := convertHostFromProto(resp.Host)
+	return &host, nil
+}
+
+func (c *GRPCBackendClient) ListHosts(ctx context.Context, scope ports.Scope) ([]models.Host, error) {
+	if !c.limiter.Allow() {
+		return nil, fmt.Errorf("rate limit exceeded")
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+	var identifiers []*netguardpb.ResourceIdentifier
+	if scope != nil {
+		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+			for _, id := range ris.Identifiers {
+				identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
+					Namespace: id.Namespace,
+					Name:      id.Name,
+				})
+			}
+		}
+	}
+	req := &netguardpb.ListHostsReq{
+		Identifiers: identifiers,
+	}
+	resp, err := c.client.ListHosts(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list hosts: %w", err)
+	}
+	hosts := make([]models.Host, 0, len(resp.Items))
+	for _, protoHost := range resp.Items {
+		hosts = append(hosts, convertHostFromProto(protoHost))
+	}
+	return hosts, nil
+}
+
+func (c *GRPCBackendClient) CreateHost(ctx context.Context, host *models.Host) error {
+	// Use Sync API for creation
+	hosts := []models.Host{*host}
+	return c.Sync(ctx, models.SyncOpUpsert, hosts)
+}
+
+func (c *GRPCBackendClient) UpdateHost(ctx context.Context, host *models.Host) error {
+	// Use Sync API for update
+	hosts := []models.Host{*host}
+	return c.Sync(ctx, models.SyncOpUpsert, hosts)
+}
+
+func (c *GRPCBackendClient) DeleteHost(ctx context.Context, id models.ResourceIdentifier) error {
+	host, err := c.GetHost(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get host for deletion: %w", err)
+	}
+	if host == nil {
+		return fmt.Errorf("host not found: %s", id.Key())
+	}
+
+	hosts := []models.Host{*host}
+	return c.Sync(ctx, models.SyncOpDelete, hosts)
+}
+
+func (c *GRPCBackendClient) GetHostBinding(ctx context.Context, id models.ResourceIdentifier) (*models.HostBinding, error) {
+	if !c.limiter.Allow() {
+		return nil, fmt.Errorf("rate limit exceeded")
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+	req := &netguardpb.GetHostBindingReq{
+		Identifier: &netguardpb.ResourceIdentifier{
+			Namespace: id.Namespace,
+			Name:      id.Name,
+		},
+	}
+	resp, err := c.client.GetHostBinding(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get host binding: %w", err)
+	}
+	hostBinding := convertHostBindingFromProto(resp.HostBinding)
+	return &hostBinding, nil
+}
+
+func (c *GRPCBackendClient) ListHostBindings(ctx context.Context, scope ports.Scope) ([]models.HostBinding, error) {
+	if !c.limiter.Allow() {
+		return nil, fmt.Errorf("rate limit exceeded")
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+	var identifiers []*netguardpb.ResourceIdentifier
+	if scope != nil {
+		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+			for _, id := range ris.Identifiers {
+				identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
+					Namespace: id.Namespace,
+					Name:      id.Name,
+				})
+			}
+		}
+	}
+	req := &netguardpb.ListHostBindingsReq{
+		Identifiers: identifiers,
+	}
+	resp, err := c.client.ListHostBindings(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list host bindings: %w", err)
+	}
+	hostBindings := make([]models.HostBinding, 0, len(resp.Items))
+	for _, protoBinding := range resp.Items {
+		hostBindings = append(hostBindings, convertHostBindingFromProto(protoBinding))
+	}
+	return hostBindings, nil
+}
+
+func (c *GRPCBackendClient) CreateHostBinding(ctx context.Context, hostBinding *models.HostBinding) error {
+	// Use Sync API for creation
+	hostBindings := []models.HostBinding{*hostBinding}
+	return c.Sync(ctx, models.SyncOpUpsert, hostBindings)
+}
+
+func (c *GRPCBackendClient) UpdateHostBinding(ctx context.Context, hostBinding *models.HostBinding) error {
+	// Use Sync API for update
+	hostBindings := []models.HostBinding{*hostBinding}
+	return c.Sync(ctx, models.SyncOpUpsert, hostBindings)
+}
+
+func (c *GRPCBackendClient) DeleteHostBinding(ctx context.Context, id models.ResourceIdentifier) error {
+	hostBinding, err := c.GetHostBinding(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get host binding for deletion: %w", err)
+	}
+	if hostBinding == nil {
+		return fmt.Errorf("host binding not found: %s", id.Key())
+	}
+
+	hostBindings := []models.HostBinding{*hostBinding}
+	return c.Sync(ctx, models.SyncOpDelete, hostBindings)
+}
+
+func (c *GRPCBackendClient) syncHost(ctx context.Context, syncOp models.SyncOp, hosts []*models.Host) error {
+	if !c.limiter.Allow() {
+		return fmt.Errorf("rate limit exceeded")
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+
+	var protoHosts []*netguardpb.Host
+	for _, host := range hosts {
+		protoHosts = append(protoHosts, convertHostToPB(*host))
+	}
+
+	req := &netguardpb.SyncReq{
+		SyncOp: convertSyncOpToPB(syncOp),
+		Subject: &netguardpb.SyncReq_Hosts{
+			Hosts: &netguardpb.SyncHosts{
+				Hosts: protoHosts,
+			},
+		},
+	}
+
+	_, err := c.client.Sync(ctx, req)
+	if err != nil {
+		return fmt.Errorf("failed to sync hosts: %w", err)
+	}
+	return nil
+}
+
+func (c *GRPCBackendClient) syncHostBinding(ctx context.Context, syncOp models.SyncOp, hostBindings []*models.HostBinding) error {
+	if !c.limiter.Allow() {
+		return fmt.Errorf("rate limit exceeded")
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+
+	var protoBindings []*netguardpb.HostBinding
+	for _, hostBinding := range hostBindings {
+		protoBindings = append(protoBindings, convertHostBindingToPB(*hostBinding))
+	}
+
+	req := &netguardpb.SyncReq{
+		SyncOp: convertSyncOpToPB(syncOp),
+		Subject: &netguardpb.SyncReq_HostBindings{
+			HostBindings: &netguardpb.SyncHostBindings{
+				HostBindings: protoBindings,
+			},
+		},
+	}
+
+	_, err := c.client.Sync(ctx, req)
+	if err != nil {
+		return fmt.Errorf("failed to sync host bindings: %w", err)
+	}
+	return nil
+}
+
+func (c *GRPCBackendClient) UpdateHostMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	// TODO: Реализовать когда backend добавит UpdateMeta endpoints
+	// На данный момент используем обычный Update через GetHost + UpdateHost
+	host, err := c.GetHost(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get host for meta update: %w", err)
+	}
+	host.Meta = meta
+	return c.UpdateHost(ctx, host)
+}
+
+func (c *GRPCBackendClient) UpdateHostBindingMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	hostBinding, err := c.GetHostBinding(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get host binding for meta update: %w", err)
+	}
+	hostBinding.Meta = meta
+	return c.UpdateHostBinding(ctx, hostBinding)
 }
 
 // Helper functions for Network conversions
@@ -1745,4 +1985,203 @@ func convertIEAgAgRuleFromProto(protoRule *netguardpb.IEAgAgRule) models.IEAgAgR
 	}
 
 	return result
+}
+
+// Helper functions for Host conversions
+func convertHostFromProto(protoHost *netguardpb.Host) models.Host {
+	result := models.Host{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: models.ResourceIdentifier{
+				Name:      protoHost.GetSelfRef().GetName(),
+				Namespace: protoHost.GetSelfRef().GetNamespace(),
+			},
+		},
+		UUID: protoHost.GetUuid(),
+
+		// Status fields
+		HostName:         protoHost.GetHostNameSync(),
+		AddressGroupName: protoHost.GetAddressGroupName(),
+		IsBound:          protoHost.GetIsBound(),
+	}
+
+	// Set binding reference if present
+	if protoHost.GetBindingRef() != nil {
+		result.BindingRef = &v1beta1.ObjectReference{
+			APIVersion: protoHost.GetBindingRef().GetApiVersion(),
+			Kind:       protoHost.GetBindingRef().GetKind(),
+			Name:       protoHost.GetBindingRef().GetName(),
+		}
+	}
+
+	// Set address group reference if present
+	if protoHost.GetAddressGroupRef() != nil {
+		result.AddressGroupRef = &v1beta1.ObjectReference{
+			APIVersion: protoHost.GetAddressGroupRef().GetApiVersion(),
+			Kind:       protoHost.GetAddressGroupRef().GetKind(),
+			Name:       protoHost.GetAddressGroupRef().GetName(),
+		}
+	}
+
+	// Copy Meta if provided
+	if protoHost.Meta != nil {
+		result.Meta = models.Meta{
+			UID:             protoHost.Meta.Uid,
+			ResourceVersion: protoHost.Meta.ResourceVersion,
+			Generation:      protoHost.Meta.Generation,
+			Labels:          protoHost.Meta.Labels,
+			Annotations:     protoHost.Meta.Annotations,
+		}
+		if protoHost.Meta.CreationTs != nil {
+			result.Meta.CreationTS = metav1.NewTime(protoHost.Meta.CreationTs.AsTime())
+		}
+		if protoHost.Meta.Conditions != nil {
+			result.Meta.Conditions = models.ProtoConditionsToK8s(protoHost.Meta.Conditions)
+		}
+		result.Meta.ObservedGeneration = protoHost.Meta.ObservedGeneration
+	}
+
+	return result
+}
+
+func convertHostToPB(host models.Host) *netguardpb.Host {
+	return &netguardpb.Host{
+		SelfRef: &netguardpb.ResourceIdentifier{
+			Name:      host.Name,
+			Namespace: host.Namespace,
+		},
+		Uuid: host.UUID,
+
+		// Status fields
+		HostNameSync:     host.HostName,
+		AddressGroupName: host.AddressGroupName,
+		IsBound:          host.IsBound,
+
+		BindingRef: func() *netguardpb.ObjectReference {
+			if host.BindingRef != nil {
+				return &netguardpb.ObjectReference{
+					ApiVersion: host.BindingRef.APIVersion,
+					Kind:       host.BindingRef.Kind,
+					Name:       host.BindingRef.Name,
+				}
+			}
+			return nil
+		}(),
+
+		AddressGroupRef: func() *netguardpb.ObjectReference {
+			if host.AddressGroupRef != nil {
+				return &netguardpb.ObjectReference{
+					ApiVersion: host.AddressGroupRef.APIVersion,
+					Kind:       host.AddressGroupRef.Kind,
+					Name:       host.AddressGroupRef.Name,
+				}
+			}
+			return nil
+		}(),
+
+		Meta: &netguardpb.Meta{
+			Uid:                host.Meta.UID,
+			ResourceVersion:    host.Meta.ResourceVersion,
+			Generation:         host.Meta.Generation,
+			CreationTs:         timestamppb.New(host.Meta.CreationTS.Time),
+			Labels:             host.Meta.Labels,
+			Annotations:        host.Meta.Annotations,
+			Conditions:         models.K8sConditionsToProto(host.Meta.Conditions),
+			ObservedGeneration: host.Meta.ObservedGeneration,
+		},
+	}
+}
+
+// Helper functions for HostBinding conversions
+func convertHostBindingFromProto(protoBinding *netguardpb.HostBinding) models.HostBinding {
+	result := models.HostBinding{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: models.ResourceIdentifier{
+				Name:      protoBinding.GetSelfRef().GetName(),
+				Namespace: protoBinding.GetSelfRef().GetNamespace(),
+			},
+		},
+	}
+
+	// Set host reference
+	if protoBinding.GetHostRef() != nil {
+		result.HostRef = v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: protoBinding.GetHostRef().GetApiVersion(),
+				Kind:       protoBinding.GetHostRef().GetKind(),
+				Name:       protoBinding.GetHostRef().GetName(),
+			},
+			Namespace: protoBinding.GetHostRef().GetNamespace(),
+		}
+	}
+
+	// Set address group reference
+	if protoBinding.GetAddressGroupRef() != nil {
+		result.AddressGroupRef = v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: protoBinding.GetAddressGroupRef().GetApiVersion(),
+				Kind:       protoBinding.GetAddressGroupRef().GetKind(),
+				Name:       protoBinding.GetAddressGroupRef().GetName(),
+			},
+			Namespace: protoBinding.GetAddressGroupRef().GetNamespace(),
+		}
+	}
+
+	// Copy Meta if provided
+	if protoBinding.Meta != nil {
+		result.Meta = models.Meta{
+			UID:             protoBinding.Meta.Uid,
+			ResourceVersion: protoBinding.Meta.ResourceVersion,
+			Generation:      protoBinding.Meta.Generation,
+			Labels:          protoBinding.Meta.Labels,
+			Annotations:     protoBinding.Meta.Annotations,
+		}
+		if protoBinding.Meta.CreationTs != nil {
+			result.Meta.CreationTS = metav1.NewTime(protoBinding.Meta.CreationTs.AsTime())
+		}
+		if protoBinding.Meta.Conditions != nil {
+			result.Meta.Conditions = models.ProtoConditionsToK8s(protoBinding.Meta.Conditions)
+		}
+		result.Meta.ObservedGeneration = protoBinding.Meta.ObservedGeneration
+	}
+
+	return result
+}
+
+func convertHostBindingToPB(hostBinding models.HostBinding) *netguardpb.HostBinding {
+	return &netguardpb.HostBinding{
+		SelfRef: &netguardpb.ResourceIdentifier{
+			Name:      hostBinding.Name,
+			Namespace: hostBinding.Namespace,
+		},
+
+		HostRef: &netguardpb.NamespacedObjectReference{
+			ApiVersion: hostBinding.HostRef.APIVersion,
+			Kind:       hostBinding.HostRef.Kind,
+			Name:       hostBinding.HostRef.Name,
+			Namespace:  hostBinding.HostRef.Namespace,
+		},
+
+		AddressGroupRef: &netguardpb.NamespacedObjectReference{
+			ApiVersion: hostBinding.AddressGroupRef.APIVersion,
+			Kind:       hostBinding.AddressGroupRef.Kind,
+			Name:       hostBinding.AddressGroupRef.Name,
+			Namespace:  hostBinding.AddressGroupRef.Namespace,
+		},
+
+		Meta: &netguardpb.Meta{
+			Uid:                hostBinding.Meta.UID,
+			ResourceVersion:    hostBinding.Meta.ResourceVersion,
+			Generation:         hostBinding.Meta.Generation,
+			CreationTs:         timestamppb.New(hostBinding.Meta.CreationTS.Time),
+			Labels:             hostBinding.Meta.Labels,
+			Annotations:        hostBinding.Meta.Annotations,
+			Conditions:         models.K8sConditionsToProto(hostBinding.Meta.Conditions),
+			ObservedGeneration: hostBinding.Meta.ObservedGeneration,
+		},
+	}
+}
+
+// convertSyncOpToPB converts domain SyncOp to protobuf SyncOp
+func convertSyncOpToPB(syncOp models.SyncOp) netguardpb.SyncOp {
+	return netguardpb.SyncOp(models.SyncOpToProto(syncOp))
 }

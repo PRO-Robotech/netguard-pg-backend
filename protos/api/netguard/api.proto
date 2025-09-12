@@ -180,16 +180,6 @@ message NetworkItem {
   string namespace = 5;
 }
 
-// AgentItem - represents an agent item in an address group
-message AgentItem {
-  string name = 1;
-  string uuid = 2;
-  string hostname = 3;
-  string api_version = 4;
-  string kind = 5;
-  string namespace = 6;
-}
-
 // Network - represents a network configuration for Netguard
 message Network {
   option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
@@ -207,43 +197,6 @@ message Network {
   NamespacedObjectReference address_group_ref = 6; // Reference to the bound AddressGroup
 }
 
-// Authentication data for agents
-message SecretData {
-  // Base64-encoded plain value
-  string raw_value = 1;
-  // Base64-encoded encrypted value: BASE64(IV(16 bytes) + ciphertext)
-  string secure_value = 2;
-}
-
-// Methods for ownership verification
-message OwnerCheck {
-  oneof auth {
-    google.protobuf.Empty no_auth = 1;
-    SecretData secret = 2;
-  }
-}
-
-// Agent - represents an agent configuration for Netguard
-message Agent {
-  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
-    json_schema: {
-      required: ["self_ref", "uuid", "name"]
-    }
-  };
-  ResourceIdentifier self_ref = 1;
-  string uuid = 2;  // Agent unique identifier
-  string name = 3;  // DNS-style hostname
-  Meta meta = 4;
-
-  // Status fields
-  bool is_bound = 5;                               // Whether the agent is bound to an AddressGroup
-  ObjectReference binding_ref = 6;                 // Reference to the AgentBinding
-  NamespacedObjectReference address_group_ref = 7; // Reference to the bound AddressGroup
-
-  // Authentication fields
-  SecretData secret_data = 8;                      // Authentication data (optional)
-  OwnerCheck owner_check = 9;                      // Ownership verification method (optional)
-}
 
 // AddressGroup - represents an address group configuration for Netguard
 message AddressGroup {
@@ -258,7 +211,6 @@ message AddressGroup {
   bool trace = 4;                 // Whether to enable trace
   repeated NetworkItem networks = 5; // Networks associated with this address group
   Meta meta = 6;
-  repeated AgentItem agents = 7;     // Agents associated with this address group
   string address_group_name = 8;  // Computed address group name (e.g., "namespace/name")
 }
 
@@ -289,18 +241,37 @@ message NetworkBinding {
   Meta meta = 5;
 }
 
-// AgentBinding - binding between an agent and an address group
-message AgentBinding {
+// Host - represents a host resource (K8s representation of Agent)
+message Host {
   option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
     json_schema: {
-      required: ["self_ref", "agent_ref", "address_group_ref"]
+      required: ["self_ref", "uuid"]
     }
   };
   ResourceIdentifier self_ref = 1;
-  ObjectReference agent_ref = 2;  // Reference to the Agent resource
-  ObjectReference address_group_ref = 3;  // Reference to the AddressGroup resource
-  AgentItem agent_item = 4;  // Agent item details
-  Meta meta = 5;
+  string uuid = 2;                             // Unique identifier of the host
+  
+  // Status fields
+  string host_name_sync = 4;                   // Host name for synchronization (avoiding conflict with hostname)
+  string address_group_name = 5;               // Name of bound AddressGroup
+  bool is_bound = 6;                           // Whether the host is bound to an AddressGroup
+  ObjectReference binding_ref = 7;             // Reference to the HostBinding
+  ObjectReference address_group_ref = 8;       // Reference to the bound AddressGroup
+  
+  Meta meta = 9;
+}
+
+// HostBinding - represents a host binding resource
+message HostBinding {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      required: ["self_ref", "host_ref", "address_group_ref"]
+    }
+  };
+  ResourceIdentifier self_ref = 1;
+  NamespacedObjectReference host_ref = 2;      // Reference to the Host resource
+  NamespacedObjectReference address_group_ref = 3; // Reference to the AddressGroup resource
+  Meta meta = 4;
 }
 
 // ProtocolPorts - mapping of protocols to port ranges
@@ -476,15 +447,16 @@ message SyncNetworkBindings {
   repeated NetworkBinding network_bindings = 1;
 }
 
-// SyncAgents - subject of Agents to sync
-message SyncAgents {
-  repeated Agent agents = 1;
+// SyncHosts - subject of Hosts to sync
+message SyncHosts {
+  repeated Host hosts = 1;
 }
 
-// SyncAgentBindings - subject of Agent Bindings to sync
-message SyncAgentBindings {
-  repeated AgentBinding agent_bindings = 1;
+// SyncHostBindings - subject of Host Bindings to sync
+message SyncHostBindings {
+  repeated HostBinding host_bindings = 1;
 }
+
 
 // Requests and responses for API methods
 
@@ -688,6 +660,46 @@ message GetNetworkBindingResp {
   NetworkBinding network_binding = 1;
 }
 
+// ListHostsReq - request to list hosts
+message ListHostsReq {
+  repeated ResourceIdentifier identifiers = 1;
+}
+
+// ListHostsResp - response with list of hosts
+message ListHostsResp {
+  repeated Host items = 1;
+}
+
+// GetHostReq - request to get a specific host
+message GetHostReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetHostResp - response with a specific host
+message GetHostResp {
+  Host host = 1;
+}
+
+// ListHostBindingsReq - request to list host bindings
+message ListHostBindingsReq {
+  repeated ResourceIdentifier identifiers = 1;
+}
+
+// ListHostBindingsResp - response with list of host bindings
+message ListHostBindingsResp {
+  repeated HostBinding items = 1;
+}
+
+// GetHostBindingReq - request to get a specific host binding
+message GetHostBindingReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetHostBindingResp - response with a specific host binding
+message GetHostBindingResp {
+  HostBinding host_binding = 1;
+}
+
 // SyncReq - request to sync
 message SyncReq {
   // Sync operation to apply
@@ -725,11 +737,12 @@ message SyncReq {
     // Subject of Network Bindings
     SyncNetworkBindings network_bindings = 11;
 
-    // Subject of Agents
-    SyncAgents agents = 12;
+    // Subject of Hosts
+    SyncHosts hosts = 12;
 
-    // Subject of Agent Bindings
-    SyncAgentBindings agent_bindings = 13;
+    // Subject of Host Bindings
+    SyncHostBindings host_bindings = 13;
+
   }
 }
 
@@ -960,43 +973,43 @@ service NetguardService {
     };
   }
 
-  // ListAgents - gets list of agents
-  rpc ListAgents(ListAgentsReq) returns (ListAgentsResp) {
+  // ListHosts - gets list of hosts
+  rpc ListHosts(ListHostsReq) returns (ListHostsResp) {
     option (google.api.http) = {
-      get: "/v1/agents"
+      get: "/v1/hosts"
     };
     option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
-      description: "ListAgents: gets list of agents";
+      description: "ListHosts: gets list of hosts";
     };
   }
 
-  // GetAgent - gets a specific agent by ID
-  rpc GetAgent(GetAgentReq) returns (GetAgentResp) {
+  // GetHost - gets a specific host by ID
+  rpc GetHost(GetHostReq) returns (GetHostResp) {
     option (google.api.http) = {
-      get: "/v1/agents/{identifier.namespace}/{identifier.name}"
+      get: "/v1/hosts/{identifier.namespace}/{identifier.name}"
     };
     option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
-      description: "GetAgent: gets a specific agent by ID";
+      description: "GetHost: gets a specific host by ID";
     };
   }
 
-  // ListAgentBindings - gets list of agent bindings
-  rpc ListAgentBindings(ListAgentBindingsReq) returns (ListAgentBindingsResp) {
+  // ListHostBindings - gets list of host bindings
+  rpc ListHostBindings(ListHostBindingsReq) returns (ListHostBindingsResp) {
     option (google.api.http) = {
-      get: "/v1/agent-bindings"
+      get: "/v1/host-bindings"
     };
     option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
-      description: "ListAgentBindings: gets list of agent bindings";
+      description: "ListHostBindings: gets list of host bindings";
     };
   }
 
-  // GetAgentBinding - gets a specific agent binding by ID
-  rpc GetAgentBinding(GetAgentBindingReq) returns (GetAgentBindingResp) {
+  // GetHostBinding - gets a specific host binding by ID
+  rpc GetHostBinding(GetHostBindingReq) returns (GetHostBindingResp) {
     option (google.api.http) = {
-      get: "/v1/agent-bindings/{identifier.namespace}/{identifier.name}"
+      get: "/v1/host-bindings/{identifier.namespace}/{identifier.name}"
     };
     option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
-      description: "GetAgentBinding: gets a specific agent binding by ID";
+      description: "GetHostBinding: gets a specific host binding by ID";
     };
   }
 }

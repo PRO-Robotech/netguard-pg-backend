@@ -268,16 +268,16 @@
         ]
       }
     },
-    "/v1/agent-bindings": {
+    "/v1/host-bindings": {
       "get": {
-        "summary": "ListAgentBindings - gets list of agent bindings",
-        "description": "ListAgentBindings: gets list of agent bindings",
-        "operationId": "NetguardService_ListAgentBindings",
+        "summary": "ListHostBindings - gets list of host bindings",
+        "description": "ListHostBindings: gets list of host bindings",
+        "operationId": "NetguardService_ListHostBindings",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1ListAgentBindingsResp"
+              "$ref": "#/definitions/v1ListHostBindingsResp"
             }
           },
           "default": {
@@ -292,16 +292,16 @@
         ]
       }
     },
-    "/v1/agent-bindings/{identifier.namespace}/{identifier.name}": {
+    "/v1/host-bindings/{identifier.namespace}/{identifier.name}": {
       "get": {
-        "summary": "GetAgentBinding - gets a specific agent binding by ID",
-        "description": "GetAgentBinding: gets a specific agent binding by ID",
-        "operationId": "NetguardService_GetAgentBinding",
+        "summary": "GetHostBinding - gets a specific host binding by ID",
+        "description": "GetHostBinding: gets a specific host binding by ID",
+        "operationId": "NetguardService_GetHostBinding",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1GetAgentBindingResp"
+              "$ref": "#/definitions/v1GetHostBindingResp"
             }
           },
           "default": {
@@ -330,16 +330,16 @@
         ]
       }
     },
-    "/v1/agents": {
+    "/v1/hosts": {
       "get": {
-        "summary": "ListAgents - gets list of agents",
-        "description": "ListAgents: gets list of agents",
-        "operationId": "NetguardService_ListAgents",
+        "summary": "ListHosts - gets list of hosts",
+        "description": "ListHosts: gets list of hosts",
+        "operationId": "NetguardService_ListHosts",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1ListAgentsResp"
+              "$ref": "#/definitions/v1ListHostsResp"
             }
           },
           "default": {
@@ -354,16 +354,16 @@
         ]
       }
     },
-    "/v1/agents/{identifier.namespace}/{identifier.name}": {
+    "/v1/hosts/{identifier.namespace}/{identifier.name}": {
       "get": {
-        "summary": "GetAgent - gets a specific agent by ID",
-        "description": "GetAgent: gets a specific agent by ID",
-        "operationId": "NetguardService_GetAgent",
+        "summary": "GetHost - gets a specific host by ID",
+        "description": "GetHost: gets a specific host by ID",
+        "operationId": "NetguardService_GetHost",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1GetAgentResp"
+              "$ref": "#/definitions/v1GetHostResp"
             }
           },
           "default": {
@@ -890,13 +890,9 @@
         "meta": {
           "$ref": "#/definitions/v1Meta"
         },
-        "agents": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1AgentItem"
-          },
-          "title": "Agents associated with this address group"
+        "addressGroupName": {
+          "type": "string",
+          "title": "Computed address group name (e.g., \"namespace/name\")"
         }
       },
       "title": "AddressGroup - represents an address group configuration for Netguard",
@@ -987,106 +983,6 @@
       },
       "title": "AddressGroupRef - reference to an address group"
     },
-    "v1Agent": {
-      "type": "object",
-      "properties": {
-        "selfRef": {
-          "$ref": "#/definitions/v1ResourceIdentifier"
-        },
-        "uuid": {
-          "type": "string",
-          "title": "Agent unique identifier"
-        },
-        "name": {
-          "type": "string",
-          "title": "DNS-style hostname"
-        },
-        "meta": {
-          "$ref": "#/definitions/v1Meta"
-        },
-        "isBound": {
-          "type": "boolean",
-          "description": "Whether the agent is bound to an AddressGroup",
-          "title": "Status fields"
-        },
-        "bindingRef": {
-          "$ref": "#/definitions/v1ObjectReference",
-          "title": "Reference to the AgentBinding"
-        },
-        "addressGroupRef": {
-          "$ref": "#/definitions/v1NamespacedObjectReference",
-          "title": "Reference to the bound AddressGroup"
-        },
-        "secretData": {
-          "$ref": "#/definitions/v1SecretData",
-          "description": "Authentication data (optional)",
-          "title": "Authentication fields"
-        },
-        "ownerCheck": {
-          "$ref": "#/definitions/v1OwnerCheck",
-          "title": "Ownership verification method (optional)"
-        }
-      },
-      "title": "Agent - represents an agent configuration for Netguard",
-      "required": [
-        "selfRef",
-        "uuid",
-        "name"
-      ]
-    },
-    "v1AgentBinding": {
-      "type": "object",
-      "properties": {
-        "selfRef": {
-          "$ref": "#/definitions/v1ResourceIdentifier"
-        },
-        "agentRef": {
-          "$ref": "#/definitions/v1ObjectReference",
-          "title": "Reference to the Agent resource"
-        },
-        "addressGroupRef": {
-          "$ref": "#/definitions/v1ObjectReference",
-          "title": "Reference to the AddressGroup resource"
-        },
-        "agentItem": {
-          "$ref": "#/definitions/v1AgentItem",
-          "title": "Agent item details"
-        },
-        "meta": {
-          "$ref": "#/definitions/v1Meta"
-        }
-      },
-      "title": "AgentBinding - binding between an agent and an address group",
-      "required": [
-        "selfRef",
-        "agentRef",
-        "addressGroupRef"
-      ]
-    },
-    "v1AgentItem": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "uuid": {
-          "type": "string"
-        },
-        "hostname": {
-          "type": "string"
-        },
-        "apiVersion": {
-          "type": "string"
-        },
-        "kind": {
-          "type": "string"
-        },
-        "namespace": {
-          "type": "string"
-        }
-      },
-      "title": "AgentItem - represents an agent item in an address group"
-    },
     "v1Condition": {
       "type": "object",
       "properties": {
@@ -1149,23 +1045,23 @@
       },
       "title": "GetAddressGroupResp - response with a specific address group"
     },
-    "v1GetAgentBindingResp": {
+    "v1GetHostBindingResp": {
       "type": "object",
       "properties": {
-        "agentBinding": {
-          "$ref": "#/definitions/v1AgentBinding"
+        "hostBinding": {
+          "$ref": "#/definitions/v1HostBinding"
         }
       },
-      "title": "GetAgentBindingResp - response with a specific agent binding"
+      "title": "GetHostBindingResp - response with a specific host binding"
     },
-    "v1GetAgentResp": {
+    "v1GetHostResp": {
       "type": "object",
       "properties": {
-        "agent": {
-          "$ref": "#/definitions/v1Agent"
+        "host": {
+          "$ref": "#/definitions/v1Host"
         }
       },
-      "title": "GetAgentResp - response with a specific agent"
+      "title": "GetHostResp - response with a specific host"
     },
     "v1GetIEAgAgRuleResp": {
       "type": "object",
@@ -1220,6 +1116,72 @@
         }
       },
       "title": "GetServiceResp - response with a specific service"
+    },
+    "v1Host": {
+      "type": "object",
+      "properties": {
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
+        },
+        "uuid": {
+          "type": "string",
+          "title": "Unique identifier of the host"
+        },
+        "hostNameSync": {
+          "type": "string",
+          "description": "Host name for synchronization (avoiding conflict with hostname)",
+          "title": "Status fields"
+        },
+        "addressGroupName": {
+          "type": "string",
+          "title": "Name of bound AddressGroup"
+        },
+        "isBound": {
+          "type": "boolean",
+          "title": "Whether the host is bound to an AddressGroup"
+        },
+        "bindingRef": {
+          "$ref": "#/definitions/v1ObjectReference",
+          "title": "Reference to the HostBinding"
+        },
+        "addressGroupRef": {
+          "$ref": "#/definitions/v1ObjectReference",
+          "title": "Reference to the bound AddressGroup"
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta"
+        }
+      },
+      "title": "Host - represents a host resource (K8s representation of Agent)",
+      "required": [
+        "selfRef",
+        "uuid"
+      ]
+    },
+    "v1HostBinding": {
+      "type": "object",
+      "properties": {
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
+        },
+        "hostRef": {
+          "$ref": "#/definitions/v1NamespacedObjectReference",
+          "title": "Reference to the Host resource"
+        },
+        "addressGroupRef": {
+          "$ref": "#/definitions/v1NamespacedObjectReference",
+          "title": "Reference to the AddressGroup resource"
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta"
+        }
+      },
+      "title": "HostBinding - represents a host binding resource",
+      "required": [
+        "selfRef",
+        "hostRef",
+        "addressGroupRef"
+      ]
     },
     "v1IEAgAgRule": {
       "type": "object",
@@ -1340,31 +1302,31 @@
       },
       "title": "ListAddressGroupsResp - response with list of address groups"
     },
-    "v1ListAgentBindingsResp": {
+    "v1ListHostBindingsResp": {
       "type": "object",
       "properties": {
         "items": {
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/v1AgentBinding"
+            "$ref": "#/definitions/v1HostBinding"
           }
         }
       },
-      "title": "ListAgentBindingsResp - response with list of agent bindings"
+      "title": "ListHostBindingsResp - response with list of host bindings"
     },
-    "v1ListAgentsResp": {
+    "v1ListHostsResp": {
       "type": "object",
       "properties": {
         "items": {
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/v1Agent"
+            "$ref": "#/definitions/v1Host"
           }
         }
       },
-      "title": "ListAgentsResp - response with list of agents"
+      "title": "ListHostsResp - response with list of hosts"
     },
     "v1ListIEAgAgRulesResp": {
       "type": "object",
@@ -1659,19 +1621,6 @@
       },
       "title": "ObjectReference contains enough information to let you locate the referenced object"
     },
-    "v1OwnerCheck": {
-      "type": "object",
-      "properties": {
-        "noAuth": {
-          "type": "object",
-          "properties": {}
-        },
-        "secret": {
-          "$ref": "#/definitions/v1SecretData"
-        }
-      },
-      "title": "Methods for ownership verification"
-    },
     "v1PortRange": {
       "type": "object",
       "properties": {
@@ -1794,20 +1743,6 @@
         "serviceLocalRef",
         "serviceRef"
       ]
-    },
-    "v1SecretData": {
-      "type": "object",
-      "properties": {
-        "rawValue": {
-          "type": "string",
-          "title": "Base64-encoded plain value"
-        },
-        "secureValue": {
-          "type": "string",
-          "title": "Base64-encoded encrypted value: BASE64(IV(16 bytes) + ciphertext)"
-        }
-      },
-      "title": "Authentication data for agents"
     },
     "v1Service": {
       "type": "object",
@@ -1944,31 +1879,31 @@
       },
       "title": "SyncAddressGroups - subject of Address Groups to sync"
     },
-    "v1SyncAgentBindings": {
+    "v1SyncHostBindings": {
       "type": "object",
       "properties": {
-        "agentBindings": {
+        "hostBindings": {
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/v1AgentBinding"
+            "$ref": "#/definitions/v1HostBinding"
           }
         }
       },
-      "title": "SyncAgentBindings - subject of Agent Bindings to sync"
+      "title": "SyncHostBindings - subject of Host Bindings to sync"
     },
-    "v1SyncAgents": {
+    "v1SyncHosts": {
       "type": "object",
       "properties": {
-        "agents": {
+        "hosts": {
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/v1Agent"
+            "$ref": "#/definitions/v1Host"
           }
         }
       },
-      "title": "SyncAgents - subject of Agents to sync"
+      "title": "SyncHosts - subject of Hosts to sync"
     },
     "v1SyncIEAgAgRules": {
       "type": "object",
@@ -2068,13 +2003,13 @@
           "$ref": "#/definitions/v1SyncNetworkBindings",
           "title": "Subject of Network Bindings"
         },
-        "agents": {
-          "$ref": "#/definitions/v1SyncAgents",
-          "title": "Subject of Agents"
+        "hosts": {
+          "$ref": "#/definitions/v1SyncHosts",
+          "title": "Subject of Hosts"
         },
-        "agentBindings": {
-          "$ref": "#/definitions/v1SyncAgentBindings",
-          "title": "Subject of Agent Bindings"
+        "hostBindings": {
+          "$ref": "#/definitions/v1SyncHostBindings",
+          "title": "Subject of Host Bindings"
         }
       },
       "title": "SyncReq - request to sync"

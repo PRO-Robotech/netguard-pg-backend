@@ -20,6 +20,8 @@ import (
 	bindingstorage "netguard-pg-backend/internal/k8s/registry/addressgroupbinding"
 	policybindingstorage "netguard-pg-backend/internal/k8s/registry/addressgroupbindingpolicy"
 	portmappingstorage "netguard-pg-backend/internal/k8s/registry/addressgroupportmapping"
+	hoststorage "netguard-pg-backend/internal/k8s/registry/host"
+	hostbindingstorage "netguard-pg-backend/internal/k8s/registry/host_binding"
 	ieagagstorage "netguard-pg-backend/internal/k8s/registry/ieagagrule"
 	networkstorage "netguard-pg-backend/internal/k8s/registry/network"
 	networkbindingstorage "netguard-pg-backend/internal/k8s/registry/network_binding"
@@ -172,6 +174,10 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 	networkStore := networkstorage.NewNetworkStorageWithClient(bClient)
 	networkBindingStore := networkbindingstorage.NewNetworkBindingStorageWithClient(bClient)
 
+	// Host and HostBinding storage
+	hostStore := hoststorage.NewHostStorage(bClient)
+	hostBindingStore := hostbindingstorage.NewHostBindingStorage(bClient)
+
 	apiGroupInfo.VersionedResourcesStorageMap[netguardv1beta1.SchemeGroupVersion.Version] = map[string]rest.Storage{
 		// Основные ресурсы
 		"addressgroups":               agStore,
@@ -184,6 +190,8 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 		"ieagagrules":                 ieagagStore,
 		"networks":                    networkStore,
 		"networkbindings":             networkBindingStore,
+		"hosts":                       hostStore,
+		"hostbindings":                hostBindingStore,
 
 		// Status subresources для всех основных ресурсов
 		"addressgroups/status":               agstorage.NewStatusREST(agStore),
@@ -196,6 +204,8 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 		"ieagagrules/status":                 ieagagstorage.NewStatusREST(ieagagStore),
 		"networks/status":                    networkstorage.NewStatusREST(networkStore),
 		"networkbindings/status":             networkbindingstorage.NewStatusREST(networkBindingStore),
+		"hosts/status":                       hoststorage.NewStatusREST(hostStore),
+		"hostbindings/status":                hostbindingstorage.NewStatusREST(hostBindingStore),
 
 		// Дополнительные subresources
 		"services/addressgroups":               svcstorage.NewAddressGroupsREST(bClient),

@@ -50,6 +50,22 @@ type AddressGroupPortMappingListerExpansion interface{}
 // AddressGroupPortMappingNamespaceLister.
 type AddressGroupPortMappingNamespaceListerExpansion interface{}
 
+// HostListerExpansion allows custom methods to be added to
+// HostLister.
+type HostListerExpansion interface{}
+
+// HostNamespaceListerExpansion allows custom methods to be added to
+// HostNamespaceLister.
+type HostNamespaceListerExpansion interface{}
+
+// HostBindingListerExpansion allows custom methods to be added to
+// HostBindingLister.
+type HostBindingListerExpansion interface{}
+
+// HostBindingNamespaceListerExpansion allows custom methods to be added to
+// HostBindingNamespaceLister.
+type HostBindingNamespaceListerExpansion interface{}
+
 // IEAgAgRuleListerExpansion allows custom methods to be added to
 // IEAgAgRuleLister.
 type IEAgAgRuleListerExpansion interface{}

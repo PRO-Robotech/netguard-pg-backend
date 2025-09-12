@@ -299,15 +299,21 @@ func (c *IEAgAgRuleConverter) ConvertToK8s(resource interface{}) runtime.Object 
 				rule.Traffic, rule.AddressGroupLocal.Name, rule.AddressGroup.Name),
 			Transport: convertTransportFromDomain(rule.Transport),
 			Traffic:   convertTrafficFromDomain(rule.Traffic),
-			AddressGroupLocal: netguardv1beta1.ObjectReference{
-				APIVersion: "netguard.sgroups.io/v1beta1",
-				Kind:       "AddressGroup",
-				Name:       rule.AddressGroupLocal.Name,
+			AddressGroupLocal: netguardv1beta1.NamespacedObjectReference{
+				ObjectReference: netguardv1beta1.ObjectReference{
+					APIVersion: "netguard.sgroups.io/v1beta1",
+					Kind:       "AddressGroup",
+					Name:       rule.AddressGroupLocal.Name,
+				},
+				Namespace: rule.Namespace,
 			},
-			AddressGroup: netguardv1beta1.ObjectReference{
-				APIVersion: "netguard.sgroups.io/v1beta1",
-				Kind:       "AddressGroup",
-				Name:       rule.AddressGroup.Name,
+			AddressGroup: netguardv1beta1.NamespacedObjectReference{
+				ObjectReference: netguardv1beta1.ObjectReference{
+					APIVersion: "netguard.sgroups.io/v1beta1",
+					Kind:       "AddressGroup",
+					Name:       rule.AddressGroup.Name,
+				},
+				Namespace: rule.Namespace,
 			},
 			Action:   netguardv1beta1.RuleAction(rule.Action),
 			Priority: rule.Priority,

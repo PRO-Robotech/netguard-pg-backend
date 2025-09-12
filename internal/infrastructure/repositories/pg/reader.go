@@ -140,3 +140,21 @@ func (r *reader) ListNetworkBindings(ctx context.Context, consume func(models.Ne
 func (r *reader) GetNetworkBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.NetworkBinding, error) {
 	return r.modularReader.GetNetworkBindingByID(ctx, id)
 }
+
+// Host methods - delegated to readers/host.go
+func (r *reader) ListHosts(ctx context.Context, consume func(models.Host) error, scope ports.Scope) error {
+	return r.modularReader.ListHosts(ctx, consume, scope)
+}
+
+func (r *reader) GetHostByID(ctx context.Context, id models.ResourceIdentifier) (*models.Host, error) {
+	return r.modularReader.GetHostByID(ctx, id)
+}
+
+// HostBinding methods - delegated to readers/host_binding.go
+func (r *reader) ListHostBindings(ctx context.Context, consume func(models.HostBinding) error, scope ports.Scope) error {
+	return r.modularReader.ListHostBindings(ctx, consume, scope)
+}
+
+func (r *reader) GetHostBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.HostBinding, error) {
+	return r.modularReader.GetHostBindingByID(ctx, id)
+}

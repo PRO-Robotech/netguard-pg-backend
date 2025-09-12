@@ -19,6 +19,11 @@ type MockRegistry struct {
 	sharedData map[string]interface{} // Shared data store
 }
 
+func (m *MockRegistry) ReaderWithReadCommitted(ctx context.Context) (ports.Reader, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 // NewMockRegistry creates a new mock registry for testing
 func NewMockRegistry() *MockRegistry {
 	return &MockRegistry{
@@ -322,8 +327,58 @@ func (r *MockReader) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceId
 	return nil, ports.ErrNotFound
 }
 
+func (r *MockReader) GetNetworkByCIDR(ctx context.Context, cidr string) (*models.Network, error) {
+	return nil, ports.ErrNotFound
+}
+
 func (r *MockReader) GetSyncStatus(ctx context.Context) (*models.SyncStatus, error) {
 	return &models.SyncStatus{}, nil
+}
+
+func (r *MockReader) ListHosts(ctx context.Context, consume func(models.Host) error, scope ports.Scope) error {
+	for key, value := range r.data {
+		if len(key) >= 5 && key[:5] == "host_" {
+			if host, ok := value.(*models.Host); ok {
+				if err := consume(*host); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (r *MockReader) GetHostByID(ctx context.Context, id models.ResourceIdentifier) (*models.Host, error) {
+	key := fmt.Sprintf("host_%s", id.Key())
+	if host, exists := r.data[key]; exists {
+		if hostObj, ok := host.(*models.Host); ok {
+			return hostObj, nil
+		}
+	}
+	return nil, ports.ErrNotFound
+}
+
+func (r *MockReader) ListHostBindings(ctx context.Context, consume func(models.HostBinding) error, scope ports.Scope) error {
+	for key, value := range r.data {
+		if len(key) >= 12 && key[:12] == "hostbinding_" {
+			if hostBinding, ok := value.(*models.HostBinding); ok {
+				if err := consume(*hostBinding); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (r *MockReader) GetHostBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.HostBinding, error) {
+	key := fmt.Sprintf("hostbinding_%s", id.Key())
+	if hostBinding, exists := r.data[key]; exists {
+		if hostBindingObj, ok := hostBinding.(*models.HostBinding); ok {
+			return hostBindingObj, nil
+		}
+	}
+	return nil, ports.ErrNotFound
 }
 
 func (r *MockReader) Close() error {
@@ -477,6 +532,40 @@ func (w *MockWriter) SyncIEAgAgRules(ctx context.Context, rules []models.IEAgAgR
 func (w *MockWriter) DeleteIEAgAgRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
 	for _, id := range ids {
 		key := fmt.Sprintf("ieagagrule_%s", id.Key())
+		delete(w.data, key)
+		w.deletedKeys[key] = true // Track deletion
+	}
+	return nil
+}
+
+func (w *MockWriter) SyncHosts(ctx context.Context, hosts []models.Host, scope ports.Scope, opts ...ports.Option) error {
+	for _, host := range hosts {
+		key := fmt.Sprintf("host_%s", host.SelfRef.ResourceIdentifier.Key())
+		w.data[key] = &host
+	}
+	return nil
+}
+
+func (w *MockWriter) DeleteHostsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	for _, id := range ids {
+		key := fmt.Sprintf("host_%s", id.Key())
+		delete(w.data, key)
+		w.deletedKeys[key] = true // Track deletion
+	}
+	return nil
+}
+
+func (w *MockWriter) SyncHostBindings(ctx context.Context, hostBindings []models.HostBinding, scope ports.Scope, opts ...ports.Option) error {
+	for _, hostBinding := range hostBindings {
+		key := fmt.Sprintf("hostbinding_%s", hostBinding.SelfRef.ResourceIdentifier.Key())
+		w.data[key] = &hostBinding
+	}
+	return nil
+}
+
+func (w *MockWriter) DeleteHostBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	for _, id := range ids {
+		key := fmt.Sprintf("hostbinding_%s", id.Key())
 		delete(w.data, key)
 		w.deletedKeys[key] = true // Track deletion
 	}

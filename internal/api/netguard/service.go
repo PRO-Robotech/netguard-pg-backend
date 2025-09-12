@@ -261,6 +261,40 @@ func (s *NetguardServiceServer) Sync(ctx context.Context, req *netguardpb.SyncRe
 			return nil, errors.Wrap(err, "failed to sync network bindings")
 		}
 
+	case *netguardpb.SyncReq_Hosts:
+		if subject.Hosts == nil || len(subject.Hosts.Hosts) == 0 {
+			return &emptypb.Empty{}, nil
+		}
+
+		// Конвертируем хосты
+		hosts := make([]models.Host, 0, len(subject.Hosts.Hosts))
+		for _, h := range subject.Hosts.Hosts {
+			hosts = append(hosts, convertHost(h))
+		}
+
+		// Синхронизируем хосты с указанной операцией
+		err = s.service.Sync(ctx, syncOp, hosts)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to sync hosts")
+		}
+
+	case *netguardpb.SyncReq_HostBindings:
+		if subject.HostBindings == nil || len(subject.HostBindings.HostBindings) == 0 {
+			return &emptypb.Empty{}, nil
+		}
+
+		// Конвертируем привязки хостов
+		bindings := make([]models.HostBinding, 0, len(subject.HostBindings.HostBindings))
+		for _, b := range subject.HostBindings.HostBindings {
+			bindings = append(bindings, convertHostBinding(b))
+		}
+
+		// Синхронизируем привязки хостов с указанной операцией
+		err = s.service.Sync(ctx, syncOp, bindings)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to sync host bindings")
+		}
+
 	default:
 		return nil, errors.New("subject not specified")
 	}
@@ -1637,6 +1671,288 @@ func convertNetworkBindingToPB(binding models.NetworkBinding) *netguardpb.Networ
 	pbBinding.NetworkItem = &netguardpb.NetworkItem{
 		Name: binding.NetworkItem.Name,
 		Cidr: binding.NetworkItem.CIDR,
+	}
+
+	// Populate Meta information
+	pbBinding.Meta = &netguardpb.Meta{
+		Uid:                binding.Meta.UID,
+		ResourceVersion:    binding.Meta.ResourceVersion,
+		Generation:         binding.Meta.Generation,
+		Labels:             binding.Meta.Labels,
+		Annotations:        binding.Meta.Annotations,
+		Conditions:         models.K8sConditionsToProto(binding.Meta.Conditions),
+		ObservedGeneration: binding.Meta.ObservedGeneration,
+	}
+	if !binding.Meta.CreationTS.IsZero() {
+		pbBinding.Meta.CreationTs = timestamppb.New(binding.Meta.CreationTS.Time)
+	}
+
+	return pbBinding
+}
+
+// ListHosts gets list of hosts
+func (s *NetguardServiceServer) ListHosts(ctx context.Context, req *netguardpb.ListHostsReq) (*netguardpb.ListHostsResp, error) {
+	var scope ports.Scope = ports.EmptyScope{}
+	if len(req.Identifiers) > 0 {
+		identifiers := make([]models.ResourceIdentifier, 0, len(req.Identifiers))
+		for _, id := range req.Identifiers {
+			identifiers = append(identifiers, models.NewResourceIdentifier(id.Name, models.WithNamespace(id.Namespace)))
+		}
+		scope = ports.NewResourceIdentifierScope(identifiers...)
+	}
+
+	hosts, err := s.service.GetHosts(ctx, scope)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get hosts")
+	}
+
+	pbHosts := make([]*netguardpb.Host, 0, len(hosts))
+	for _, host := range hosts {
+		pbHosts = append(pbHosts, convertHostToPB(host))
+	}
+
+	return &netguardpb.ListHostsResp{
+		Items: pbHosts,
+	}, nil
+}
+
+// GetHost gets a host by identifier
+func (s *NetguardServiceServer) GetHost(ctx context.Context, req *netguardpb.GetHostReq) (*netguardpb.GetHostResp, error) {
+	id := models.NewResourceIdentifier(req.Identifier.Name, models.WithNamespace(req.Identifier.Namespace))
+
+	host, err := s.service.GetHostByID(ctx, id)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get host")
+	}
+
+	return &netguardpb.GetHostResp{
+		Host: convertHostToPB(*host),
+	}, nil
+}
+
+// ListHostBindings gets list of host bindings
+func (s *NetguardServiceServer) ListHostBindings(ctx context.Context, req *netguardpb.ListHostBindingsReq) (*netguardpb.ListHostBindingsResp, error) {
+	var scope ports.Scope = ports.EmptyScope{}
+	if len(req.Identifiers) > 0 {
+		identifiers := make([]models.ResourceIdentifier, 0, len(req.Identifiers))
+		for _, id := range req.Identifiers {
+			identifiers = append(identifiers, models.NewResourceIdentifier(id.Name, models.WithNamespace(id.Namespace)))
+		}
+		scope = ports.NewResourceIdentifierScope(identifiers...)
+	}
+
+	hostBindings, err := s.service.GetHostBindings(ctx, scope)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get host bindings")
+	}
+
+	pbBindings := make([]*netguardpb.HostBinding, 0, len(hostBindings))
+	for _, binding := range hostBindings {
+		pbBindings = append(pbBindings, convertHostBindingToPB(binding))
+	}
+
+	return &netguardpb.ListHostBindingsResp{
+		Items: pbBindings,
+	}, nil
+}
+
+// GetHostBinding gets a host binding by identifier
+func (s *NetguardServiceServer) GetHostBinding(ctx context.Context, req *netguardpb.GetHostBindingReq) (*netguardpb.GetHostBindingResp, error) {
+	id := models.NewResourceIdentifier(req.Identifier.Name, models.WithNamespace(req.Identifier.Namespace))
+
+	hostBinding, err := s.service.GetHostBindingByID(ctx, id)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get host binding")
+	}
+
+	return &netguardpb.GetHostBindingResp{
+		HostBinding: convertHostBindingToPB(*hostBinding),
+	}, nil
+}
+
+// convertHost converts proto Host to domain Host
+func convertHost(protoHost *netguardpb.Host) models.Host {
+	host := models.Host{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: models.ResourceIdentifier{
+				Name:      protoHost.SelfRef.Name,
+				Namespace: protoHost.SelfRef.Namespace,
+			},
+		},
+		UUID: protoHost.Uuid,
+
+		// Status fields
+		HostName:         protoHost.HostNameSync,
+		AddressGroupName: protoHost.AddressGroupName,
+		IsBound:          protoHost.IsBound,
+	}
+
+	// Set binding reference if present
+	if protoHost.BindingRef != nil {
+		host.BindingRef = &v1beta1.ObjectReference{
+			APIVersion: protoHost.BindingRef.ApiVersion,
+			Kind:       protoHost.BindingRef.Kind,
+			Name:       protoHost.BindingRef.Name,
+		}
+	}
+
+	// Set address group reference if present
+	if protoHost.AddressGroupRef != nil {
+		host.AddressGroupRef = &v1beta1.ObjectReference{
+			APIVersion: protoHost.AddressGroupRef.ApiVersion,
+			Kind:       protoHost.AddressGroupRef.Kind,
+			Name:       protoHost.AddressGroupRef.Name,
+		}
+	}
+
+	// Convert Meta if provided
+	if protoHost.Meta != nil {
+		host.Meta = models.Meta{
+			UID:             protoHost.Meta.Uid,
+			ResourceVersion: protoHost.Meta.ResourceVersion,
+			Generation:      protoHost.Meta.Generation,
+			Labels:          protoHost.Meta.Labels,
+			Annotations:     protoHost.Meta.Annotations,
+		}
+		if protoHost.Meta.CreationTs != nil {
+			host.Meta.CreationTS = metav1.NewTime(protoHost.Meta.CreationTs.AsTime())
+		}
+		if protoHost.Meta.Conditions != nil {
+			host.Meta.Conditions = models.ProtoConditionsToK8s(protoHost.Meta.Conditions)
+		}
+		host.Meta.ObservedGeneration = protoHost.Meta.ObservedGeneration
+	}
+
+	return host
+}
+
+// convertHostToPB converts domain Host to proto Host
+func convertHostToPB(host models.Host) *netguardpb.Host {
+	pbHost := &netguardpb.Host{
+		SelfRef: &netguardpb.ResourceIdentifier{
+			Name:      host.Name,
+			Namespace: host.Namespace,
+		},
+		Uuid: host.UUID,
+
+		// Status fields
+		HostNameSync:     host.HostName,
+		AddressGroupName: host.AddressGroupName,
+		IsBound:          host.IsBound,
+	}
+
+	// Convert binding reference if present
+	if host.BindingRef != nil {
+		pbHost.BindingRef = &netguardpb.ObjectReference{
+			ApiVersion: host.BindingRef.APIVersion,
+			Kind:       host.BindingRef.Kind,
+			Name:       host.BindingRef.Name,
+		}
+	}
+
+	// Convert address group reference if present
+	if host.AddressGroupRef != nil {
+		pbHost.AddressGroupRef = &netguardpb.ObjectReference{
+			ApiVersion: host.AddressGroupRef.APIVersion,
+			Kind:       host.AddressGroupRef.Kind,
+			Name:       host.AddressGroupRef.Name,
+		}
+	}
+
+	// Populate Meta information
+	pbHost.Meta = &netguardpb.Meta{
+		Uid:                host.Meta.UID,
+		ResourceVersion:    host.Meta.ResourceVersion,
+		Generation:         host.Meta.Generation,
+		Labels:             host.Meta.Labels,
+		Annotations:        host.Meta.Annotations,
+		Conditions:         models.K8sConditionsToProto(host.Meta.Conditions),
+		ObservedGeneration: host.Meta.ObservedGeneration,
+	}
+	if !host.Meta.CreationTS.IsZero() {
+		pbHost.Meta.CreationTs = timestamppb.New(host.Meta.CreationTS.Time)
+	}
+
+	return pbHost
+}
+
+// convertHostBinding converts proto HostBinding to domain HostBinding
+func convertHostBinding(protoBinding *netguardpb.HostBinding) models.HostBinding {
+	binding := models.HostBinding{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: models.ResourceIdentifier{
+				Name:      protoBinding.SelfRef.Name,
+				Namespace: protoBinding.SelfRef.Namespace,
+			},
+		},
+	}
+
+	// Set host reference
+	if protoBinding.HostRef != nil {
+		binding.HostRef = v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: protoBinding.HostRef.ApiVersion,
+				Kind:       protoBinding.HostRef.Kind,
+				Name:       protoBinding.HostRef.Name,
+			},
+			Namespace: protoBinding.HostRef.Namespace,
+		}
+	}
+
+	// Set address group reference
+	if protoBinding.AddressGroupRef != nil {
+		binding.AddressGroupRef = v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: protoBinding.AddressGroupRef.ApiVersion,
+				Kind:       protoBinding.AddressGroupRef.Kind,
+				Name:       protoBinding.AddressGroupRef.Name,
+			},
+			Namespace: protoBinding.AddressGroupRef.Namespace,
+		}
+	}
+
+	// Convert Meta if provided
+	if protoBinding.Meta != nil {
+		binding.Meta = models.Meta{
+			UID:             protoBinding.Meta.Uid,
+			ResourceVersion: protoBinding.Meta.ResourceVersion,
+			Generation:      protoBinding.Meta.Generation,
+			Labels:          protoBinding.Meta.Labels,
+			Annotations:     protoBinding.Meta.Annotations,
+		}
+		if protoBinding.Meta.CreationTs != nil {
+			binding.Meta.CreationTS = metav1.NewTime(protoBinding.Meta.CreationTs.AsTime())
+		}
+		if protoBinding.Meta.Conditions != nil {
+			binding.Meta.Conditions = models.ProtoConditionsToK8s(protoBinding.Meta.Conditions)
+		}
+		binding.Meta.ObservedGeneration = protoBinding.Meta.ObservedGeneration
+	}
+
+	return binding
+}
+
+// convertHostBindingToPB converts domain HostBinding to proto HostBinding
+func convertHostBindingToPB(binding models.HostBinding) *netguardpb.HostBinding {
+	pbBinding := &netguardpb.HostBinding{
+		SelfRef: &netguardpb.ResourceIdentifier{
+			Name:      binding.Name,
+			Namespace: binding.Namespace,
+		},
+
+		HostRef: &netguardpb.NamespacedObjectReference{
+			ApiVersion: binding.HostRef.APIVersion,
+			Kind:       binding.HostRef.Kind,
+			Name:       binding.HostRef.Name,
+			Namespace:  binding.HostRef.Namespace,
+		},
+
+		AddressGroupRef: &netguardpb.NamespacedObjectReference{
+			ApiVersion: binding.AddressGroupRef.APIVersion,
+			Kind:       binding.AddressGroupRef.Kind,
+			Name:       binding.AddressGroupRef.Name,
+			Namespace:  binding.AddressGroupRef.Namespace,
+		},
 	}
 
 	// Populate Meta information

@@ -105,10 +105,19 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupStatus":              schema_k8s_apis_netguard_v1beta1_AddressGroupStatus(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupsSpec":               schema_k8s_apis_netguard_v1beta1_AddressGroupsSpec(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupsSpecList":           schema_k8s_apis_netguard_v1beta1_AddressGroupsSpecList(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.Host":                            schema_k8s_apis_netguard_v1beta1_Host(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostBinding":                     schema_k8s_apis_netguard_v1beta1_HostBinding(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostBindingList":                 schema_k8s_apis_netguard_v1beta1_HostBindingList(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostBindingSpec":                 schema_k8s_apis_netguard_v1beta1_HostBindingSpec(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostBindingStatus":               schema_k8s_apis_netguard_v1beta1_HostBindingStatus(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostList":                        schema_k8s_apis_netguard_v1beta1_HostList(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostSpec":                        schema_k8s_apis_netguard_v1beta1_HostSpec(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostStatus":                      schema_k8s_apis_netguard_v1beta1_HostStatus(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IEAgAgRule":                      schema_k8s_apis_netguard_v1beta1_IEAgAgRule(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IEAgAgRuleList":                  schema_k8s_apis_netguard_v1beta1_IEAgAgRuleList(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IEAgAgRuleSpec":                  schema_k8s_apis_netguard_v1beta1_IEAgAgRuleSpec(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IEAgAgRuleStatus":                schema_k8s_apis_netguard_v1beta1_IEAgAgRuleStatus(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IPItem":                          schema_k8s_apis_netguard_v1beta1_IPItem(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IngressPort":                     schema_k8s_apis_netguard_v1beta1_IngressPort(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference":       schema_k8s_apis_netguard_v1beta1_NamespacedObjectReference(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.Network":                         schema_k8s_apis_netguard_v1beta1_Network(ref),
@@ -3679,6 +3688,382 @@ func schema_k8s_apis_netguard_v1beta1_AddressGroupsSpecList(ref common.Reference
 	}
 }
 
+func schema_k8s_apis_netguard_v1beta1_Host(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Host is the Schema for the hosts API",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostStatus"),
+						},
+					},
+					"ipList": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IPItem"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostSpec", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostStatus", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IPItem"},
+	}
+}
+
+func schema_k8s_apis_netguard_v1beta1_HostBinding(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "HostBinding is the Schema for the hostbindings API",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostBindingSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostBindingStatus"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostBindingSpec", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostBindingStatus"},
+	}
+}
+
+func schema_k8s_apis_netguard_v1beta1_HostBindingList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "HostBindingList contains a list of HostBinding",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostBinding"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostBinding"},
+	}
+}
+
+func schema_k8s_apis_netguard_v1beta1_HostBindingSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "HostBindingSpec defines the desired state of HostBinding",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"hostRef": {
+						SchemaProps: spec.SchemaProps{
+							Description: "HostRef is a reference to the Host resource",
+							Default:     map[string]interface{}{},
+							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"),
+						},
+					},
+					"addressGroupRef": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AddressGroupRef is a reference to the AddressGroup resource",
+							Default:     map[string]interface{}{},
+							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"),
+						},
+					},
+				},
+				Required: []string{"hostRef", "addressGroupRef"},
+			},
+		},
+		Dependencies: []string{
+			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"},
+	}
+}
+
+func schema_k8s_apis_netguard_v1beta1_HostBindingStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "HostBindingStatus defines the observed state of HostBinding",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"conditions": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-patch-merge-key": "type",
+								"x-kubernetes-patch-strategy":  "merge",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "Conditions represent the latest available observations of the resource's state",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Condition"),
+									},
+								},
+							},
+						},
+					},
+					"observedGeneration": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ObservedGeneration is the most recent generation observed by the controller",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Condition"},
+	}
+}
+
+func schema_k8s_apis_netguard_v1beta1_HostList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "HostList contains a list of Host",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.Host"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.Host"},
+	}
+}
+
+func schema_k8s_apis_netguard_v1beta1_HostSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "HostSpec defines the desired state of Host",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"uuid": {
+						SchemaProps: spec.SchemaProps{
+							Description: "UUID is the unique identifier of the host",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"uuid"},
+			},
+		},
+	}
+}
+
+func schema_k8s_apis_netguard_v1beta1_HostStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "HostStatus defines the observed state of Host",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"hostName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "HostName is the name used for host synchronization",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"addressGroupName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AddressGroupName is the name of bound AddressGroup",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"isBound": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IsBound indicates if the host is bound to an AddressGroup",
+							Default:     false,
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"bindingRef": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BindingRef is a reference to the HostBinding that binds this host",
+							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ObjectReference"),
+						},
+					},
+					"addressGroupRef": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AddressGroupRef is a reference to the AddressGroup this host is bound to",
+							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ObjectReference"),
+						},
+					},
+					"conditions": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-patch-merge-key": "type",
+								"x-kubernetes-patch-strategy":  "merge",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "Conditions represent the latest available observations of the resource's state",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Condition"),
+									},
+								},
+							},
+						},
+					},
+					"observedGeneration": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ObservedGeneration is the most recent generation observed by the controller",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+				},
+				Required: []string{"isBound"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Condition", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ObjectReference"},
+	}
+}
+
 func schema_k8s_apis_netguard_v1beta1_IEAgAgRule(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -3897,6 +4282,26 @@ func schema_k8s_apis_netguard_v1beta1_IEAgAgRuleStatus(ref common.ReferenceCallb
 		},
 		Dependencies: []string{
 			"k8s.io/apimachinery/pkg/apis/meta/v1.Condition"},
+	}
+}
+
+func schema_k8s_apis_netguard_v1beta1_IPItem(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"ip": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+				},
+				Required: []string{"ip"},
+			},
+		},
 	}
 }
 
