@@ -2320,6 +2320,20 @@ func (s *AddressGroupResourceService) updateHostBindingStatusForSyncedAddressGro
 					continue
 				}
 
+				// 🔄 NEW: Sync updated hosts with SGroup after binding status changes
+				log.Printf("🔗 Syncing %d hosts with SGroup after binding changes for AddressGroup %s", len(hostsToUpdate), ag.Key())
+				for _, host := range hostsToUpdate {
+					if s.hostService != nil {
+						hostCopy := host // Create a copy for the pointer
+						if syncErr := s.hostService.SyncHostWithExternal(ctx, &hostCopy, types.SyncOperationUpsert); syncErr != nil {
+							log.Printf("❌ Failed to sync Host %s with SGroup: %v", host.Key(), syncErr)
+							// Continue with other hosts even if one fails
+						} else {
+							log.Printf("✅ Successfully synced Host %s with SGroup (isBound=%v)", host.Key(), host.IsBound)
+						}
+					}
+				}
+
 				log.Printf("✅ Updated %d hosts binding status for AddressGroup %s", len(hostsToUpdate), ag.Key())
 			} else {
 				log.Printf("ℹ️ No host binding changes needed for AddressGroup %s", ag.Key())

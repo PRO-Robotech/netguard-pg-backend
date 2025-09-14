@@ -139,7 +139,7 @@ func (h *Host) DeepCopy() Resource {
 
 // GetSyncSubjectType returns the sync subject type for Host
 func (h *Host) GetSyncSubjectType() types.SyncSubjectType {
-	return "Hosts" // Hosts are now their own sync subject type
+	return types.SyncSubjectTypeHosts // Use the proper constant
 }
 
 // GetSyncKey returns a unique key for the Host
@@ -156,21 +156,39 @@ func (h *Host) ToSGroupsProto() (interface{}, error) {
 		return nil, fmt.Errorf("Host cannot be nil")
 	}
 
+	fmt.Printf("🔍 DEBUG: Host.ToSGroupsProto - Converting Host %s (UUID: %s, IsBound: %v)\n",
+		h.Key(), h.UUID, h.IsBound)
+
 	// Build host name with namespace if present
 	hostName := h.Name
 	if h.Namespace != "" {
 		hostName = fmt.Sprintf("%s/%s", h.Namespace, h.Name)
 	}
 
+	// Set SgName based on binding status
+	sgName := ""
+	if h.IsBound && h.AddressGroupRef != nil {
+		// Use AddressGroup name as SgName when host is bound
+		sgName = h.AddressGroupRef.Name
+		if h.Namespace != "" && sgName != "" {
+			// Include namespace in SgName for uniqueness
+			sgName = fmt.Sprintf("%s/%s", h.Namespace, sgName)
+		}
+	}
+
+	fmt.Printf("🔍 DEBUG: Host.ToSGroupsProto - Computed values: hostName=%s, sgName=%s\n",
+		hostName, sgName)
+
 	// Convert to sgroups protobuf element
 	protoHost := &pb.Host{
-		Name: hostName,
-		Uuid: h.UUID,
-		// SgName will be set when host is bound to address group
-		SgName: "",
+		Name:   hostName,
+		Uuid:   h.UUID,
+		SgName: sgName,
 		// IpList will be updated by agents
-		IpList: nil,
+		IpList: &pb.IPList{IPs: []string{}}, // Initialize empty IPList to avoid nil
 	}
+
+	fmt.Printf("🔍 DEBUG: Host.ToSGroupsProto - Created protoHost: %+v\n", protoHost)
 
 	// Return single host element
 	return protoHost, nil

@@ -82,20 +82,23 @@ func (s *HostResourceService) CreateHost(ctx context.Context, host *models.Host)
 	}
 
 	// Sync with external systems
-	// TEMP_FIX: Disable external sync while testing cascading deletion
-	// syncErr := s.syncHostWithExternal(ctx, host, types.SyncOperationUpsert)
-	log.Printf("⚠️ DEBUG: External sync temporarily disabled for Host %s", host.Key())
+	syncErr := s.syncHostWithExternal(ctx, host, types.SyncOperationUpsert)
+	if syncErr != nil {
+		log.Printf("❌ Failed to sync Host %s with external systems: %v", host.Key(), syncErr)
+		// Continue with condition processing even if sync fails
+	} else {
+		log.Printf("✅ Successfully synced Host %s with external systems", host.Key())
+	}
 
 	// Process conditions after sync (so sync result can be included in conditions)
 	if s.conditionManager != nil {
-		// Pass nil as syncErr since we're not syncing
-		if err := s.conditionManager.ProcessHostConditions(ctx, host, nil); err != nil {
+		if err := s.conditionManager.ProcessHostConditions(ctx, host, syncErr); err != nil {
 			log.Printf("⚠️ DEBUG: Failed to process conditions for host %s: %v", host.Key(), err)
 			// Don't fail the creation due to condition processing errors
 		}
 	}
 
-	return nil // Return success since we're not syncing
+	return syncErr // Return sync error if it occurred
 }
 
 // UpdateHost updates an existing Host
@@ -126,19 +129,22 @@ func (s *HostResourceService) UpdateHost(ctx context.Context, host *models.Host)
 	}
 
 	// Sync with external systems
-	// TEMP_FIX: Disable external sync while testing cascading deletion
-	// syncErr := s.syncHostWithExternal(ctx, host, types.SyncOperationUpsert)
-	log.Printf("⚠️ DEBUG: External sync temporarily disabled for Host %s", host.Key())
+	syncErr := s.syncHostWithExternal(ctx, host, types.SyncOperationUpsert)
+	if syncErr != nil {
+		log.Printf("❌ Failed to sync Host %s with external systems: %v", host.Key(), syncErr)
+		// Continue with condition processing even if sync fails
+	} else {
+		log.Printf("✅ Successfully synced Host %s with external systems", host.Key())
+	}
 
 	// Process conditions after sync
 	if s.conditionManager != nil {
-		// Pass nil as syncErr since we're not syncing
-		if err := s.conditionManager.ProcessHostConditions(ctx, host, nil); err != nil {
+		if err := s.conditionManager.ProcessHostConditions(ctx, host, syncErr); err != nil {
 			log.Printf("⚠️ DEBUG: Failed to process conditions for host %s: %v", host.Key(), err)
 		}
 	}
 
-	return nil // Return success since we're not syncing
+	return syncErr // Return sync error if it occurred
 }
 
 // DeleteHost deletes a Host by resource identifier with cascading deletion of HostBinding
@@ -214,23 +220,22 @@ func (s *HostResourceService) DeleteHost(ctx context.Context, id models.Resource
 	log.Printf("✅ DEBUG: Host %s (and associated HostBinding) successfully deleted from storage", id.Key())
 
 	// Sync deletions with external systems - HostBinding first, then Host
-	// TEMP_FIX: Disable external sync while testing cascading deletion
 	if hostBindingToDelete != nil {
-		log.Printf("🔗 DEBUG: External sync for HostBinding %s deletion temporarily disabled", hostBindingToDelete.Key())
-		// err = s.syncHostBindingWithExternal(ctx, hostBindingToDelete, types.SyncOperationDelete)
-		// if err != nil {
-		//	log.Printf("❌ DEBUG: External sync failed for HostBinding %s: %v", hostBindingToDelete.Key(), err)
-		//	return fmt.Errorf("failed to sync host binding deletion: %w", err)
-		// }
-		log.Printf("✅ DEBUG: HostBinding %s deletion sync skipped (disabled)", hostBindingToDelete.Key())
+		log.Printf("🔗 DEBUG: Syncing HostBinding %s deletion with external systems", hostBindingToDelete.Key())
+		err = s.syncHostBindingWithExternal(ctx, hostBindingToDelete, types.SyncOperationDelete)
+		if err != nil {
+			log.Printf("❌ DEBUG: External sync failed for HostBinding %s: %v", hostBindingToDelete.Key(), err)
+			return fmt.Errorf("failed to sync host binding deletion: %w", err)
+		}
+		log.Printf("✅ DEBUG: HostBinding %s deletion synced successfully", hostBindingToDelete.Key())
 	}
 
-	log.Printf("🔗 DEBUG: External sync for Host %s deletion temporarily disabled", id.Key())
-	// err = s.syncHostWithExternal(ctx, existing, types.SyncOperationDelete)
-	// if err != nil {
-	//	log.Printf("❌ DEBUG: External sync failed for Host %s: %v", id.Key(), err)
-	//	return fmt.Errorf("failed to sync host deletion: %w", err)
-	// }
+	log.Printf("🔗 DEBUG: Syncing Host %s deletion with external systems", id.Key())
+	err = s.syncHostWithExternal(ctx, existing, types.SyncOperationDelete)
+	if err != nil {
+		log.Printf("❌ DEBUG: External sync failed for Host %s: %v", id.Key(), err)
+		return fmt.Errorf("failed to sync host deletion: %w", err)
+	}
 
 	log.Printf("🎉 DEBUG: Host %s cascading deletion completed successfully (storage + external sync)", id.Key())
 	return nil
@@ -601,6 +606,11 @@ func (s *HostResourceService) UpdateHostBinding(ctx context.Context, hostID mode
 	}
 
 	return nil
+}
+
+// SyncHostWithExternal syncs a Host with external systems (public wrapper)
+func (s *HostResourceService) SyncHostWithExternal(ctx context.Context, host *models.Host, operation types.SyncOperation) error {
+	return s.syncHostWithExternal(ctx, host, operation)
 }
 
 // UpdateHostBindingStatus updates Host.isBound status based on AddressGroup hosts changes
