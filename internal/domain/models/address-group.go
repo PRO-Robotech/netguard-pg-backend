@@ -21,11 +21,12 @@ type NetworkItem struct {
 // AddressGroup represents an address group configuration for Netguard
 type AddressGroup struct {
 	SelfRef
-	DefaultAction    RuleAction    `json:"defaultAction"`              // Default action for the address group (ACCEPT/DROP)
-	Logs             bool          `json:"logs,omitempty"`             // Whether to enable logs
-	Trace            bool          `json:"trace,omitempty"`            // Whether to enable trace
-	Networks         []NetworkItem `json:"networks,omitempty"`         // Networks associated with this address group
-	AddressGroupName string        `json:"addressGroupName,omitempty"` // Name used in sgroups synchronization
+	DefaultAction    RuleAction                        `json:"defaultAction"`              // Default action for the address group (ACCEPT/DROP)
+	Logs             bool                              `json:"logs,omitempty"`             // Whether to enable logs
+	Trace            bool                              `json:"trace,omitempty"`            // Whether to enable trace
+	Networks         []NetworkItem                     `json:"networks,omitempty"`         // Networks associated with this address group
+	AddressGroupName string                            `json:"addressGroupName,omitempty"` // Name used in sgroups synchronization
+	Hosts            []netguardv1beta1.ObjectReference `json:"hosts,omitempty"`            // Hosts that belong to this address group (exclusively)
 	Meta             Meta
 }
 
@@ -161,6 +162,14 @@ func (ag *AddressGroup) DeepCopy() Resource {
 		copy.Networks = make([]NetworkItem, len(ag.Networks))
 		for i, network := range ag.Networks {
 			copy.Networks[i] = network
+		}
+	}
+
+	// Deep copy hosts
+	if ag.Hosts != nil {
+		copy.Hosts = make([]netguardv1beta1.ObjectReference, len(ag.Hosts))
+		for i, host := range ag.Hosts {
+			copy.Hosts[i] = host
 		}
 	}
 

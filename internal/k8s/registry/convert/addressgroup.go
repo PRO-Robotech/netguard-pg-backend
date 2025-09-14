@@ -62,6 +62,7 @@ func (c *AddressGroupConverter) ToDomain(ctx context.Context, k8sObj *netguardv1
 		Logs:             k8sObj.Spec.Logs,
 		Trace:            k8sObj.Spec.Trace,
 		Networks:         networks,
+		Hosts:            k8sObj.Spec.Hosts,
 		AddressGroupName: finalAddressGroupName,
 		Meta:             ConvertMetadataToDomain(k8sObj.ObjectMeta, k8sObj.Status.Conditions, k8sObj.Status.ObservedGeneration),
 	}
@@ -87,6 +88,7 @@ func (c *AddressGroupConverter) FromDomain(ctx context.Context, domainObj *model
 			DefaultAction: netguardv1beta1.RuleAction(domainObj.DefaultAction),
 			Logs:          domainObj.Logs,
 			Trace:         domainObj.Trace,
+			Hosts:         domainObj.Hosts,
 		},
 		Networks: networks,
 	}

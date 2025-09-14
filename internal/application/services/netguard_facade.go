@@ -64,16 +64,16 @@ func NewNetguardFacade(
 	// Create validation service (no condition manager needed) - MUST be created first
 	validationService := resources.NewValidationService(registry)
 
+	// Create host resource services with condition managers (needed first for AddressGroupResourceService)
+	hostResourceService := resources.NewHostResourceService(registry, syncManager, hostConditionAdapter)
+
 	// Create resource services with condition managers
 	serviceResourceService := resources.NewServiceResourceService(registry, syncManager, serviceConditionAdapter)
-	addressGroupResourceService := resources.NewAddressGroupResourceService(registry, syncManager, addressGroupConditionAdapter, validationService)
+	addressGroupResourceService := resources.NewAddressGroupResourceService(registry, syncManager, addressGroupConditionAdapter, validationService, hostResourceService)
 
 	// Create network resource services with condition managers
 	networkResourceService := resources.NewNetworkResourceService(registry, syncManager, networkConditionAdapter)
 	networkBindingResourceService := resources.NewNetworkBindingResourceService(registry, networkResourceService, syncManager, networkBindingConditionAdapter)
-
-	// Create host resource services with condition managers
-	hostResourceService := resources.NewHostResourceService(registry, syncManager, hostConditionAdapter)
 	hostBindingResourceService := resources.NewHostBindingResourceService(registry, hostResourceService, syncManager, hostBindingConditionAdapter)
 
 	// Create RuleS2S service with condition manager

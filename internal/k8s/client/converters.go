@@ -246,6 +246,18 @@ func convertAddressGroupFromProto(protoAG *netguardpb.AddressGroup) models.Addre
 		})
 	}
 
+	// Convert hosts field (NEW: hosts belonging to this address group)
+	if len(protoAG.Hosts) > 0 {
+		addressGroup.Hosts = make([]v1beta1.ObjectReference, len(protoAG.Hosts))
+		for i, host := range protoAG.Hosts {
+			addressGroup.Hosts[i] = v1beta1.ObjectReference{
+				APIVersion: host.ApiVersion,
+				Kind:       host.Kind,
+				Name:       host.Name,
+			}
+		}
+	}
+
 	return addressGroup
 }
 
@@ -282,6 +294,18 @@ func convertAddressGroupToProto(addressGroup models.AddressGroup) *netguardpb.Ad
 
 	if !addressGroup.Meta.CreationTS.IsZero() {
 		protoAG.Meta.CreationTs = timestamppb.New(addressGroup.Meta.CreationTS.Time)
+	}
+
+	// Convert hosts field (NEW: hosts belonging to this address group)
+	if len(addressGroup.Hosts) > 0 {
+		protoAG.Hosts = make([]*netguardpb.ObjectReference, len(addressGroup.Hosts))
+		for i, host := range addressGroup.Hosts {
+			protoAG.Hosts[i] = &netguardpb.ObjectReference{
+				ApiVersion: host.APIVersion,
+				Kind:       host.Kind,
+				Name:       host.Name,
+			}
+		}
 	}
 
 	return protoAG

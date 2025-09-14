@@ -3540,10 +3540,26 @@ func schema_k8s_apis_netguard_v1beta1_AddressGroupSpec(ref common.ReferenceCallb
 							Format:      "",
 						},
 					},
+					"hosts": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Hosts that belong exclusively to this AddressGroup Each host can belong to only one AddressGroup",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ObjectReference"),
+									},
+								},
+							},
+						},
+					},
 				},
 				Required: []string{"defaultAction"},
 			},
 		},
+		Dependencies: []string{
+			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ObjectReference"},
 	}
 }
 

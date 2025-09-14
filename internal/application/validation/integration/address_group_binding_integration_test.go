@@ -32,9 +32,15 @@ func TestIntegration_AddressGroupBindingValidation(t *testing.T) {
 
 	bindingID := models.NewResourceIdentifier("test-binding")
 	binding := models.AddressGroupBinding{
-		SelfRef:         models.SelfRef{ResourceIdentifier: bindingID},
-		ServiceRef:      models.ServiceRef{ResourceIdentifier: serviceID},
-		AddressGroupRef: models.AddressGroupRef{ResourceIdentifier: addressGroupID},
+		SelfRef: models.SelfRef{ResourceIdentifier: bindingID},
+		ServiceRef: models.NewServiceRef(
+			serviceID.Name,
+			models.WithNamespace(serviceID.Namespace),
+		),
+		AddressGroupRef: models.NewAddressGroupRef(
+			addressGroupID.Name,
+			models.WithNamespace(addressGroupID.Namespace),
+		),
 	}
 
 	// Add data to repository
@@ -106,9 +112,15 @@ func TestIntegration_AddressGroupBindingReferences(t *testing.T) {
 
 	bindingID := models.NewResourceIdentifier("test-binding", models.WithNamespace("test-ns"))
 	binding := models.AddressGroupBinding{
-		SelfRef:         models.SelfRef{ResourceIdentifier: bindingID},
-		ServiceRef:      models.ServiceRef{ResourceIdentifier: serviceID},
-		AddressGroupRef: models.AddressGroupRef{ResourceIdentifier: addressGroupID},
+		SelfRef: models.SelfRef{ResourceIdentifier: bindingID},
+		ServiceRef: models.NewServiceRef(
+			serviceID.Name,
+			models.WithNamespace(serviceID.Namespace),
+		),
+		AddressGroupRef: models.NewAddressGroupRef(
+			addressGroupID.Name,
+			models.WithNamespace(addressGroupID.Namespace),
+		),
 	}
 
 	// Add data to repository
@@ -142,9 +154,15 @@ func TestIntegration_AddressGroupBindingReferences(t *testing.T) {
 
 	// Test ValidateReferences with mismatched namespace
 	bindingWithMismatchedNS := models.AddressGroupBinding{
-		SelfRef:         models.SelfRef{ResourceIdentifier: models.NewResourceIdentifier("test-binding", models.WithNamespace("other-ns"))},
-		ServiceRef:      models.ServiceRef{ResourceIdentifier: serviceID},
-		AddressGroupRef: models.AddressGroupRef{ResourceIdentifier: addressGroupID},
+		SelfRef: models.SelfRef{ResourceIdentifier: models.NewResourceIdentifier("test-binding", models.WithNamespace("other-ns"))},
+		ServiceRef: models.NewServiceRef(
+			serviceID.Name,
+			models.WithNamespace(serviceID.Namespace),
+		),
+		AddressGroupRef: models.NewAddressGroupRef(
+			addressGroupID.Name,
+			models.WithNamespace(addressGroupID.Namespace),
+		),
 	}
 	err = bindingValidator.ValidateReferences(context.Background(), bindingWithMismatchedNS)
 	if err == nil {
@@ -153,9 +171,12 @@ func TestIntegration_AddressGroupBindingReferences(t *testing.T) {
 
 	// Test ValidateReferences with invalid service reference
 	invalidServiceBinding := models.AddressGroupBinding{
-		SelfRef:         models.SelfRef{ResourceIdentifier: bindingID},
-		ServiceRef:      models.ServiceRef{ResourceIdentifier: models.NewResourceIdentifier("non-existent-service")},
-		AddressGroupRef: models.AddressGroupRef{ResourceIdentifier: addressGroupID},
+		SelfRef:    models.SelfRef{ResourceIdentifier: bindingID},
+		ServiceRef: models.NewServiceRef("non-existent-service", models.WithNamespace("default")),
+		AddressGroupRef: models.NewAddressGroupRef(
+			addressGroupID.Name,
+			models.WithNamespace(addressGroupID.Namespace),
+		),
 	}
 	err = bindingValidator.ValidateReferences(context.Background(), invalidServiceBinding)
 	if err == nil {
@@ -164,9 +185,12 @@ func TestIntegration_AddressGroupBindingReferences(t *testing.T) {
 
 	// Test ValidateReferences with invalid address group reference
 	invalidAddressGroupBinding := models.AddressGroupBinding{
-		SelfRef:         models.SelfRef{ResourceIdentifier: bindingID},
-		ServiceRef:      models.ServiceRef{ResourceIdentifier: serviceID},
-		AddressGroupRef: models.AddressGroupRef{ResourceIdentifier: models.NewResourceIdentifier("non-existent-address-group")},
+		SelfRef: models.SelfRef{ResourceIdentifier: bindingID},
+		ServiceRef: models.NewServiceRef(
+			serviceID.Name,
+			models.WithNamespace(serviceID.Namespace),
+		),
+		AddressGroupRef: models.NewAddressGroupRef("non-existent-address-group", models.WithNamespace("default")),
 	}
 	err = bindingValidator.ValidateReferences(context.Background(), invalidAddressGroupBinding)
 	if err == nil {
@@ -197,9 +221,15 @@ func TestIntegration_AddressGroupBindingValidateForCreation(t *testing.T) {
 
 	bindingID := models.NewResourceIdentifier("test-binding")
 	binding := models.AddressGroupBinding{
-		SelfRef:         models.SelfRef{ResourceIdentifier: bindingID},
-		ServiceRef:      models.ServiceRef{ResourceIdentifier: serviceID},
-		AddressGroupRef: models.AddressGroupRef{ResourceIdentifier: addressGroupID},
+		SelfRef: models.SelfRef{ResourceIdentifier: bindingID},
+		ServiceRef: models.NewServiceRef(
+			serviceID.Name,
+			models.WithNamespace(serviceID.Namespace),
+		),
+		AddressGroupRef: models.NewAddressGroupRef(
+			addressGroupID.Name,
+			models.WithNamespace(addressGroupID.Namespace),
+		),
 	}
 
 	// Add data to repository
@@ -233,9 +263,12 @@ func TestIntegration_AddressGroupBindingValidateForCreation(t *testing.T) {
 
 	// Test ValidateForCreation with invalid binding
 	invalidBinding := models.AddressGroupBinding{
-		SelfRef:         models.SelfRef{ResourceIdentifier: bindingID},
-		ServiceRef:      models.ServiceRef{ResourceIdentifier: models.NewResourceIdentifier("non-existent-service")},
-		AddressGroupRef: models.AddressGroupRef{ResourceIdentifier: addressGroupID},
+		SelfRef:    models.SelfRef{ResourceIdentifier: bindingID},
+		ServiceRef: models.NewServiceRef("non-existent-service", models.WithNamespace("default")),
+		AddressGroupRef: models.NewAddressGroupRef(
+			addressGroupID.Name,
+			models.WithNamespace(addressGroupID.Namespace),
+		),
 	}
 	err = bindingValidator.ValidateForCreation(context.Background(), &invalidBinding)
 	if err == nil {

@@ -211,6 +211,11 @@ type AddressGroupSpec struct {
 	// Whether to enable trace
 	// +optional
 	Trace bool `json:"trace"`
+
+	// Hosts that belong exclusively to this AddressGroup
+	// Each host can belong to only one AddressGroup
+	// +optional
+	Hosts []ObjectReference `json:"hosts,omitempty"`
 }
 
 // AddressGroupStatus defines the observed state of AddressGroup

@@ -211,6 +211,7 @@ message AddressGroup {
   bool trace = 4;                 // Whether to enable trace
   repeated NetworkItem networks = 5; // Networks associated with this address group
   Meta meta = 6;
+  repeated ObjectReference hosts = 7; // Hosts that belong to this address group (exclusively)
   string address_group_name = 8;  // Computed address group name (e.g., "namespace/name")
 }
 

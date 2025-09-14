@@ -627,6 +627,18 @@ func convertAddressGroup(ag *netguardpb.AddressGroup) models.AddressGroup {
 		Meta:          models.Meta{},
 	}
 
+	// Convert hosts field (NEW: hosts belonging to this address group)
+	if len(ag.Hosts) > 0 {
+		result.Hosts = make([]v1beta1.ObjectReference, len(ag.Hosts))
+		for i, host := range ag.Hosts {
+			result.Hosts[i] = v1beta1.ObjectReference{
+				APIVersion: host.ApiVersion,
+				Kind:       host.Kind,
+				Name:       host.Name,
+			}
+		}
+	}
+
 	if ag.Meta != nil {
 		result.Meta = models.Meta{
 			UID:             ag.Meta.Uid,
@@ -927,6 +939,18 @@ func convertAddressGroupToPB(ag models.AddressGroup) *netguardpb.AddressGroup {
 			Kind:       networkItem.Kind,
 			Namespace:  networkItem.Namespace,
 		})
+	}
+
+	// Convert hosts field (NEW: hosts belonging to this address group)
+	if len(ag.Hosts) > 0 {
+		result.Hosts = make([]*netguardpb.ObjectReference, len(ag.Hosts))
+		for i, host := range ag.Hosts {
+			result.Hosts[i] = &netguardpb.ObjectReference{
+				ApiVersion: host.APIVersion,
+				Kind:       host.Kind,
+				Name:       host.Name,
+			}
+		}
 	}
 
 	return result

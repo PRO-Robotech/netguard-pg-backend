@@ -890,6 +890,14 @@
         "meta": {
           "$ref": "#/definitions/v1Meta"
         },
+        "hosts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ObjectReference"
+          },
+          "title": "Hosts that belong to this address group (exclusively)"
+        },
         "addressGroupName": {
           "type": "string",
           "title": "Computed address group name (e.g., \"namespace/name\")"

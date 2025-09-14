@@ -7,6 +7,7 @@ import (
 	"netguard-pg-backend/internal/application/validation"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/infrastructure/repositories/mem"
+	"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 )
 
 // TestIntegration_ServiceAliasValidation tests the integration of ServiceAliasValidator with the repository
@@ -28,7 +29,7 @@ func TestIntegration_ServiceAliasValidation(t *testing.T) {
 	aliasID := models.NewResourceIdentifier("test-alias")
 	alias := models.ServiceAlias{
 		SelfRef:    models.SelfRef{ResourceIdentifier: aliasID},
-		ServiceRef: models.ServiceRef{ResourceIdentifier: serviceID},
+		ServiceRef: models.NewServiceRef(serviceID.Name, models.WithNamespace(serviceID.Namespace)),
 	}
 
 	// Add data to repository
@@ -92,7 +93,7 @@ func TestIntegration_ServiceAliasReferences(t *testing.T) {
 	aliasID := models.NewResourceIdentifier("test-alias", models.WithNamespace("test-ns"))
 	alias := models.ServiceAlias{
 		SelfRef:    models.SelfRef{ResourceIdentifier: aliasID},
-		ServiceRef: models.ServiceRef{ResourceIdentifier: serviceID},
+		ServiceRef: models.NewServiceRef(serviceID.Name, models.WithNamespace(serviceID.Namespace)),
 	}
 
 	// Add data to repository
@@ -125,9 +126,7 @@ func TestIntegration_ServiceAliasReferences(t *testing.T) {
 		SelfRef: models.SelfRef{
 			ResourceIdentifier: models.NewResourceIdentifier("test-alias", models.WithNamespace("other-ns")),
 		},
-		ServiceRef: models.ServiceRef{
-			ResourceIdentifier: serviceID,
-		},
+		ServiceRef: models.NewServiceRef(serviceID.Name, models.WithNamespace(serviceID.Namespace)),
 	}
 	err = aliasValidator.ValidateReferences(context.Background(), aliasMismatchedNS)
 	if err == nil {
@@ -137,7 +136,7 @@ func TestIntegration_ServiceAliasReferences(t *testing.T) {
 	// Test ValidateReferences with invalid service reference
 	invalidAlias := models.ServiceAlias{
 		SelfRef:    models.SelfRef{ResourceIdentifier: aliasID},
-		ServiceRef: models.ServiceRef{ResourceIdentifier: models.NewResourceIdentifier("non-existent-service")},
+		ServiceRef: models.NewServiceRef("non-existent-service", models.WithNamespace("default")),
 	}
 	err = aliasValidator.ValidateReferences(context.Background(), invalidAlias)
 	if err == nil {
@@ -185,9 +184,7 @@ func TestIntegration_ServiceAliasValidateForCreation(t *testing.T) {
 		SelfRef: models.SelfRef{
 			ResourceIdentifier: models.NewResourceIdentifier("test-alias"),
 		},
-		ServiceRef: models.ServiceRef{
-			ResourceIdentifier: serviceID,
-		},
+		ServiceRef: models.NewServiceRef(serviceID.Name, models.WithNamespace(serviceID.Namespace)),
 	}
 
 	err = aliasValidator.ValidateForCreation(context.Background(), aliasWithoutNS)
@@ -205,9 +202,7 @@ func TestIntegration_ServiceAliasValidateForCreation(t *testing.T) {
 		SelfRef: models.SelfRef{
 			ResourceIdentifier: models.NewResourceIdentifier("test-alias-2", models.WithNamespace("test-ns")),
 		},
-		ServiceRef: models.ServiceRef{
-			ResourceIdentifier: serviceID,
-		},
+		ServiceRef: models.NewServiceRef(serviceID.Name, models.WithNamespace(serviceID.Namespace)),
 	}
 
 	err = aliasValidator.ValidateForCreation(context.Background(), aliasWithMatchingNS)
@@ -220,9 +215,7 @@ func TestIntegration_ServiceAliasValidateForCreation(t *testing.T) {
 		SelfRef: models.SelfRef{
 			ResourceIdentifier: models.NewResourceIdentifier("test-alias-3", models.WithNamespace("other-ns")),
 		},
-		ServiceRef: models.ServiceRef{
-			ResourceIdentifier: serviceID,
-		},
+		ServiceRef: models.NewServiceRef(serviceID.Name, models.WithNamespace(serviceID.Namespace)),
 	}
 
 	err = aliasValidator.ValidateForCreation(context.Background(), aliasWithMismatchedNS)
@@ -235,9 +228,7 @@ func TestIntegration_ServiceAliasValidateForCreation(t *testing.T) {
 		SelfRef: models.SelfRef{
 			ResourceIdentifier: models.NewResourceIdentifier("test-alias-4"),
 		},
-		ServiceRef: models.ServiceRef{
-			ResourceIdentifier: models.NewResourceIdentifier("non-existent-service"),
-		},
+		ServiceRef: models.NewServiceRef("non-existent-service", models.WithNamespace("default")),
 	}
 
 	err = aliasValidator.ValidateForCreation(context.Background(), invalidAlias)
@@ -265,14 +256,28 @@ func TestIntegration_ServiceAliasDependencies(t *testing.T) {
 	aliasID := models.NewResourceIdentifier("test-alias")
 	alias := models.ServiceAlias{
 		SelfRef:    models.SelfRef{ResourceIdentifier: aliasID},
-		ServiceRef: models.ServiceRef{ResourceIdentifier: serviceID},
+		ServiceRef: models.NewServiceRef(serviceID.Name, models.WithNamespace(serviceID.Namespace)),
 	}
 
 	ruleID := models.NewResourceIdentifier("test-rule")
 	rule := models.RuleS2S{
-		SelfRef:         models.SelfRef{ResourceIdentifier: ruleID},
-		ServiceLocalRef: models.ServiceAliasRef{ResourceIdentifier: aliasID},
-		ServiceRef:      models.ServiceAliasRef{ResourceIdentifier: aliasID},
+		SelfRef: models.SelfRef{ResourceIdentifier: ruleID},
+		ServiceLocalRef: v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "ServiceAlias",
+				Name:       aliasID.Name,
+			},
+			Namespace: aliasID.Namespace,
+		},
+		ServiceRef: v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "ServiceAlias",
+				Name:       aliasID.Name,
+			},
+			Namespace: aliasID.Namespace,
+		},
 	}
 
 	// Add data to repository

@@ -81,8 +81,11 @@ func TestIntegration_ServiceDependencies(t *testing.T) {
 
 	aliasID := models.NewResourceIdentifier("test-alias")
 	alias := models.ServiceAlias{
-		SelfRef:    models.SelfRef{ResourceIdentifier: aliasID},
-		ServiceRef: models.ServiceRef{ResourceIdentifier: serviceID},
+		SelfRef: models.SelfRef{ResourceIdentifier: aliasID},
+		ServiceRef: models.NewServiceRef(
+			serviceID.Name,
+			models.WithNamespace(serviceID.Namespace),
+		),
 	}
 
 	// Add data to repository
@@ -158,7 +161,7 @@ func TestIntegration_ServiceReferences(t *testing.T) {
 	service := models.Service{
 		SelfRef: models.SelfRef{ResourceIdentifier: serviceID},
 		AddressGroups: []models.AddressGroupRef{
-			{ResourceIdentifier: addressGroupID},
+			models.NewAddressGroupRef(addressGroupID.Name, models.WithNamespace(addressGroupID.Namespace)),
 		},
 	}
 

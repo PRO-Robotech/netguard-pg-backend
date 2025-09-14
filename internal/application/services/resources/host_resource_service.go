@@ -602,3 +602,102 @@ func (s *HostResourceService) UpdateHostBinding(ctx context.Context, hostID mode
 
 	return nil
 }
+
+// UpdateHostBindingStatus updates Host.isBound status based on AddressGroup hosts changes
+func (s *HostResourceService) UpdateHostBindingStatus(ctx context.Context, oldAG, newAG *models.AddressGroup) error {
+	log.Printf("🔄 UpdateHostBindingStatus called for AddressGroup changes")
+
+	// Get lists of hosts from old and new AddressGroups
+	var oldHosts, newHosts []v1beta1.ObjectReference
+
+	if oldAG != nil {
+		oldHosts = oldAG.Hosts
+		log.Printf("🔍 Old AddressGroup %s has %d hosts", oldAG.Key(), len(oldHosts))
+	}
+	if newAG != nil {
+		newHosts = newAG.Hosts
+		log.Printf("🔍 New AddressGroup %s has %d hosts", newAG.Key(), len(newHosts))
+	}
+
+	// Convert to maps for easier comparison
+	oldHostsMap := make(map[string]bool)
+	for _, host := range oldHosts {
+		oldHostsMap[host.Name] = true
+	}
+
+	newHostsMap := make(map[string]bool)
+	for _, host := range newHosts {
+		newHostsMap[host.Name] = true
+	}
+
+	// Get namespace (from newAG or oldAG)
+	namespace := ""
+	addressGroupName := ""
+	if newAG != nil {
+		namespace = newAG.Namespace
+		addressGroupName = newAG.Name
+	} else if oldAG != nil {
+		namespace = oldAG.Namespace
+	}
+
+	// Update hosts that were removed (set isBound = false)
+	for hostName := range oldHostsMap {
+		if !newHostsMap[hostName] {
+			log.Printf("🔓 Unbinding host %s/%s from AddressGroup", namespace, hostName)
+			if err := s.updateHostBindingStatusForHost(ctx, hostName, namespace, false, ""); err != nil {
+				log.Printf("❌ Failed to unbind host %s/%s: %v", namespace, hostName, err)
+			}
+		}
+	}
+
+	// Update hosts that were added (set isBound = true)
+	for hostName := range newHostsMap {
+		if !oldHostsMap[hostName] {
+			log.Printf("🔒 Binding host %s/%s to AddressGroup %s", namespace, hostName, addressGroupName)
+			if err := s.updateHostBindingStatusForHost(ctx, hostName, namespace, true, addressGroupName); err != nil {
+				log.Printf("❌ Failed to bind host %s/%s to AddressGroup %s: %v", namespace, hostName, addressGroupName, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// updateHostBindingStatusForHost updates a specific Host's binding status
+func (s *HostResourceService) updateHostBindingStatusForHost(ctx context.Context, hostName, namespace string, isBound bool, addressGroupName string) error {
+	hostID := models.ResourceIdentifier{
+		Name:      hostName,
+		Namespace: namespace,
+	}
+
+	// Get the Host
+	host, err := s.getHostByID(ctx, hostID.Key())
+	if err != nil {
+		return fmt.Errorf("failed to get host %s/%s: %w", namespace, hostName, err)
+	}
+
+	// Update Host status
+	host.IsBound = isBound
+	if isBound {
+		host.AddressGroupName = addressGroupName
+		host.AddressGroupRef = &v1beta1.ObjectReference{
+			APIVersion: "netguard.sgroups.io/v1beta1",
+			Kind:       "AddressGroup",
+			Name:       addressGroupName,
+		}
+	} else {
+		host.AddressGroupName = ""
+		host.AddressGroupRef = nil
+		host.BindingRef = nil
+	}
+
+	// Update the Host in registry
+	if err := s.UpdateHost(ctx, host); err != nil {
+		return fmt.Errorf("failed to update host status: %w", err)
+	}
+
+	log.Printf("✅ Successfully updated Host %s/%s: isBound=%v, addressGroupName=%s",
+		namespace, hostName, isBound, addressGroupName)
+
+	return nil
+}
