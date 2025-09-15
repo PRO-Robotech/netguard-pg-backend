@@ -52,7 +52,6 @@ func NewNetguardFacade(
 	conditionManager *ConditionManager,
 	syncManager interfaces.SyncManager,
 ) *NetguardFacade {
-	// Create condition manager adapters
 	serviceConditionAdapter := &serviceConditionManagerAdapter{conditionManager}
 	addressGroupConditionAdapter := &addressGroupConditionManagerAdapter{conditionManager}
 	networkConditionAdapter := &networkConditionManagerAdapter{conditionManager}
