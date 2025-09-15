@@ -37,8 +37,8 @@ type AddressGroupResourceService struct {
 	syncManager        interfaces.SyncManager
 	conditionManager   AddressGroupConditionManagerInterface
 	validationService  *ValidationService
-	ruleS2SRegenerator RuleS2SRegenerator   // Optional - for IEAgAg rule updates when bindings change
-	hostService        *HostResourceService // For updating Host.isBound status
+	ruleS2SRegenerator RuleS2SRegenerator
+	hostService        *HostResourceService
 }
 
 // RuleS2SRegenerator interface is now defined in interfaces.go to avoid circular dependencies
@@ -188,8 +188,6 @@ func (s *AddressGroupResourceService) CreateAddressGroup(ctx context.Context, ad
 			// Don't fail the operation if condition processing fails
 		}
 	}
-
-	// Note: Host aggregation is now handled automatically by PostgreSQL triggers
 
 	// Sync with external systems after successful creation
 	s.syncAddressGroupsWithSGroups(ctx, []models.AddressGroup{addressGroup}, types.SyncOperationUpsert)
@@ -2475,9 +2473,6 @@ func (s *AddressGroupResourceService) validateSGroupSyncForChangedHosts(ctx cont
 				return errors.Wrapf(err, "SGROUP validation failed for added hosts in AddressGroup %s", newAG.Key())
 			}
 		}
-
-		// Note: We don't need to validate removed hosts with SGROUP since they're being removed
-		// The SGROUP sync for removal will happen post-commit in updateHostBindingStatusForSyncedAddressGroups
 	}
 
 	return nil
@@ -2540,7 +2535,6 @@ func (s *AddressGroupResourceService) validateHostsSGroupSync(ctx context.Contex
 			return errors.Wrapf(err, "host reference %d: failed to load host '%s' for SGROUP validation", i, hostRef.Name)
 		}
 
-		// Test SGROUP synchronization
 		err = s.syncManager.SyncEntity(ctx, host, types.SyncOperationUpsert)
 		if err != nil {
 			return errors.Errorf("SGROUP synchronization failed for host '%s' in namespace '%s': %v - the host cannot be added to AddressGroup %s due to SGROUP constraints",
