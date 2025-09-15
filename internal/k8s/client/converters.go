@@ -1,6 +1,7 @@
 package client
 
 import (
+	"fmt"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 	// commonpb "github.com/H-BF/protos/pkg/api/common" - replaced with local types
@@ -246,7 +247,51 @@ func convertAddressGroupFromProto(protoAG *netguardpb.AddressGroup) models.Addre
 		})
 	}
 
+	// Convert hosts field (NEW: hosts belonging to this address group)
+	if len(protoAG.Hosts) > 0 {
+		addressGroup.Hosts = make([]v1beta1.ObjectReference, len(protoAG.Hosts))
+		for i, host := range protoAG.Hosts {
+			addressGroup.Hosts[i] = v1beta1.ObjectReference{
+				APIVersion: host.ApiVersion,
+				Kind:       host.Kind,
+				Name:       host.Name,
+			}
+		}
+	}
+
+	// Convert AggregatedHosts field (NEW: aggregated hosts from protobuf)
+	fmt.Printf("🔍 CLIENT_CONVERSION_DEBUG: Converting %d aggregated hosts from protobuf for %s/%s\n",
+		len(protoAG.AggregatedHosts), protoAG.SelfRef.Namespace, protoAG.SelfRef.Name)
+	if len(protoAG.AggregatedHosts) > 0 {
+		addressGroup.AggregatedHosts = make([]models.HostReference, len(protoAG.AggregatedHosts))
+		for i, hostRef := range protoAG.AggregatedHosts {
+			fmt.Printf("  Converting protobuf host[%d]: Name=%s, UUID=%s, Source=%s\n",
+				i, hostRef.Ref.Name, hostRef.Uuid, hostRef.Source.String())
+			addressGroup.AggregatedHosts[i] = models.HostReference{
+				ObjectReference: v1beta1.ObjectReference{
+					APIVersion: hostRef.Ref.ApiVersion,
+					Kind:       hostRef.Ref.Kind,
+					Name:       hostRef.Ref.Name,
+				},
+				UUID:   hostRef.Uuid,
+				Source: convertHostRegistrationSourceFromPB(hostRef.Source),
+			}
+		}
+	}
+
 	return addressGroup
+}
+
+// convertHostRegistrationSourceFromPB converts protobuf HostRegistrationSource to domain enum
+func convertHostRegistrationSourceFromPB(source netguardpb.HostRegistrationSource) models.HostRegistrationSource {
+	switch source {
+	case netguardpb.HostRegistrationSource_HOST_SOURCE_SPEC:
+		return models.HostSourceSpec
+	case netguardpb.HostRegistrationSource_HOST_SOURCE_BINDING:
+		return models.HostSourceBinding
+	default:
+		return models.HostSourceSpec // default
+	}
 }
 
 func convertAddressGroupToProto(addressGroup models.AddressGroup) *netguardpb.AddressGroup {
@@ -282,6 +327,18 @@ func convertAddressGroupToProto(addressGroup models.AddressGroup) *netguardpb.Ad
 
 	if !addressGroup.Meta.CreationTS.IsZero() {
 		protoAG.Meta.CreationTs = timestamppb.New(addressGroup.Meta.CreationTS.Time)
+	}
+
+	// Convert hosts field (NEW: hosts belonging to this address group)
+	if len(addressGroup.Hosts) > 0 {
+		protoAG.Hosts = make([]*netguardpb.ObjectReference, len(addressGroup.Hosts))
+		for i, host := range addressGroup.Hosts {
+			protoAG.Hosts[i] = &netguardpb.ObjectReference{
+				ApiVersion: host.APIVersion,
+				Kind:       host.Kind,
+				Name:       host.Name,
+			}
+		}
 	}
 
 	return protoAG

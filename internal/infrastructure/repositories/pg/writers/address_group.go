@@ -110,6 +110,12 @@ func (w *Writer) upsertAddressGroup(ctx context.Context, ag models.AddressGroup)
 		return errors.Wrap(err, "failed to marshal networks")
 	}
 
+	// Marshal Hosts field (NEW: hosts belonging to this address group)
+	hostsJSON, err := json.Marshal(ag.Hosts)
+	if err != nil {
+		return errors.Wrap(err, "failed to marshal hosts")
+	}
+
 	// First, check if address group exists and get existing resource version
 	var existingResourceVersion sql.NullInt64
 	existingQuery := `SELECT resource_version FROM address_groups WHERE namespace = $1 AND name = $2`
@@ -139,17 +145,18 @@ func (w *Writer) upsertAddressGroup(ctx context.Context, ag models.AddressGroup)
 		}
 	}
 
-	// Then, upsert the address group using the resource version (including Networks field)
+	// Then, upsert the address group using the resource version (including Networks and Hosts fields)
 	addressGroupQuery := `
-		INSERT INTO address_groups (namespace, name, default_action, logs, trace, description, networks, resource_version)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO address_groups (namespace, name, default_action, logs, trace, description, networks, hosts, resource_version)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		ON CONFLICT (namespace, name) DO UPDATE SET
 			default_action = $3,
 			logs = $4,
 			trace = $5,
 			description = $6,
 			networks = $7,
-			resource_version = $8`
+			hosts = $8,
+			resource_version = $9`
 
 	if err := w.exec(ctx, addressGroupQuery,
 		ag.Namespace,
@@ -159,6 +166,7 @@ func (w *Writer) upsertAddressGroup(ctx context.Context, ag models.AddressGroup)
 		ag.Trace,
 		"",           // description field
 		networksJSON, // Networks field - CRITICAL FIX
+		hostsJSON,    // Hosts field - NEW: hosts belonging to this address group
 		resourceVersion,
 	); err != nil {
 		return errors.Wrapf(err, "failed to upsert address group %s/%s", ag.Namespace, ag.Name)

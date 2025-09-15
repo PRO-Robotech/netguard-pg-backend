@@ -7,6 +7,9 @@ import (
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
+	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
+	"netguard-pg-backend/internal/sync/interfaces"
+	"netguard-pg-backend/internal/sync/types"
 
 	"github.com/pkg/errors"
 )
@@ -43,6 +46,16 @@ func (v *AddressGroupValidator) ValidateForCreation(ctx context.Context, group m
 		return fmt.Errorf("networks can't be modified or added during creation")
 	}
 
+	// PHASE 2.5: Validate host references (existence and format)
+	if err := v.validateHostReferences(ctx, group.Hosts, group.ResourceIdentifier); err != nil {
+		return err
+	}
+
+	// PHASE 2.6: Validate host exclusivity (NEW: ensure hosts don't belong to other AddressGroups)
+	if err := v.validateHostExclusivity(ctx, group.Hosts, group.ResourceIdentifier); err != nil {
+		return err
+	}
+
 	// PHASE 3: Validate references (existing validation)
 	return v.ValidateReferences(ctx, group)
 }
@@ -65,6 +78,17 @@ func (v *AddressGroupValidator) ValidateForUpdate(ctx context.Context, oldGroup,
 	if err := v.validateNetworks(newGroup.Networks); err != nil {
 		return err
 	}
+
+	// Validate host references (existence and format) for new or changed hosts
+	if err := v.validateHostReferences(ctx, newGroup.Hosts, newGroup.ResourceIdentifier); err != nil {
+		return err
+	}
+
+	// Validate host exclusivity for new or changed hosts
+	if err := v.validateHostExclusivity(ctx, newGroup.Hosts, newGroup.ResourceIdentifier); err != nil {
+		return err
+	}
+
 	// For address groups, the validation for update is the same as for creation
 	// We might add specific update validation rules in the future if needed
 	return v.ValidateReferences(ctx, newGroup)
@@ -89,6 +113,118 @@ func (v *AddressGroupValidator) validateNetworks(networks []models.NetworkItem) 
 
 		if network.Kind == "" {
 			return fmt.Errorf("network item %d (%s): kind is required", i, network.Name)
+		}
+	}
+
+	return nil
+}
+
+// validateHostReferences validates host references in AddressGroup (existence and format)
+func (v *AddressGroupValidator) validateHostReferences(ctx context.Context, hosts []netguardv1beta1.ObjectReference, currentAG models.ResourceIdentifier) error {
+	if len(hosts) == 0 {
+		return nil // No hosts to validate
+	}
+
+	for i, host := range hosts {
+		// PHASE 1: Validate ObjectReference format
+		if host.Name == "" {
+			return fmt.Errorf("host reference %d: name is required", i)
+		}
+
+		// PHASE 2: Validate correct Kind (must be "Host", not "Hosts")
+		if host.Kind != "Host" {
+			return fmt.Errorf("host reference %d (%s): invalid kind '%s' - must be 'Host' (not 'Hosts')", i, host.Name, host.Kind)
+		}
+
+		// PHASE 3: Validate correct ApiVersion
+		expectedAPIVersion := "netguard.sgroups.io/v1beta1"
+		if host.APIVersion != expectedAPIVersion {
+			return fmt.Errorf("host reference %d (%s): invalid apiVersion '%s' - must be '%s'", i, host.Name, host.APIVersion, expectedAPIVersion)
+		}
+
+		// PHASE 4: Validate host existence
+		hostID := models.ResourceIdentifier{
+			Name:      host.Name,
+			Namespace: currentAG.Namespace, // Hosts must be in same namespace as AddressGroup
+		}
+
+		_, err := v.reader.GetHostByID(ctx, hostID)
+		if err != nil {
+			if errors.Is(err, ports.ErrNotFound) {
+				return fmt.Errorf("host reference %d: host '%s' does not exist in namespace '%s'", i, host.Name, currentAG.Namespace)
+			}
+			return fmt.Errorf("host reference %d: failed to validate host '%s' existence: %v", i, host.Name, err)
+		}
+	}
+
+	return nil
+}
+
+// validateHostExclusivity validates that hosts in the AddressGroup don't belong to other AddressGroups
+// Each host can belong to only one AddressGroup (exclusivity constraint)
+func (v *AddressGroupValidator) validateHostExclusivity(ctx context.Context, hosts []netguardv1beta1.ObjectReference, currentAG models.ResourceIdentifier) error {
+	if len(hosts) == 0 {
+		return nil // No hosts to validate
+	}
+
+	// Check each host against all existing AddressGroups
+	for _, host := range hosts {
+		// List all AddressGroups to check for host conflicts
+		err := v.reader.ListAddressGroups(ctx, func(ag models.AddressGroup) error {
+			// Skip the current AddressGroup being validated
+			if ag.Key() == currentAG.Key() {
+				return nil
+			}
+
+			// Check if any of the AG's hosts match the host we're validating
+			// Note: hosts must be in the same namespace as the AddressGroup
+			for _, existingHost := range ag.Hosts {
+				if host.Name == existingHost.Name && currentAG.Namespace == ag.Namespace {
+					return fmt.Errorf("host %s/%s already belongs to AddressGroup %s - each host can belong to only one AddressGroup",
+						currentAG.Namespace, host.Name, ag.Key())
+				}
+			}
+			return nil
+		}, ports.EmptyScope{})
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// ValidateSgroupSyncForHosts validates that hosts can be synchronized with SGROUP
+// This is a pre-validation step that tests SGROUP synchronization before saving to database
+func (v *AddressGroupValidator) ValidateSgroupSyncForHosts(ctx context.Context, hosts []netguardv1beta1.ObjectReference, currentAG models.ResourceIdentifier, syncManager interfaces.SyncManager) error {
+	if len(hosts) == 0 {
+		return nil // No hosts to validate
+	}
+
+	if syncManager == nil {
+		return nil
+	}
+
+	for i, hostRef := range hosts {
+		// Get the actual host entity from database
+		hostID := models.ResourceIdentifier{
+			Name:      hostRef.Name,
+			Namespace: currentAG.Namespace, // Host must be in same namespace as AddressGroup
+		}
+
+		host, err := v.reader.GetHostByID(ctx, hostID)
+		if err != nil {
+			if errors.Is(err, ports.ErrNotFound) {
+				return fmt.Errorf("host reference %d: host '%s' does not exist in namespace '%s'", i, hostRef.Name, currentAG.Namespace)
+			}
+			return fmt.Errorf("host reference %d: failed to load host '%s' for SGROUP validation: %v", i, hostRef.Name, err)
+		}
+
+		err = syncManager.SyncEntity(ctx, host, types.SyncOperationUpsert)
+		if err != nil {
+			return fmt.Errorf("SGROUP synchronization failed for host '%s' in namespace '%s': %v - the host cannot be added to this AddressGroup due to SGROUP constraints",
+				hostRef.Name, currentAG.Namespace, err)
 		}
 	}
 

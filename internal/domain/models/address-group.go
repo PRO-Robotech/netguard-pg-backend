@@ -9,6 +9,63 @@ import (
 	pb "github.com/PRO-Robotech/protos/pkg/api/sgroups"
 )
 
+// HostRegistrationSource represents the source of host registration
+type HostRegistrationSource string
+
+const (
+	// HostSourceSpec indicates the host was registered via AddressGroup.spec.hosts
+	HostSourceSpec HostRegistrationSource = "spec"
+	// HostSourceBinding indicates the host was registered via HostBinding
+	HostSourceBinding HostRegistrationSource = "binding"
+)
+
+// HostReference represents a reference to a Host with additional metadata
+type HostReference struct {
+	// Reference to the Host object (namespace is implied from AddressGroup context)
+	ObjectReference netguardv1beta1.ObjectReference `json:"ref"`
+
+	// UUID of the host (for efficient lookup and SGroup sync)
+	UUID string `json:"uuid"`
+
+	// Source indicates how this host was registered (spec or binding)
+	Source HostRegistrationSource `json:"source"`
+}
+
+// NewHostReference creates a new HostReference from an ObjectReference
+func NewHostReference(ref netguardv1beta1.ObjectReference, uuid string, source HostRegistrationSource) HostReference {
+	return HostReference{
+		ObjectReference: ref,
+		UUID:            uuid,
+		Source:          source,
+	}
+}
+
+// NewHostReferenceFromHost creates a new HostReference from a Host model
+func NewHostReferenceFromHost(host *Host, source HostRegistrationSource) HostReference {
+	return HostReference{
+		ObjectReference: netguardv1beta1.ObjectReference{
+			APIVersion: "netguard.sgroups.io/v1beta1",
+			Kind:       "Host",
+			Name:       host.Name,
+		},
+		UUID:   host.UUID,
+		Source: source,
+	}
+}
+
+// Key returns the unique key for the HostReference within a namespace context
+func (hr *HostReference) Key(namespace string) string {
+	if namespace == "" {
+		return hr.ObjectReference.Name
+	}
+	return fmt.Sprintf("%s/%s", namespace, hr.ObjectReference.Name)
+}
+
+// GetName returns the name of the referenced host
+func (hr *HostReference) GetName() string {
+	return hr.ObjectReference.Name
+}
+
 // NetworkItem represents a network item in an address group
 type NetworkItem struct {
 	Name       string `json:"name"`
@@ -26,7 +83,15 @@ type AddressGroup struct {
 	Trace            bool          `json:"trace,omitempty"`            // Whether to enable trace
 	Networks         []NetworkItem `json:"networks,omitempty"`         // Networks associated with this address group
 	AddressGroupName string        `json:"addressGroupName,omitempty"` // Name used in sgroups synchronization
-	Meta             Meta
+
+	// Hosts that belong to this address group (from spec.hosts)
+	Hosts []netguardv1beta1.ObjectReference `json:"hosts,omitempty"`
+
+	// AggregatedHosts contains all hosts that belong to this AddressGroup,
+	// aggregated from both spec.hosts and HostBinding resources
+	AggregatedHosts []HostReference `json:"aggregatedHosts,omitempty"`
+
+	Meta Meta
 }
 
 // AddressGroupRef represents a reference to an AddressGroup
@@ -161,6 +226,22 @@ func (ag *AddressGroup) DeepCopy() Resource {
 		copy.Networks = make([]NetworkItem, len(ag.Networks))
 		for i, network := range ag.Networks {
 			copy.Networks[i] = network
+		}
+	}
+
+	// Deep copy hosts
+	if ag.Hosts != nil {
+		copy.Hosts = make([]netguardv1beta1.ObjectReference, len(ag.Hosts))
+		for i, host := range ag.Hosts {
+			copy.Hosts[i] = host
+		}
+	}
+
+	// Deep copy aggregated hosts
+	if ag.AggregatedHosts != nil {
+		copy.AggregatedHosts = make([]HostReference, len(ag.AggregatedHosts))
+		for i, hostRef := range ag.AggregatedHosts {
+			copy.AggregatedHosts[i] = hostRef
 		}
 	}
 

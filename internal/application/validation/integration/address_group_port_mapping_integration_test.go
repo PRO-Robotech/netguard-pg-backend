@@ -27,9 +27,10 @@ func TestIntegration_AddressGroupPortMappingValidation(t *testing.T) {
 
 	// Create a port mapping with a service reference
 	accessPorts := make(map[models.ServiceRef]models.ServicePorts)
-	accessPorts[models.ServiceRef{
-		ResourceIdentifier: serviceID,
-	}] = models.ServicePorts{
+	accessPorts[models.NewServiceRef(
+		serviceID.Name,
+		models.WithNamespace(serviceID.Namespace),
+	)] = models.ServicePorts{
 		Ports: models.ProtocolPorts{
 			models.TCP: []models.PortRange{{Start: 80, End: 80}},
 		},
@@ -101,9 +102,10 @@ func TestIntegration_AddressGroupPortMappingReferences(t *testing.T) {
 
 	// Create a port mapping with a service reference
 	accessPorts := make(map[models.ServiceRef]models.ServicePorts)
-	accessPorts[models.ServiceRef{
-		ResourceIdentifier: serviceID,
-	}] = models.ServicePorts{
+	accessPorts[models.NewServiceRef(
+		serviceID.Name,
+		models.WithNamespace(serviceID.Namespace),
+	)] = models.ServicePorts{
 		Ports: models.ProtocolPorts{
 			models.TCP: []models.PortRange{{Start: 80, End: 80}},
 		},
@@ -142,9 +144,7 @@ func TestIntegration_AddressGroupPortMappingReferences(t *testing.T) {
 
 	// Test ValidateReferences with invalid service reference
 	invalidAccessPorts := make(map[models.ServiceRef]models.ServicePorts)
-	invalidAccessPorts[models.ServiceRef{
-		ResourceIdentifier: models.NewResourceIdentifier("non-existent-service"),
-	}] = models.ServicePorts{
+	invalidAccessPorts[models.NewServiceRef("non-existent-service", models.WithNamespace("default"))] = models.ServicePorts{
 		Ports: models.ProtocolPorts{
 			models.TCP: []models.PortRange{{Start: 80, End: 80}},
 		},
@@ -179,9 +179,10 @@ func TestIntegration_AddressGroupPortMappingValidateForCreation(t *testing.T) {
 
 	// Create a port mapping with a service reference
 	accessPorts := make(map[models.ServiceRef]models.ServicePorts)
-	accessPorts[models.ServiceRef{
-		ResourceIdentifier: serviceID,
-	}] = models.ServicePorts{
+	accessPorts[models.NewServiceRef(
+		serviceID.Name,
+		models.WithNamespace(serviceID.Namespace),
+	)] = models.ServicePorts{
 		Ports: models.ProtocolPorts{
 			models.TCP: []models.PortRange{{Start: 80, End: 80}},
 		},
@@ -220,9 +221,7 @@ func TestIntegration_AddressGroupPortMappingValidateForCreation(t *testing.T) {
 
 	// Test ValidateForCreation with invalid mapping
 	invalidAccessPorts := make(map[models.ServiceRef]models.ServicePorts)
-	invalidAccessPorts[models.ServiceRef{
-		ResourceIdentifier: models.NewResourceIdentifier("non-existent-service"),
-	}] = models.ServicePorts{
+	invalidAccessPorts[models.NewServiceRef("non-existent-service", models.WithNamespace("default"))] = models.ServicePorts{
 		Ports: models.ProtocolPorts{
 			models.TCP: []models.PortRange{{Start: 80, End: 80}},
 		},

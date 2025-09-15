@@ -20,6 +20,12 @@ enum Traffic {
   Egress = 1;
 }
 
+// HostRegistrationSource represents the source of host registration
+enum HostRegistrationSource {
+  HOST_SOURCE_SPEC = 0;    // Host registered via AddressGroup.spec.hosts
+  HOST_SOURCE_BINDING = 1; // Host registered via HostBinding resource
+}
+
 option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
   info: {
     title: "Netguard API";
@@ -71,6 +77,18 @@ message ObjectReference {
   
   // Name of the referenced object
   string name = 3;
+}
+
+// HostReference represents a reference to a Host with additional metadata
+message HostReference {
+  // Reference to the Host object (namespace is implied from AddressGroup context)
+  ObjectReference ref = 1;
+  
+  // UUID of the host (for efficient lookup and SGroup sync)
+  string uuid = 2;
+  
+  // Source indicates how this host was registered (spec or binding)
+  HostRegistrationSource source = 3;
 }
 
 // NamespacedObjectReference extends ObjectReference with a Namespace field
@@ -211,7 +229,9 @@ message AddressGroup {
   bool trace = 4;                 // Whether to enable trace
   repeated NetworkItem networks = 5; // Networks associated with this address group
   Meta meta = 6;
+  repeated ObjectReference hosts = 7; // Hosts that belong to this address group (exclusively)
   string address_group_name = 8;  // Computed address group name (e.g., "namespace/name")
+  repeated HostReference aggregated_hosts = 9; // All hosts from any source (spec + HostBinding)
 }
 
 // AddressGroupBinding - binding between a service and an address group

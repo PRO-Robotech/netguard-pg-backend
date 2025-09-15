@@ -28,6 +28,8 @@ func (c *AddressGroupConverter) ToDomain(ctx context.Context, k8sObj *netguardv1
 	networkHelper := &NetworkItemConversionHelper{}
 	networks := networkHelper.ConvertNetworkItemsToDomain(k8sObj.Networks)
 
+	aggregatedHosts := convertHostReferencesToDomain(k8sObj.AggregatedHosts)
+
 	// Log incoming AddressGroupName value
 	fmt.Printf("🔍 REGISTRY_DEBUG: AddressGroupConverter.ToDomain for %s/%s - incoming Status.AddressGroupName: '%s'\n",
 		k8sObj.Namespace, k8sObj.Name, k8sObj.Status.AddressGroupName)
@@ -62,6 +64,8 @@ func (c *AddressGroupConverter) ToDomain(ctx context.Context, k8sObj *netguardv1
 		Logs:             k8sObj.Spec.Logs,
 		Trace:            k8sObj.Spec.Trace,
 		Networks:         networks,
+		Hosts:            k8sObj.Spec.Hosts,
+		AggregatedHosts:  aggregatedHosts,
 		AddressGroupName: finalAddressGroupName,
 		Meta:             ConvertMetadataToDomain(k8sObj.ObjectMeta, k8sObj.Status.Conditions, k8sObj.Status.ObservedGeneration),
 	}
@@ -79,6 +83,8 @@ func (c *AddressGroupConverter) FromDomain(ctx context.Context, domainObj *model
 	networkHelper := &NetworkItemConversionHelper{}
 	networks := networkHelper.ConvertNetworkItemsFromDomain(domainObj.Networks)
 
+	aggregatedHostsK8s := convertHostReferencesToK8s(domainObj.AggregatedHosts)
+
 	// Create k8s address group with standard metadata conversion
 	k8sAddressGroup := &netguardv1beta1.AddressGroup{
 		TypeMeta:   CreateStandardTypeMetaForResource("AddressGroup"),
@@ -87,8 +93,10 @@ func (c *AddressGroupConverter) FromDomain(ctx context.Context, domainObj *model
 			DefaultAction: netguardv1beta1.RuleAction(domainObj.DefaultAction),
 			Logs:          domainObj.Logs,
 			Trace:         domainObj.Trace,
+			Hosts:         domainObj.Hosts,
 		},
-		Networks: networks,
+		Networks:        networks,
+		AggregatedHosts: aggregatedHostsK8s,
 	}
 
 	// Convert status using standard helper
@@ -125,4 +133,38 @@ func (c *AddressGroupConverter) ToList(ctx context.Context, domainObjs []*models
 // NewAddressGroupConverter creates a new AddressGroupConverter instance
 func NewAddressGroupConverter() *AddressGroupConverter {
 	return &AddressGroupConverter{}
+}
+
+// convertHostReferencesToDomain converts K8s HostReference slice to domain HostReference slice
+func convertHostReferencesToDomain(k8sHostRefs []netguardv1beta1.HostReference) []models.HostReference {
+	if k8sHostRefs == nil {
+		return nil
+	}
+
+	domainHostRefs := make([]models.HostReference, len(k8sHostRefs))
+	for i, k8sRef := range k8sHostRefs {
+		domainHostRefs[i] = models.HostReference{
+			ObjectReference: k8sRef.ObjectReference,
+			UUID:            k8sRef.UUID,
+			Source:          models.HostRegistrationSource(k8sRef.Source),
+		}
+	}
+	return domainHostRefs
+}
+
+// convertHostReferencesToK8s converts domain HostReference slice to K8s HostReference slice
+func convertHostReferencesToK8s(domainHostRefs []models.HostReference) []netguardv1beta1.HostReference {
+	if domainHostRefs == nil {
+		return nil
+	}
+
+	k8sHostRefs := make([]netguardv1beta1.HostReference, len(domainHostRefs))
+	for i, domainRef := range domainHostRefs {
+		k8sHostRefs[i] = netguardv1beta1.HostReference{
+			ObjectReference: domainRef.ObjectReference,
+			UUID:            domainRef.UUID,
+			Source:          netguardv1beta1.HostRegistrationSource(domainRef.Source),
+		}
+	}
+	return k8sHostRefs
 }

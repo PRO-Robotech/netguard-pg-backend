@@ -78,7 +78,10 @@ func TestIntegration_AddressGroupDependencies(t *testing.T) {
 	service := models.Service{
 		SelfRef: models.SelfRef{ResourceIdentifier: serviceID},
 		AddressGroups: []models.AddressGroupRef{
-			{ResourceIdentifier: addressGroupID},
+			models.NewAddressGroupRef(
+				addressGroupID.Name,
+				models.WithNamespace(addressGroupID.Namespace),
+			),
 		},
 		IngressPorts: []models.IngressPort{
 			{Protocol: models.TCP, Port: "80", Description: "HTTP"},
@@ -88,9 +91,15 @@ func TestIntegration_AddressGroupDependencies(t *testing.T) {
 	// Create AddressGroupBinding (необходимо для mem repository)
 	bindingID := models.ResourceIdentifier{Name: "test-binding", Namespace: "default"}
 	binding := models.AddressGroupBinding{
-		SelfRef:         models.SelfRef{ResourceIdentifier: bindingID},
-		ServiceRef:      models.ServiceRef{ResourceIdentifier: serviceID},
-		AddressGroupRef: models.AddressGroupRef{ResourceIdentifier: addressGroupID},
+		SelfRef: models.SelfRef{ResourceIdentifier: bindingID},
+		ServiceRef: models.NewServiceRef(
+			serviceID.Name,
+			models.WithNamespace(serviceID.Namespace),
+		),
+		AddressGroupRef: models.NewAddressGroupRef(
+			addressGroupID.Name,
+			models.WithNamespace(addressGroupID.Namespace),
+		),
 	}
 
 	// Add data to repository
@@ -184,9 +193,15 @@ func TestIntegration_AddressGroupBindingDependencies(t *testing.T) {
 
 	bindingID := models.NewResourceIdentifier("test-binding")
 	binding := models.AddressGroupBinding{
-		SelfRef:         models.SelfRef{ResourceIdentifier: bindingID},
-		ServiceRef:      models.ServiceRef{ResourceIdentifier: serviceID},
-		AddressGroupRef: models.AddressGroupRef{ResourceIdentifier: addressGroupID},
+		SelfRef: models.SelfRef{ResourceIdentifier: bindingID},
+		ServiceRef: models.NewServiceRef(
+			serviceID.Name,
+			models.WithNamespace(serviceID.Namespace),
+		),
+		AddressGroupRef: models.NewAddressGroupRef(
+			addressGroupID.Name,
+			models.WithNamespace(addressGroupID.Namespace),
+		),
 	}
 
 	// Add data to repository

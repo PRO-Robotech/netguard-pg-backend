@@ -7,6 +7,7 @@ import (
 	"netguard-pg-backend/internal/application/validation"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/infrastructure/repositories/mem"
+	"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 )
 
 // TestIntegration_RuleS2SValidation tests the integration of RuleS2SValidator with the repository
@@ -28,20 +29,34 @@ func TestIntegration_RuleS2SValidation(t *testing.T) {
 	aliasID1 := models.NewResourceIdentifier("test-alias-1")
 	alias1 := models.ServiceAlias{
 		SelfRef:    models.SelfRef{ResourceIdentifier: aliasID1},
-		ServiceRef: models.ServiceRef{ResourceIdentifier: serviceID},
+		ServiceRef: models.NewServiceRef(serviceID.Name, models.WithNamespace(serviceID.Namespace)),
 	}
 
 	aliasID2 := models.NewResourceIdentifier("test-alias-2")
 	alias2 := models.ServiceAlias{
 		SelfRef:    models.SelfRef{ResourceIdentifier: aliasID2},
-		ServiceRef: models.ServiceRef{ResourceIdentifier: serviceID},
+		ServiceRef: models.NewServiceRef(serviceID.Name, models.WithNamespace(serviceID.Namespace)),
 	}
 
 	ruleID := models.NewResourceIdentifier("test-rule")
 	rule := models.RuleS2S{
-		SelfRef:         models.SelfRef{ResourceIdentifier: ruleID},
-		ServiceLocalRef: models.ServiceAliasRef{ResourceIdentifier: aliasID1},
-		ServiceRef:      models.ServiceAliasRef{ResourceIdentifier: aliasID2},
+		SelfRef: models.SelfRef{ResourceIdentifier: ruleID},
+		ServiceLocalRef: v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "ServiceAlias",
+				Name:       aliasID1.Name,
+			},
+			Namespace: aliasID1.Namespace,
+		},
+		ServiceRef: v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "ServiceAlias",
+				Name:       aliasID2.Name,
+			},
+			Namespace: aliasID2.Namespace,
+		},
 	}
 
 	// Add data to repository
@@ -109,20 +124,34 @@ func TestIntegration_RuleS2SReferences(t *testing.T) {
 	aliasID1 := models.NewResourceIdentifier("test-alias-1")
 	alias1 := models.ServiceAlias{
 		SelfRef:    models.SelfRef{ResourceIdentifier: aliasID1},
-		ServiceRef: models.ServiceRef{ResourceIdentifier: serviceID},
+		ServiceRef: models.NewServiceRef(serviceID.Name, models.WithNamespace(serviceID.Namespace)),
 	}
 
 	aliasID2 := models.NewResourceIdentifier("test-alias-2")
 	alias2 := models.ServiceAlias{
 		SelfRef:    models.SelfRef{ResourceIdentifier: aliasID2},
-		ServiceRef: models.ServiceRef{ResourceIdentifier: serviceID},
+		ServiceRef: models.NewServiceRef(serviceID.Name, models.WithNamespace(serviceID.Namespace)),
 	}
 
 	ruleID := models.NewResourceIdentifier("test-rule")
 	rule := models.RuleS2S{
-		SelfRef:         models.SelfRef{ResourceIdentifier: ruleID},
-		ServiceLocalRef: models.ServiceAliasRef{ResourceIdentifier: aliasID1},
-		ServiceRef:      models.ServiceAliasRef{ResourceIdentifier: aliasID2},
+		SelfRef: models.SelfRef{ResourceIdentifier: ruleID},
+		ServiceLocalRef: v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "ServiceAlias",
+				Name:       aliasID1.Name,
+			},
+			Namespace: aliasID1.Namespace,
+		},
+		ServiceRef: v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "ServiceAlias",
+				Name:       aliasID2.Name,
+			},
+			Namespace: aliasID2.Namespace,
+		},
 	}
 
 	// Add data to repository
@@ -156,9 +185,23 @@ func TestIntegration_RuleS2SReferences(t *testing.T) {
 
 	// Test ValidateReferences with invalid service local reference
 	invalidLocalRule := models.RuleS2S{
-		SelfRef:         models.SelfRef{ResourceIdentifier: ruleID},
-		ServiceLocalRef: models.ServiceAliasRef{ResourceIdentifier: models.NewResourceIdentifier("non-existent-alias")},
-		ServiceRef:      models.ServiceAliasRef{ResourceIdentifier: aliasID2},
+		SelfRef: models.SelfRef{ResourceIdentifier: ruleID},
+		ServiceLocalRef: v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "ServiceAlias",
+				Name:       "non-existent-alias",
+			},
+			Namespace: "default",
+		},
+		ServiceRef: v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "ServiceAlias",
+				Name:       aliasID2.Name,
+			},
+			Namespace: aliasID2.Namespace,
+		},
 	}
 	err = ruleValidator.ValidateReferences(context.Background(), invalidLocalRule)
 	if err == nil {
@@ -167,9 +210,23 @@ func TestIntegration_RuleS2SReferences(t *testing.T) {
 
 	// Test ValidateReferences with invalid service reference
 	invalidServiceRule := models.RuleS2S{
-		SelfRef:         models.SelfRef{ResourceIdentifier: ruleID},
-		ServiceLocalRef: models.ServiceAliasRef{ResourceIdentifier: aliasID1},
-		ServiceRef:      models.ServiceAliasRef{ResourceIdentifier: models.NewResourceIdentifier("non-existent-alias")},
+		SelfRef: models.SelfRef{ResourceIdentifier: ruleID},
+		ServiceLocalRef: v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "ServiceAlias",
+				Name:       aliasID1.Name,
+			},
+			Namespace: aliasID1.Namespace,
+		},
+		ServiceRef: v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "ServiceAlias",
+				Name:       "non-existent-alias",
+			},
+			Namespace: "default",
+		},
 	}
 	err = ruleValidator.ValidateReferences(context.Background(), invalidServiceRule)
 	if err == nil {
@@ -196,20 +253,34 @@ func TestIntegration_RuleS2SValidateForCreation(t *testing.T) {
 	aliasID1 := models.NewResourceIdentifier("test-alias-1")
 	alias1 := models.ServiceAlias{
 		SelfRef:    models.SelfRef{ResourceIdentifier: aliasID1},
-		ServiceRef: models.ServiceRef{ResourceIdentifier: serviceID},
+		ServiceRef: models.NewServiceRef(serviceID.Name, models.WithNamespace(serviceID.Namespace)),
 	}
 
 	aliasID2 := models.NewResourceIdentifier("test-alias-2")
 	alias2 := models.ServiceAlias{
 		SelfRef:    models.SelfRef{ResourceIdentifier: aliasID2},
-		ServiceRef: models.ServiceRef{ResourceIdentifier: serviceID},
+		ServiceRef: models.NewServiceRef(serviceID.Name, models.WithNamespace(serviceID.Namespace)),
 	}
 
 	ruleID := models.NewResourceIdentifier("test-rule")
 	rule := models.RuleS2S{
-		SelfRef:         models.SelfRef{ResourceIdentifier: ruleID},
-		ServiceLocalRef: models.ServiceAliasRef{ResourceIdentifier: aliasID1},
-		ServiceRef:      models.ServiceAliasRef{ResourceIdentifier: aliasID2},
+		SelfRef: models.SelfRef{ResourceIdentifier: ruleID},
+		ServiceLocalRef: v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "ServiceAlias",
+				Name:       aliasID1.Name,
+			},
+			Namespace: aliasID1.Namespace,
+		},
+		ServiceRef: v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "ServiceAlias",
+				Name:       aliasID2.Name,
+			},
+			Namespace: aliasID2.Namespace,
+		},
 	}
 
 	// Add data to repository
@@ -243,9 +314,23 @@ func TestIntegration_RuleS2SValidateForCreation(t *testing.T) {
 
 	// Test ValidateForCreation with invalid rule
 	invalidRule := models.RuleS2S{
-		SelfRef:         models.SelfRef{ResourceIdentifier: ruleID},
-		ServiceLocalRef: models.ServiceAliasRef{ResourceIdentifier: models.NewResourceIdentifier("non-existent-alias")},
-		ServiceRef:      models.ServiceAliasRef{ResourceIdentifier: aliasID2},
+		SelfRef: models.SelfRef{ResourceIdentifier: ruleID},
+		ServiceLocalRef: v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "ServiceAlias",
+				Name:       "non-existent-alias",
+			},
+			Namespace: "default",
+		},
+		ServiceRef: v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "ServiceAlias",
+				Name:       aliasID2.Name,
+			},
+			Namespace: aliasID2.Namespace,
+		},
 	}
 	err = ruleValidator.ValidateForCreation(context.Background(), invalidRule)
 	if err == nil {

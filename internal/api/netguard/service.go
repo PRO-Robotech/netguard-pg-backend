@@ -627,6 +627,35 @@ func convertAddressGroup(ag *netguardpb.AddressGroup) models.AddressGroup {
 		Meta:          models.Meta{},
 	}
 
+	// Convert hosts field (NEW: hosts belonging to this address group)
+	if len(ag.Hosts) > 0 {
+		result.Hosts = make([]v1beta1.ObjectReference, len(ag.Hosts))
+		for i, host := range ag.Hosts {
+			result.Hosts[i] = v1beta1.ObjectReference{
+				APIVersion: host.ApiVersion,
+				Kind:       host.Kind,
+				Name:       host.Name,
+			}
+		}
+	}
+
+	fmt.Printf("🔍 PB_TO_DOMAIN_DEBUG: AddressGroup %s/%s - pb.AggregatedHosts length: %d\n",
+		ag.GetSelfRef().GetNamespace(), ag.GetSelfRef().GetName(), len(ag.AggregatedHosts))
+	if len(ag.AggregatedHosts) > 0 {
+		result.AggregatedHosts = make([]models.HostReference, len(ag.AggregatedHosts))
+		for i, hostRef := range ag.AggregatedHosts {
+			result.AggregatedHosts[i] = models.HostReference{
+				ObjectReference: v1beta1.ObjectReference{
+					APIVersion: hostRef.Ref.ApiVersion,
+					Kind:       hostRef.Ref.Kind,
+					Name:       hostRef.Ref.Name,
+				},
+				UUID:   hostRef.Uuid,
+				Source: convertHostRegistrationSourceFromPB(hostRef.Source),
+			}
+		}
+	}
+
 	if ag.Meta != nil {
 		result.Meta = models.Meta{
 			UID:             ag.Meta.Uid,
@@ -929,7 +958,61 @@ func convertAddressGroupToPB(ag models.AddressGroup) *netguardpb.AddressGroup {
 		})
 	}
 
+	// Convert hosts field (NEW: hosts belonging to this address group)
+	if len(ag.Hosts) > 0 {
+		result.Hosts = make([]*netguardpb.ObjectReference, len(ag.Hosts))
+		for i, host := range ag.Hosts {
+			result.Hosts[i] = &netguardpb.ObjectReference{
+				ApiVersion: host.APIVersion,
+				Kind:       host.Kind,
+				Name:       host.Name,
+			}
+		}
+	}
+
+	// Convert AggregatedHosts field (NEW: aggregated hosts from database triggers)
+	if len(ag.AggregatedHosts) > 0 {
+		result.AggregatedHosts = make([]*netguardpb.HostReference, len(ag.AggregatedHosts))
+		for i, hostRef := range ag.AggregatedHosts {
+			fmt.Printf("  Converting host[%d]: Name=%s, UUID=%s, Source=%s\n",
+				i, hostRef.GetName(), hostRef.UUID, hostRef.Source)
+			result.AggregatedHosts[i] = &netguardpb.HostReference{
+				Ref: &netguardpb.ObjectReference{
+					ApiVersion: hostRef.ObjectReference.APIVersion,
+					Kind:       hostRef.ObjectReference.Kind,
+					Name:       hostRef.ObjectReference.Name,
+				},
+				Uuid:   hostRef.UUID,
+				Source: convertHostRegistrationSourceToPB(hostRef.Source),
+			}
+		}
+	}
+
 	return result
+}
+
+// convertHostRegistrationSourceToPB converts domain HostRegistrationSource to protobuf enum
+func convertHostRegistrationSourceToPB(source models.HostRegistrationSource) netguardpb.HostRegistrationSource {
+	switch source {
+	case models.HostSourceSpec:
+		return netguardpb.HostRegistrationSource_HOST_SOURCE_SPEC
+	case models.HostSourceBinding:
+		return netguardpb.HostRegistrationSource_HOST_SOURCE_BINDING
+	default:
+		return netguardpb.HostRegistrationSource_HOST_SOURCE_SPEC // default
+	}
+}
+
+// convertHostRegistrationSourceFromPB converts protobuf HostRegistrationSource to domain enum
+func convertHostRegistrationSourceFromPB(source netguardpb.HostRegistrationSource) models.HostRegistrationSource {
+	switch source {
+	case netguardpb.HostRegistrationSource_HOST_SOURCE_SPEC:
+		return models.HostSourceSpec
+	case netguardpb.HostRegistrationSource_HOST_SOURCE_BINDING:
+		return models.HostSourceBinding
+	default:
+		return models.HostSourceSpec // default
+	}
 }
 
 func convertAddressGroupBindingToPB(b models.AddressGroupBinding) *netguardpb.AddressGroupBinding {

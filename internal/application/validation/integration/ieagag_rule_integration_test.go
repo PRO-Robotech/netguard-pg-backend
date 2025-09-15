@@ -38,11 +38,17 @@ func TestIntegration_IEAgAgRuleValidation(t *testing.T) {
 
 	ruleID := models.NewResourceIdentifier("test-rule")
 	rule := models.IEAgAgRule{
-		SelfRef:           models.SelfRef{ResourceIdentifier: ruleID},
-		Transport:         models.TCP,
-		Traffic:           models.INGRESS,
-		AddressGroupLocal: models.AddressGroupRef{ResourceIdentifier: addressGroupLocalID},
-		AddressGroup:      models.AddressGroupRef{ResourceIdentifier: addressGroupID},
+		SelfRef:   models.SelfRef{ResourceIdentifier: ruleID},
+		Transport: models.TCP,
+		Traffic:   models.INGRESS,
+		AddressGroupLocal: models.NewAddressGroupRef(
+			addressGroupLocalID.Name,
+			models.WithNamespace(addressGroupLocalID.Namespace),
+		),
+		AddressGroup: models.NewAddressGroupRef(
+			addressGroupID.Name,
+			models.WithNamespace(addressGroupID.Namespace),
+		),
 		Ports: []models.PortSpec{
 			{
 				Destination: "80",
@@ -143,9 +149,15 @@ func TestIntegration_IEAgAgRuleReferences(t *testing.T) {
 	// Act & Assert
 	// Test ValidateReferences with valid references
 	rule := models.IEAgAgRule{
-		SelfRef:           models.SelfRef{ResourceIdentifier: models.NewResourceIdentifier("test-rule")},
-		AddressGroupLocal: models.AddressGroupRef{ResourceIdentifier: addressGroupLocalID},
-		AddressGroup:      models.AddressGroupRef{ResourceIdentifier: addressGroupID},
+		SelfRef: models.SelfRef{ResourceIdentifier: models.NewResourceIdentifier("test-rule")},
+		AddressGroupLocal: models.NewAddressGroupRef(
+			addressGroupLocalID.Name,
+			models.WithNamespace(addressGroupLocalID.Namespace),
+		),
+		AddressGroup: models.NewAddressGroupRef(
+			addressGroupID.Name,
+			models.WithNamespace(addressGroupID.Namespace),
+		),
 	}
 
 	err = ruleValidator.ValidateReferences(context.Background(), rule)
@@ -156,8 +168,11 @@ func TestIntegration_IEAgAgRuleReferences(t *testing.T) {
 	// Test ValidateReferences with invalid local address group reference
 	invalidLocalRule := models.IEAgAgRule{
 		SelfRef:           models.SelfRef{ResourceIdentifier: models.NewResourceIdentifier("test-rule")},
-		AddressGroupLocal: models.AddressGroupRef{ResourceIdentifier: models.NewResourceIdentifier("non-existent-ag-local")},
-		AddressGroup:      models.AddressGroupRef{ResourceIdentifier: addressGroupID},
+		AddressGroupLocal: models.NewAddressGroupRef("non-existent-ag-local", models.WithNamespace("default")),
+		AddressGroup: models.NewAddressGroupRef(
+			addressGroupID.Name,
+			models.WithNamespace(addressGroupID.Namespace),
+		),
 	}
 
 	err = ruleValidator.ValidateReferences(context.Background(), invalidLocalRule)
@@ -167,9 +182,12 @@ func TestIntegration_IEAgAgRuleReferences(t *testing.T) {
 
 	// Test ValidateReferences with invalid address group reference
 	invalidRule := models.IEAgAgRule{
-		SelfRef:           models.SelfRef{ResourceIdentifier: models.NewResourceIdentifier("test-rule")},
-		AddressGroupLocal: models.AddressGroupRef{ResourceIdentifier: addressGroupLocalID},
-		AddressGroup:      models.AddressGroupRef{ResourceIdentifier: models.NewResourceIdentifier("non-existent-ag")},
+		SelfRef: models.SelfRef{ResourceIdentifier: models.NewResourceIdentifier("test-rule")},
+		AddressGroupLocal: models.NewAddressGroupRef(
+			addressGroupLocalID.Name,
+			models.WithNamespace(addressGroupLocalID.Namespace),
+		),
+		AddressGroup: models.NewAddressGroupRef("non-existent-ag", models.WithNamespace("default")),
 	}
 
 	err = ruleValidator.ValidateReferences(context.Background(), invalidRule)
@@ -226,11 +244,17 @@ func TestIntegration_IEAgAgRuleValidateForCreation(t *testing.T) {
 	// Act & Assert
 	// Test ValidateForCreation with valid rule
 	validRule := models.IEAgAgRule{
-		SelfRef:           models.SelfRef{ResourceIdentifier: models.NewResourceIdentifier("test-rule")},
-		Transport:         models.TCP,
-		Traffic:           models.INGRESS,
-		AddressGroupLocal: models.AddressGroupRef{ResourceIdentifier: addressGroupLocalID},
-		AddressGroup:      models.AddressGroupRef{ResourceIdentifier: addressGroupID},
+		SelfRef:   models.SelfRef{ResourceIdentifier: models.NewResourceIdentifier("test-rule")},
+		Transport: models.TCP,
+		Traffic:   models.INGRESS,
+		AddressGroupLocal: models.NewAddressGroupRef(
+			addressGroupLocalID.Name,
+			models.WithNamespace(addressGroupLocalID.Namespace),
+		),
+		AddressGroup: models.NewAddressGroupRef(
+			addressGroupID.Name,
+			models.WithNamespace(addressGroupID.Namespace),
+		),
 		Ports: []models.PortSpec{
 			{
 				Destination: "80",
@@ -261,7 +285,7 @@ func TestIntegration_IEAgAgRuleValidateForCreation(t *testing.T) {
 
 	// Test ValidateForCreation with invalid references
 	invalidRefRule := validRule
-	invalidRefRule.AddressGroupLocal = models.AddressGroupRef{ResourceIdentifier: models.NewResourceIdentifier("non-existent-ag-local")}
+	invalidRefRule.AddressGroupLocal = models.NewAddressGroupRef("non-existent-ag-local", models.WithNamespace("default"))
 
 	err = ruleValidator.ValidateForCreation(context.Background(), invalidRefRule)
 	if err == nil {
