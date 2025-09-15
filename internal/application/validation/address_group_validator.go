@@ -8,6 +8,8 @@ import (
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
+	"netguard-pg-backend/internal/sync/interfaces"
+	"netguard-pg-backend/internal/sync/types"
 
 	"github.com/pkg/errors"
 )
@@ -187,6 +189,42 @@ func (v *AddressGroupValidator) validateHostExclusivity(ctx context.Context, hos
 
 		if err != nil {
 			return err
+		}
+	}
+
+	return nil
+}
+
+// ValidateSgroupSyncForHosts validates that hosts can be synchronized with SGROUP
+// This is a pre-validation step that tests SGROUP synchronization before saving to database
+func (v *AddressGroupValidator) ValidateSgroupSyncForHosts(ctx context.Context, hosts []netguardv1beta1.ObjectReference, currentAG models.ResourceIdentifier, syncManager interfaces.SyncManager) error {
+	if len(hosts) == 0 {
+		return nil // No hosts to validate
+	}
+
+	if syncManager == nil {
+		return nil
+	}
+
+	for i, hostRef := range hosts {
+		// Get the actual host entity from database
+		hostID := models.ResourceIdentifier{
+			Name:      hostRef.Name,
+			Namespace: currentAG.Namespace, // Host must be in same namespace as AddressGroup
+		}
+
+		host, err := v.reader.GetHostByID(ctx, hostID)
+		if err != nil {
+			if errors.Is(err, ports.ErrNotFound) {
+				return fmt.Errorf("host reference %d: host '%s' does not exist in namespace '%s'", i, hostRef.Name, currentAG.Namespace)
+			}
+			return fmt.Errorf("host reference %d: failed to load host '%s' for SGROUP validation: %v", i, hostRef.Name, err)
+		}
+
+		err = syncManager.SyncEntity(ctx, host, types.SyncOperationUpsert)
+		if err != nil {
+			return fmt.Errorf("SGROUP synchronization failed for host '%s' in namespace '%s': %v - the host cannot be added to this AddressGroup due to SGROUP constraints",
+				hostRef.Name, currentAG.Namespace, err)
 		}
 	}
 

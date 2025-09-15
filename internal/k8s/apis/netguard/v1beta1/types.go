@@ -195,6 +195,11 @@ type AddressGroup struct {
 	Spec     AddressGroupSpec   `json:"spec,omitempty"`
 	Status   AddressGroupStatus `json:"status,omitempty"`
 	Networks []NetworkItem      `json:"networks,omitempty"` // Networks list
+
+	// AggregatedHosts contains all hosts that belong to this AddressGroup,
+	// aggregated from both spec.hosts and HostBinding resources
+	// +optional
+	AggregatedHosts []HostReference `json:"x-aggregatedHosts"`
 }
 
 // AddressGroupSpec defines the desired state of AddressGroup
@@ -283,6 +288,29 @@ type NamespacedObjectReference struct {
 
 	// Namespace of the referenced object
 	Namespace string `json:"namespace,omitempty"`
+}
+
+// HostRegistrationSource represents the source of host registration
+// +kubebuilder:validation:Enum=spec;binding
+type HostRegistrationSource string
+
+const (
+	// HostSourceSpec indicates the host was registered via AddressGroup.spec.hosts
+	HostSourceSpec HostRegistrationSource = "spec"
+	// HostSourceBinding indicates the host was registered via HostBinding
+	HostSourceBinding HostRegistrationSource = "binding"
+)
+
+// HostReference represents a reference to a Host with additional metadata
+type HostReference struct {
+	// Reference to the Host object (namespace is implied from AddressGroup context)
+	ObjectReference ObjectReference `json:"ref"`
+
+	// UUID of the host (for efficient lookup and SGroup sync)
+	UUID string `json:"uuid"`
+
+	// Source indicates how this host was registered (spec or binding)
+	Source HostRegistrationSource `json:"source"`
 }
 
 // PortConfig defines a port or port range configuration

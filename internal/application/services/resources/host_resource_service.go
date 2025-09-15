@@ -93,12 +93,24 @@ func (s *HostResourceService) CreateHost(ctx context.Context, host *models.Host)
 	// Process conditions after sync (so sync result can be included in conditions)
 	if s.conditionManager != nil {
 		if err := s.conditionManager.ProcessHostConditions(ctx, host, syncErr); err != nil {
-			log.Printf("⚠️ DEBUG: Failed to process conditions for host %s: %v", host.Key(), err)
+			log.Printf("⚠️ Failed to process conditions for host %s: %v", host.Key(), err)
 			// Don't fail the creation due to condition processing errors
+		}
+
+		// Update the host status with conditions in the database
+		if updateErr := s.updateHostStatus(ctx, host); updateErr != nil {
+			log.Printf("⚠️ Failed to update host %s status after condition processing: %v", host.Key(), updateErr)
 		}
 	}
 
-	return syncErr // Return sync error if it occurred
+	// Don't fail host creation if SGROUP sync fails - host should still be created
+	// but will have Ready=False condition indicating sync failure
+	if syncErr != nil {
+		log.Printf("⚠️ Host %s created successfully but SGROUP sync failed: %v", host.Key(), syncErr)
+		return fmt.Errorf("host created but SGROUP sync failed: %w", syncErr)
+	}
+
+	return nil
 }
 
 // UpdateHost updates an existing Host
@@ -140,11 +152,22 @@ func (s *HostResourceService) UpdateHost(ctx context.Context, host *models.Host)
 	// Process conditions after sync
 	if s.conditionManager != nil {
 		if err := s.conditionManager.ProcessHostConditions(ctx, host, syncErr); err != nil {
-			log.Printf("⚠️ DEBUG: Failed to process conditions for host %s: %v", host.Key(), err)
+			log.Printf("⚠️ Failed to process conditions for host %s: %v", host.Key(), err)
+		}
+
+		// Update the host status with conditions in the database
+		if updateErr := s.updateHostStatus(ctx, host); updateErr != nil {
+			log.Printf("⚠️ Failed to update host %s status after condition processing: %v", host.Key(), updateErr)
 		}
 	}
 
-	return syncErr // Return sync error if it occurred
+	// Don't fail host update if SGROUP sync fails - host should still be updated
+	// but will have Ready=False condition indicating sync failure
+	if syncErr != nil {
+		log.Printf("⚠️ Host %s updated but SGROUP sync failed: %v", host.Key(), syncErr)
+	}
+
+	return nil
 }
 
 // DeleteHost deletes a Host by resource identifier with cascading deletion of HostBinding
@@ -233,11 +256,14 @@ func (s *HostResourceService) DeleteHost(ctx context.Context, id models.Resource
 	log.Printf("🔗 DEBUG: Syncing Host %s deletion with external systems", id.Key())
 	err = s.syncHostWithExternal(ctx, existing, types.SyncOperationDelete)
 	if err != nil {
-		log.Printf("❌ DEBUG: External sync failed for Host %s: %v", id.Key(), err)
-		return fmt.Errorf("failed to sync host deletion: %w", err)
+		log.Printf("⚠️ External sync failed for Host %s deletion: %v", id.Key(), err)
+		log.Printf("⚠️ Host %s deleted from storage but SGROUP sync failed - continuing anyway", id.Key())
+		// Don't fail host deletion if SGROUP sync fails - host is already deleted from storage
+	} else {
+		log.Printf("✅ Successfully synced Host %s deletion with SGROUP", id.Key())
 	}
 
-	log.Printf("🎉 DEBUG: Host %s cascading deletion completed successfully (storage + external sync)", id.Key())
+	log.Printf("🎉 DEBUG: Host %s cascading deletion completed (storage deleted, SGROUP sync attempted)", id.Key())
 	return nil
 }
 
@@ -542,6 +568,7 @@ func (s *HostResourceService) syncHostWithExternal(ctx context.Context, host *mo
 
 // UpdateHostBinding updates Host status when a binding is created
 func (s *HostResourceService) UpdateHostBinding(ctx context.Context, hostID models.ResourceIdentifier, bindingID models.ResourceIdentifier, addressGroupID models.ResourceIdentifier) error {
+	log.Printf("🔧 DEBUG: UpdateHostBinding called - hostID=%s, bindingID=%s, addressGroupID=%s", hostID.Key(), bindingID.Key(), addressGroupID.Key())
 	writer, err := s.repo.Writer(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get writer: %w", err)
@@ -564,19 +591,38 @@ func (s *HostResourceService) UpdateHostBinding(ctx context.Context, hostID mode
 		return fmt.Errorf("host not found: %s", hostID.Key())
 	}
 
-	// Update binding references
-	host.BindingRef = &v1beta1.ObjectReference{
-		APIVersion: "netguard.sgroups.io/v1beta1",
-		Kind:       "HostBinding",
-		Name:       bindingID.Name, // Store only the name part for repository consistency
+	// Check if this is a binding operation (not unbinding)
+	isBinding := bindingID.Name != "" && addressGroupID.Name != ""
+
+	// CRITICAL: Only allow binding if host is ready (synchronized with SGROUP)
+	if isBinding && !utils.IsReadyConditionTrue(host) {
+		log.Printf("❌ Host %s cannot be bound to AddressGroup: not synchronized with SGROUP (Ready=false)", hostID.Key())
+		return fmt.Errorf("host %s is not ready for binding - must be synchronized with SGROUP first (Ready condition must be True)", hostID.Key())
 	}
-	host.AddressGroupRef = &v1beta1.ObjectReference{
-		APIVersion: "netguard.sgroups.io/v1beta1",
-		Kind:       "AddressGroup",
-		Name:       addressGroupID.Name,
+
+	// Update binding references - handle both binding creation and unbinding
+	if bindingID.Name == "" && addressGroupID.Name == "" {
+		// Unbinding case - clear all binding references
+		log.Printf("🔧 DEBUG: UpdateHostBinding - Unbinding case, clearing Host %s status", hostID.Key())
+		host.BindingRef = nil
+		host.AddressGroupRef = nil
+		host.IsBound = false
+		host.AddressGroupName = ""
+	} else {
+		// Binding case - set all binding references
+		host.BindingRef = &v1beta1.ObjectReference{
+			APIVersion: "netguard.sgroups.io/v1beta1",
+			Kind:       "HostBinding",
+			Name:       bindingID.Name, // Store only the name part for repository consistency
+		}
+		host.AddressGroupRef = &v1beta1.ObjectReference{
+			APIVersion: "netguard.sgroups.io/v1beta1",
+			Kind:       "AddressGroup",
+			Name:       addressGroupID.Name,
+		}
+		host.IsBound = true
+		host.AddressGroupName = addressGroupID.Name
 	}
-	host.IsBound = true
-	host.AddressGroupName = addressGroupID.Name
 
 	// Update metadata
 	host.GetMeta().TouchOnWrite(fmt.Sprintf("%d", time.Now().UnixNano()))
@@ -686,6 +732,12 @@ func (s *HostResourceService) updateHostBindingStatusForHost(ctx context.Context
 		return fmt.Errorf("failed to get host %s/%s: %w", namespace, hostName, err)
 	}
 
+	// CRITICAL: Only allow binding via AG.spec if host is ready (synchronized with SGROUP)
+	if isBound && !utils.IsReadyConditionTrue(host) {
+		log.Printf("❌ Host %s/%s cannot be bound via AddressGroup.spec: not synchronized with SGROUP (Ready=false)", namespace, hostName)
+		return fmt.Errorf("host %s/%s is not ready for binding via AddressGroup.spec - must be synchronized with SGROUP first (Ready condition must be True)", namespace, hostName)
+	}
+
 	// Update Host status
 	host.IsBound = isBound
 	if isBound {
@@ -708,6 +760,31 @@ func (s *HostResourceService) updateHostBindingStatusForHost(ctx context.Context
 
 	log.Printf("✅ Successfully updated Host %s/%s: isBound=%v, addressGroupName=%s",
 		namespace, hostName, isBound, addressGroupName)
+
+	return nil
+}
+
+// updateHostStatus updates only the host status/conditions in the database without triggering sync
+func (s *HostResourceService) updateHostStatus(ctx context.Context, host *models.Host) error {
+	// Update metadata
+	host.GetMeta().TouchOnWrite(fmt.Sprintf("%d", time.Now().UnixNano()))
+
+	// Update only the status in the database
+	writer, err := s.repo.Writer(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get writer: %w", err)
+	}
+	defer writer.Abort()
+
+	// Convert to slice for sync - this only updates status, no external sync
+	hosts := []models.Host{*host}
+	if err := writer.SyncHosts(ctx, hosts, ports.EmptyScope{}, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
+		return fmt.Errorf("failed to sync host status: %w", err)
+	}
+
+	if err := writer.Commit(); err != nil {
+		return fmt.Errorf("failed to commit host status update: %w", err)
+	}
 
 	return nil
 }

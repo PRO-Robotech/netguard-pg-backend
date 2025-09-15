@@ -12,7 +12,7 @@ import (
 	"netguard-pg-backend/internal/application/validation"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
-	"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
+	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 	"netguard-pg-backend/internal/sync/interfaces"
 	"netguard-pg-backend/internal/sync/types"
 )
@@ -163,6 +163,19 @@ func (s *AddressGroupResourceService) CreateAddressGroup(ctx context.Context, ad
 		return errors.Wrap(err, "failed to create address group")
 	}
 
+	// Validate SGROUP synchronization for new hosts before commit (CreateAddressGroup)
+	log.Printf("🔍 CreateAddressGroup: SGROUP validation check for %s (syncManager_nil=%v)", addressGroup.Key(), s.syncManager == nil)
+	if s.syncManager != nil && len(addressGroup.Hosts) > 0 {
+		log.Printf("🔍 CreateAddressGroup: Calling validateHostsSGroupSync for %d hosts", len(addressGroup.Hosts))
+		if err = s.validateHostsSGroupSync(ctx, addressGroup.Hosts, addressGroup.ResourceIdentifier); err != nil {
+			log.Printf("❌ CreateAddressGroup: SGROUP validation failed: %v", err)
+			return errors.Wrap(err, "SGROUP synchronization validation failed")
+		}
+		log.Printf("✅ CreateAddressGroup: SGROUP validation passed")
+	} else {
+		log.Printf("⚠️ CreateAddressGroup: SGROUP validation skipped (syncManager_nil=%v, hosts_count=%d)", s.syncManager == nil, len(addressGroup.Hosts))
+	}
+
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit transaction")
 	}
@@ -176,12 +189,14 @@ func (s *AddressGroupResourceService) CreateAddressGroup(ctx context.Context, ad
 		}
 	}
 
+	// Note: Host aggregation is now handled automatically by PostgreSQL triggers
+
 	// Sync with external systems after successful creation
 	s.syncAddressGroupsWithSGroups(ctx, []models.AddressGroup{addressGroup}, types.SyncOperationUpsert)
 
 	// Update Host.isBound status for hosts in this AddressGroup
 	if s.hostService != nil && len(addressGroup.Hosts) > 0 {
-		log.Printf("CreateAddressGroup: Updating Host binding status for %d hosts", len(addressGroup.Hosts))
+		log.Printf("CreateAddressGroup: Updating Host binding status for %d spec hosts", len(addressGroup.Hosts))
 		if err := s.hostService.UpdateHostBindingStatus(ctx, nil, &addressGroup); err != nil {
 			log.Printf("❌ Failed to update Host binding status after AddressGroup creation: %v", err)
 			// Don't fail the operation if Host status update fails
@@ -239,6 +254,22 @@ func (s *AddressGroupResourceService) UpdateAddressGroup(ctx context.Context, ad
 		return errors.Wrap(err, "failed to update address group")
 	}
 
+	// Validate SGROUP synchronization for host changes before commit (UpdateAddressGroup)
+	log.Printf("🔍 UpdateAddressGroup: SGROUP validation check for %s (syncManager_nil=%v)", addressGroup.Key(), s.syncManager == nil)
+	if s.syncManager != nil {
+		log.Printf("🔍 UpdateAddressGroup: Calling validateSGroupSyncForChangedHosts")
+		oldAddressGroups := map[string]*models.AddressGroup{
+			existingAddressGroup.Key(): existingAddressGroup,
+		}
+		if err = s.validateSGroupSyncForChangedHosts(ctx, []models.AddressGroup{addressGroup}, oldAddressGroups); err != nil {
+			log.Printf("❌ UpdateAddressGroup: SGROUP validation failed: %v", err)
+			return errors.Wrap(err, "SGROUP synchronization validation failed")
+		}
+		log.Printf("✅ UpdateAddressGroup: SGROUP validation passed")
+	} else {
+		log.Printf("⚠️ UpdateAddressGroup: SGROUP validation skipped (syncManager is nil)")
+	}
+
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit transaction")
 	}
@@ -251,6 +282,8 @@ func (s *AddressGroupResourceService) UpdateAddressGroup(ctx context.Context, ad
 			// Don't fail the operation if condition processing fails
 		}
 	}
+
+	// Note: Host aggregation is now handled automatically by PostgreSQL triggers
 
 	// Sync with external systems after successful update
 	s.syncAddressGroupsWithSGroups(ctx, []models.AddressGroup{addressGroup}, types.SyncOperationUpsert)
@@ -280,8 +313,45 @@ func (s *AddressGroupResourceService) SyncAddressGroups(ctx context.Context, add
 		}
 	}()
 
+	// Load old AddressGroup states before syncing for SGROUP validation
+	var oldAddressGroups map[string]*models.AddressGroup
+	if syncOp == models.SyncOpUpsert && s.syncManager != nil {
+		oldAddressGroups = make(map[string]*models.AddressGroup)
+		reader, err := s.registry.Reader(ctx)
+		if err != nil {
+			return errors.Wrap(err, "failed to get reader for old state loading")
+		}
+		defer reader.Close()
+
+		for _, ag := range addressGroups {
+			oldAG, err := reader.GetAddressGroupByID(ctx, models.ResourceIdentifier{
+				Name:      ag.Name,
+				Namespace: ag.Namespace,
+			})
+			if err != nil && !errors.Is(err, ports.ErrNotFound) {
+				return errors.Wrapf(err, "failed to load old state for AddressGroup %s", ag.Key())
+			}
+			if err == nil {
+				oldAddressGroups[ag.Key()] = oldAG
+			}
+		}
+	}
+
 	if err = s.syncAddressGroups(ctx, writer, addressGroups, syncOp); err != nil {
 		return errors.Wrap(err, "failed to sync address groups")
+	}
+
+	// Validate SGROUP synchronization for changed hosts before commit
+	log.Printf("🔍 SGROUP_VALIDATION_CHECK: syncOp=%v, syncManager_nil=%v, addressGroups_count=%d", syncOp, s.syncManager == nil, len(addressGroups))
+	if syncOp == models.SyncOpUpsert && s.syncManager != nil {
+		log.Printf("🔍 SGROUP_VALIDATION_START: Calling validateSGroupSyncForChangedHosts with %d AddressGroups", len(addressGroups))
+		if err = s.validateSGroupSyncForChangedHosts(ctx, addressGroups, oldAddressGroups); err != nil {
+			log.Printf("❌ SGROUP_VALIDATION_FAILED: %v", err)
+			return errors.Wrap(err, "SGROUP synchronization validation failed")
+		}
+		log.Printf("✅ SGROUP_VALIDATION_SUCCESS: All hosts passed SGROUP validation")
+	} else {
+		log.Printf("⚠️ SGROUP_VALIDATION_SKIPPED: syncOp=%v, syncManager_nil=%v", syncOp, s.syncManager == nil)
 	}
 
 	if err = writer.Commit(); err != nil {
@@ -2219,14 +2289,39 @@ func (s *AddressGroupResourceService) updateHostBindingStatusForSyncedAddressGro
 	log.Printf("🔄 updateHostBindingStatusForSyncedAddressGroups: Processing %d AddressGroups with syncOp=%v", len(addressGroups), syncOp)
 
 	for _, ag := range addressGroups {
-		if len(ag.Hosts) == 0 {
+		log.Printf("🔧 DEBUG updateHostBindingStatusForSyncedAddressGroups: AddressGroup %s - syncOp=%v (%T), ag.AggregatedHosts=%d, ag.Hosts=%d", ag.Key(), syncOp, syncOp, len(ag.AggregatedHosts), len(ag.Hosts))
+
+		// IMPORTANT: AddressGroup objects from Sync API don't contain AggregatedHosts field
+		// We need to load the fresh data from database to get the accurate host information
+		reader, err := s.registry.Reader(ctx)
+		if err != nil {
+			log.Printf("❌ Failed to get reader for loading fresh AddressGroup data: %v", err)
+			continue
+		}
+
+		freshAG, err := reader.GetAddressGroupByID(ctx, models.ResourceIdentifier{Name: ag.Name, Namespace: ag.Namespace})
+		reader.Close()
+		if err != nil {
+			log.Printf("❌ Failed to load fresh AddressGroup %s: %v", ag.Key(), err)
+			continue
+		}
+
+		// Use fresh data from database that contains AggregatedHosts
+		ag = *freshAG
+		log.Printf("🔄 FIXED: Fresh AddressGroup %s - AggregatedHosts=%d, Hosts=%d", ag.Key(), len(ag.AggregatedHosts), len(ag.Hosts))
+
+		if len(ag.AggregatedHosts) == 0 && len(ag.Hosts) == 0 {
 			continue // No hosts to process
 		}
 
 		switch syncOp {
 		case models.SyncOpDelete:
 			// For delete operations, unbind all hosts
-			log.Printf("🔓 Unbinding %d hosts from deleted AddressGroup %s", len(ag.Hosts), ag.Key())
+			totalHosts := len(ag.AggregatedHosts)
+			if totalHosts == 0 {
+				totalHosts = len(ag.Hosts) // fallback if AggregatedHosts is empty
+			}
+			log.Printf("🔓 Unbinding %d hosts from deleted AddressGroup %s (AggregatedHosts=%d, Hosts=%d)", totalHosts, ag.Key(), len(ag.AggregatedHosts), len(ag.Hosts))
 			if err := s.hostService.UpdateHostBindingStatus(ctx, &ag, nil); err != nil {
 				log.Printf("❌ Failed to unbind hosts from deleted AddressGroup %s: %v", ag.Key(), err)
 			}
@@ -2244,7 +2339,9 @@ func (s *AddressGroupResourceService) updateHostBindingStatusForSyncedAddressGro
 			// Step 1: Find all hosts currently bound to this AddressGroup (old bindings)
 			currentlyBoundHosts := make(map[string]*models.Host)
 			err = reader.ListHosts(ctx, func(host models.Host) error {
-				if host.IsBound && host.AddressGroupRef != nil && host.AddressGroupRef.Name == ag.Name {
+				if host.IsBound && host.AddressGroupRef != nil &&
+					host.AddressGroupRef.Name == ag.Name &&
+					host.Namespace == ag.Namespace {
 					currentlyBoundHosts[host.Key()] = &host
 				}
 				return nil
@@ -2256,11 +2353,20 @@ func (s *AddressGroupResourceService) updateHostBindingStatusForSyncedAddressGro
 				continue
 			}
 
-			// Step 2: Create set of hosts that should be bound (new bindings)
+			// Step 2: Create set of hosts that should be bound (new bindings from aggregated hosts or spec hosts)
 			shouldBeBoundHosts := make(map[string]models.ResourceIdentifier)
-			for _, hostRef := range ag.Hosts {
-				hostID := models.ResourceIdentifier{Name: hostRef.Name, Namespace: ag.Namespace}
-				shouldBeBoundHosts[hostID.Key()] = hostID
+			if len(ag.AggregatedHosts) > 0 {
+				// Use AggregatedHosts if available (preferred)
+				for _, hostRef := range ag.AggregatedHosts {
+					hostID := models.ResourceIdentifier{Name: hostRef.GetName(), Namespace: ag.Namespace}
+					shouldBeBoundHosts[hostID.Key()] = hostID
+				}
+			} else if len(ag.Hosts) > 0 {
+				// Fallback to spec.hosts if AggregatedHosts is empty
+				for _, hostRef := range ag.Hosts {
+					hostID := models.ResourceIdentifier{Name: hostRef.Name, Namespace: ag.Namespace}
+					shouldBeBoundHosts[hostID.Key()] = hostID
+				}
 			}
 
 			log.Printf("📊 Binding analysis for %s: %d currently bound, %d should be bound",
@@ -2279,7 +2385,7 @@ func (s *AddressGroupResourceService) updateHostBindingStatusForSyncedAddressGro
 
 					// Bind this host
 					host.IsBound = true
-					host.AddressGroupRef = &v1beta1.ObjectReference{
+					host.AddressGroupRef = &netguardv1beta1.ObjectReference{
 						Name: ag.Name,
 					}
 					hostsToUpdate = append(hostsToUpdate, *host)
@@ -2343,4 +2449,106 @@ func (s *AddressGroupResourceService) updateHostBindingStatusForSyncedAddressGro
 			log.Printf("⚠️ Unknown syncOp %v for AddressGroup %s", syncOp, ag.Key())
 		}
 	}
+}
+
+// validateSGroupSyncForChangedHosts validates SGROUP synchronization for hosts that changed in AddressGroups
+// This method detects hosts that were added/removed and validates them with SGROUP before committing the transaction
+func (s *AddressGroupResourceService) validateSGroupSyncForChangedHosts(ctx context.Context, newAddressGroups []models.AddressGroup, oldAddressGroups map[string]*models.AddressGroup) error {
+	log.Printf("🔍 SGROUP validation: Processing %d AddressGroups for host changes (oldAddressGroups_count=%d)", len(newAddressGroups), len(oldAddressGroups))
+
+	for _, newAG := range newAddressGroups {
+		oldAG := oldAddressGroups[newAG.Key()]
+
+		// Get changed hosts
+		addedHosts, removedHosts := s.getHostChanges(newAG, oldAG)
+
+		if len(addedHosts) == 0 && len(removedHosts) == 0 {
+			continue // No host changes for this AddressGroup
+		}
+
+		log.Printf("🔄 SGROUP validation: AddressGroup %s - %d added hosts, %d removed hosts",
+			newAG.Key(), len(addedHosts), len(removedHosts))
+
+		// Validate SGROUP synchronization for added hosts
+		if len(addedHosts) > 0 {
+			if err := s.validateHostsSGroupSync(ctx, addedHosts, newAG.ResourceIdentifier); err != nil {
+				return errors.Wrapf(err, "SGROUP validation failed for added hosts in AddressGroup %s", newAG.Key())
+			}
+		}
+
+		// Note: We don't need to validate removed hosts with SGROUP since they're being removed
+		// The SGROUP sync for removal will happen post-commit in updateHostBindingStatusForSyncedAddressGroups
+	}
+
+	return nil
+}
+
+// getHostChanges compares old and new AddressGroup hosts and returns added/removed hosts
+func (s *AddressGroupResourceService) getHostChanges(newAG models.AddressGroup, oldAG *models.AddressGroup) (addedHosts, removedHosts []netguardv1beta1.ObjectReference) {
+	newHosts := make(map[string]netguardv1beta1.ObjectReference)
+	oldHosts := make(map[string]netguardv1beta1.ObjectReference)
+
+	// Build map of new hosts
+	for _, host := range newAG.Hosts {
+		newHosts[host.Name] = host
+	}
+
+	// Build map of old hosts (if oldAG exists)
+	if oldAG != nil {
+		for _, host := range oldAG.Hosts {
+			oldHosts[host.Name] = host
+		}
+	}
+
+	// Find added hosts (in new but not in old)
+	for hostName, host := range newHosts {
+		if _, exists := oldHosts[hostName]; !exists {
+			addedHosts = append(addedHosts, host)
+		}
+	}
+
+	// Find removed hosts (in old but not in new)
+	for hostName, host := range oldHosts {
+		if _, exists := newHosts[hostName]; !exists {
+			removedHosts = append(removedHosts, host)
+		}
+	}
+
+	return addedHosts, removedHosts
+}
+
+// validateHostsSGroupSync validates a list of hosts with SGROUP
+func (s *AddressGroupResourceService) validateHostsSGroupSync(ctx context.Context, hosts []netguardv1beta1.ObjectReference, agID models.ResourceIdentifier) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader for host validation")
+	}
+	defer reader.Close()
+
+	for i, hostRef := range hosts {
+		// Load the actual host entity
+		hostID := models.ResourceIdentifier{
+			Name:      hostRef.Name,
+			Namespace: agID.Namespace, // Host must be in same namespace as AddressGroup
+		}
+
+		host, err := reader.GetHostByID(ctx, hostID)
+		if err != nil {
+			if errors.Is(err, ports.ErrNotFound) {
+				return errors.Errorf("host reference %d: host '%s' does not exist in namespace '%s'", i, hostRef.Name, agID.Namespace)
+			}
+			return errors.Wrapf(err, "host reference %d: failed to load host '%s' for SGROUP validation", i, hostRef.Name)
+		}
+
+		// Test SGROUP synchronization
+		err = s.syncManager.SyncEntity(ctx, host, types.SyncOperationUpsert)
+		if err != nil {
+			return errors.Errorf("SGROUP synchronization failed for host '%s' in namespace '%s': %v - the host cannot be added to AddressGroup %s due to SGROUP constraints",
+				hostRef.Name, agID.Namespace, err, agID.Key())
+		}
+
+		log.Printf("✅ SGROUP validation passed for host %s/%s in AddressGroup %s", agID.Namespace, hostRef.Name, agID.Key())
+	}
+
+	return nil
 }

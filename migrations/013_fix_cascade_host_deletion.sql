@@ -59,51 +59,20 @@ END $$;
 -- +goose StatementEnd
 
 -- +goose Down
--- Revert to original (broken) function for rollback
+-- Remove cascade functionality completely for rollback
 
 -- +goose StatementBegin
 
--- Drop corrected function
+-- Drop trigger first to avoid dependency issues
+DROP TRIGGER IF EXISTS cascade_host_from_address_groups ON hosts;
+
+-- Drop cascade function completely (no broken replacement)
 DROP FUNCTION IF EXISTS cascade_host_deletion();
 
--- Restore original function (with the jsonb - jsonb issue)
-CREATE OR REPLACE FUNCTION cascade_host_deletion() RETURNS TRIGGER AS $$
-DECLARE
-    host_obj jsonb;
-BEGIN
-    -- Build ObjectReference for the deleted host (original broken version)
-    host_obj := jsonb_build_object(
-        'name', OLD.name,
-        'namespace', OLD.namespace,
-        'apiVersion', 'netguard.io/v1beta1',
-        'kind', 'Host'
-    );
-    
-    -- Remove host from all AddressGroup.spec.hosts arrays (original broken version)
-    UPDATE address_groups 
-    SET hosts = hosts - host_obj
-    WHERE hosts @> jsonb_build_array(host_obj);
-    
-    -- Log the cascade operation
-    RAISE NOTICE 'Removed host %.% from all AddressGroups due to host deletion', OLD.namespace, OLD.name;
-    
-    RETURN OLD;
-END;
-$$ LANGUAGE plpgsql;
-
--- Recreate trigger
+-- Use DO block for NOTICE
 DO $$
 BEGIN
-    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'hosts') THEN
-        DROP TRIGGER IF EXISTS cascade_host_from_address_groups ON hosts;
-        CREATE TRIGGER cascade_host_from_address_groups
-            BEFORE DELETE ON hosts
-            FOR EACH ROW 
-            EXECUTE FUNCTION cascade_host_deletion();
-        RAISE NOTICE 'Restored original cascade_host_from_address_groups trigger on hosts table';
-    ELSE
-        RAISE NOTICE 'Hosts table does not exist, skipping cascade_host_from_address_groups trigger creation';
-    END IF;
+    RAISE NOTICE 'Removed cascade_host_deletion function and trigger - no cascade functionality in pre-013 state';
 END $$;
 
 -- +goose StatementEnd

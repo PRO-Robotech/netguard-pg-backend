@@ -1,6 +1,7 @@
 package client
 
 import (
+	"fmt"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 	// commonpb "github.com/H-BF/protos/pkg/api/common" - replaced with local types
@@ -258,7 +259,39 @@ func convertAddressGroupFromProto(protoAG *netguardpb.AddressGroup) models.Addre
 		}
 	}
 
+	// Convert AggregatedHosts field (NEW: aggregated hosts from protobuf)
+	fmt.Printf("🔍 CLIENT_CONVERSION_DEBUG: Converting %d aggregated hosts from protobuf for %s/%s\n",
+		len(protoAG.AggregatedHosts), protoAG.SelfRef.Namespace, protoAG.SelfRef.Name)
+	if len(protoAG.AggregatedHosts) > 0 {
+		addressGroup.AggregatedHosts = make([]models.HostReference, len(protoAG.AggregatedHosts))
+		for i, hostRef := range protoAG.AggregatedHosts {
+			fmt.Printf("  Converting protobuf host[%d]: Name=%s, UUID=%s, Source=%s\n",
+				i, hostRef.Ref.Name, hostRef.Uuid, hostRef.Source.String())
+			addressGroup.AggregatedHosts[i] = models.HostReference{
+				ObjectReference: v1beta1.ObjectReference{
+					APIVersion: hostRef.Ref.ApiVersion,
+					Kind:       hostRef.Ref.Kind,
+					Name:       hostRef.Ref.Name,
+				},
+				UUID:   hostRef.Uuid,
+				Source: convertHostRegistrationSourceFromPB(hostRef.Source),
+			}
+		}
+	}
+
 	return addressGroup
+}
+
+// convertHostRegistrationSourceFromPB converts protobuf HostRegistrationSource to domain enum
+func convertHostRegistrationSourceFromPB(source netguardpb.HostRegistrationSource) models.HostRegistrationSource {
+	switch source {
+	case netguardpb.HostRegistrationSource_HOST_SOURCE_SPEC:
+		return models.HostSourceSpec
+	case netguardpb.HostRegistrationSource_HOST_SOURCE_BINDING:
+		return models.HostSourceBinding
+	default:
+		return models.HostSourceSpec // default
+	}
 }
 
 func convertAddressGroupToProto(addressGroup models.AddressGroup) *netguardpb.AddressGroup {

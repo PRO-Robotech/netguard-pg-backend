@@ -15,22 +15,49 @@ import (
 
 // SyncHostBindings syncs host bindings to PostgreSQL with K8s metadata support
 func (w *Writer) SyncHostBindings(ctx context.Context, hostBindings []models.HostBinding, scope ports.Scope, options ...ports.Option) error {
-	// Handle scoped sync - delete existing resources in scope first
-	if !scope.IsEmpty() {
+	// Extract sync operation from options
+	syncOp := models.SyncOpUpsert // Default operation
+	for _, opt := range options {
+		if syncOption, ok := opt.(ports.SyncOption); ok {
+			syncOp = syncOption.Operation
+			break
+		}
+	}
+
+	// Handle scoped sync - delete existing resources in scope first (for non-DELETE operations)
+	if !scope.IsEmpty() && syncOp != models.SyncOpDelete {
 		if err := w.deleteHostBindingsInScope(ctx, scope); err != nil {
 			return errors.Wrap(err, "failed to delete host bindings in scope")
 		}
 	}
 
-	// Upsert each host binding
-	for _, hostBinding := range hostBindings {
-		if err := w.upsertHostBinding(ctx, hostBinding); err != nil {
-			// Check for unique constraint violation (one binding per host)
-			if isUniqueViolation(err, "host_bindings_host_namespace_host_name_key") {
-				return errors.Errorf("host %s/%s is already bound to another address group", hostBinding.HostRef.Namespace, hostBinding.HostRef.Name)
-			}
-			return errors.Wrapf(err, "failed to upsert host binding %s/%s", hostBinding.Namespace, hostBinding.Name)
+	// Handle operations based on sync operation
+	switch syncOp {
+	case models.SyncOpDelete:
+		// For DELETE operations, delete the specific bindings
+		var identifiers []models.ResourceIdentifier
+		for _, binding := range hostBindings {
+			identifiers = append(identifiers, models.ResourceIdentifier{
+				Namespace: binding.Namespace,
+				Name:      binding.Name,
+			})
 		}
+		if err := w.DeleteHostBindingsByIDs(ctx, identifiers); err != nil {
+			return errors.Wrap(err, "failed to delete host bindings")
+		}
+	case models.SyncOpUpsert, models.SyncOpFullSync:
+		// For UPSERT/FULLSYNC operations, upsert all provided bindings
+		for _, hostBinding := range hostBindings {
+			if err := w.upsertHostBinding(ctx, hostBinding); err != nil {
+				// Check for unique constraint violation (one binding per host)
+				if isUniqueViolation(err, "host_bindings_host_namespace_host_name_key") {
+					return errors.Errorf("host %s/%s is already bound to another address group", hostBinding.HostRef.Namespace, hostBinding.HostRef.Name)
+				}
+				return errors.Wrapf(err, "failed to upsert host binding %s/%s", hostBinding.Namespace, hostBinding.Name)
+			}
+		}
+	default:
+		return errors.Errorf("unsupported sync operation: %v", syncOp)
 	}
 
 	return nil

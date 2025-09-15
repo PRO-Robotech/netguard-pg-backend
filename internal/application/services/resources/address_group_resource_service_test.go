@@ -49,7 +49,7 @@ func TestAddressGroupResourceService_GetAddressGroups(t *testing.T) {
 			mockSyncManager := testutil.NewMockSyncManager()
 
 			mockConditionManager := testutil.NewMockConditionManager()
-			validationService := NewValidationService(mockRegistry)
+			validationService := NewValidationService(mockRegistry, nil)
 			service := NewAddressGroupResourceService(mockRegistry, mockSyncManager, mockConditionManager, validationService)
 
 			// Execute
@@ -103,7 +103,7 @@ func TestAddressGroupResourceService_GetAddressGroupByID(t *testing.T) {
 			mockSyncManager := testutil.NewMockSyncManager()
 
 			mockConditionManager := testutil.NewMockConditionManager()
-			validationService := NewValidationService(mockRegistry)
+			validationService := NewValidationService(mockRegistry, nil)
 			service := NewAddressGroupResourceService(mockRegistry, mockSyncManager, mockConditionManager, validationService)
 
 			// Execute
@@ -146,7 +146,7 @@ func TestAddressGroupResourceService_CreateAddressGroup(t *testing.T) {
 			mockSyncManager := testutil.NewMockSyncManager()
 
 			mockConditionManager := testutil.NewMockConditionManager()
-			validationService := NewValidationService(mockRegistry)
+			validationService := NewValidationService(mockRegistry, nil)
 			service := NewAddressGroupResourceService(mockRegistry, mockSyncManager, mockConditionManager, validationService)
 
 			// Execute
@@ -205,7 +205,7 @@ func TestAddressGroupResourceService_UpdateAddressGroup(t *testing.T) {
 			mockSyncManager := testutil.NewMockSyncManager()
 
 			mockConditionManager := testutil.NewMockConditionManager()
-			validationService := NewValidationService(mockRegistry)
+			validationService := NewValidationService(mockRegistry, nil)
 			service := NewAddressGroupResourceService(mockRegistry, mockSyncManager, mockConditionManager, validationService)
 
 			// Execute
@@ -268,7 +268,7 @@ func TestAddressGroupResourceService_DeleteAddressGroupsByIDs(t *testing.T) {
 			mockSyncManager := testutil.NewMockSyncManager()
 
 			mockConditionManager := testutil.NewMockConditionManager()
-			validationService := NewValidationService(mockRegistry)
+			validationService := NewValidationService(mockRegistry, nil)
 			service := NewAddressGroupResourceService(mockRegistry, mockSyncManager, mockConditionManager, validationService)
 
 			// Execute
@@ -323,7 +323,7 @@ func TestAddressGroupResourceService_SyncAddressGroups(t *testing.T) {
 			mockSyncManager := testutil.NewMockSyncManager()
 
 			mockConditionManager := testutil.NewMockConditionManager()
-			validationService := NewValidationService(mockRegistry)
+			validationService := NewValidationService(mockRegistry, nil)
 			service := NewAddressGroupResourceService(mockRegistry, mockSyncManager, mockConditionManager, validationService)
 
 			// Execute
@@ -354,7 +354,7 @@ func TestAddressGroupResourceService_AddressGroupLifecycle(t *testing.T) {
 		mockSyncManager := testutil.NewMockSyncManager()
 
 		mockConditionManager := testutil.NewMockConditionManager()
-		mockValidationService := NewValidationService(mockRegistry)
+		mockValidationService := NewValidationService(mockRegistry, nil)
 		service := NewAddressGroupResourceService(mockRegistry, mockSyncManager, mockConditionManager, mockValidationService)
 		testAddressGroup := testutil.TestFixtures.AddressGroup
 
@@ -394,7 +394,7 @@ func TestAddressGroupResourceService_Concurrency(t *testing.T) {
 		mockSyncManager := testutil.NewMockSyncManager()
 
 		mockConditionManager := testutil.NewMockConditionManager()
-		mockValidationService := NewValidationService(mockRegistry)
+		mockValidationService := NewValidationService(mockRegistry, nil)
 		service := NewAddressGroupResourceService(mockRegistry, mockSyncManager, mockConditionManager, mockValidationService)
 
 		// Create multiple address groups concurrently (reduced number to avoid race conditions)
@@ -429,7 +429,7 @@ func TestAddressGroupResourceService_ErrorHandling(t *testing.T) {
 
 		mockSyncManager := testutil.NewMockSyncManager()
 		mockConditionManager := testutil.NewMockConditionManager()
-		mockValidationService := NewValidationService(mockRegistry)
+		mockValidationService := NewValidationService(mockRegistry, nil)
 		service := NewAddressGroupResourceService(mockRegistry, mockSyncManager, mockConditionManager, mockValidationService)
 
 		// Test that errors are properly handled

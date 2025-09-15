@@ -11,6 +11,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"netguard-pg-backend/internal/application/services/resources"
+	"netguard-pg-backend/internal/application/utils"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/sync/interfaces"
@@ -61,8 +62,7 @@ func NewNetguardFacade(
 	hostBindingConditionAdapter := &hostBindingConditionManagerAdapter{conditionManager}
 	ruleConditionAdapter := &ruleConditionManager{conditionManager}
 
-	// Create validation service (no condition manager needed) - MUST be created first
-	validationService := resources.NewValidationService(registry)
+	validationService := resources.NewValidationService(registry, syncManager)
 
 	// Create host resource services with condition managers (needed first for AddressGroupResourceService)
 	hostResourceService := resources.NewHostResourceService(registry, syncManager, hostConditionAdapter)
@@ -1007,8 +1007,15 @@ type hostConditionManagerAdapter struct {
 }
 
 func (a *hostConditionManagerAdapter) ProcessHostConditions(ctx context.Context, host *models.Host, syncResult error) error {
-	// For now, just return nil as host conditions are not yet implemented
-	// This can be extended when host condition processing is needed
+	if syncResult != nil {
+		// Set failed condition if sync failed
+		utils.SetSyncFailedCondition(host, syncResult)
+		log.Printf("❌ Host %s sync failed: %v", host.Key(), syncResult)
+	} else {
+		// Set success condition if sync succeeded
+		utils.SetSyncSuccessCondition(host)
+		log.Printf("✅ Host %s sync succeeded", host.Key())
+	}
 	return nil
 }
 

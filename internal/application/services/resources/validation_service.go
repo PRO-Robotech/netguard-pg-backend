@@ -9,17 +9,21 @@ import (
 	"netguard-pg-backend/internal/application/validation"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
+	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
+	"netguard-pg-backend/internal/sync/interfaces"
 )
 
 // ValidationService centralizes validation logic for all resource types
 type ValidationService struct {
-	registry ports.Registry
+	registry    ports.Registry
+	syncManager interfaces.SyncManager
 }
 
 // NewValidationService creates a new ValidationService
-func NewValidationService(registry ports.Registry) *ValidationService {
+func NewValidationService(registry ports.Registry, syncManager interfaces.SyncManager) *ValidationService {
 	return &ValidationService{
-		registry: registry,
+		registry:    registry,
+		syncManager: syncManager,
 	}
 }
 
@@ -97,8 +101,15 @@ func (s *ValidationService) ValidateAddressGroupForCreation(ctx context.Context,
 	validator := validation.NewDependencyValidator(reader)
 	addressGroupValidator := validator.GetAddressGroupValidator()
 
+	// PHASE 1: Standard validation (existence, references, etc)
 	if err := addressGroupValidator.ValidateForCreation(ctx, addressGroup); err != nil {
 		return errors.Wrapf(err, "address group validation failed for creation: %s", addressGroup.Key())
+	}
+
+	// PHASE 2: SGROUP synchronization pre-validation (new!)
+	// This tests if hosts can be synchronized with SGROUP before saving to database
+	if err := addressGroupValidator.ValidateSgroupSyncForHosts(ctx, addressGroup.Hosts, addressGroup.ResourceIdentifier, s.syncManager); err != nil {
+		return errors.Wrapf(err, "SGROUP synchronization validation failed for address group creation: %s", addressGroup.Key())
 	}
 
 	return nil
@@ -115,8 +126,19 @@ func (s *ValidationService) ValidateAddressGroupForUpdate(ctx context.Context, o
 	validator := validation.NewDependencyValidator(reader)
 	addressGroupValidator := validator.GetAddressGroupValidator()
 
+	// PHASE 1: Standard validation (existence, references, etc)
 	if err := addressGroupValidator.ValidateForUpdate(ctx, oldAddressGroup, newAddressGroup); err != nil {
 		return errors.Wrapf(err, "address group validation failed for update: %s", newAddressGroup.Key())
+	}
+
+	// PHASE 2: SGROUP synchronization pre-validation (new!)
+	// This tests if NEW hosts can be synchronized with SGROUP before saving to database
+	// Only validate new or changed hosts to avoid unnecessary SGROUP calls
+	newHostsToValidate := getNewOrChangedHosts(oldAddressGroup.Hosts, newAddressGroup.Hosts)
+	if len(newHostsToValidate) > 0 {
+		if err := addressGroupValidator.ValidateSgroupSyncForHosts(ctx, newHostsToValidate, newAddressGroup.ResourceIdentifier, s.syncManager); err != nil {
+			return errors.Wrapf(err, "SGROUP synchronization validation failed for address group update: %s", newAddressGroup.Key())
+		}
 	}
 
 	return nil
@@ -722,4 +744,39 @@ func (s *ValidationService) ValidateResourceDependencies(ctx context.Context, re
 	}
 
 	return nil
+}
+
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
+// getNewOrChangedHosts returns hosts that are new or changed compared to old hosts list
+// This is used to avoid unnecessary SGROUP validation calls for hosts that haven't changed
+func getNewOrChangedHosts(oldHosts, newHosts []netguardv1beta1.ObjectReference) []netguardv1beta1.ObjectReference {
+	if len(oldHosts) == 0 {
+		// All hosts are new
+		return newHosts
+	}
+
+	if len(newHosts) == 0 {
+		// No hosts to validate (all removed)
+		return nil
+	}
+
+	// Create a map of old hosts for quick lookup
+	oldHostsMap := make(map[string]bool)
+	for _, oldHost := range oldHosts {
+		oldHostsMap[oldHost.Name] = true
+	}
+
+	// Find new hosts that weren't in the old list
+	var newOrChangedHosts []netguardv1beta1.ObjectReference
+	for _, newHost := range newHosts {
+		if !oldHostsMap[newHost.Name] {
+			// This is a new host, needs validation
+			newOrChangedHosts = append(newOrChangedHosts, newHost)
+		}
+	}
+
+	return newOrChangedHosts
 }

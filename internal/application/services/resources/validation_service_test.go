@@ -63,7 +63,7 @@ func TestValidationService_ValidateServiceForCreation(t *testing.T) {
 			mockRegistry := testutil.NewMockRegistry()
 			mockRegistry.SetupTestData(tt.setupData)
 
-			validationService := NewValidationService(mockRegistry)
+			validationService := NewValidationService(mockRegistry, nil)
 
 			// Execute
 			err := validationService.ValidateServiceForCreation(context.Background(), tt.service)
@@ -109,7 +109,7 @@ func TestValidationService_ValidateServiceForUpdate(t *testing.T) {
 			mockRegistry := testutil.NewMockRegistry()
 			mockRegistry.SetupTestData(tt.setupData)
 
-			validationService := NewValidationService(mockRegistry)
+			validationService := NewValidationService(mockRegistry, nil)
 
 			// Execute
 			err := validationService.ValidateServiceForUpdate(context.Background(), tt.oldService, tt.newService)
@@ -158,7 +158,7 @@ func TestValidationService_ValidateServiceForDeletion(t *testing.T) {
 			mockRegistry := testutil.NewMockRegistry()
 			mockRegistry.SetupTestData(tt.setupData)
 
-			validationService := NewValidationService(mockRegistry)
+			validationService := NewValidationService(mockRegistry, nil)
 
 			// Execute
 			err := validationService.ValidateServiceForDeletion(context.Background(), tt.service)
@@ -198,7 +198,7 @@ func TestValidationService_ValidateAddressGroupForCreation(t *testing.T) {
 			mockRegistry := testutil.NewMockRegistry()
 			mockRegistry.SetupTestData(tt.setupData)
 
-			validationService := NewValidationService(mockRegistry)
+			validationService := NewValidationService(mockRegistry, nil)
 
 			// Execute
 			err := validationService.ValidateAddressGroupForCreation(context.Background(), tt.addressGroup)
@@ -244,7 +244,7 @@ func TestValidationService_ValidateAddressGroupForUpdate(t *testing.T) {
 			mockRegistry := testutil.NewMockRegistry()
 			mockRegistry.SetupTestData(tt.setupData)
 
-			validationService := NewValidationService(mockRegistry)
+			validationService := NewValidationService(mockRegistry, nil)
 
 			// Execute
 			err := validationService.ValidateAddressGroupForUpdate(context.Background(), tt.oldAddressGroup, tt.newAddressGroup)
@@ -293,7 +293,7 @@ func TestValidationService_ValidateAddressGroupForDeletion(t *testing.T) {
 			mockRegistry := testutil.NewMockRegistry()
 			mockRegistry.SetupTestData(tt.setupData)
 
-			validationService := NewValidationService(mockRegistry)
+			validationService := NewValidationService(mockRegistry, nil)
 
 			// Execute
 			err := validationService.ValidateAddressGroupForDeletion(context.Background(), tt.addressGroup)
@@ -358,7 +358,7 @@ func TestValidationService_ValidateRuleS2SForCreation(t *testing.T) {
 			mockRegistry := testutil.NewMockRegistry()
 			mockRegistry.SetupTestData(tt.setupData)
 
-			validationService := NewValidationService(mockRegistry)
+			validationService := NewValidationService(mockRegistry, nil)
 
 			// Execute
 			err := validationService.ValidateRuleS2SForCreation(context.Background(), tt.rule)
@@ -416,7 +416,7 @@ func TestValidationService_ValidateRuleS2SForUpdate(t *testing.T) {
 			mockRegistry := testutil.NewMockRegistry()
 			mockRegistry.SetupTestData(tt.setupData)
 
-			validationService := NewValidationService(mockRegistry)
+			validationService := NewValidationService(mockRegistry, nil)
 
 			// Execute
 			err := validationService.ValidateRuleS2SForUpdate(context.Background(), tt.oldRule, tt.newRule)
@@ -465,7 +465,7 @@ func TestValidationService_ValidateRuleS2SForDeletion(t *testing.T) {
 			mockRegistry := testutil.NewMockRegistry()
 			mockRegistry.SetupTestData(tt.setupData)
 
-			validationService := NewValidationService(mockRegistry)
+			validationService := NewValidationService(mockRegistry, nil)
 
 			// Execute
 			err := validationService.ValidateRuleS2SForDeletion(context.Background(), tt.rule)
@@ -517,7 +517,7 @@ func TestValidationService_ValidateServiceAliasForCreation(t *testing.T) {
 			mockRegistry := testutil.NewMockRegistry()
 			mockRegistry.SetupTestData(tt.setupData)
 
-			validationService := NewValidationService(mockRegistry)
+			validationService := NewValidationService(mockRegistry, nil)
 
 			// Execute
 			err := validationService.ValidateServiceAliasForCreation(context.Background(), tt.alias)
@@ -557,7 +557,7 @@ func TestValidationService_ValidateNetworkForCreation(t *testing.T) {
 			mockRegistry := testutil.NewMockRegistry()
 			mockRegistry.SetupTestData(tt.setupData)
 
-			validationService := NewValidationService(mockRegistry)
+			validationService := NewValidationService(mockRegistry, nil)
 
 			// Execute
 			err := validationService.ValidateNetworkForCreation(context.Background(), tt.network)
@@ -613,7 +613,7 @@ func TestValidationService_ValidateNetworkBindingForCreation(t *testing.T) {
 			mockRegistry := testutil.NewMockRegistry()
 			mockRegistry.SetupTestData(tt.setupData)
 
-			validationService := NewValidationService(mockRegistry)
+			validationService := NewValidationService(mockRegistry, nil)
 
 			// Execute
 			err := validationService.ValidateNetworkBindingForCreation(context.Background(), tt.networkBinding)
@@ -697,7 +697,7 @@ func TestValidationService_ValidateMultipleResourcesForOperation(t *testing.T) {
 			mockRegistry := testutil.NewMockRegistry()
 			mockRegistry.SetupTestData(tt.setupData)
 
-			validationService := NewValidationService(mockRegistry)
+			validationService := NewValidationService(mockRegistry, nil)
 
 			// Execute
 			err := validationService.ValidateMultipleResourcesForOperation(context.Background(), tt.resources, tt.operation)
@@ -886,7 +886,7 @@ func TestValidationService_ValidateResourceDependencies(t *testing.T) {
 			mockRegistry := testutil.NewMockRegistry()
 			mockRegistry.SetupTestData(tt.setupData)
 
-			validationService := NewValidationService(mockRegistry)
+			validationService := NewValidationService(mockRegistry, nil)
 
 			// Execute
 			err := validationService.ValidateResourceDependencies(context.Background(), tt.resource)

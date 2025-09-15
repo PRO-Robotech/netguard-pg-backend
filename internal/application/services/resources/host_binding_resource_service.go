@@ -20,6 +20,8 @@ type HostBindingConditionManagerInterface interface {
 	ProcessHostBindingConditions(ctx context.Context, hostBinding *models.HostBinding, syncResult error) error
 }
 
+// Note: Host aggregation is now handled automatically by PostgreSQL triggers
+
 // HostBindingResourceService provides business logic for HostBinding resources
 type HostBindingResourceService struct {
 	repo                ports.Registry
@@ -118,6 +120,8 @@ func (s *HostBindingResourceService) CreateHostBinding(ctx context.Context, host
 		}
 	}
 
+	// Note: Aggregated hosts are now updated automatically by PostgreSQL triggers
+
 	return nil
 }
 
@@ -135,10 +139,61 @@ func (s *HostBindingResourceService) UpdateHostBinding(ctx context.Context, host
 		return fmt.Errorf("host binding validation failed: %w", err)
 	}
 
-	// TODO: Implement proper host binding update using Writer pattern
-	// For now, just validate and return success to fix compilation
+	// Get reader to validate existing host binding
+	reader, err := s.repo.Reader(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get reader: %w", err)
+	}
+	defer reader.Close()
 
-	log.Printf("✅ DEBUG: HostBinding %s updated successfully", hostBinding.Key())
+	// Check if HostBinding exists
+	existing, err := s.getHostBindingByIDWithReader(ctx, reader, hostBinding.Key())
+	if err != nil {
+		if errors.Is(err, ports.ErrNotFound) {
+			return fmt.Errorf("host binding not found: %s", hostBinding.Key())
+		}
+		return fmt.Errorf("failed to get existing host binding: %w", err)
+	}
+	if existing == nil {
+		return fmt.Errorf("host binding not found: %s", hostBinding.Key())
+	}
+
+	// Convert ResourceIdentifiers for validation
+	hostRef := models.ResourceIdentifier{Name: hostBinding.HostRef.Name, Namespace: hostBinding.HostRef.Namespace}
+	addressGroupRef := models.ResourceIdentifier{Name: hostBinding.AddressGroupRef.Name, Namespace: hostBinding.AddressGroupRef.Namespace}
+	bindingID := models.ResourceIdentifier{Name: hostBinding.Name, Namespace: hostBinding.Namespace}
+
+	// Validate that the referenced Host exists (allow same binding)
+	if err := s.validateHostBindingWithReader(ctx, reader, hostRef, bindingID); err != nil {
+		return fmt.Errorf("host validation failed: %w", err)
+	}
+
+	// Validate that the referenced AddressGroup exists
+	if err := s.validateAddressGroupWithReader(ctx, reader, addressGroupRef); err != nil {
+		return fmt.Errorf("address group validation failed: %w", err)
+	}
+
+	// Update metadata
+	hostBinding.GetMeta().TouchOnWrite(fmt.Sprintf("%d", time.Now().UnixNano()))
+
+	// Get writer and perform update
+	writer, err := s.repo.Writer(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get writer: %w", err)
+	}
+	defer writer.Abort()
+
+	// Convert to slice for sync
+	bindings := []models.HostBinding{*hostBinding}
+	if err := writer.SyncHostBindings(ctx, bindings, ports.EmptyScope{}, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
+		return fmt.Errorf("failed to update host binding: %w", err)
+	}
+
+	if err := writer.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	log.Printf("✅ DEBUG: HostBinding %s updated successfully in storage", hostBinding.Key())
 
 	// Process conditions if condition manager is available
 	if s.conditionManager != nil {
@@ -148,6 +203,8 @@ func (s *HostBindingResourceService) UpdateHostBinding(ctx context.Context, host
 		}
 	}
 
+	// Note: Aggregated hosts are now updated automatically by PostgreSQL triggers
+
 	return nil
 }
 
@@ -155,10 +212,46 @@ func (s *HostBindingResourceService) UpdateHostBinding(ctx context.Context, host
 func (s *HostBindingResourceService) DeleteHostBinding(ctx context.Context, id models.ResourceIdentifier) error {
 	log.Printf("🔥 DEBUG: HostBindingResourceService.DeleteHostBinding called for %s", id.Key())
 
-	// TODO: Implement proper host binding deletion using Writer pattern
-	// For now, just return success to fix compilation
+	// Note: We no longer need to get HostBinding details since PostgreSQL triggers handle aggregation automatically
 
-	log.Printf("✅ DEBUG: HostBinding %s deleted successfully", id.Key())
+	// Get writer for deletion
+	writer, err := s.repo.Writer(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get writer: %w", err)
+	}
+	defer writer.Abort()
+
+	// Check if HostBinding exists before deletion
+	reader, err := s.repo.Reader(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get reader: %w", err)
+	}
+	defer reader.Close()
+
+	existingBinding, err := s.getHostBindingByIDWithReader(ctx, reader, id.Key())
+	if err != nil {
+		if errors.Is(err, ports.ErrNotFound) {
+			return fmt.Errorf("host binding not found: %s", id.Key())
+		}
+		return fmt.Errorf("failed to get existing host binding: %w", err)
+	}
+	if existingBinding == nil {
+		return fmt.Errorf("host binding not found: %s", id.Key())
+	}
+
+	// Delete the HostBinding using the SyncHostBindings with DELETE operation
+	if err := writer.SyncHostBindings(ctx, []models.HostBinding{*existingBinding}, ports.EmptyScope{}, ports.WithSyncOp(models.SyncOpDelete)); err != nil {
+		return fmt.Errorf("failed to delete host binding: %w", err)
+	}
+
+	if err := writer.Commit(); err != nil {
+		return fmt.Errorf("failed to commit deletion transaction: %w", err)
+	}
+
+	log.Printf("✅ DEBUG: HostBinding %s deleted successfully from storage", id.Key())
+
+	// Note: Host status and aggregated hosts are now updated automatically by PostgreSQL triggers and synchronization
+
 	return nil
 }
 
@@ -166,20 +259,53 @@ func (s *HostBindingResourceService) DeleteHostBinding(ctx context.Context, id m
 func (s *HostBindingResourceService) GetHostBinding(ctx context.Context, id models.ResourceIdentifier) (*models.HostBinding, error) {
 	log.Printf("🔥 DEBUG: HostBindingResourceService.GetHostBinding called for %s", id.Key())
 
-	// TODO: Implement proper host binding retrieval using Reader pattern
-	// For now, just return nil to fix compilation
-	log.Printf("⚠️ DEBUG: HostBinding %s retrieval not yet implemented", id.Key())
-	return nil, ports.ErrNotFound
+	// Get reader to retrieve host binding
+	reader, err := s.repo.Reader(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get reader: %w", err)
+	}
+	defer reader.Close()
+
+	// Use the helper method to get host binding by ID
+	hostBinding, err := s.getHostBindingByIDWithReader(ctx, reader, id.Key())
+	if err != nil {
+		return nil, err
+	}
+
+	if hostBinding == nil {
+		return nil, ports.ErrNotFound
+	}
+
+	log.Printf("✅ DEBUG: HostBinding %s retrieved successfully", id.Key())
+	return hostBinding, nil
 }
 
 // ListHostBindings retrieves all HostBindings within a scope
 func (s *HostBindingResourceService) ListHostBindings(ctx context.Context, scope ports.Scope) ([]models.HostBinding, error) {
 	log.Printf("🔥 DEBUG: HostBindingResourceService.ListHostBindings called with scope %v", scope)
 
-	// TODO: Implement proper host binding listing using Reader pattern
-	// For now, just return empty slice to fix compilation
-	log.Printf("⚠️ DEBUG: HostBinding listing not yet implemented")
-	return []models.HostBinding{}, nil
+	// Get reader to list host bindings
+	reader, err := s.repo.Reader(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get reader: %w", err)
+	}
+	defer reader.Close()
+
+	// List to collect host bindings
+	var hostBindings []models.HostBinding
+
+	// Use the repository's ListHostBindings method with a consume function
+	err = reader.ListHostBindings(ctx, func(binding models.HostBinding) error {
+		hostBindings = append(hostBindings, binding)
+		return nil
+	}, scope)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to list host bindings: %w", err)
+	}
+
+	log.Printf("✅ DEBUG: Listed %d HostBindings successfully", len(hostBindings))
+	return hostBindings, nil
 }
 
 // SyncHostBindings synchronizes multiple host bindings with the specified operation
@@ -331,8 +457,12 @@ func (s *HostBindingResourceService) validateHostBindingWithReader(ctx context.C
 				return nil // Host is bound to the same binding - valid
 			}
 			log.Printf("❌ HostBinding validation: Host is bound to DIFFERENT binding - expectedName='%s' vs actualName='%s'", expectedName, actualName)
+			return fmt.Errorf("host is already bound to another binding (expected: %s, actual: %s)", bindingID.Name, actualName)
+		} else {
+			// Host is bound but BindingRef is nil - means it's bound via AddressGroup.spec.hosts
+			log.Printf("❌ HostBinding validation: Host is bound via AddressGroup.spec.hosts - cannot create HostBinding")
+			return fmt.Errorf("host is already bound to AddressGroup via spec.hosts - cannot create HostBinding")
 		}
-		return fmt.Errorf("host is already bound to another binding (expected: %s, actual: %s)", bindingID.Name, host.BindingRef.Name)
 	}
 
 	log.Printf("✅ HostBinding validation: Host is not bound - VALID")
