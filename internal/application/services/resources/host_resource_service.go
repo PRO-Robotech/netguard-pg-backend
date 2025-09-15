@@ -600,9 +600,7 @@ func (s *HostResourceService) UpdateHostBinding(ctx context.Context, hostID mode
 		return fmt.Errorf("host %s is not ready for binding - must be synchronized with SGROUP first (Ready condition must be True)", hostID.Key())
 	}
 
-	// Update binding references - handle both binding creation and unbinding
 	if bindingID.Name == "" && addressGroupID.Name == "" {
-		// Unbinding case - clear all binding references
 		log.Printf("🔧 DEBUG: UpdateHostBinding - Unbinding case, clearing Host %s status", hostID.Key())
 		host.BindingRef = nil
 		host.AddressGroupRef = nil
@@ -613,7 +611,7 @@ func (s *HostResourceService) UpdateHostBinding(ctx context.Context, hostID mode
 		host.BindingRef = &v1beta1.ObjectReference{
 			APIVersion: "netguard.sgroups.io/v1beta1",
 			Kind:       "HostBinding",
-			Name:       bindingID.Name, // Store only the name part for repository consistency
+			Name:       bindingID.Name,
 		}
 		host.AddressGroupRef = &v1beta1.ObjectReference{
 			APIVersion: "netguard.sgroups.io/v1beta1",
