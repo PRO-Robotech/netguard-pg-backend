@@ -27,10 +27,6 @@ func NewValidationService(registry ports.Registry, syncManager interfaces.SyncMa
 	}
 }
 
-// =============================================================================
-// Service Validation
-// =============================================================================
-
 // ValidateServiceForCreation validates a service for creation
 func (s *ValidationService) ValidateServiceForCreation(ctx context.Context, service models.Service) error {
 	reader, err := s.registry.Reader(ctx)
