@@ -111,6 +111,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostBindingSpec":                 schema_k8s_apis_netguard_v1beta1_HostBindingSpec(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostBindingStatus":               schema_k8s_apis_netguard_v1beta1_HostBindingStatus(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostList":                        schema_k8s_apis_netguard_v1beta1_HostList(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostReference":                   schema_k8s_apis_netguard_v1beta1_HostReference(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostSpec":                        schema_k8s_apis_netguard_v1beta1_HostSpec(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostStatus":                      schema_k8s_apis_netguard_v1beta1_HostStatus(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IEAgAgRule":                      schema_k8s_apis_netguard_v1beta1_IEAgAgRule(ref),
@@ -2979,11 +2980,25 @@ func schema_k8s_apis_netguard_v1beta1_AddressGroup(ref common.ReferenceCallback)
 							},
 						},
 					},
+					"x-aggregatedHosts": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AggregatedHosts contains all hosts that belong to this AddressGroup, aggregated from both spec.hosts and HostBinding resources",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostReference"),
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupSpec", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupStatus", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NetworkItem"},
+			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupSpec", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupStatus", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostReference", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NetworkItem"},
 	}
 }
 
@@ -3540,10 +3555,26 @@ func schema_k8s_apis_netguard_v1beta1_AddressGroupSpec(ref common.ReferenceCallb
 							Format:      "",
 						},
 					},
+					"hosts": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Hosts that belong exclusively to this AddressGroup Each host can belong to only one AddressGroup",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ObjectReference"),
+									},
+								},
+							},
+						},
+					},
 				},
 				Required: []string{"defaultAction"},
 			},
 		},
+		Dependencies: []string{
+			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ObjectReference"},
 	}
 }
 
@@ -3962,6 +3993,45 @@ func schema_k8s_apis_netguard_v1beta1_HostList(ref common.ReferenceCallback) com
 		},
 		Dependencies: []string{
 			"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.Host"},
+	}
+}
+
+func schema_k8s_apis_netguard_v1beta1_HostReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "HostReference represents a reference to a Host with additional metadata",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"ref": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Reference to the Host object (namespace is implied from AddressGroup context)",
+							Default:     map[string]interface{}{},
+							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ObjectReference"),
+						},
+					},
+					"uuid": {
+						SchemaProps: spec.SchemaProps{
+							Description: "UUID of the host (for efficient lookup and SGroup sync)",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"source": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Source indicates how this host was registered (spec or binding)",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"ref", "uuid", "source"},
+			},
+		},
+		Dependencies: []string{
+			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ObjectReference"},
 	}
 }
 

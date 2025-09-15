@@ -890,9 +890,25 @@
         "meta": {
           "$ref": "#/definitions/v1Meta"
         },
+        "hosts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ObjectReference"
+          },
+          "title": "Hosts that belong to this address group (exclusively)"
+        },
         "addressGroupName": {
           "type": "string",
           "title": "Computed address group name (e.g., \"namespace/name\")"
+        },
+        "aggregatedHosts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1HostReference"
+          },
+          "title": "All hosts from any source (spec + HostBinding)"
         }
       },
       "title": "AddressGroup - represents an address group configuration for Netguard",
@@ -1182,6 +1198,34 @@
         "hostRef",
         "addressGroupRef"
       ]
+    },
+    "v1HostReference": {
+      "type": "object",
+      "properties": {
+        "ref": {
+          "$ref": "#/definitions/v1ObjectReference",
+          "title": "Reference to the Host object (namespace is implied from AddressGroup context)"
+        },
+        "uuid": {
+          "type": "string",
+          "title": "UUID of the host (for efficient lookup and SGroup sync)"
+        },
+        "source": {
+          "$ref": "#/definitions/v1HostRegistrationSource",
+          "title": "Source indicates how this host was registered (spec or binding)"
+        }
+      },
+      "title": "HostReference represents a reference to a Host with additional metadata"
+    },
+    "v1HostRegistrationSource": {
+      "type": "string",
+      "enum": [
+        "HOST_SOURCE_SPEC",
+        "HOST_SOURCE_BINDING"
+      ],
+      "default": "HOST_SOURCE_SPEC",
+      "description": "- HOST_SOURCE_SPEC: Host registered via AddressGroup.spec.hosts\n - HOST_SOURCE_BINDING: Host registered via HostBinding resource",
+      "title": "HostRegistrationSource represents the source of host registration"
     },
     "v1IEAgAgRule": {
       "type": "object",
