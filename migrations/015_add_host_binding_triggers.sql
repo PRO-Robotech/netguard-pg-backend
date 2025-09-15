@@ -80,8 +80,8 @@ DECLARE
     host_name TEXT;
     hosts_to_unbind JSONB := COALESCE(OLD.hosts, '[]'::jsonb);
 BEGIN
-    -- Unbind all hosts that were in spec.hosts of the deleted AddressGroup
-    IF jsonb_array_length(hosts_to_unbind) > 0 THEN
+    IF hosts_to_unbind IS NOT NULL AND hosts_to_unbind != 'null'::jsonb
+       AND jsonb_typeof(hosts_to_unbind) = 'array' AND jsonb_array_length(hosts_to_unbind) > 0 THEN
         FOR host_ref IN SELECT jsonb_array_elements(hosts_to_unbind)
         LOOP
             host_name := host_ref->>'name';

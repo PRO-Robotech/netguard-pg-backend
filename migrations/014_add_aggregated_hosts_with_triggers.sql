@@ -23,8 +23,8 @@ BEGIN
     FROM address_groups 
     WHERE namespace = ag_namespace AND name = ag_name;
     
-    -- Add hosts from spec.hosts with source = "spec" only if hosts is not null/empty
-    IF hosts_field IS NOT NULL AND hosts_field != 'null'::jsonb AND jsonb_array_length(hosts_field) > 0 THEN
+    IF hosts_field IS NOT NULL AND hosts_field != 'null'::jsonb
+       AND jsonb_typeof(hosts_field) = 'array' AND jsonb_array_length(hosts_field) > 0 THEN
         FOR host_ref IN
             SELECT jsonb_array_elements(hosts_field) as host_obj
         LOOP
