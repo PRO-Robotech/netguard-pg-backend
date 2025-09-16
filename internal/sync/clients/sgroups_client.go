@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/sync/interfaces"
@@ -146,6 +147,45 @@ func (c *sgroupsClient) Sync(ctx context.Context, req *types.SyncRequest) error 
 	return err
 }
 
+// GetStatuses returns a channel of timestamp updates from SGROUP
+func (c *sgroupsClient) GetStatuses(ctx context.Context) (chan *timestamppb.Timestamp, error) {
+	// Create streaming call to SyncStatuses
+	stream, err := c.client.SyncStatuses(ctx, &emptypb.Empty{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to open SyncStatuses stream: %w", err)
+	}
+
+	// Create channel for timestamps
+	statusChan := make(chan *timestamppb.Timestamp, 100)
+
+	// Start goroutine to read from stream
+	go func() {
+		defer close(statusChan)
+		for {
+			statusResp, err := stream.Recv()
+			if err != nil {
+				// Stream ended or error occurred
+				return
+			}
+
+			// Extract timestamp from response and send to channel (non-blocking)
+			if statusResp.UpdatedAt != nil {
+				select {
+				case statusChan <- statusResp.UpdatedAt:
+					// Timestamp sent successfully
+				case <-ctx.Done():
+					// Context cancelled, exit goroutine
+					return
+				default:
+					// Channel full, drop timestamp
+				}
+			}
+		}
+	}()
+
+	return statusChan, nil
+}
+
 // Health checks the health of sgroups service
 func (c *sgroupsClient) Health(ctx context.Context) error {
 	// Create context with timeout
@@ -155,6 +195,76 @@ func (c *sgroupsClient) Health(ctx context.Context) error {
 	// Real health check using SyncStatuses
 	_, err := c.client.SyncStatuses(ctx, &emptypb.Empty{})
 	return err
+}
+
+// GetHostsByUUIDs retrieves hosts from SGROUP by their UUIDs
+func (c *sgroupsClient) GetHostsByUUIDs(ctx context.Context, uuids []string) ([]*pb.Host, error) {
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+
+	// Create request with ByUID filter
+	req := &pb.ListHostsReq{
+		Criteria: &pb.ListHostsReq_ByUuid{
+			ByUuid: &pb.ListHostsReq_ByUID{
+				UIDs: uuids,
+			},
+		},
+	}
+
+	// Call ListHosts with UUID filter
+	resp, err := c.client.ListHosts(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get hosts by UUIDs: %w", err)
+	}
+
+	return resp.Hosts, nil
+}
+
+// ListAllHosts retrieves all hosts from SGROUP (for full sync)
+func (c *sgroupsClient) ListAllHosts(ctx context.Context) ([]*pb.Host, error) {
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+
+	// Create request with no filter (all hosts)
+	req := &pb.ListHostsReq{
+		Criteria: &pb.ListHostsReq_None{
+			None: &pb.ListHostsReq_NoFilter{},
+		},
+	}
+
+	// Call ListHosts with no filter
+	resp, err := c.client.ListHosts(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list all hosts: %w", err)
+	}
+
+	return resp.Hosts, nil
+}
+
+// GetHostsInSecurityGroup retrieves hosts from SGROUP that belong to specific security groups
+func (c *sgroupsClient) GetHostsInSecurityGroup(ctx context.Context, sgNames []string) ([]*pb.Host, error) {
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+
+	// Create request with BySG filter
+	req := &pb.ListHostsReq{
+		Criteria: &pb.ListHostsReq_BySgName{
+			BySgName: &pb.ListHostsReq_BySG{
+				Names: sgNames,
+			},
+		},
+	}
+
+	// Call ListHosts with SG filter
+	resp, err := c.client.ListHosts(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get hosts in security groups: %w", err)
+	}
+
+	return resp.Hosts, nil
 }
 
 // Close closes the gRPC connection

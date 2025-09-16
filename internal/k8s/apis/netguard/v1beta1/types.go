@@ -790,7 +790,10 @@ type Host struct {
 
 	Spec   HostSpec   `json:"spec,omitempty"`
 	Status HostStatus `json:"status,omitempty"`
-	IPList []IPItem   `json:"ipList,omitempty"`
+
+	// IPList contains IP addresses for this Host, synchronized from SGROUP
+	// +optional
+	IPList []IPItem `json:"x-ipList"`
 }
 
 // +kubebuilder:object:root=true

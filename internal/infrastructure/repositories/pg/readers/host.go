@@ -2,7 +2,9 @@ package readers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -21,6 +23,7 @@ func (r *Reader) ListHosts(ctx context.Context, consume func(models.Host) error,
 		       h.host_name_sync, h.address_group_name, h.is_bound,
 		       h.binding_ref_namespace, h.binding_ref_name,
 		       h.address_group_ref_namespace, h.address_group_ref_name,
+		       h.ip_list,
 		       m.resource_version, m.labels, m.annotations, m.conditions,
 		       m.created_at, m.updated_at
 		FROM hosts h
@@ -61,6 +64,7 @@ func (r *Reader) GetHostByID(ctx context.Context, id models.ResourceIdentifier) 
 		       h.host_name_sync, h.address_group_name, h.is_bound,
 		       h.binding_ref_namespace, h.binding_ref_name,
 		       h.address_group_ref_namespace, h.address_group_ref_name,
+		       h.ip_list,
 		       m.resource_version, m.labels, m.annotations, m.conditions,
 		       m.created_at, m.updated_at
 		FROM hosts h
@@ -84,6 +88,7 @@ func (r *Reader) GetHostByID(ctx context.Context, id models.ResourceIdentifier) 
 func (r *Reader) scanHost(rows pgx.Rows) (models.Host, error) {
 	var host models.Host
 	var labelsJSON, annotationsJSON, conditionsJSON []byte
+	var ipListJSON []byte              // JSON field for ip_list
 	var createdAt, updatedAt time.Time // Temporary variables for timestamps
 	var resourceVersion int64          // Scan as int64 from database
 
@@ -105,6 +110,7 @@ func (r *Reader) scanHost(rows pgx.Rows) (models.Host, error) {
 		&bindingRefName,
 		&addressGroupRefNamespace,
 		&addressGroupRefName,
+		&ipListJSON,
 		&resourceVersion,
 		&labelsJSON,
 		&annotationsJSON,
@@ -146,6 +152,22 @@ func (r *Reader) scanHost(rows pgx.Rows) (models.Host, error) {
 		}
 	}
 
+	// Parse IP list from JSON if present
+	if ipListJSON != nil {
+		log.Printf("🔍 PG_READER_DEBUG: Found ip_list JSON for host %s/%s: %s",
+			host.Namespace, host.Name, string(ipListJSON))
+		var ipItems []models.IPItem
+		if err := json.Unmarshal(ipListJSON, &ipItems); err != nil {
+			return models.Host{}, errors.Wrap(err, "failed to parse ip_list JSON")
+		}
+		log.Printf("🔍 PG_READER_DEBUG: Parsed %d IP items for host %s/%s",
+			len(ipItems), host.Namespace, host.Name)
+		host.IpList = ipItems
+	} else {
+		log.Printf("❌ PG_READER_DEBUG: No ip_list JSON found for host %s/%s",
+			host.Namespace, host.Name)
+	}
+
 	// Parse and set metadata
 	host.Meta, err = utils.ConvertK8sMetadata(fmt.Sprintf("%d", resourceVersion), labelsJSON, annotationsJSON, conditionsJSON, createdAt, updatedAt)
 	if err != nil {
@@ -159,6 +181,7 @@ func (r *Reader) scanHost(rows pgx.Rows) (models.Host, error) {
 func (r *Reader) scanHostRow(row pgx.Row) (*models.Host, error) {
 	var host models.Host
 	var labelsJSON, annotationsJSON, conditionsJSON []byte
+	var ipListJSON []byte              // JSON field for ip_list
 	var createdAt, updatedAt time.Time // Temporary variables for timestamps
 	var resourceVersion int64          // Scan as int64 from database
 
@@ -180,6 +203,7 @@ func (r *Reader) scanHostRow(row pgx.Row) (*models.Host, error) {
 		&bindingRefName,
 		&addressGroupRefNamespace,
 		&addressGroupRefName,
+		&ipListJSON,
 		&resourceVersion,
 		&labelsJSON,
 		&annotationsJSON,
@@ -219,6 +243,22 @@ func (r *Reader) scanHostRow(row pgx.Row) (*models.Host, error) {
 			Kind:       "AddressGroup",
 			Name:       *addressGroupRefName,
 		}
+	}
+
+	// Parse IP list from JSON if present
+	if ipListJSON != nil {
+		log.Printf("🔍 PG_READER_DEBUG: scanHostRow - Found ip_list JSON for host %s/%s: %s",
+			host.Namespace, host.Name, string(ipListJSON))
+		var ipItems []models.IPItem
+		if err := json.Unmarshal(ipListJSON, &ipItems); err != nil {
+			return nil, errors.Wrap(err, "failed to parse ip_list JSON")
+		}
+		log.Printf("🔍 PG_READER_DEBUG: scanHostRow - Parsed %d IP items for host %s/%s",
+			len(ipItems), host.Namespace, host.Name)
+		host.IpList = ipItems
+	} else {
+		log.Printf("❌ PG_READER_DEBUG: scanHostRow - No ip_list JSON found for host %s/%s",
+			host.Namespace, host.Name)
 	}
 
 	// Parse and set metadata

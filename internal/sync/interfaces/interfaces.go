@@ -3,6 +3,9 @@ package interfaces
 import (
 	"context"
 
+	pb "github.com/PRO-Robotech/protos/pkg/api/sgroups"
+	"google.golang.org/protobuf/types/known/timestamppb"
+
 	"netguard-pg-backend/internal/sync/types"
 )
 
@@ -58,6 +61,22 @@ type SGroupGateway interface {
 
 	// Health checks the health of sgroups service
 	Health(ctx context.Context) error
+
+	// GetStatuses returns a channel of timestamp updates from SGROUP
+	GetStatuses(ctx context.Context) (chan *timestamppb.Timestamp, error)
+
+	// Close closes the gateway connection
+	Close() error
+
+	// Host operations for reverse synchronization
+	// GetHostsByUUIDs retrieves hosts from SGROUP by their UUIDs
+	GetHostsByUUIDs(ctx context.Context, uuids []string) ([]*pb.Host, error)
+
+	// ListAllHosts retrieves all hosts from SGROUP (for full sync)
+	ListAllHosts(ctx context.Context) ([]*pb.Host, error)
+
+	// GetHostsInSecurityGroup retrieves hosts from SGROUP that belong to specific security groups
+	GetHostsInSecurityGroup(ctx context.Context, sgNames []string) ([]*pb.Host, error)
 }
 
 // RetryConfig defines retry configuration for synchronization

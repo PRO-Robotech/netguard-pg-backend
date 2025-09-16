@@ -26,7 +26,7 @@ authn:
 # Конфигурация синхронизации
 sync:
   enabled: true
-  
+
   # Настройки sgroups клиента
   sgroups:
     grpc_address: "sgroups-server.incloud-sgroups.svc:9006"
@@ -41,19 +41,58 @@ sync:
       key_file: ""
       ca_file: ""
       insecure_skip_verify: true
-  
+
   # Настройки повторных попыток
   retry:
     max_retries: 3
     initial_delay: 100    # миллисекунды
     max_delay: 5000       # миллисекунды
     backoff_factor: 2.0
-  
+
   # Настройки debouncing
   debounce:
     time: "5s"
-  
+
   # Настройки очистки
   cleanup:
     interval: "10m"
     max_age: "1h"
+
+# Конфигурация обратной синхронизации (от SGROUP к NETGUARD)
+reverse_sync:
+  # Настройки менеджера обратной синхронизации
+  manager:
+    auto_start: true
+    processing_timeout: "30s"
+    enable_statistics: true
+    max_concurrent_processors: 5
+    health_check_interval: "60s"
+
+  # Настройки SGROUP детектора изменений
+  sgroup_detector:
+    reconnect_interval: "5s"
+    max_retries: 10
+    change_event_source: "sgroup"
+
+  # Настройки синхронизатора хостов
+  host_synchronizer:
+    batch_size: 50
+    max_concurrency: 5
+    sync_timeout: "30s"
+    enable_ip_set_validation: true
+    namespace_filter: ""      # Пустая строка = все namespace
+
+  # Настройки процессора хостов
+  host_processor:
+    enable_namespace_filtering: false
+    default_processing_mode: "full_sync"
+    enable_batch_processing: true
+    error_retry_limit: 3
+
+  # Системные настройки
+  system:
+    log_level: "info"
+    enable_metrics: true
+    metrics_port: 8090
+    graceful_shutdown_timeout: "30s"
+    environment: "production"

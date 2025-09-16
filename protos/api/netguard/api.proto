@@ -261,6 +261,11 @@ message NetworkBinding {
   Meta meta = 5;
 }
 
+// IPItem - represents an IP address entry
+message IPItem {
+  string ip = 1;  // IP address
+}
+
 // Host - represents a host resource (K8s representation of Agent)
 message Host {
   option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
@@ -277,8 +282,9 @@ message Host {
   bool is_bound = 6;                           // Whether the host is bound to an AddressGroup
   ObjectReference binding_ref = 7;             // Reference to the HostBinding
   ObjectReference address_group_ref = 8;       // Reference to the bound AddressGroup
-  
-  Meta meta = 9;
+  repeated IPItem ip_list = 10;                // List of IP addresses from SGROUP synchronization
+
+  Meta meta = 11;
 }
 
 // HostBinding - represents a host binding resource

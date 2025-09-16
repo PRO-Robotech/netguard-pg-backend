@@ -2040,6 +2040,22 @@ func convertHostFromProto(protoHost *netguardpb.Host) models.Host {
 		result.Meta.ObservedGeneration = protoHost.Meta.ObservedGeneration
 	}
 
+	// Convert IP list if present
+	if len(protoHost.GetIpList()) > 0 {
+		log.Printf("🔍 K8S_CLIENT_CONVERTER_DEBUG: convertHostFromProto - Converting %d IP items for host %s/%s",
+			len(protoHost.GetIpList()), protoHost.GetSelfRef().GetNamespace(), protoHost.GetSelfRef().GetName())
+		result.IpList = make([]models.IPItem, len(protoHost.GetIpList()))
+		for i, ipItem := range protoHost.GetIpList() {
+			log.Printf("🔍 K8S_CLIENT_CONVERTER_DEBUG: convertHostFromProto - IP[%d] = %s", i, ipItem.GetIp())
+			result.IpList[i] = models.IPItem{
+				IP: ipItem.GetIp(),
+			}
+		}
+	} else {
+		log.Printf("❌ K8S_CLIENT_CONVERTER_DEBUG: convertHostFromProto - No IP list in protobuf for host %s/%s",
+			protoHost.GetSelfRef().GetNamespace(), protoHost.GetSelfRef().GetName())
+	}
+
 	return result
 }
 

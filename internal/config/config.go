@@ -9,6 +9,8 @@ import (
 	"github.com/ilyakaznacheev/cleanenv"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+
+	syncConfig "netguard-pg-backend/internal/sync/config"
 )
 
 // Константы для типов аутентификации
@@ -27,11 +29,12 @@ const (
 type (
 	// Config - основная конфигурация приложения
 	Config struct {
-		App      `yaml:"app"`
-		Settings `yaml:"settings"`
-		Log      `yaml:"logger"`
-		Authn    `yaml:"authn"`
-		Sync     SyncConfig `yaml:"sync"`
+		App         `yaml:"app"`
+		Settings    `yaml:"settings"`
+		Log         `yaml:"logger"`
+		Authn       `yaml:"authn"`
+		Sync        SyncConfig                         `yaml:"sync"`
+		ReverseSync syncConfig.ReverseSyncSystemConfig `yaml:"reverse_sync"`
 	}
 
 	// App - конфигурация приложения
@@ -86,6 +89,7 @@ func NewConfig(path string) (*Config, error) {
 	cfg.Authn.Type = AuthnTypeTLS
 	cfg.Authn.TLS.Client.Verify = VerifyModeSkip
 	cfg.Sync = DefaultSyncConfig()
+	cfg.ReverseSync = syncConfig.DevelopmentConfig() // Use development config by default
 
 	// Загрузка из файла конфигурации
 	if path != "" {
@@ -193,6 +197,11 @@ func (c *Config) Validate() error {
 		if err := c.Sync.Validate(); err != nil {
 			return fmt.Errorf("sync config validation failed: %w", err)
 		}
+	}
+
+	// Validate reverse sync configuration
+	if err := c.ReverseSync.Validate(); err != nil {
+		return fmt.Errorf("reverse sync config validation failed: %w", err)
 	}
 
 	return nil

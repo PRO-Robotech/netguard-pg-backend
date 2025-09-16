@@ -3758,9 +3758,10 @@ func schema_k8s_apis_netguard_v1beta1_Host(ref common.ReferenceCallback) common.
 							Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostStatus"),
 						},
 					},
-					"ipList": {
+					"x-ipList": {
 						SchemaProps: spec.SchemaProps{
-							Type: []string{"array"},
+							Description: "IPList contains IP addresses for this Host, synchronized from SGROUP",
+							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{

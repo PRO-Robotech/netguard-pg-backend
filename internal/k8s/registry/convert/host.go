@@ -3,6 +3,7 @@ package convert
 import (
 	"context"
 	"fmt"
+	"log"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -40,6 +41,14 @@ func (c *HostConverter) ToDomain(ctx context.Context, k8sObj *netguardv1beta1.Ho
 		Meta:            ConvertMetadataToDomain(k8sObj.ObjectMeta, k8sObj.Status.Conditions, k8sObj.Status.ObservedGeneration),
 	}
 
+	// Convert IPList from K8s to domain format
+	if k8sObj.IPList != nil {
+		domainHost.IpList = make([]models.IPItem, len(k8sObj.IPList))
+		for i, ipItem := range k8sObj.IPList {
+			domainHost.IpList[i] = models.IPItem{IP: ipItem.IP}
+		}
+	}
+
 	return domainHost, nil
 }
 
@@ -62,6 +71,20 @@ func (c *HostConverter) FromDomain(ctx context.Context, domainObj *models.Host) 
 			BindingRef:      domainObj.BindingRef,
 			AddressGroupRef: domainObj.AddressGroupRef,
 		},
+	}
+
+	// Convert IPList from domain to K8s format
+	if domainObj.IpList != nil {
+		log.Printf("🔍 K8S_CONVERTER_DEBUG: Converting %d IP items for host %s/%s",
+			len(domainObj.IpList), domainObj.Namespace, domainObj.Name)
+		k8sHost.IPList = make([]netguardv1beta1.IPItem, len(domainObj.IpList))
+		for i, ipItem := range domainObj.IpList {
+			log.Printf("🔍 K8S_CONVERTER_DEBUG: IP[%d] = %s", i, ipItem.IP)
+			k8sHost.IPList[i] = netguardv1beta1.IPItem{IP: ipItem.IP}
+		}
+	} else {
+		log.Printf("❌ K8S_CONVERTER_DEBUG: No IP list found for host %s/%s",
+			domainObj.Namespace, domainObj.Name)
 	}
 
 	// Convert status using standard helper

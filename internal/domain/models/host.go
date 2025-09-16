@@ -9,6 +9,11 @@ import (
 	"netguard-pg-backend/internal/sync/types"
 )
 
+// IPItem represents an IP address entry
+type IPItem struct {
+	IP string `json:"ip"`
+}
+
 // Host represents a host resource in the domain (K8s representation of Agent)
 type Host struct {
 	SelfRef
@@ -22,6 +27,9 @@ type Host struct {
 	IsBound          bool                     `json:"isBound"`
 	BindingRef       *v1beta1.ObjectReference `json:"bindingRef,omitempty"`
 	AddressGroupRef  *v1beta1.ObjectReference `json:"addressGroupRef,omitempty"`
+
+	// IPList from SGROUP synchronization (matching K8s CRD format)
+	IpList []IPItem `json:"ipList,omitempty"`
 
 	// Metadata
 	Meta Meta `json:"meta"`
@@ -70,6 +78,41 @@ func (h *Host) SetAddressGroupRef(ref *v1beta1.ObjectReference) {
 // SetIsBound sets the binding status
 func (h *Host) SetIsBound(bound bool) {
 	h.IsBound = bound
+}
+
+// SetIpList sets the IP list for the host from string slice
+func (h *Host) SetIpList(ipList []string) {
+	h.IpList = make([]IPItem, len(ipList))
+	for i, ip := range ipList {
+		h.IpList[i] = IPItem{IP: ip}
+	}
+}
+
+// GetIpList returns the IP list for the host as string slice
+func (h *Host) GetIpList() []string {
+	ipList := make([]string, len(h.IpList))
+	for i, item := range h.IpList {
+		ipList[i] = item.IP
+	}
+	return ipList
+}
+
+// HasIpList returns true if the host has IP addresses
+func (h *Host) HasIpList() bool {
+	return len(h.IpList) > 0
+}
+
+// AddIP adds an IP address to the host's IP list
+func (h *Host) AddIP(ip string) {
+	if h.IpList == nil {
+		h.IpList = make([]IPItem, 0)
+	}
+	h.IpList = append(h.IpList, IPItem{IP: ip})
+}
+
+// ClearIpList clears the host's IP list
+func (h *Host) ClearIpList() {
+	h.IpList = nil
 }
 
 // ClearBinding clears all binding-related fields
@@ -132,6 +175,14 @@ func (h *Host) DeepCopy() Resource {
 		copy.AddressGroupRef = &addressGroupRefCopy
 	}
 
+	// Deep copy IpList slice
+	if h.IpList != nil {
+		copy.IpList = make([]IPItem, len(h.IpList))
+		for i, item := range h.IpList {
+			copy.IpList[i] = IPItem{IP: item.IP}
+		}
+	}
+
 	return &copy
 }
 
@@ -181,8 +232,8 @@ func (h *Host) ToSGroupsProto() (interface{}, error) {
 		Name:   hostName,
 		Uuid:   h.UUID,
 		SgName: sgName,
-		// IpList will be updated by agents
-		IpList: &pb.IPList{IPs: []string{}}, // Initialize empty IPList to avoid nil
+		// Use host's IpList or empty list if not set
+		IpList: &pb.IPList{IPs: h.GetIpList()},
 	}
 
 	fmt.Printf("🔍 DEBUG: Host.ToSGroupsProto - Created protoHost: %+v\n", protoHost)

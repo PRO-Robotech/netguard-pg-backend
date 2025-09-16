@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"netguard-pg-backend/internal/api/netguard"
 	"netguard-pg-backend/internal/app/server"
@@ -17,6 +18,8 @@ import (
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/infrastructure/repositories/mem"
 	"netguard-pg-backend/internal/infrastructure/repositories/pg"
+	"netguard-pg-backend/internal/sync"
+	"netguard-pg-backend/internal/sync/adapters"
 	"netguard-pg-backend/internal/sync/clients"
 	"netguard-pg-backend/internal/sync/interfaces"
 	"netguard-pg-backend/internal/sync/manager"
@@ -106,6 +109,9 @@ func main() {
 	// Setup sync manager
 	syncManager := setupSyncManager(ctx, cfg)
 
+	// Setup reverse sync system (SGROUP -> NETGUARD synchronization)
+	reverseSyncSystem := setupReverseSyncSystem(ctx, cfg, registry, syncManager)
+
 	// Create condition manager (needed for facade)
 	conditionManager := services.NewConditionManager(registry)
 
@@ -155,6 +161,17 @@ func main() {
 	<-ctx.Done()
 
 	// Gracefully stop services
+	log.Printf("Shutting down services...")
+
+	// Stop reverse sync system first
+	if reverseSyncSystem != nil {
+		log.Printf("Stopping reverse sync system...")
+		if err := reverseSyncSystem.Stop(); err != nil {
+			log.Printf("Failed to stop reverse sync system: %v", err)
+		}
+	}
+
+	// Stop gRPC and HTTP servers
 	grpcServer.GracefulStop()
 	if err := httpServer.Shutdown(context.Background()); err != nil {
 		log.Printf("Failed to shutdown HTTP server: %v", err)
@@ -231,4 +248,81 @@ func setupSyncManager(ctx context.Context, cfg *config.Config) interfaces.SyncMa
 	}
 
 	return syncManager
+}
+
+// setupReverseSyncSystem creates and configures the reverse sync system for SGROUP -> NETGUARD synchronization
+func setupReverseSyncSystem(ctx context.Context, cfg *config.Config, registry ports.Registry, syncManager interfaces.SyncManager) *sync.ReverseSyncSystem {
+	log.Printf("🔄 Setting up reverse synchronization system...")
+
+	// Skip setup if sync manager is not available (sync disabled)
+	if syncManager == nil {
+		log.Printf("⚠️  Skipping reverse sync setup - main sync is disabled")
+		return nil
+	}
+
+	// Validate reverse sync configuration
+	if err := cfg.ReverseSync.Validate(); err != nil {
+		log.Printf("❌ ERROR: Invalid reverse sync configuration: %v", err)
+		return nil
+	}
+
+	// Create SGROUP gateway using existing sync configuration
+	sgroupsClient, err := clients.NewSGroupsClient(cfg.Sync.SGroups)
+	if err != nil {
+		log.Printf("❌ ERROR: Failed to create sgroups client for reverse sync: %v", err)
+		return nil
+	}
+
+	// Test connection to SGROUP
+	if err := sgroupsClient.Health(ctx); err != nil {
+		log.Printf("❌ ERROR: Failed to connect to SGROUP service for reverse sync: %v", err)
+		return nil
+	}
+
+	// Create PostgreSQL adapters
+	hostReader := adapters.NewPostgreSQLHostReader(registry)
+	hostWriter := adapters.NewPostgreSQLHostWriter(registry)
+
+	// Create reverse sync system
+	reverseSyncSystem, err := sync.NewReverseSyncSystem(
+		sgroupsClient,
+		hostReader,
+		hostWriter,
+		cfg.ReverseSync,
+	)
+	if err != nil {
+		log.Printf("❌ ERROR: Failed to create reverse sync system: %v", err)
+		return nil
+	}
+
+	// Start reverse sync system
+	go func() {
+		if err := reverseSyncSystem.Start(ctx); err != nil {
+			log.Printf("❌ ERROR: Failed to start reverse sync system: %v", err)
+			return
+		}
+
+		// Log system statistics periodically
+		if cfg.ReverseSync.System.EnableMetrics {
+			go func() {
+				ticker := time.NewTicker(60 * time.Second)
+				defer ticker.Stop()
+
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case <-ticker.C:
+						if reverseSyncSystem.IsRunning() {
+							stats := reverseSyncSystem.GetStats()
+							log.Printf("📊 Reverse Sync Stats: Running=%v, Total Events=%d, Success=%d, Failed=%d",
+								reverseSyncSystem.IsRunning(), stats.TotalEvents, stats.ProcessedEvents, stats.FailedEvents)
+						}
+					}
+				}
+			}()
+		}
+	}()
+
+	return reverseSyncSystem
 }

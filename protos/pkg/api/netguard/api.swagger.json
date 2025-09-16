@@ -1164,6 +1164,14 @@
           "$ref": "#/definitions/v1ObjectReference",
           "title": "Reference to the bound AddressGroup"
         },
+        "ipList": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IPItem"
+          },
+          "title": "List of IP addresses from SGROUP synchronization"
+        },
         "meta": {
           "$ref": "#/definitions/v1Meta"
         }
@@ -1278,6 +1286,16 @@
         "addressGroup",
         "action"
       ]
+    },
+    "v1IPItem": {
+      "type": "object",
+      "properties": {
+        "ip": {
+          "type": "string",
+          "title": "IP address"
+        }
+      },
+      "title": "IPItem - represents an IP address entry"
     },
     "v1IngressPort": {
       "type": "object",

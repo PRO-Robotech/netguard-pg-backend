@@ -68,6 +68,15 @@ func (w *Writer) upsertHost(ctx context.Context, host models.Host) error {
 		return errors.Wrap(err, "failed to marshal conditions")
 	}
 
+	// Marshal IP list to JSON
+	var ipListJSON []byte
+	if host.IpList != nil && len(host.IpList) > 0 {
+		ipListJSON, err = json.Marshal(host.IpList)
+		if err != nil {
+			return errors.Wrap(err, "failed to marshal IP list")
+		}
+	}
+
 	// First, check if host exists and get existing resource version
 	var existingResourceVersion sql.NullInt64
 	existingQuery := `SELECT resource_version FROM hosts WHERE namespace = $1 AND name = $2`
@@ -124,12 +133,13 @@ func (w *Writer) upsertHost(ctx context.Context, host models.Host) error {
 	// UPSERT host record
 	hostQuery := `
 		INSERT INTO hosts (
-			namespace, name, uuid, 
+			namespace, name, uuid,
 			host_name_sync, address_group_name, is_bound,
 			binding_ref_namespace, binding_ref_name,
 			address_group_ref_namespace, address_group_ref_name,
+			ip_list,
 			resource_version
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		ON CONFLICT (namespace, name) DO UPDATE SET
 			uuid = EXCLUDED.uuid,
 			host_name_sync = EXCLUDED.host_name_sync,
@@ -139,6 +149,7 @@ func (w *Writer) upsertHost(ctx context.Context, host models.Host) error {
 			binding_ref_name = EXCLUDED.binding_ref_name,
 			address_group_ref_namespace = EXCLUDED.address_group_ref_namespace,
 			address_group_ref_name = EXCLUDED.address_group_ref_name,
+			ip_list = EXCLUDED.ip_list,
 			resource_version = EXCLUDED.resource_version`
 
 	_, err = w.tx.Exec(ctx, hostQuery,
@@ -146,6 +157,7 @@ func (w *Writer) upsertHost(ctx context.Context, host models.Host) error {
 		hostNameSync, addressGroupName, host.IsBound,
 		bindingRefNamespace, bindingRefName,
 		addressGroupRefNamespace, addressGroupRefName,
+		ipListJSON,
 		resourceVersion,
 	)
 	if err != nil {

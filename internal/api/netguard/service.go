@@ -1888,6 +1888,21 @@ func convertHost(protoHost *netguardpb.Host) models.Host {
 		}
 	}
 
+	// Convert IP list if present
+	if len(protoHost.IpList) > 0 {
+		log.Printf("🔍 GRPC_CONVERTER_DEBUG: convertHost - Converting %d IP items from protobuf for host %s/%s",
+			len(protoHost.IpList), protoHost.SelfRef.Namespace, protoHost.SelfRef.Name)
+		host.IpList = make([]models.IPItem, len(protoHost.IpList))
+		for i, ipItem := range protoHost.IpList {
+			host.IpList[i] = models.IPItem{
+				IP: ipItem.Ip,
+			}
+		}
+	} else {
+		log.Printf("❌ GRPC_CONVERTER_DEBUG: convertHost - No IP list in protobuf for host %s/%s",
+			protoHost.SelfRef.Namespace, protoHost.SelfRef.Name)
+	}
+
 	// Convert Meta if provided
 	if protoHost.Meta != nil {
 		host.Meta = models.Meta{
@@ -1940,6 +1955,22 @@ func convertHostToPB(host models.Host) *netguardpb.Host {
 			Kind:       host.AddressGroupRef.Kind,
 			Name:       host.AddressGroupRef.Name,
 		}
+	}
+
+	// Convert IP list if present
+	if len(host.IpList) > 0 {
+		log.Printf("🔍 GRPC_CONVERTER_DEBUG: convertHostToPB - Converting %d IP items to protobuf for host %s/%s",
+			len(host.IpList), host.Namespace, host.Name)
+		pbHost.IpList = make([]*netguardpb.IPItem, len(host.IpList))
+		for i, ipItem := range host.IpList {
+			log.Printf("🔍 GRPC_CONVERTER_DEBUG: convertHostToPB - IP[%d] = %s", i, ipItem.IP)
+			pbHost.IpList[i] = &netguardpb.IPItem{
+				Ip: ipItem.IP,
+			}
+		}
+	} else {
+		log.Printf("❌ GRPC_CONVERTER_DEBUG: convertHostToPB - No IP list in domain model for host %s/%s",
+			host.Namespace, host.Name)
 	}
 
 	// Populate Meta information

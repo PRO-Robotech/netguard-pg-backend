@@ -7,8 +7,9 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
-	// providerv1alpha1 "netguard-pg-backend/deps/apis/sgroups-k8s-provider/v1alpha1" - removed non-existent import
+	pb "github.com/PRO-Robotech/protos/pkg/api/sgroups"
 	"netguard-pg-backend/internal/sync/interfaces"
 	"netguard-pg-backend/internal/sync/types"
 )
@@ -25,6 +26,16 @@ func (m *MockSGroupGateway) Sync(ctx context.Context, req *types.SyncRequest) er
 
 func (m *MockSGroupGateway) Health(ctx context.Context) error {
 	args := m.Called(ctx)
+	return args.Error(0)
+}
+
+func (m *MockSGroupGateway) GetStatuses(ctx context.Context) (chan *timestamppb.Timestamp, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(chan *timestamppb.Timestamp), args.Error(1)
+}
+
+func (m *MockSGroupGateway) Close() error {
+	args := m.Called()
 	return args.Error(0)
 }
 
@@ -109,7 +120,7 @@ func TestAddressGroupSyncer_Sync(t *testing.T) {
 						// Setup for correct entity type (Groups)
 						mockEntity.On("GetSyncSubjectType").Return(types.SyncSubjectTypeGroups)
 						mockEntity.On("GetSyncKey").Return("test-group")
-						mockEntity.On("ToSGroupsProto").Return(nil, nil)
+						mockEntity.On("ToSGroupsProto").Return(&pb.SecGroup{Name: "test-group"}, nil)
 					}
 				}
 				entity = tt.entity
@@ -175,12 +186,12 @@ func TestAddressGroupSyncer_SyncBatch(t *testing.T) {
 				mockEntity1 := &MockSyncableEntity{}
 				mockEntity1.On("GetSyncSubjectType").Return(types.SyncSubjectTypeGroups)
 				mockEntity1.On("GetSyncKey").Return("test-group-1")
-				mockEntity1.On("ToSGroupsProto").Return(nil, nil)
+				mockEntity1.On("ToSGroupsProto").Return(&pb.SecGroup{Name: "test-group-1"}, nil)
 
 				mockEntity2 := &MockSyncableEntity{}
 				mockEntity2.On("GetSyncSubjectType").Return(types.SyncSubjectTypeGroups)
 				mockEntity2.On("GetSyncKey").Return("test-group-2")
-				mockEntity2.On("ToSGroupsProto").Return(nil, nil)
+				mockEntity2.On("ToSGroupsProto").Return(&pb.SecGroup{Name: "test-group-2"}, nil)
 
 				entities = []interfaces.SyncableEntity{mockEntity1, mockEntity2}
 			}
