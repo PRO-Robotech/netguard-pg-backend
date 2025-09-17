@@ -14,7 +14,7 @@ RUN mkdir -p /app/bin && \
     GOBIN=/app/bin GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go install github.com/pressly/goose/v3/cmd/goose@v3.23.1
 
 # Copy migrations from root migrations directory (complete schema)
-COPY migrations/ /app/
+COPY ./migrations/ /app/migrations/
 
 # second release stage
 FROM gcr.io/distroless/static:nonroot
