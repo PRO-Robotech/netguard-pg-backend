@@ -199,7 +199,7 @@ type AddressGroup struct {
 	// AggregatedHosts contains all hosts that belong to this AddressGroup,
 	// aggregated from both spec.hosts and HostBinding resources
 	// +optional
-	AggregatedHosts []HostReference `json:"x-aggregatedHosts"`
+	AggregatedHosts []HostReference `json:"xAggregatedHosts"`
 }
 
 // AddressGroupSpec defines the desired state of AddressGroup
@@ -793,7 +793,7 @@ type Host struct {
 
 	// IPList contains IP addresses for this Host, synchronized from SGROUP
 	// +optional
-	IPList []IPItem `json:"x-ipList"`
+	IPList []IPItem `json:"xIPList"`
 }
 
 // +kubebuilder:object:root=true

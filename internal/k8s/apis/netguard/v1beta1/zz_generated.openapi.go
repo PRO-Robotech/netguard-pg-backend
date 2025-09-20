@@ -2980,7 +2980,7 @@ func schema_k8s_apis_netguard_v1beta1_AddressGroup(ref common.ReferenceCallback)
 							},
 						},
 					},
-					"x-aggregatedHosts": {
+					"xAggregatedHosts": {
 						SchemaProps: spec.SchemaProps{
 							Description: "AggregatedHosts contains all hosts that belong to this AddressGroup, aggregated from both spec.hosts and HostBinding resources",
 							Type:        []string{"array"},
@@ -3758,7 +3758,7 @@ func schema_k8s_apis_netguard_v1beta1_Host(ref common.ReferenceCallback) common.
 							Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostStatus"),
 						},
 					},
-					"x-ipList": {
+					"xIPList": {
 						SchemaProps: spec.SchemaProps{
 							Description: "IPList contains IP addresses for this Host, synchronized from SGROUP",
 							Type:        []string{"array"},
