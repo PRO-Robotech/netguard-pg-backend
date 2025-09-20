@@ -73,7 +73,7 @@ func NewNetguardFacade(
 	// Create network resource services with condition managers
 	networkResourceService := resources.NewNetworkResourceService(registry, syncManager, networkConditionAdapter)
 	networkBindingResourceService := resources.NewNetworkBindingResourceService(registry, networkResourceService, syncManager, networkBindingConditionAdapter)
-	hostBindingResourceService := resources.NewHostBindingResourceService(registry, hostResourceService, syncManager, hostBindingConditionAdapter)
+	hostBindingResourceService := resources.NewHostBindingResourceService(registry, hostResourceService, addressGroupResourceService, syncManager, hostBindingConditionAdapter)
 
 	// Create RuleS2S service with condition manager
 	ruleS2SResourceService := resources.NewRuleS2SResourceService(registry, syncManager, ruleConditionAdapter)
@@ -708,8 +708,6 @@ func (f *NetguardFacade) FindServicesForAddressGroups(ctx context.Context, addre
 
 // GetSyncStatus returns overall sync status (could coordinate between all services)
 func (f *NetguardFacade) GetSyncStatus(ctx context.Context) (*models.SyncStatus, error) {
-	// Simple implementation - return current time as last sync
-	// TODO: Implement proper sync status tracking if needed
 	return &models.SyncStatus{
 		UpdatedAt: time.Now(),
 	}, nil
@@ -717,8 +715,6 @@ func (f *NetguardFacade) GetSyncStatus(ctx context.Context) (*models.SyncStatus,
 
 // SetSyncStatus sets overall sync status
 func (f *NetguardFacade) SetSyncStatus(ctx context.Context, status models.SyncStatus) error {
-	// Simple implementation - just log the status update
-	// TODO: Implement proper sync status storage if needed
 	log.Printf("SetSyncStatus: Updated sync status at %v", status.UpdatedAt)
 	return nil
 }
@@ -780,91 +776,65 @@ func (f *NetguardFacade) Sync(ctx context.Context, syncOp models.SyncOp, resourc
 				return errors.New(fmt.Sprintf("unsupported sync operation for Network: %v", syncOp))
 			}
 		}
-		log.Printf("✅ DEBUG: All Network operations completed successfully")
 		return nil
 	case []models.NetworkBinding:
-		log.Printf("🔥 DEBUG: Processing %d NetworkBinding(s) with syncOp=%v", len(typedResources), syncOp)
 
 		// Handle different sync operations for NetworkBindings
-		for i, binding := range typedResources {
-			log.Printf("🔥 DEBUG: Processing NetworkBinding[%d]: %s with syncOp=%v", i, binding.Key(), syncOp)
+		for _, binding := range typedResources {
 			switch syncOp {
 			case models.SyncOpDelete:
-				log.Printf("🔥 DEBUG: Calling DeleteNetworkBinding for %s", binding.Key())
 				if err := f.networkBindingResourceService.DeleteNetworkBinding(ctx, binding.SelfRef.ResourceIdentifier); err != nil {
 					log.Printf("❌ DEBUG: DeleteNetworkBinding failed for %s: %v", binding.Key(), err)
 					return errors.Wrapf(err, "failed to delete network binding %s", binding.Key())
 				}
-				log.Printf("✅ DEBUG: DeleteNetworkBinding completed successfully for %s", binding.Key())
 			case models.SyncOpUpsert, models.SyncOpFullSync:
-				log.Printf("🔥 DEBUG: Calling CreateNetworkBinding for %s", binding.Key())
 				if err := f.networkBindingResourceService.CreateNetworkBinding(ctx, &binding); err != nil {
 					log.Printf("❌ DEBUG: CreateNetworkBinding failed for %s: %v", binding.Key(), err)
 					return errors.Wrapf(err, "failed to create network binding %s", binding.Key())
 				}
-				log.Printf("✅ DEBUG: CreateNetworkBinding completed successfully for %s", binding.Key())
 			default:
 				log.Printf("❌ DEBUG: Unsupported sync operation for NetworkBinding: %v", syncOp)
 				return errors.New(fmt.Sprintf("unsupported sync operation for NetworkBinding: %v", syncOp))
 			}
 		}
-		log.Printf("✅ DEBUG: All NetworkBinding operations completed successfully")
 		return nil
 	case []models.Host:
-		log.Printf("🔥 DEBUG: Processing %d Host(s) with syncOp=%v", len(typedResources), syncOp)
-
-		// Handle different sync operations for Hosts
-		for i, host := range typedResources {
-			log.Printf("🔥 DEBUG: Processing Host[%d]: %s with syncOp=%v", i, host.Key(), syncOp)
+		for _, host := range typedResources {
 			switch syncOp {
 			case models.SyncOpDelete:
-				log.Printf("🔥 DEBUG: Calling DeleteHost for %s", host.Key())
 				if err := f.hostResourceService.DeleteHost(ctx, host.SelfRef.ResourceIdentifier); err != nil {
 					log.Printf("❌ DEBUG: DeleteHost failed for %s: %v", host.Key(), err)
 					return errors.Wrapf(err, "failed to delete host %s", host.Key())
 				}
-				log.Printf("✅ DEBUG: DeleteHost completed successfully for %s", host.Key())
 			case models.SyncOpUpsert, models.SyncOpFullSync:
-				log.Printf("🔥 DEBUG: Calling CreateHost for %s", host.Key())
 				if err := f.hostResourceService.CreateHost(ctx, &host); err != nil {
 					log.Printf("❌ DEBUG: CreateHost failed for %s: %v", host.Key(), err)
 					return errors.Wrapf(err, "failed to create host %s", host.Key())
 				}
-				log.Printf("✅ DEBUG: CreateHost completed successfully for %s", host.Key())
 			default:
 				log.Printf("❌ DEBUG: Unsupported sync operation for Host: %v", syncOp)
 				return errors.New(fmt.Sprintf("unsupported sync operation for Host: %v", syncOp))
 			}
 		}
-		log.Printf("✅ DEBUG: All Host operations completed successfully")
 		return nil
 	case []models.HostBinding:
-		log.Printf("🔥 DEBUG: Processing %d HostBinding(s) with syncOp=%v", len(typedResources), syncOp)
-
-		// Handle different sync operations for HostBindings
-		for i, hostBinding := range typedResources {
-			log.Printf("🔥 DEBUG: Processing HostBinding[%d]: %s with syncOp=%v", i, hostBinding.Key(), syncOp)
+		for _, hostBinding := range typedResources {
 			switch syncOp {
 			case models.SyncOpDelete:
-				log.Printf("🔥 DEBUG: Calling DeleteHostBinding for %s", hostBinding.Key())
 				if err := f.hostBindingResourceService.DeleteHostBinding(ctx, hostBinding.SelfRef.ResourceIdentifier); err != nil {
 					log.Printf("❌ DEBUG: DeleteHostBinding failed for %s: %v", hostBinding.Key(), err)
 					return errors.Wrapf(err, "failed to delete host binding %s", hostBinding.Key())
 				}
-				log.Printf("✅ DEBUG: DeleteHostBinding completed successfully for %s", hostBinding.Key())
 			case models.SyncOpUpsert, models.SyncOpFullSync:
-				log.Printf("🔥 DEBUG: Calling CreateHostBinding for %s", hostBinding.Key())
 				if err := f.hostBindingResourceService.CreateHostBinding(ctx, &hostBinding); err != nil {
 					log.Printf("❌ DEBUG: CreateHostBinding failed for %s: %v", hostBinding.Key(), err)
 					return errors.Wrapf(err, "failed to create host binding %s", hostBinding.Key())
 				}
-				log.Printf("✅ DEBUG: CreateHostBinding completed successfully for %s", hostBinding.Key())
 			default:
 				log.Printf("❌ DEBUG: Unsupported sync operation for HostBinding: %v", syncOp)
 				return errors.New(fmt.Sprintf("unsupported sync operation for HostBinding: %v", syncOp))
 			}
 		}
-		log.Printf("✅ DEBUG: All HostBinding operations completed successfully")
 		return nil
 	default:
 		return errors.New(fmt.Sprintf("unsupported resource type: %T", resources))
@@ -877,7 +847,6 @@ func (f *NetguardFacade) ProcessConditionsIfNeeded(ctx context.Context, resource
 		return
 	}
 
-	// SKIP condition processing for DELETE operations to prevent recreation of deleted resources
 	if syncOp == models.SyncOpDelete {
 		log.Printf("🚫 ConditionManager: Skipping condition processing for DELETE operation to prevent recreation of deleted resources")
 		return
@@ -1015,6 +984,7 @@ func (a *hostConditionManagerAdapter) ProcessHostConditions(ctx context.Context,
 		utils.SetSyncSuccessCondition(host)
 		log.Printf("✅ Host %s sync succeeded", host.Key())
 	}
+
 	return nil
 }
 

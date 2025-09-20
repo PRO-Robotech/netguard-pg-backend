@@ -32,7 +32,6 @@ func BuildScopeFilter(scope ports.Scope, tableAlias string) (string, []interface
 		argIndex := 1
 
 		for _, id := range s.Identifiers {
-			// Handle namespace-only filtering (when name is empty, filter only by namespace)
 			if id.Name == "" {
 				condition := fmt.Sprintf("(%s.namespace = $%d)",
 					tableAlias, argIndex)
@@ -52,7 +51,6 @@ func BuildScopeFilter(scope ports.Scope, tableAlias string) (string, []interface
 		return "(" + strings.Join(conditions, " OR ") + ")", args
 
 	default:
-		// For other scope types, return empty filter
 		return "", nil
 	}
 }
@@ -124,10 +122,8 @@ func ConvertK8sMetadata(resourceVersionStr string, labelsJSON, annotationsJSON [
 		}
 		meta.Conditions = conditions
 	}
-
 	// Convert timestamps
 	meta.CreationTS = metav1.NewTime(createdAt)
-	// Note: updatedAt is tracked in PostgreSQL but not currently used in domain model
 
 	return meta, nil
 }
