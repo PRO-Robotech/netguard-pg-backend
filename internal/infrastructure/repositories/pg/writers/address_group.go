@@ -11,12 +11,11 @@ import (
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
+	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 )
 
 // SyncAddressGroups implements hybrid sync strategy for address groups
 func (w *Writer) SyncAddressGroups(ctx context.Context, addressGroups []models.AddressGroup, scope ports.Scope, opts ...ports.Option) error {
-	// 🔧 PRODUCTION FIX: Check if this is a condition-only operation
-	// If so, we need to handle transaction context properly to avoid UID conflicts
 	isConditionOnly := false
 	for _, opt := range opts {
 		if _, ok := opt.(ports.ConditionOnlyOperation); ok {
@@ -26,12 +25,7 @@ func (w *Writer) SyncAddressGroups(ctx context.Context, addressGroups []models.A
 		}
 	}
 
-	// 🚨 CRITICAL: For condition-only operations, we need fresh transaction context
-	// because ConditionManager runs after main transaction commit and can't see the addressgroup
-	// that was just committed due to transaction isolation
 	if isConditionOnly {
-		fmt.Printf("🚧 DEBUG: ConditionOnly operation detected for AddressGroup - using fresh ReadCommitted transaction...\n")
-
 		// Use type assertion to check if registry supports condition operations
 		if conditionRegistry, ok := w.registry.(interface {
 			WriterForConditions(ctx context.Context) (ports.Writer, error)
@@ -43,11 +37,6 @@ func (w *Writer) SyncAddressGroups(ctx context.Context, addressGroups []models.A
 			}
 			defer freshWriter.Abort() // Ensure cleanup
 
-			// Use the fresh writer for the sync operation
-			fmt.Printf("✅ DEBUG: Using fresh ReadCommitted writer for AddressGroup condition sync\n")
-
-			// Use the fresh writer's SyncAddressGroups method directly
-			// 🚨 CRITICAL: Don't pass ConditionOnlyOperation to prevent infinite recursion!
 			var filteredOpts []ports.Option
 			for _, opt := range opts {
 				if _, ok := opt.(ports.ConditionOnlyOperation); !ok {
@@ -61,7 +50,6 @@ func (w *Writer) SyncAddressGroups(ctx context.Context, addressGroups []models.A
 			if err := freshWriter.Commit(); err != nil {
 				return errors.Wrap(err, "failed to commit fresh writer transaction")
 			}
-			fmt.Printf("✅ DEBUG: AddressGroup condition sync completed successfully with fresh transaction\n")
 			return nil
 		}
 		return errors.New("registry does not support condition operations")
@@ -75,10 +63,6 @@ func (w *Writer) SyncAddressGroups(ctx context.Context, addressGroups []models.A
 
 	// Upsert all provided address groups
 	for i := range addressGroups {
-		// 🔧 CRITICAL FIX: Initialize metadata fields (UID, Generation, ObservedGeneration)
-		// This is what Memory backend does via ensureMetaFill() -> TouchOnCreate()
-		// Without this, PATCH operations fail because objInfo.UpdatedObject() needs UID
-		// IMPORTANT: Use index-based loop to modify original, not copy!
 		if addressGroups[i].Meta.UID == "" {
 			addressGroups[i].Meta.TouchOnCreate()
 		}
@@ -111,7 +95,12 @@ func (w *Writer) upsertAddressGroup(ctx context.Context, ag models.AddressGroup)
 	}
 
 	// Marshal Hosts field (NEW: hosts belonging to this address group)
-	hostsJSON, err := json.Marshal(ag.Hosts)
+	// Ensure nil slice becomes empty array in JSON, not null
+	hosts := ag.Hosts
+	if hosts == nil {
+		hosts = []netguardv1beta1.ObjectReference{}
+	}
+	hostsJSON, err := json.Marshal(hosts)
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal hosts")
 	}
@@ -164,9 +153,9 @@ func (w *Writer) upsertAddressGroup(ctx context.Context, ag models.AddressGroup)
 		string(ag.DefaultAction),
 		ag.Logs,
 		ag.Trace,
-		"",           // description field
-		networksJSON, // Networks field - CRITICAL FIX
-		hostsJSON,    // Hosts field - NEW: hosts belonging to this address group
+		"",
+		networksJSON,
+		hostsJSON,
 		resourceVersion,
 	); err != nil {
 		return errors.Wrapf(err, "failed to upsert address group %s/%s", ag.Namespace, ag.Name)
@@ -254,12 +243,7 @@ func (w *Writer) SyncAddressGroupBindings(ctx context.Context, bindings []models
 			return errors.Wrap(err, "failed to delete address group bindings")
 		}
 	case models.SyncOpUpsert, models.SyncOpFullSync:
-		// For UPSERT/FULLSYNC operations, upsert all provided bindings
 		for i := range bindings {
-			// 🔧 CRITICAL FIX: Initialize metadata fields (UID, Generation, ObservedGeneration)
-			// This is what Memory backend does via ensureMetaFill() -> TouchOnCreate()
-			// Without this, PATCH operations fail because objInfo.UpdatedObject() needs UID
-			// IMPORTANT: Use index-based loop to modify original, not copy!
 			if bindings[i].Meta.UID == "" {
 				bindings[i].Meta.TouchOnCreate()
 			}
@@ -277,7 +261,6 @@ func (w *Writer) SyncAddressGroupBindings(ctx context.Context, bindings []models
 
 // upsertAddressGroupBinding inserts or updates an address group binding
 func (w *Writer) upsertAddressGroupBinding(ctx context.Context, binding models.AddressGroupBinding) error {
-	// Marshal K8s metadata
 	labelsJSON, annotationsJSON, err := w.marshalLabelsAnnotations(binding.Meta.Labels, binding.Meta.Annotations)
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal K8s metadata")
@@ -295,7 +278,6 @@ func (w *Writer) upsertAddressGroupBinding(ctx context.Context, binding models.A
 
 	var resourceVersion int64
 	if existingResourceVersion.Valid {
-		// UPDATE existing K8s metadata
 		metadataQuery := `
 			UPDATE k8s_metadata 
 			SET labels = $1, annotations = $2, conditions = $3, updated_at = NOW()
@@ -403,10 +385,6 @@ func (w *Writer) SyncAddressGroupPortMappings(ctx context.Context, mappings []mo
 
 	// Upsert all provided mappings
 	for i := range mappings {
-		// 🔧 CRITICAL FIX: Initialize metadata fields (UID, Generation, ObservedGeneration)
-		// This is what Memory backend does via ensureMetaFill() -> TouchOnCreate()
-		// Without this, PATCH operations fail because objInfo.UpdatedObject() needs UID
-		// IMPORTANT: Use index-based loop to modify original, not copy!
 		if mappings[i].Meta.UID == "" {
 			mappings[i].Meta.TouchOnCreate()
 		}
@@ -545,12 +523,7 @@ func (w *Writer) SyncAddressGroupBindingPolicies(ctx context.Context, policies [
 		}
 	}
 
-	// Upsert all provided policies
 	for i := range policies {
-		// 🔧 CRITICAL FIX: Initialize metadata fields (UID, Generation, ObservedGeneration)
-		// This is what Memory backend does via ensureMetaFill() -> TouchOnCreate()
-		// Without this, PATCH operations fail because objInfo.UpdatedObject() needs UID
-		// IMPORTANT: Use index-based loop to modify original, not copy!
 		if policies[i].Meta.UID == "" {
 			policies[i].Meta.TouchOnCreate()
 		}
@@ -605,7 +578,6 @@ func (w *Writer) upsertAddressGroupBindingPolicy(ctx context.Context, policy mod
 		}
 	}
 
-	// Marshal reference fields to JSONB
 	addressGroupRefJSON, err := json.Marshal(policy.AddressGroupRef)
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal address group reference")

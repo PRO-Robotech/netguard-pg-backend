@@ -88,10 +88,10 @@ func (r *Reader) scanAddressGroup(rows pgx.Rows) (models.AddressGroup, error) {
 		&addressGroup.DefaultAction,
 		&addressGroup.Logs,
 		&addressGroup.Trace,
-		&description,         // AddressGroups don't have description but database schema has it
-		&networksJSON,        // Networks field - CRITICAL FIX
-		&hostsJSON,           // Hosts field - NEW: hosts belonging to this address group
-		&aggregatedHostsJSON, // AggregatedHosts field - NEW: aggregated hosts from triggers
+		&description,
+		&networksJSON,
+		&hostsJSON,
+		&aggregatedHostsJSON,
 		&resourceVersion,
 		&labelsJSON,
 		&annotationsJSON,
@@ -110,29 +110,16 @@ func (r *Reader) scanAddressGroup(rows pgx.Rows) (models.AddressGroup, error) {
 		}
 	}
 
-	// Unmarshal Hosts field (NEW: hosts belonging to this address group)
 	if len(hostsJSON) > 0 {
 		if err := json.Unmarshal(hostsJSON, &addressGroup.Hosts); err != nil {
 			return addressGroup, errors.Wrap(err, "failed to unmarshal hosts")
 		}
 	}
 
-	// Unmarshal AggregatedHosts field (NEW: aggregated hosts from database triggers)
-	fmt.Printf("🔍 DB_READER_DEBUG: AddressGroup %s/%s - aggregatedHostsJSON length: %d, content: %s\n",
-		addressGroup.Namespace, addressGroup.Name, len(aggregatedHostsJSON), string(aggregatedHostsJSON))
 	if len(aggregatedHostsJSON) > 0 {
 		if err := json.Unmarshal(aggregatedHostsJSON, &addressGroup.AggregatedHosts); err != nil {
 			return addressGroup, errors.Wrap(err, "failed to unmarshal aggregated_hosts")
 		}
-		fmt.Printf("✅ DB_READER_DEBUG: Successfully unmarshaled %d aggregated hosts for %s/%s\n",
-			len(addressGroup.AggregatedHosts), addressGroup.Namespace, addressGroup.Name)
-		for i, hostRef := range addressGroup.AggregatedHosts {
-			fmt.Printf("🔍 DB_READER_DEBUG: AggregatedHost[%d]: name=%s, uuid=%s, source=%s\n",
-				i, hostRef.ObjectReference.Name, hostRef.UUID, hostRef.Source)
-		}
-	} else {
-		fmt.Printf("⚠️ DB_READER_DEBUG: No aggregated_hosts data for %s/%s\n",
-			addressGroup.Namespace, addressGroup.Name)
 	}
 
 	// Convert K8s metadata (convert int64 to string)
@@ -157,8 +144,8 @@ func (r *Reader) scanAddressGroup(rows pgx.Rows) (models.AddressGroup, error) {
 func (r *Reader) scanAddressGroupRow(row pgx.Row) (*models.AddressGroup, error) {
 	var addressGroup models.AddressGroup
 	var labelsJSON, annotationsJSON, conditionsJSON, networksJSON, hostsJSON, aggregatedHostsJSON []byte
-	var createdAt, updatedAt time.Time // Temporary variables for timestamps
-	var resourceVersion int64          // Scan as int64 from database
+	var createdAt, updatedAt time.Time
+	var resourceVersion int64
 	var description string
 
 	err := row.Scan(
@@ -167,10 +154,10 @@ func (r *Reader) scanAddressGroupRow(row pgx.Row) (*models.AddressGroup, error) 
 		&addressGroup.DefaultAction,
 		&addressGroup.Logs,
 		&addressGroup.Trace,
-		&description,         // AddressGroups don't have description but database schema has it
-		&networksJSON,        // Networks field - CRITICAL FIX
-		&hostsJSON,           // Hosts field - NEW: hosts belonging to this address group
-		&aggregatedHostsJSON, // AggregatedHosts field - NEW: aggregated hosts from triggers
+		&description,
+		&networksJSON,
+		&hostsJSON,
+		&aggregatedHostsJSON,
 		&resourceVersion,
 		&labelsJSON,
 		&annotationsJSON,
@@ -189,14 +176,12 @@ func (r *Reader) scanAddressGroupRow(row pgx.Row) (*models.AddressGroup, error) 
 		}
 	}
 
-	// Unmarshal Hosts field (NEW: hosts belonging to this address group)
 	if len(hostsJSON) > 0 {
 		if err := json.Unmarshal(hostsJSON, &addressGroup.Hosts); err != nil {
 			return nil, errors.Wrap(err, "failed to unmarshal hosts")
 		}
 	}
 
-	// Unmarshal AggregatedHosts field (NEW: aggregated hosts from database triggers)
 	if len(aggregatedHostsJSON) > 0 {
 		if err := json.Unmarshal(aggregatedHostsJSON, &addressGroup.AggregatedHosts); err != nil {
 			return nil, errors.Wrap(err, "failed to unmarshal aggregated_hosts")

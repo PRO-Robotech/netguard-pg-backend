@@ -181,12 +181,64 @@ func (s *HostResourceService) DeleteHost(ctx context.Context, id models.Resource
 		return nil
 	}
 
-	// Check if there's a HostBinding that needs to be deleted first
-	log.Printf("🔍 DEBUG: Looking for HostBinding bound to Host %s", id.Key())
+	if existing.IsBound && existing.AddressGroupRef != nil && existing.BindingRef == nil {
+		log.Printf("🔍 DEBUG: Host %s is bound via AddressGroup.spec.hosts, need to remove from AG first", id.Key())
+
+		reader, err := s.repo.Reader(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get reader: %w", err)
+		}
+		defer reader.Close()
+
+		agID := models.ResourceIdentifier{
+			Name:      existing.AddressGroupRef.Name,
+			Namespace: existing.Namespace,
+		}
+
+		ag, err := reader.GetAddressGroupByID(ctx, agID)
+		if err != nil && !errors.Is(err, ports.ErrNotFound) {
+			return fmt.Errorf("failed to get address group %s: %w", agID.Key(), err)
+		}
+
+		if ag != nil {
+			// Remove host from AddressGroup.spec.hosts
+			var updatedHosts []v1beta1.ObjectReference
+			for _, hostRef := range ag.Hosts {
+				if hostRef.Name != existing.Name {
+					updatedHosts = append(updatedHosts, hostRef)
+				}
+			}
+
+			if len(updatedHosts) != len(ag.Hosts) {
+				ag.Hosts = updatedHosts
+
+				writer, err := s.repo.Writer(ctx)
+				if err != nil {
+					return fmt.Errorf("failed to get writer for AddressGroup update: %w", err)
+				}
+				defer writer.Abort()
+
+				ags := []models.AddressGroup{*ag}
+				if err := writer.SyncAddressGroups(ctx, ags, ports.EmptyScope{}, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
+					return fmt.Errorf("failed to update address group: %w", err)
+				}
+
+				if err := writer.Commit(); err != nil {
+					return fmt.Errorf("failed to commit address group update: %w", err)
+				}
+			}
+		}
+
+		// Refresh host to get updated binding status
+		existing, err = s.getHostByID(ctx, id.Key())
+		if err != nil {
+			return fmt.Errorf("failed to refresh host after unbinding: %w", err)
+		}
+	}
+
 	hostBinding, err := s.findHostBindingByHostID(ctx, id)
 	var hostBindingToDelete *models.HostBinding
 	if err != nil && !errors.Is(err, ports.ErrNotFound) {
-		log.Printf("❌ DEBUG: Failed to search for HostBinding for Host %s: %v", id.Key(), err)
 		return fmt.Errorf("failed to search for host binding: %w", err)
 	}
 	if err == nil && hostBinding != nil {
@@ -196,13 +248,28 @@ func (s *HostResourceService) DeleteHost(ctx context.Context, id models.Resource
 	// Start transaction for cascading deletion
 	writer, err := s.repo.Writer(ctx)
 	if err != nil {
-		log.Printf("❌ DEBUG: Failed to get writer for Host %s: %v", id.Key(), err)
 		return fmt.Errorf("failed to get writer: %w", err)
 	}
 	defer writer.Abort()
 
 	// If there's a HostBinding to delete, delete it first
+	var addressGroupToSync *models.AddressGroup
 	if hostBindingToDelete != nil {
+		agID := models.ResourceIdentifier{
+			Name:      hostBindingToDelete.AddressGroupRef.Name,
+			Namespace: hostBindingToDelete.Namespace, // HostBinding is in same namespace as AddressGroup
+		}
+
+		reader, err := s.repo.ReaderFromWriter(ctx, writer)
+		if err != nil {
+			return fmt.Errorf("failed to get reader from writer: %w", err)
+		}
+		defer reader.Close()
+
+		if ag, err := reader.GetAddressGroupByID(ctx, agID); err == nil && ag != nil {
+			addressGroupToSync = ag
+		}
+
 		hostBindingID := models.NewResourceIdentifier(hostBindingToDelete.Name, models.WithNamespace(hostBindingToDelete.Namespace))
 		if err := writer.DeleteHostBindingsByIDs(ctx, []models.ResourceIdentifier{hostBindingID}); err != nil {
 			log.Printf("❌ DEBUG: writer.DeleteHostBindingsByIDs failed for %s: %v", hostBindingToDelete.Key(), err)
@@ -220,11 +287,19 @@ func (s *HostResourceService) DeleteHost(ctx context.Context, id models.Resource
 		return fmt.Errorf("failed to commit cascading deletion: %w", err)
 	}
 
-	if hostBindingToDelete != nil {
-		err = s.syncHostBindingWithExternal(ctx, hostBindingToDelete, types.SyncOperationDelete)
-		if err != nil {
-			log.Printf("❌ DEBUG: External sync failed for HostBinding %s: %v", hostBindingToDelete.Key(), err)
-			return fmt.Errorf("failed to sync host binding deletion: %w", err)
+	if addressGroupToSync != nil && s.syncManager != nil {
+		reader, err := s.repo.Reader(ctx)
+		if err == nil {
+			if updatedAG, err := reader.GetAddressGroupByID(ctx, models.ResourceIdentifier{
+				Name:      addressGroupToSync.Name,
+				Namespace: addressGroupToSync.Namespace,
+			}); err == nil && updatedAG != nil {
+				log.Printf("🔄 DEBUG: Syncing updated AddressGroup %s with SGROUP after HostBinding deletion", updatedAG.Key())
+				if syncErr := s.syncManager.SyncEntityForced(ctx, updatedAG, types.SyncOperationUpsert); syncErr != nil {
+					log.Printf("⚠️ Failed to sync AddressGroup %s with SGROUP after HostBinding deletion: %v", updatedAG.Key(), syncErr)
+				}
+			}
+			reader.Close()
 		}
 	}
 
@@ -232,9 +307,7 @@ func (s *HostResourceService) DeleteHost(ctx context.Context, id models.Resource
 	if err != nil {
 		log.Printf("⚠️ External sync failed for Host %s deletion: %v", id.Key(), err)
 		log.Printf("⚠️ Host %s deleted from storage but SGROUP sync failed - continuing anyway", id.Key())
-		// Don't fail host deletion if SGROUP sync fails - host is already deleted from storage
 	}
-
 	return nil
 }
 
@@ -433,24 +506,8 @@ func (s *HostResourceService) findHostBindingByHostID(ctx context.Context, hostI
 	return foundBinding, nil
 }
 
-// syncHostBindingWithExternal synchronizes a HostBinding with external systems
-func (s *HostResourceService) syncHostBindingWithExternal(ctx context.Context, hostBinding *models.HostBinding, operation types.SyncOperation) error {
-	log.Printf("🔗 DEBUG: syncHostBindingWithExternal called for HostBinding %s, operation=%v", hostBinding.Key(), operation)
-
-	if s.syncManager == nil {
-		log.Printf("⚠️ DEBUG: No sync manager available for HostBinding %s", hostBinding.Key())
-		return nil
-	}
-
-	// Use SyncManager to synchronize with external systems
-	err := s.syncManager.SyncEntity(ctx, hostBinding, operation)
-	if err != nil {
-		log.Printf("❌ DEBUG: Failed to sync HostBinding %s with external systems: %v", hostBinding.Key(), err)
-		return err
-	}
-
-	return nil
-}
+// HostBinding is a NetGuard-only resource, no external sync needed
+// syncHostBindingWithExternal is removed - HostBinding doesn't sync with external systems
 
 // getHostByID retrieves a host by its key using Reader pattern
 func (s *HostResourceService) getHostByID(ctx context.Context, id string) (*models.Host, error) {

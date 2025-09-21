@@ -11,20 +11,24 @@ DECLARE
     host_ref JSONB;
     host_name TEXT;
 BEGIN
+    IF jsonb_typeof(old_hosts) != 'array' THEN
+        old_hosts := '[]'::jsonb;
+    END IF;
+    IF jsonb_typeof(new_hosts) != 'array' THEN
+        new_hosts := '[]'::jsonb;
+    END IF;
+
     -- Only process if hosts field actually changed
     IF old_hosts = new_hosts THEN
         RETURN NEW;
     END IF;
 
-    -- Process OLD hosts: find hosts that were removed and unbind them
-    IF jsonb_array_length(old_hosts) > 0 THEN
+    IF jsonb_typeof(old_hosts) = 'array' AND jsonb_array_length(old_hosts) > 0 THEN
         FOR host_ref IN SELECT jsonb_array_elements(old_hosts)
         LOOP
             host_name := host_ref->>'name';
 
-            -- Check if this host is no longer in the new hosts list
             IF NOT (new_hosts @> jsonb_build_array(host_ref)) THEN
-                -- Unbind the host: set is_bound = false and clear address_group_ref
                 UPDATE hosts
                 SET
                     is_bound = false,
@@ -41,15 +45,12 @@ BEGIN
         END LOOP;
     END IF;
 
-    -- Process NEW hosts: find hosts that were added and bind them
-    IF jsonb_array_length(new_hosts) > 0 THEN
+    IF jsonb_typeof(new_hosts) = 'array' AND jsonb_array_length(new_hosts) > 0 THEN
         FOR host_ref IN SELECT jsonb_array_elements(new_hosts)
         LOOP
             host_name := host_ref->>'name';
 
-            -- Check if this host was not in the old hosts list
             IF NOT (old_hosts @> jsonb_build_array(host_ref)) THEN
-                -- Bind the host: set is_bound = true and set address_group_ref
                 UPDATE hosts
                 SET
                     is_bound = true,
@@ -80,6 +81,10 @@ DECLARE
     host_name TEXT;
     hosts_to_unbind JSONB := COALESCE(OLD.hosts, '[]'::jsonb);
 BEGIN
+    IF jsonb_typeof(hosts_to_unbind) != 'array' THEN
+        hosts_to_unbind := '[]'::jsonb;
+    END IF;
+
     IF hosts_to_unbind IS NOT NULL AND hosts_to_unbind != 'null'::jsonb
        AND jsonb_typeof(hosts_to_unbind) = 'array' AND jsonb_array_length(hosts_to_unbind) > 0 THEN
         FOR host_ref IN SELECT jsonb_array_elements(hosts_to_unbind)
