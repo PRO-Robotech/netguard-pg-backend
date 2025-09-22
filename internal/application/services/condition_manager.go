@@ -239,7 +239,6 @@ func (cm *ConditionManager) ProcessAddressGroupConditions(ctx context.Context, a
 			ag.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "External sync failed")
 			ag.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "Address group passed all validations")
 
-			// 🎯 CONDITION_BATCHING: Even failed syncs need condition updates
 			cm.batchConditionUpdate("AddressGroup", ag)
 			return fmt.Errorf("external sync failed for AddressGroup %s/%s: %w", ag.Namespace, ag.Name, err)
 		}
@@ -256,11 +255,7 @@ func (cm *ConditionManager) ProcessAddressGroupConditions(ctx context.Context, a
 
 	klog.Infof("✅ ConditionManager.ProcessAddressGroupConditions: address group %s/%s processed successfully with %d conditions", ag.Namespace, ag.Name, len(ag.Meta.Conditions))
 
-	// 🎯 CONDITION_BATCHING: Use batched condition updates to reduce k8s_metadata contention
 	cm.batchConditionUpdate("AddressGroup", ag)
-	klog.V(3).Infof("🎯 CONDITION_BATCHING: Queued AddressGroup %s/%s for batch condition update", ag.Namespace, ag.Name)
-
-	klog.Infof("💾 ConditionManager: Successfully saved conditions for address group %s/%s", ag.Namespace, ag.Name)
 	return nil
 }
 
@@ -272,9 +267,6 @@ func (cm *ConditionManager) ProcessRuleS2SConditions(ctx context.Context, rule *
 
 	klog.V(4).Infof("ConditionManager.ProcessRuleS2SConditions: processing rule %s/%s after commit", rule.Namespace, rule.Name)
 
-	// 🔧 CROSS-RULES2S FIX: Use ReadCommitted reader to see recently committed binding deletions
-	// This ensures the condition manager can see deleted AddressGroupBindings immediately
-	// replacing the previous 10ms sleep hack with proper transaction isolation
 	reader, err := cm.registry.ReaderWithReadCommitted(ctx)
 	if err != nil {
 		rule.Meta.SetErrorCondition(models.ReasonBackendError, fmt.Sprintf("Failed to get ReadCommitted reader for validation: %v", err))
@@ -296,10 +288,7 @@ func (cm *ConditionManager) ProcessRuleS2SConditions(ctx context.Context, rule *
 		rule.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "RuleS2S has validation errors")
 		rule.Meta.SetValidatedCondition(metav1.ConditionFalse, models.ReasonValidationFailed, fmt.Sprintf("Validation failed: %v", err))
 
-		// 🎯 CONDITION_BATCHING: Use batched condition updates for validation failures
 		cm.batchConditionUpdate("RuleS2S", rule)
-		klog.V(3).Infof("🎯 CONDITION_BATCHING: Queued failed validation RuleS2S %s/%s for batch condition update", rule.Namespace, rule.Name)
-		klog.Infof("✅ ConditionManager: Saved failure conditions for RuleS2S %s/%s (basic validation failed)", rule.Namespace, rule.Name)
 		return nil
 	}
 
@@ -307,28 +296,22 @@ func (cm *ConditionManager) ProcessRuleS2SConditions(ctx context.Context, rule *
 	rule.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "RuleS2S passed validation")
 
 	// Проверяем существование связанных ServiceAlias в РЕАЛЬНОМ состоянии
-	if err := cm.validateServiceAliasReferences(ctx, reader, rule); err != nil {
-		rule.Meta.SetErrorCondition(models.ReasonDependencyError, fmt.Sprintf("ServiceAlias dependency error: %v", err))
+	if err := cm.validateServiceReferences(ctx, reader, rule); err != nil {
+		rule.Meta.SetErrorCondition(models.ReasonDependencyError, fmt.Sprintf("Service dependency error: %v", err))
 		rule.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Traffic direction binding validation failed")
 
 		// 🧹 CLEANUP TRIGGER: When RuleS2S becomes Ready=False due to validation failure, clean up associated IEAgAgRules
 		klog.Infof("🧹 CLEANUP_TRIGGER: RuleS2S %s/%s Ready=False (validation failed), triggering IEAgAgRule cleanup", rule.Namespace, rule.Name)
 		if cm.ieAgAgManager != nil {
 			if cleanupErr := cm.ieAgAgManager.CleanupIEAgAgRulesForRuleS2S(ctx, *rule); cleanupErr != nil {
-				klog.Errorf("❌ ConditionManager: Failed to cleanup IEAgAgRules for failed validation RuleS2S %s/%s: %v", rule.Namespace, rule.Name, cleanupErr)
 				rule.Meta.SetErrorCondition(models.ReasonCleanupError, fmt.Sprintf("Failed to cleanup IEAgAgRules: %v", cleanupErr))
 				// Continue processing - don't fail condition update due to cleanup errors
-			} else {
-				klog.Infof("✅ ConditionManager: Successfully cleaned up IEAgAgRules for failed validation RuleS2S %s/%s", rule.Namespace, rule.Name)
 			}
 		} else {
 			klog.Warningf("⚠️ ConditionManager: IEAgAgManager is nil, cannot cleanup rules for RuleS2S %s/%s", rule.Namespace, rule.Name)
 		}
 
-		// 🎯 CONDITION_BATCHING: Use batched condition updates for validation failures
 		cm.batchConditionUpdate("RuleS2S", rule)
-		klog.V(3).Infof("🎯 CONDITION_BATCHING: Queued failed validation RuleS2S %s/%s for batch condition update", rule.Namespace, rule.Name)
-		klog.Infof("✅ ConditionManager: Saved failure conditions for RuleS2S %s/%s (enhanced validation failed: %v)", rule.Namespace, rule.Name, err)
 		return nil
 	}
 
@@ -1044,68 +1027,32 @@ func (cm *ConditionManager) validateServicesHaveAddressGroups(ctx context.Contex
 	return nil
 }
 
-func (cm *ConditionManager) validateServiceAliasReferences(ctx context.Context, reader ports.Reader, rule *models.RuleS2S) error {
-	klog.Infof("🔍 validateServiceAliasReferences: Starting validation for RuleS2S %s/%s", rule.Namespace, rule.Name)
-
-	// Проверяем локальный ServiceAlias
-	localAliasID := models.NewResourceIdentifier(rule.ServiceLocalRef.Name, models.WithNamespace(rule.ServiceLocalRef.Namespace))
-	klog.Infof("🔍 validateServiceAliasReferences: [1/4] Checking local ServiceAlias %s", localAliasID.Key())
-	localAlias, err := reader.GetServiceAliasByID(ctx, localAliasID)
+func (cm *ConditionManager) validateServiceReferences(ctx context.Context, reader ports.Reader, rule *models.RuleS2S) error {
+	localServiceID := models.NewResourceIdentifier(rule.ServiceLocalRef.Name, models.WithNamespace(rule.ServiceLocalRef.Namespace))
+	_, err := reader.GetServiceByID(ctx, localServiceID)
 	if err == ports.ErrNotFound {
-		klog.Errorf("❌ validateServiceAliasReferences: [1/4] Local ServiceAlias %s NOT FOUND", localAliasID.Key())
-		return fmt.Errorf("local service alias '%s' not found", localAliasID.Key())
+		klog.Errorf("❌ validateServiceReferences: [1/2] Local Service %s NOT FOUND", localServiceID.Key())
+		return fmt.Errorf("local service '%s' not found", localServiceID.Key())
 	} else if err != nil {
-		klog.Errorf("❌ validateServiceAliasReferences: [1/4] Failed to get local ServiceAlias %s: %v", localAliasID.Key(), err)
-		return fmt.Errorf("failed to get local service alias '%s': %v", localAliasID.Key(), err)
-	}
-	klog.Infof("✅ validateServiceAliasReferences: [1/4] Local ServiceAlias %s found", localAliasID.Key())
-
-	// Проверяем целевой ServiceAlias
-	targetAliasID := models.NewResourceIdentifier(rule.ServiceRef.Name, models.WithNamespace(rule.ServiceRef.Namespace))
-	klog.Infof("🔍 validateServiceAliasReferences: [2/4] Checking target ServiceAlias %s", targetAliasID.Key())
-	targetAlias, err := reader.GetServiceAliasByID(ctx, targetAliasID)
-	if err == ports.ErrNotFound {
-		klog.Errorf("❌ validateServiceAliasReferences: [2/4] Target ServiceAlias %s NOT FOUND", targetAliasID.Key())
-		return fmt.Errorf("target service alias '%s' not found", targetAliasID.Key())
-	} else if err != nil {
-		klog.Errorf("❌ validateServiceAliasReferences: [2/4] Failed to get target ServiceAlias %s: %v", targetAliasID.Key(), err)
-		return fmt.Errorf("failed to get target service alias '%s': %v", targetAliasID.Key(), err)
-	}
-	klog.Infof("✅ validateServiceAliasReferences: [2/4] Target ServiceAlias %s found", targetAliasID.Key())
-
-	// Проверяем что Service, на которые ссылаются ServiceAlias, РЕАЛЬНО существуют
-	localServiceID := models.NewResourceIdentifier(localAlias.ServiceRef.Name, models.WithNamespace(localAlias.Namespace))
-	klog.Infof("🔍 validateServiceAliasReferences: [3/4] Checking local Service %s (referenced by ServiceAlias %s)", localServiceID.Key(), localAlias.Key())
-	_, err = reader.GetServiceByID(ctx, localServiceID)
-	if err == ports.ErrNotFound {
-		klog.Errorf("❌ validateServiceAliasReferences: [3/4] Local Service %s NOT FOUND (referenced by ServiceAlias %s)", localServiceID.Key(), localAlias.Key())
-		return fmt.Errorf("local service '%s' (referenced by ServiceAlias '%s') not found", localServiceID.Key(), localAlias.Key())
-	} else if err != nil {
-		klog.Errorf("❌ validateServiceAliasReferences: [3/4] Failed to get local Service %s: %v", localServiceID.Key(), err)
+		klog.Errorf("❌ validateServiceReferences: [1/2] Failed to get local Service %s: %v", localServiceID.Key(), err)
 		return fmt.Errorf("failed to get local service '%s': %v", localServiceID.Key(), err)
 	}
-	klog.Infof("✅ validateServiceAliasReferences: [3/4] Local Service %s found", localServiceID.Key())
 
-	targetServiceID := models.NewResourceIdentifier(targetAlias.ServiceRef.Name, models.WithNamespace(targetAlias.Namespace))
-	klog.Infof("🔍 validateServiceAliasReferences: [4/4] Checking target Service %s (referenced by ServiceAlias %s)", targetServiceID.Key(), targetAlias.Key())
+	targetServiceID := models.NewResourceIdentifier(rule.ServiceRef.Name, models.WithNamespace(rule.ServiceRef.Namespace))
 	_, err = reader.GetServiceByID(ctx, targetServiceID)
 	if err == ports.ErrNotFound {
-		klog.Errorf("❌ validateServiceAliasReferences: [4/4] Target Service %s NOT FOUND (referenced by ServiceAlias %s)", targetServiceID.Key(), targetAlias.Key())
-		return fmt.Errorf("target service '%s' (referenced by ServiceAlias '%s') not found", targetServiceID.Key(), targetAlias.Key())
+		klog.Errorf("❌ validateServiceReferences: [2/2] Target Service %s NOT FOUND", targetServiceID.Key())
+		return fmt.Errorf("target service '%s' not found", targetServiceID.Key())
 	} else if err != nil {
-		klog.Errorf("❌ validateServiceAliasReferences: [4/4] Failed to get target Service %s: %v", targetServiceID.Key(), err)
+		klog.Errorf("❌ validateServiceReferences: [2/2] Failed to get target Service %s: %v", targetServiceID.Key(), err)
 		return fmt.Errorf("failed to get target service '%s': %v", targetServiceID.Key(), err)
 	}
-	klog.Infof("✅ validateServiceAliasReferences: [4/4] Target Service %s found", targetServiceID.Key())
 
-	// 🆕 CORRECT VALIDATION: Check if services have AddressGroups (following k8s-controller pattern)
 	if err := cm.validateServicesHaveAddressGroups(ctx, reader, rule, localServiceID, targetServiceID); err != nil {
-		klog.Errorf("❌ validateServiceAliasReferences: [5/5] Service AddressGroups validation FAILED for RuleS2S %s/%s: %v", rule.Namespace, rule.Name, err)
+		klog.Errorf("❌ validateServiceReferences: [3/3] Service AddressGroups validation FAILED for RuleS2S %s/%s: %v", rule.Namespace, rule.Name, err)
 		return fmt.Errorf("service AddressGroups validation failed: %v", err)
 	}
-	klog.Infof("✅ validateServiceAliasReferences: [5/5] Service AddressGroups validated successfully")
 
-	klog.Infof("✅ validateServiceAliasReferences: All dependencies validated successfully for RuleS2S %s/%s", rule.Namespace, rule.Name)
 	return nil
 }
 
@@ -1344,9 +1291,6 @@ func (cm *ConditionManager) flushConditionBatch() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	klog.V(2).Infof("🎯 CONDITION_BATCHING: Processing batch of %d condition updates (sequential processing: %v)",
-		len(currentBatch), cm.sequentialMutex != nil)
-
 	// Use WriterForConditions for ReadCommitted isolation
 	if registryWithConditions, ok := cm.registry.(interface {
 		WriterForConditions(context.Context) (ports.Writer, error)
@@ -1454,14 +1398,9 @@ func (cm *ConditionManager) flushConditionBatch() {
 				ruleModels[i] = *rule
 			}
 
-			klog.Infof("🔄 DEPENDENCY_ORDERED_SYNC: External sync phase 2 - syncing %d IEAgAgRules to SGROUP (after AddressGroups)", len(ieAgAgRules))
-
 			if err := writer.SyncIEAgAgRules(ctx, ruleModels, ports.EmptyScope{}, ports.ConditionOnlyOperation{}); err != nil {
 				klog.Errorf("❌ CONDITION_BATCHING: Failed to batch sync %d IEAgAgRules: %v", len(ieAgAgRules), err)
 				success = false
-			} else {
-				klog.V(2).Infof("✅ CONDITION_BATCHING: Successfully batched %d IEAgAgRule condition updates", len(ieAgAgRules))
-				klog.Infof("✅ DEPENDENCY_ORDERED_SYNC: Successfully synced %d IEAgAgRules after AddressGroups", len(ieAgAgRules))
 			}
 		}
 
@@ -1469,8 +1408,6 @@ func (cm *ConditionManager) flushConditionBatch() {
 			if err := writer.Commit(); err != nil {
 				klog.Errorf("❌ CONDITION_BATCHING: Failed to commit batch transaction: %v", err)
 				writer.Abort()
-			} else {
-				klog.Infof("✅ CONDITION_BATCHING: Successfully committed batch of %d condition updates", len(currentBatch))
 			}
 		} else {
 			writer.Abort()

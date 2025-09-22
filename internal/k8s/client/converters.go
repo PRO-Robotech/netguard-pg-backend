@@ -575,7 +575,7 @@ func convertRuleS2SFromProto(proto *netguardpb.RuleS2S) models.RuleS2S {
 		ServiceLocalRef: v1beta1.NamespacedObjectReference{
 			ObjectReference: v1beta1.ObjectReference{
 				APIVersion: "netguard.sgroups.io/v1beta1",
-				Kind:       "ServiceAlias",
+				Kind:       "Service",
 				Name:       proto.ServiceLocalRef.Identifier.Name,
 			},
 			Namespace: proto.ServiceLocalRef.Identifier.Namespace,
@@ -583,12 +583,12 @@ func convertRuleS2SFromProto(proto *netguardpb.RuleS2S) models.RuleS2S {
 		ServiceRef: v1beta1.NamespacedObjectReference{
 			ObjectReference: v1beta1.ObjectReference{
 				APIVersion: "netguard.sgroups.io/v1beta1",
-				Kind:       "ServiceAlias",
+				Kind:       "Service",
 				Name:       proto.ServiceRef.Identifier.Name,
 			},
 			Namespace: proto.ServiceRef.Identifier.Namespace,
 		},
-		Trace: proto.Trace, // Copy trace field from proto
+		Trace: proto.Trace,
 	}
 
 	// Convert IEAgAgRuleRefs

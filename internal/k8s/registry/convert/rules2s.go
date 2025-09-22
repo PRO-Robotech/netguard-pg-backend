@@ -76,8 +76,8 @@ func (c *RuleS2SConverter) FromDomain(ctx context.Context, domainObj *models.Rul
 		ObjectMeta: ConvertMetadataFromDomain(domainObj.Meta, domainObj.ResourceIdentifier.Name, domainObj.ResourceIdentifier.Namespace),
 		Spec: netguardv1beta1.RuleS2SSpec{
 			Traffic:         traffic,
-			ServiceLocalRef: EnsureNamespacedObjectReferenceFields(domainObj.ServiceLocalRef, "ServiceAlias"),
-			ServiceRef:      EnsureNamespacedObjectReferenceFields(domainObj.ServiceRef, "ServiceAlias"),
+			ServiceLocalRef: EnsureNamespacedObjectReferenceFields(domainObj.ServiceLocalRef, "Service"),
+			ServiceRef:      EnsureNamespacedObjectReferenceFields(domainObj.ServiceRef, "Service"),
 			Trace:           domainObj.Trace, // Copy trace field from domain
 		},
 	}

@@ -406,6 +406,7 @@ func convertIEAgAgRuleToSGroupsProto(rule models.IEAgAgRule) *pb.IESgSgRule {
 		Ports:     ports,
 		Logs:      rule.Logs,
 		Action:    action,
+		Trace:     rule.Trace,
 	}
 }
 

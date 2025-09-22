@@ -73,7 +73,6 @@ func NewGRPCBackendClient(config BackendClientConfig) (*GRPCBackendClient, error
 	return grpcClient, nil
 }
 
-// --- Service ---
 func (c *GRPCBackendClient) GetService(ctx context.Context, id models.ResourceIdentifier) (*models.Service, error) {
 	if !c.limiter.Allow() {
 		return nil, fmt.Errorf("rate limit exceeded")
@@ -397,7 +396,6 @@ func (c *GRPCBackendClient) syncAddressGroupBinding(ctx context.Context, syncOp 
 			},
 		},
 	}
-	log.Printf("🗑️ DEBUG syncAddressGroupBinding: Making gRPC Sync call with SyncOp=%s for %d bindings", protoSyncOp.String(), len(protoBindings))
 	for i, binding := range protoBindings {
 		log.Printf("🗑️ DEBUG: Binding[%d] SelfRef.Name='%s', SelfRef.Namespace='%s'", i, binding.SelfRef.Name, binding.SelfRef.Namespace)
 		if binding.ServiceRef != nil && binding.ServiceRef.Identifier != nil {
@@ -413,7 +411,7 @@ func (c *GRPCBackendClient) syncAddressGroupBinding(ctx context.Context, syncOp 
 		log.Printf("❌ DEBUG syncAddressGroupBinding: gRPC Sync call FAILED: %v", err)
 		return fmt.Errorf("failed to sync address group bindings: %w", err)
 	}
-	log.Printf("✅ DEBUG syncAddressGroupBinding: gRPC Sync call SUCCESS")
+
 	return nil
 }
 
@@ -807,14 +805,9 @@ func (c *GRPCBackendClient) DeleteAddressGroupBindingPolicy(ctx context.Context,
 	log.Printf("🔧 FIX DeleteAddressGroupBindingPolicy: Getting full object before delete for %s/%s", id.Namespace, id.Name)
 	fullPolicy, err := c.GetAddressGroupBindingPolicy(ctx, id)
 	if err != nil {
-		log.Printf("❌ FIX: Failed to get full policy for delete: %v", err)
 		return fmt.Errorf("failed to get full policy for delete: %w", err)
 	}
 
-	log.Printf("✅ FIX: Retrieved full policy with ServiceRef.Name='%s', AddressGroupRef.Name='%s'",
-		fullPolicy.ServiceRef.Name, fullPolicy.AddressGroupRef.Name)
-
-	// Now send the FULL object for deletion (like pre-refactoring)
 	return c.syncAddressGroupBindingPolicy(ctx, models.SyncOpDelete, []*models.AddressGroupBindingPolicy{fullPolicy})
 }
 
@@ -1933,6 +1926,7 @@ func convertIEAgAgRuleFromProto(protoRule *netguardpb.IEAgAgRule) models.IEAgAgR
 		Logs:      protoRule.Logs,
 		Priority:  protoRule.Priority,
 		Meta:      models.Meta{},
+		Trace:     protoRule.Trace,
 	}
 
 	// Copy AddressGroups

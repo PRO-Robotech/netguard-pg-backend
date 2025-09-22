@@ -780,7 +780,6 @@ func convertRuleS2S(r *netguardpb.RuleS2S) models.RuleS2S {
 		Meta:    models.Meta{},
 	}
 
-	// Правильная конвертация Traffic
 	switch r.Traffic {
 	case netguardpb.Traffic_Ingress:
 		result.Traffic = models.INGRESS
@@ -788,10 +787,14 @@ func convertRuleS2S(r *netguardpb.RuleS2S) models.RuleS2S {
 		result.Traffic = models.EGRESS
 	}
 
-	// Convert ServiceLocalRef with nil-safe access
+	result.Trace = r.Trace
+
 	var localName, localNamespace string
 	if localRef := r.GetServiceLocalRef(); localRef != nil {
-		if localId := localRef.GetIdentifier(); localId != nil {
+		if objRef := localRef.GetObjectRef(); objRef != nil {
+			localName = objRef.GetName()
+			localNamespace = objRef.GetNamespace()
+		} else if localId := localRef.GetIdentifier(); localId != nil {
 			localName = localId.GetName()
 			localNamespace = localId.GetNamespace()
 		}
@@ -802,7 +805,7 @@ func convertRuleS2S(r *netguardpb.RuleS2S) models.RuleS2S {
 	result.ServiceLocalRef = v1beta1.NamespacedObjectReference{
 		ObjectReference: v1beta1.ObjectReference{
 			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "ServiceAlias",
+			Kind:       "Service",
 			Name:       localName,
 		},
 		Namespace: localNamespace,
@@ -811,7 +814,10 @@ func convertRuleS2S(r *netguardpb.RuleS2S) models.RuleS2S {
 	// Convert ServiceRef with nil-safe access
 	var serviceName, serviceNamespace string
 	if svcRef := r.GetServiceRef(); svcRef != nil {
-		if svcId := svcRef.GetIdentifier(); svcId != nil {
+		if objRef := svcRef.GetObjectRef(); objRef != nil {
+			serviceName = objRef.GetName()
+			serviceNamespace = objRef.GetNamespace()
+		} else if svcId := svcRef.GetIdentifier(); svcId != nil {
 			serviceName = svcId.GetName()
 			serviceNamespace = svcId.GetNamespace()
 		}
@@ -822,14 +828,25 @@ func convertRuleS2S(r *netguardpb.RuleS2S) models.RuleS2S {
 	result.ServiceRef = v1beta1.NamespacedObjectReference{
 		ObjectReference: v1beta1.ObjectReference{
 			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "ServiceAlias",
+			Kind:       "Service",
 			Name:       serviceName,
 		},
 		Namespace: serviceNamespace,
 	}
 
-	// Convert IEAgAgRuleRefs
-	if len(r.IeagAgRuleRefs) > 0 {
+	if len(r.IeagAgRuleObjectRefs) > 0 {
+		result.IEAgAgRuleRefs = make([]v1beta1.NamespacedObjectReference, len(r.IeagAgRuleObjectRefs))
+		for i, ref := range r.IeagAgRuleObjectRefs {
+			result.IEAgAgRuleRefs[i] = v1beta1.NamespacedObjectReference{
+				ObjectReference: v1beta1.ObjectReference{
+					APIVersion: ref.ApiVersion,
+					Kind:       ref.Kind,
+					Name:       ref.Name,
+				},
+				Namespace: ref.Namespace,
+			}
+		}
+	} else if len(r.IeagAgRuleRefs) > 0 {
 		result.IEAgAgRuleRefs = make([]v1beta1.NamespacedObjectReference, len(r.IeagAgRuleRefs))
 		for i, ref := range r.IeagAgRuleRefs {
 			result.IEAgAgRuleRefs[i] = v1beta1.NamespacedObjectReference{
@@ -1112,11 +1129,16 @@ func convertRuleS2SToPB(r models.RuleS2S) *netguardpb.RuleS2S {
 			Name:      r.ResourceIdentifier.Name,
 			Namespace: r.ResourceIdentifier.Namespace,
 		},
-		// Traffic set later
 		ServiceLocalRef: &netguardpb.ServiceRef{
 			Identifier: &netguardpb.ResourceIdentifier{
 				Name:      r.ServiceLocalRef.Name,
 				Namespace: r.ServiceLocalRef.Namespace,
+			},
+			ObjectRef: &netguardpb.NamespacedObjectReference{
+				ApiVersion: r.ServiceLocalRef.APIVersion,
+				Kind:       r.ServiceLocalRef.Kind,
+				Name:       r.ServiceLocalRef.Name,
+				Namespace:  r.ServiceLocalRef.Namespace,
 			},
 		},
 		ServiceRef: &netguardpb.ServiceRef{
@@ -1124,11 +1146,26 @@ func convertRuleS2SToPB(r models.RuleS2S) *netguardpb.RuleS2S {
 				Name:      r.ServiceRef.Name,
 				Namespace: r.ServiceRef.Namespace,
 			},
+			ObjectRef: &netguardpb.NamespacedObjectReference{
+				ApiVersion: r.ServiceRef.APIVersion,
+				Kind:       r.ServiceRef.Kind,
+				Name:       r.ServiceRef.Name,
+				Namespace:  r.ServiceRef.Namespace,
+			},
 		},
 	}
 
-	// Convert IEAgAgRuleRefs
 	if len(r.IEAgAgRuleRefs) > 0 {
+		pb.IeagAgRuleObjectRefs = make([]*netguardpb.NamespacedObjectReference, len(r.IEAgAgRuleRefs))
+		for i, ref := range r.IEAgAgRuleRefs {
+			pb.IeagAgRuleObjectRefs[i] = &netguardpb.NamespacedObjectReference{
+				ApiVersion: ref.APIVersion,
+				Kind:       ref.Kind,
+				Name:       ref.Name,
+				Namespace:  ref.Namespace,
+			}
+		}
+		// Also provide legacy format for backward compatibility
 		pb.IeagAgRuleRefs = make([]*netguardpb.ResourceIdentifier, len(r.IEAgAgRuleRefs))
 		for i, ref := range r.IEAgAgRuleRefs {
 			pb.IeagAgRuleRefs[i] = &netguardpb.ResourceIdentifier{
@@ -1138,7 +1175,8 @@ func convertRuleS2SToPB(r models.RuleS2S) *netguardpb.RuleS2S {
 		}
 	}
 
-	// traffic enum conversion
+	pb.Trace = r.Trace
+
 	if r.Traffic == models.EGRESS {
 		pb.Traffic = netguardpb.Traffic_Egress
 	} else {
@@ -1278,8 +1316,6 @@ func convertActionToPB(action models.RuleAction) netguardpb.RuleAction {
 }
 
 func convertIEAgAgRuleToPB(rule models.IEAgAgRule) *netguardpb.IEAgAgRule {
-	// log.Printf("🔄 convertIEAgAgRuleToPB: Converting rule %s - Transport='%s', Traffic='%s', Action='%s'",
-	// 	rule.Key(), rule.Transport, rule.Traffic, rule.Action)
 
 	var transport netguardpb.Networks_NetIP_Transport
 	switch rule.Transport {
@@ -1325,6 +1361,7 @@ func convertIEAgAgRuleToPB(rule models.IEAgAgRule) *netguardpb.IEAgAgRule {
 		Action:   convertActionToPB(rule.Action),
 		Logs:     rule.Logs,
 		Priority: rule.Priority,
+		Trace:    rule.Trace,
 	}
 
 	// Populate Meta
@@ -1380,7 +1417,7 @@ func convertAddressGroupBindingPolicy(policy *netguardpb.AddressGroupBindingPoli
 		}
 	}
 	if agName == "" {
-		return result // Skip conversion if AddressGroupRef is incomplete
+		return result
 	}
 	result.AddressGroupRef = models.NewAddressGroupRef(agName, models.WithNamespace(agNamespace))
 
@@ -1506,7 +1543,6 @@ func (s *NetguardServiceServer) ListNetworks(ctx context.Context, req *netguardp
 // GetNetwork gets a specific network by ID
 func (s *NetguardServiceServer) GetNetwork(ctx context.Context, req *netguardpb.GetNetworkReq) (*netguardpb.GetNetworkResp, error) {
 	id := idFromReq(req.GetIdentifier())
-	log.Printf("🚀 GRPC GetNetwork: request for %s", id.Key())
 	network, err := s.service.GetNetworkByID(ctx, id)
 	if err != nil {
 		log.Printf("❌ GRPC GetNetwork: failed to get %s: %v", id.Key(), err)
@@ -1514,7 +1550,6 @@ func (s *NetguardServiceServer) GetNetwork(ctx context.Context, req *netguardpb.
 	}
 
 	if network != nil {
-		log.Printf("🔍 GRPC GetNetwork: Network[%s] returned with IsBound=%t", id.Key(), network.IsBound)
 		if network.BindingRef != nil {
 			log.Printf("  🔍 GRPC GetNetwork: network[%s].BindingRef=%s", id.Key(), network.BindingRef.Name)
 		} else {

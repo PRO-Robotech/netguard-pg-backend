@@ -18,7 +18,7 @@ import (
 func (r *Reader) ListRuleS2S(ctx context.Context, consume func(models.RuleS2S) error, scope ports.Scope) error {
 	query := `
 		SELECT rs.namespace, rs.name, rs.traffic,
-		       rs.service_local_ref, rs.service_ref, rs.ieagag_rule_refs,
+		       rs.service_local_ref, rs.service_ref, rs.ieagag_rule_refs, rs.trace,
 			   m.resource_version, m.labels, m.annotations, m.conditions,
 			   m.created_at, m.updated_at
 		FROM rule_s2s rs
@@ -56,7 +56,7 @@ func (r *Reader) ListRuleS2S(ctx context.Context, consume func(models.RuleS2S) e
 func (r *Reader) GetRuleS2SByID(ctx context.Context, id models.ResourceIdentifier) (*models.RuleS2S, error) {
 	query := `
 		SELECT rs.namespace, rs.name, rs.traffic,
-		       rs.service_local_ref, rs.service_ref, rs.ieagag_rule_refs,
+		       rs.service_local_ref, rs.service_ref, rs.ieagag_rule_refs, rs.trace,
 			   m.resource_version, m.labels, m.annotations, m.conditions,
 			   m.created_at, m.updated_at
 		FROM rule_s2s rs
@@ -87,6 +87,7 @@ func (r *Reader) scanRuleS2S(rows pgx.Rows) (models.RuleS2S, error) {
 	var traffic string                             // Traffic enum as string
 	var serviceLocalRefJSON, serviceRefJSON []byte // JSONB columns
 	var ieagagRuleRefsJSON []byte                  // IEAgAg rule refs array
+	var trace bool                                 // Trace field
 
 	err := rows.Scan(
 		&ruleS2S.Namespace,
@@ -95,6 +96,7 @@ func (r *Reader) scanRuleS2S(rows pgx.Rows) (models.RuleS2S, error) {
 		&serviceLocalRefJSON,
 		&serviceRefJSON,
 		&ieagagRuleRefsJSON,
+		&trace,
 		&resourceVersion,
 		&labelsJSON,
 		&annotationsJSON,
@@ -112,11 +114,9 @@ func (r *Reader) scanRuleS2S(rows pgx.Rows) (models.RuleS2S, error) {
 		return ruleS2S, err
 	}
 
-	// Set SelfRef
 	ruleS2S.SelfRef = models.NewSelfRef(models.NewResourceIdentifier(ruleS2S.Name, models.WithNamespace(ruleS2S.Namespace)))
-
-	// Set Traffic enum
 	ruleS2S.Traffic = models.Traffic(traffic)
+	ruleS2S.Trace = trace
 
 	// Unmarshal JSONB ObjectReferences
 	if len(serviceLocalRefJSON) > 0 {
@@ -152,6 +152,7 @@ func (r *Reader) scanRuleS2SRow(row pgx.Row) (*models.RuleS2S, error) {
 	var traffic string                             // Traffic enum as string
 	var serviceLocalRefJSON, serviceRefJSON []byte // JSONB columns
 	var ieagagRuleRefsJSON []byte                  // IEAgAg rule refs array
+	var trace bool                                 // Trace field
 
 	err := row.Scan(
 		&ruleS2S.Namespace,
@@ -160,6 +161,7 @@ func (r *Reader) scanRuleS2SRow(row pgx.Row) (*models.RuleS2S, error) {
 		&serviceLocalRefJSON,
 		&serviceRefJSON,
 		&ieagagRuleRefsJSON,
+		&trace,
 		&resourceVersion,
 		&labelsJSON,
 		&annotationsJSON,
@@ -177,11 +179,9 @@ func (r *Reader) scanRuleS2SRow(row pgx.Row) (*models.RuleS2S, error) {
 		return nil, err
 	}
 
-	// Set SelfRef
 	ruleS2S.SelfRef = models.NewSelfRef(models.NewResourceIdentifier(ruleS2S.Name, models.WithNamespace(ruleS2S.Namespace)))
-
-	// Set Traffic enum
 	ruleS2S.Traffic = models.Traffic(traffic)
+	ruleS2S.Trace = trace
 
 	// Unmarshal JSONB ObjectReferences
 	if len(serviceLocalRefJSON) > 0 {

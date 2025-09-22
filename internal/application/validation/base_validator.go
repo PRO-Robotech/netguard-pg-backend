@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -32,14 +33,26 @@ func NewBaseValidator(reader ports.Reader, entityType string, listFunction func(
 // ValidateExists checks if an entity exists
 func (v *BaseValidator) ValidateExists(ctx context.Context, id models.ResourceIdentifier, keyExtractor func(interface{}) string) error {
 	exists := false
-	err := v.listFunction(ctx, func(entity interface{}) error {
-		if keyExtractor(entity) == id.Key() {
-			exists = true
-		}
-		return nil
-	}, ports.NewResourceIdentifierScope(id))
 
-	if err != nil {
+	var err error
+	maxRetries := 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		err = v.listFunction(ctx, func(entity interface{}) error {
+			if keyExtractor(entity) == id.Key() {
+				exists = true
+			}
+			return nil
+		}, ports.NewResourceIdentifierScope(id))
+
+		if err == nil {
+			break
+		}
+
+		if strings.Contains(err.Error(), "conn busy") && attempt < maxRetries-1 {
+			time.Sleep(time.Duration(10*(1<<attempt)) * time.Millisecond)
+			continue
+		}
+
 		return errors.Wrap(err, fmt.Sprintf("failed to check %s existence", v.entityType))
 	}
 

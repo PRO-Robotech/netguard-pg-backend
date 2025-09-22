@@ -20,17 +20,18 @@ func (v *RuleS2SValidator) ValidateExists(ctx context.Context, id models.Resourc
 
 // ValidateReferences checks if all references in a rule s2s are valid
 func (v *RuleS2SValidator) ValidateReferences(ctx context.Context, rule models.RuleS2S) error {
-	serviceAliasValidator := NewServiceAliasValidator(v.reader)
+	localServiceValidator := NewServiceValidator(v.reader)
+	serviceValidator := NewServiceValidator(v.reader)
 
 	// Create ResourceIdentifier from NamespacedObjectReference
 	localServiceID := models.NewResourceIdentifier(rule.ServiceLocalRef.Name, models.WithNamespace(rule.ServiceLocalRef.Namespace))
-	if err := serviceAliasValidator.ValidateExists(ctx, localServiceID); err != nil {
+	if err := localServiceValidator.ValidateExists(ctx, localServiceID); err != nil {
 		return errors.Wrapf(err, "invalid service local reference in rule s2s %s", rule.Key())
 	}
 
 	// Create ResourceIdentifier from NamespacedObjectReference
 	serviceID := models.NewResourceIdentifier(rule.ServiceRef.Name, models.WithNamespace(rule.ServiceRef.Namespace))
-	if err := serviceAliasValidator.ValidateExists(ctx, serviceID); err != nil {
+	if err := serviceValidator.ValidateExists(ctx, serviceID); err != nil {
 		return errors.Wrapf(err, "invalid service reference in rule s2s %s", rule.Key())
 	}
 
@@ -83,17 +84,13 @@ func (v *RuleS2SValidator) ValidateNamespaceRules(ctx context.Context, rule mode
 	// 2. Check that ServiceRef has a correct namespace
 	// If ServiceRef namespace is not specified, it should be the same as the rule's namespace
 	if rule.ServiceRef.Namespace == "" && rule.Namespace != "" {
-		// Create a copy of ServiceRef with updated namespace for validation
-		serviceRefWithNamespace := models.ServiceAliasRef{
-			ResourceIdentifier: models.ResourceIdentifier{
-				Name:      rule.ServiceRef.Name,
-				Namespace: rule.Namespace,
-			},
+		serviceRefWithNamespace := models.ResourceIdentifier{
+			Name:      rule.ServiceRef.Name,
+			Namespace: rule.Namespace,
 		}
 
-		// Check if ServiceRef exists with the rule's namespace
-		serviceAliasValidator := NewServiceAliasValidator(v.reader)
-		if err := serviceAliasValidator.ValidateExists(ctx, serviceRefWithNamespace.ResourceIdentifier); err != nil {
+		namespaceServiceValidator := NewServiceValidator(v.reader)
+		if err := namespaceServiceValidator.ValidateExists(ctx, serviceRefWithNamespace); err != nil {
 			return errors.Wrapf(err, "invalid service reference in rule s2s %s: service must exist in rule's namespace", rule.Key())
 		}
 	}
@@ -137,20 +134,10 @@ func (v *RuleS2SValidator) ValidateForCreation(ctx context.Context, rule models.
 // ValidateForPostCommit validates a rule s2s after it has been committed to database
 // This skips duplicate checking since the entity already exists in the database
 func (v *RuleS2SValidator) ValidateForPostCommit(ctx context.Context, rule models.RuleS2S) error {
-	// PHASE 1: Skip duplicate entity check (entity is already committed)
-	// This method is called AFTER the entity is saved to database, so existence is expected
-
-	// PHASE 2: Validate namespace rules (existing validation)
 	if err := v.ValidateNamespaceRules(ctx, rule); err != nil {
 		return err
 	}
 
-	// PHASE 3: Validate references (existing validation)
-	if err := v.ValidateReferences(ctx, rule); err != nil {
-		return err
-	}
-
-	// PHASE 4: Check for business logic duplicates (existing validation)
 	if err := v.ValidateNoDuplicates(ctx, rule); err != nil {
 		return err
 	}
@@ -160,32 +147,24 @@ func (v *RuleS2SValidator) ValidateForPostCommit(ctx context.Context, rule model
 
 // ValidateForUpdate validates a rule s2s before update
 func (v *RuleS2SValidator) ValidateForUpdate(ctx context.Context, oldRule, newRule models.RuleS2S) error {
-	// 🚀 PHASE 1: Ready Condition Framework - Validate spec immutability when Ready=True
-	// Ported from k8s-controller rules2s_webhook.go pattern
-
-	// Create rule spec structures for comparison
 	oldSpec := struct {
 		Traffic         models.Traffic
 		ServiceLocalRef netguardv1beta1.NamespacedObjectReference
 		ServiceRef      netguardv1beta1.NamespacedObjectReference
-		Trace           bool
 	}{
 		Traffic:         oldRule.Traffic,
 		ServiceLocalRef: oldRule.ServiceLocalRef,
 		ServiceRef:      oldRule.ServiceRef,
-		Trace:           oldRule.Trace,
 	}
 
 	newSpec := struct {
 		Traffic         models.Traffic
 		ServiceLocalRef netguardv1beta1.NamespacedObjectReference
 		ServiceRef      netguardv1beta1.NamespacedObjectReference
-		Trace           bool
 	}{
 		Traffic:         newRule.Traffic,
 		ServiceLocalRef: newRule.ServiceLocalRef,
 		ServiceRef:      newRule.ServiceRef,
-		Trace:           newRule.Trace,
 	}
 
 	// Validate that spec hasn't changed when Ready condition is true
@@ -193,7 +172,6 @@ func (v *RuleS2SValidator) ValidateForUpdate(ctx context.Context, oldRule, newRu
 		return err
 	}
 
-	// 🚀 PHASE 2: Object Reference Immutability - Validate multiple object references haven't changed when Ready=True
 	referenceComparisons := []ObjectReferenceComparison{
 		{
 			OldRef:    &NamespacedObjectReferenceAdapter{Ref: oldRule.ServiceLocalRef},

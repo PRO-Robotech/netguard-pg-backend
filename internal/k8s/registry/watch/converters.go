@@ -119,12 +119,9 @@ func (c *AddressGroupConverter) GetResourceKey(resource interface{}) string {
 	return group.ResourceIdentifier.Key()
 }
 
-// Заглушки для остальных конверторов (TODO: реализовать полностью)
-
 type AddressGroupBindingConverter struct{}
 
 func (c *AddressGroupBindingConverter) ConvertToK8s(resource interface{}) runtime.Object {
-	// TODO: реализовать
 	return nil
 }
 
@@ -151,7 +148,6 @@ func (c *AddressGroupBindingConverter) GetResourceKey(resource interface{}) stri
 type AddressGroupPortMappingConverter struct{}
 
 func (c *AddressGroupPortMappingConverter) ConvertToK8s(resource interface{}) runtime.Object {
-	// TODO: реализовать
 	return nil
 }
 
@@ -178,7 +174,6 @@ func (c *AddressGroupPortMappingConverter) GetResourceKey(resource interface{}) 
 type RuleS2SConverter struct{}
 
 func (c *RuleS2SConverter) ConvertToK8s(resource interface{}) runtime.Object {
-	// TODO: реализовать
 	return nil
 }
 
@@ -205,7 +200,6 @@ func (c *RuleS2SConverter) GetResourceKey(resource interface{}) string {
 type ServiceAliasConverter struct{}
 
 func (c *ServiceAliasConverter) ConvertToK8s(resource interface{}) runtime.Object {
-	// TODO: реализовать
 	return nil
 }
 
@@ -317,6 +311,7 @@ func (c *IEAgAgRuleConverter) ConvertToK8s(resource interface{}) runtime.Object 
 			},
 			Action:   netguardv1beta1.RuleAction(rule.Action),
 			Priority: rule.Priority,
+			Trace:    rule.Trace,
 		},
 		Status: netguardv1beta1.IEAgAgRuleStatus{
 			ObservedGeneration: rule.Meta.ObservedGeneration,
