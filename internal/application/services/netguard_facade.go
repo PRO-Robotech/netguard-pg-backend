@@ -491,7 +491,8 @@ func (f *NetguardFacade) FindRuleS2SForServicesWithReader(ctx context.Context, r
 }
 
 func (f *NetguardFacade) FindRuleS2SForServiceAliases(ctx context.Context, aliasIDs []models.ResourceIdentifier) ([]models.RuleS2S, error) {
-	return f.ruleS2SResourceService.FindRuleS2SForServiceAliases(ctx, aliasIDs)
+	//return f.ruleS2SResourceService.FindRuleS2SForServiceAliases(ctx, aliasIDs)
+	return nil, nil
 }
 
 // Complex rule update methods
