@@ -135,6 +135,23 @@ func convertServiceFromProto(protoSvc *netguardpb.Service) models.Service {
 		))
 	}
 
+	if len(protoSvc.XAggregatedAddressGroups) > 0 {
+		service.XAggregatedAddressGroups = make([]models.AddressGroupReference, len(protoSvc.XAggregatedAddressGroups))
+		for i, agRef := range protoSvc.XAggregatedAddressGroups {
+			service.XAggregatedAddressGroups[i] = models.AddressGroupReference{
+				Ref: v1beta1.NamespacedObjectReference{
+					ObjectReference: v1beta1.ObjectReference{
+						APIVersion: agRef.Ref.ApiVersion,
+						Kind:       agRef.Ref.Kind,
+						Name:       agRef.Ref.Name,
+					},
+					Namespace: agRef.Ref.Namespace,
+				},
+				Source: convertAddressGroupRegistrationSourceFromPB(agRef.Source),
+			}
+		}
+	}
+
 	return service
 }
 
@@ -189,12 +206,26 @@ func convertServiceToProto(service models.Service) *netguardpb.Service {
 		})
 	}
 
+	if len(service.XAggregatedAddressGroups) > 0 {
+		protoSvc.XAggregatedAddressGroups = make([]*netguardpb.AddressGroupReference, len(service.XAggregatedAddressGroups))
+		for i, agRef := range service.XAggregatedAddressGroups {
+			protoSvc.XAggregatedAddressGroups[i] = &netguardpb.AddressGroupReference{
+				Ref: &netguardpb.NamespacedObjectReference{
+					ApiVersion: agRef.Ref.APIVersion,
+					Kind:       agRef.Ref.Kind,
+					Name:       agRef.Ref.Name,
+					Namespace:  agRef.Ref.Namespace,
+				},
+				Source: convertAddressGroupRegistrationSourceToPB(agRef.Source),
+			}
+		}
+	}
+
 	return protoSvc
 }
 
 // AddressGroup конверторы
 func convertAddressGroupFromProto(protoAG *netguardpb.AddressGroup) models.AddressGroup {
-	// Конвертация RuleAction protobuf enum в string
 	var defaultAction models.RuleAction
 	switch protoAG.DefaultAction {
 	case netguardpb.RuleAction_ACCEPT:
@@ -282,7 +313,6 @@ func convertAddressGroupFromProto(protoAG *netguardpb.AddressGroup) models.Addre
 	return addressGroup
 }
 
-// convertHostRegistrationSourceFromPB converts protobuf HostRegistrationSource to domain enum
 func convertHostRegistrationSourceFromPB(source netguardpb.HostRegistrationSource) models.HostRegistrationSource {
 	switch source {
 	case netguardpb.HostRegistrationSource_HOST_SOURCE_SPEC:
@@ -291,6 +321,28 @@ func convertHostRegistrationSourceFromPB(source netguardpb.HostRegistrationSourc
 		return models.HostSourceBinding
 	default:
 		return models.HostSourceSpec // default
+	}
+}
+
+func convertAddressGroupRegistrationSourceFromPB(source netguardpb.AddressGroupRegistrationSource) v1beta1.AddressGroupRegistrationSource {
+	switch source {
+	case netguardpb.AddressGroupRegistrationSource_ADDRESS_GROUP_SOURCE_SPEC:
+		return v1beta1.AddressGroupSourceSpec
+	case netguardpb.AddressGroupRegistrationSource_ADDRESS_GROUP_SOURCE_BINDING:
+		return v1beta1.AddressGroupSourceBinding
+	default:
+		return v1beta1.AddressGroupSourceSpec // default
+	}
+}
+
+func convertAddressGroupRegistrationSourceToPB(source v1beta1.AddressGroupRegistrationSource) netguardpb.AddressGroupRegistrationSource {
+	switch source {
+	case v1beta1.AddressGroupSourceSpec:
+		return netguardpb.AddressGroupRegistrationSource_ADDRESS_GROUP_SOURCE_SPEC
+	case v1beta1.AddressGroupSourceBinding:
+		return netguardpb.AddressGroupRegistrationSource_ADDRESS_GROUP_SOURCE_BINDING
+	default:
+		return netguardpb.AddressGroupRegistrationSource_ADDRESS_GROUP_SOURCE_SPEC // default
 	}
 }
 

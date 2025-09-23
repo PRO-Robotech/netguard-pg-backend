@@ -52,6 +52,10 @@ type Service struct {
 	Spec          ServiceSpec       `json:"spec,omitempty"`
 	Status        ServiceStatus     `json:"status,omitempty"`
 	AddressGroups AddressGroupsSpec `json:"addressGroups,omitempty"`
+
+	// XAggregatedAddressGroups contains all AddressGroup references from both spec and bindings
+	// +optional
+	XAggregatedAddressGroups []AddressGroupReference `json:"xAggregatedAddressGroups,omitempty"`
 }
 
 // ServiceSpec defines the desired state of Service
@@ -63,6 +67,10 @@ type ServiceSpec struct {
 	// IngressPorts defines the ports that are allowed for ingress traffic
 	// +optional
 	IngressPorts []IngressPort `json:"ingressPorts,omitempty"`
+
+	// AddressGroups defines address groups directly referenced in the service spec
+	// +optional
+	AddressGroups []NamespacedObjectReference `json:"addressGroups,omitempty"`
 }
 
 // IngressPort defines a port configuration for ingress traffic
@@ -311,6 +319,27 @@ type HostReference struct {
 
 	// Source indicates how this host was registered (spec or binding)
 	Source HostRegistrationSource `json:"source"`
+}
+
+// AddressGroupRegistrationSource represents the source of address group registration
+// +kubebuilder:validation:Enum=spec;binding
+// +k8s:openapi-gen=true
+type AddressGroupRegistrationSource string
+
+const (
+	// AddressGroupSourceSpec indicates the address group was registered via Service.spec.addressGroups
+	AddressGroupSourceSpec AddressGroupRegistrationSource = "spec"
+	// AddressGroupSourceBinding indicates the address group was registered via AddressGroupBinding
+	AddressGroupSourceBinding AddressGroupRegistrationSource = "binding"
+)
+
+// AddressGroupReference represents a reference to an AddressGroup with additional metadata
+type AddressGroupReference struct {
+	// Reference to the AddressGroup object
+	Ref NamespacedObjectReference `json:"ref"`
+
+	// Source indicates how this address group was registered (spec or binding)
+	Source AddressGroupRegistrationSource `json:"source"`
 }
 
 // PortConfig defines a port or port range configuration

@@ -26,6 +26,12 @@ enum HostRegistrationSource {
   HOST_SOURCE_BINDING = 1; // Host registered via HostBinding resource
 }
 
+// AddressGroupRegistrationSource represents the source of address group registration
+enum AddressGroupRegistrationSource {
+  ADDRESS_GROUP_SOURCE_SPEC = 0;    // AddressGroup registered via Service.spec.addressGroups
+  ADDRESS_GROUP_SOURCE_BINDING = 1; // AddressGroup registered via AddressGroupBinding resource
+}
+
 option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
   info: {
     title: "Netguard API";
@@ -52,6 +58,7 @@ message Service {
   repeated IngressPort ingress_ports = 4;
   repeated AddressGroupRef address_groups = 5;
   Meta meta = 6;
+  repeated AddressGroupReference x_aggregated_address_groups = 7;
 }
 
 // IngressPort - defines a port configuration for ingress traffic
@@ -71,10 +78,10 @@ message ResourceIdentifier {
 message ObjectReference {
   // APIVersion of the referenced object
   string api_version = 1;
-  
+
   // Kind of the referenced object
   string kind = 2;
-  
+
   // Name of the referenced object
   string name = 3;
 }
@@ -83,10 +90,10 @@ message ObjectReference {
 message HostReference {
   // Reference to the Host object (namespace is implied from AddressGroup context)
   ObjectReference ref = 1;
-  
+
   // UUID of the host (for efficient lookup and SGroup sync)
   string uuid = 2;
-  
+
   // Source indicates how this host was registered (spec or binding)
   HostRegistrationSource source = 3;
 }
@@ -95,13 +102,13 @@ message HostReference {
 message NamespacedObjectReference {
   // APIVersion of the referenced object
   string api_version = 1;
-  
+
   // Kind of the referenced object
   string kind = 2;
-  
+
   // Name of the referenced object
   string name = 3;
-  
+
   // Namespace of the referenced object
   string namespace = 4;
 }
@@ -121,24 +128,24 @@ message Condition {
 message ManagedFieldsEntry {
   // Manager is an identifier of the workflow managing these fields
   string manager = 1;
-  
+
   // Operation is the type of operation which lead to this ManagedFieldsEntry being created
   // Possible values: "Apply", "Update"
   string operation = 2;
-  
+
   // APIVersion defines the version of this resource
   string api_version = 3;
-  
+
   // Time is the timestamp of when the ManagedFields entry was added
   google.protobuf.Timestamp time = 4;
-  
+
   // FieldsType is the discriminator for the different fields format
   string fields_type = 5;
-  
+
   // FieldsV1 stores a set of fields in a data structure like Patch
   // Serialized as JSON bytes for compatibility
   bytes fields_v1 = 6;
-  
+
   // Subresource is the name of the subresource used to update that object, or empty string if the object was updated through the main resource
   string subresource = 7;
 }
@@ -151,15 +158,15 @@ message Meta {
   google.protobuf.Timestamp creation_ts = 4;
   map<string,string> labels = 5;
   map<string,string> annotations = 6;
-  
+
   // Status management - формируется Backend, отображается в Status клиентам
   repeated Condition conditions = 7;
   int64 observed_generation = 8;
-  
+
   // GeneratedName is an optional prefix, used by the server, to generate a unique name
   // ONLY IF the Name field has not been provided. Stored for round-trip compatibility.
   string generated_name = 9;
-  
+
   // ManagedFields stores Server-Side Apply field ownership information
   // Compatible with k8s.io/apimachinery/pkg/apis/meta/v1.ManagedFieldsEntry
   repeated ManagedFieldsEntry managed_fields = 10;
@@ -181,10 +188,10 @@ message ServiceRef {
 enum RuleAction {
   // UNDEFINED - undefined action (should not be used)
   UNDEFINED = 0;
-  
-  // DROP - drops network packet  
+
+  // DROP - drops network packet
   DROP = 1;
-  
+
   // ACCEPT - accepts network packet
   ACCEPT = 2;
 }
@@ -208,7 +215,7 @@ message Network {
   ResourceIdentifier self_ref = 1;
   string cidr = 2;  // Network in CIDR notation
   Meta meta = 3;
-  
+
   // Status fields
   bool is_bound = 4;                               // Whether the network is bound to an AddressGroup
   ObjectReference binding_ref = 5;                 // Reference to the NetworkBinding
@@ -275,7 +282,7 @@ message Host {
   };
   ResourceIdentifier self_ref = 1;
   string uuid = 2;                             // Unique identifier of the host
-  
+
   // Status fields
   string host_name_sync = 4;                   // Host name for synchronization (avoiding conflict with hostname)
   string address_group_name = 5;               // Name of bound AddressGroup
@@ -345,6 +352,15 @@ message ServiceAlias {
   ResourceIdentifier self_ref = 1;
   ServiceRef service_ref = 2;
   Meta meta = 6;
+}
+
+// AddressGroupReference represents a reference to an AddressGroup with source tracking
+message AddressGroupReference {
+  // Reference to the AddressGroup object
+  NamespacedObjectReference ref = 1;
+
+  // Source indicates how this address group was registered (spec or binding)
+  AddressGroupRegistrationSource source = 2;
 }
 
 // AddressGroupBindingPolicy - policy allowing binding of a service to an address group
