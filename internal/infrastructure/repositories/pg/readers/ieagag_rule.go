@@ -21,6 +21,7 @@ func (r *Reader) ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAg
 		SELECT ier.namespace, ier.name, ier.transport, ier.traffic, ier.action,
 		       ier.address_group_local_namespace, ier.address_group_local_name,
 		       ier.address_group_namespace, ier.address_group_name, ier.ports,
+		       ier.trace,
 			   m.resource_version, m.labels, m.annotations, m.conditions,
 			   m.created_at, m.updated_at
 		FROM ie_ag_ag_rules ier
@@ -60,6 +61,7 @@ func (r *Reader) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdenti
 		SELECT ier.namespace, ier.name, ier.transport, ier.traffic, ier.action,
 		       ier.address_group_local_namespace, ier.address_group_local_name,
 		       ier.address_group_namespace, ier.address_group_name, ier.ports,
+		       ier.trace,
 			   m.resource_version, m.labels, m.annotations, m.conditions,
 			   m.created_at, m.updated_at
 		FROM ie_ag_ag_rules ier
@@ -93,6 +95,7 @@ func (r *Reader) scanIEAgAgRule(rows pgx.Rows) (models.IEAgAgRule, error) {
 	var addressGroupLocalNamespace, addressGroupLocalName string // AddressGroupLocal fields
 	var addressGroupNamespace, addressGroupName string           // AddressGroup fields
 	var portsJSON []byte                                         // JSONB for array of PortSpec
+	var trace bool                                               // Trace field
 
 	err := rows.Scan(
 		&ieagagRule.Namespace,
@@ -105,6 +108,7 @@ func (r *Reader) scanIEAgAgRule(rows pgx.Rows) (models.IEAgAgRule, error) {
 		&addressGroupNamespace,
 		&addressGroupName,
 		&portsJSON,
+		&trace,
 		&resourceVersion,
 		&labelsJSON,
 		&annotationsJSON,
@@ -125,10 +129,11 @@ func (r *Reader) scanIEAgAgRule(rows pgx.Rows) (models.IEAgAgRule, error) {
 	// Set SelfRef
 	ieagagRule.SelfRef = models.NewSelfRef(models.NewResourceIdentifier(ieagagRule.Name, models.WithNamespace(ieagagRule.Namespace)))
 
-	// Set enum fields
+	// Set enum fields and trace
 	ieagagRule.Transport = models.TransportProtocol(transport)
 	ieagagRule.Traffic = models.Traffic(traffic)
 	ieagagRule.Action = models.RuleAction(action)
+	ieagagRule.Trace = trace
 
 	// Build NamespacedObjectReference from separate namespace/name columns
 	if addressGroupLocalNamespace != "" && addressGroupLocalName != "" {
@@ -177,6 +182,7 @@ func (r *Reader) scanIEAgAgRuleRow(row pgx.Row) (*models.IEAgAgRule, error) {
 	var addressGroupLocalNamespace, addressGroupLocalName string // AddressGroupLocal fields
 	var addressGroupNamespace, addressGroupName string           // AddressGroup fields
 	var portsJSON []byte                                         // JSONB for array of PortSpec
+	var trace bool                                               // Trace field
 
 	err := row.Scan(
 		&ieagagRule.Namespace,
@@ -189,6 +195,7 @@ func (r *Reader) scanIEAgAgRuleRow(row pgx.Row) (*models.IEAgAgRule, error) {
 		&addressGroupNamespace,
 		&addressGroupName,
 		&portsJSON,
+		&trace,
 		&resourceVersion,
 		&labelsJSON,
 		&annotationsJSON,
@@ -209,10 +216,11 @@ func (r *Reader) scanIEAgAgRuleRow(row pgx.Row) (*models.IEAgAgRule, error) {
 	// Set SelfRef
 	ieagagRule.SelfRef = models.NewSelfRef(models.NewResourceIdentifier(ieagagRule.Name, models.WithNamespace(ieagagRule.Namespace)))
 
-	// Set enum fields
+	// Set enum fields and trace
 	ieagagRule.Transport = models.TransportProtocol(transport)
 	ieagagRule.Traffic = models.Traffic(traffic)
 	ieagagRule.Action = models.RuleAction(action)
+	ieagagRule.Trace = trace
 
 	// Build NamespacedObjectReference from separate namespace/name columns
 	if addressGroupLocalNamespace != "" && addressGroupLocalName != "" {

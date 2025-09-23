@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -154,18 +153,11 @@ func (r *Reader) scanHost(rows pgx.Rows) (models.Host, error) {
 
 	// Parse IP list from JSON if present
 	if ipListJSON != nil {
-		log.Printf("🔍 PG_READER_DEBUG: Found ip_list JSON for host %s/%s: %s",
-			host.Namespace, host.Name, string(ipListJSON))
 		var ipItems []models.IPItem
 		if err := json.Unmarshal(ipListJSON, &ipItems); err != nil {
 			return models.Host{}, errors.Wrap(err, "failed to parse ip_list JSON")
 		}
-		log.Printf("🔍 PG_READER_DEBUG: Parsed %d IP items for host %s/%s",
-			len(ipItems), host.Namespace, host.Name)
 		host.IpList = ipItems
-	} else {
-		log.Printf("❌ PG_READER_DEBUG: No ip_list JSON found for host %s/%s",
-			host.Namespace, host.Name)
 	}
 
 	// Parse and set metadata
@@ -247,18 +239,12 @@ func (r *Reader) scanHostRow(row pgx.Row) (*models.Host, error) {
 
 	// Parse IP list from JSON if present
 	if ipListJSON != nil {
-		log.Printf("🔍 PG_READER_DEBUG: scanHostRow - Found ip_list JSON for host %s/%s: %s",
-			host.Namespace, host.Name, string(ipListJSON))
 		var ipItems []models.IPItem
 		if err := json.Unmarshal(ipListJSON, &ipItems); err != nil {
 			return nil, errors.Wrap(err, "failed to parse ip_list JSON")
 		}
-		log.Printf("🔍 PG_READER_DEBUG: scanHostRow - Parsed %d IP items for host %s/%s",
-			len(ipItems), host.Namespace, host.Name)
+
 		host.IpList = ipItems
-	} else {
-		log.Printf("❌ PG_READER_DEBUG: scanHostRow - No ip_list JSON found for host %s/%s",
-			host.Namespace, host.Name)
 	}
 
 	// Parse and set metadata

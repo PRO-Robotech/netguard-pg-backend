@@ -159,6 +159,7 @@ func (r *IEAgAgRule) ToSGroupsProto() (interface{}, error) {
 		Ports:     ports,
 		Logs:      r.Logs,
 		Action:    action,
+		Trace:     r.Trace,
 	}
 
 	// Return single rule element (not wrapped in SyncIESgSgRules)

@@ -3,6 +3,7 @@ package readers
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -30,8 +31,20 @@ func (r *Reader) ListServices(ctx context.Context, consume func(models.Service) 
 
 	query += " ORDER BY s.namespace, s.name"
 
-	rows, err := r.query(ctx, query, args...)
-	if err != nil {
+	var rows pgx.Rows
+	var err error
+	maxRetries := 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		rows, err = r.query(ctx, query, args...)
+		if err == nil {
+			break
+		}
+
+		if strings.Contains(err.Error(), "conn busy") && attempt < maxRetries-1 {
+			time.Sleep(time.Duration(10*(1<<attempt)) * time.Millisecond)
+			continue
+		}
+
 		return errors.Wrap(err, "failed to query services")
 	}
 	defer rows.Close()
@@ -42,9 +55,20 @@ func (r *Reader) ListServices(ctx context.Context, consume func(models.Service) 
 			return errors.Wrap(err, "failed to scan service")
 		}
 
-		// Load address group relationships
-		if err := r.loadServiceAddressGroups(ctx, &service); err != nil {
-			return errors.Wrap(err, "failed to load service address groups")
+		var loadErr error
+		maxRetries := 3
+		for attempt := 0; attempt < maxRetries; attempt++ {
+			loadErr = r.loadServiceAddressGroups(ctx, &service)
+			if loadErr == nil {
+				break
+			}
+
+			if strings.Contains(loadErr.Error(), "conn busy") && attempt < maxRetries-1 {
+				time.Sleep(time.Duration(10*(1<<attempt)) * time.Millisecond)
+				continue
+			}
+
+			return errors.Wrap(loadErr, "failed to load service address groups")
 		}
 
 		if err := consume(service); err != nil {
@@ -65,19 +89,41 @@ func (r *Reader) GetServiceByID(ctx context.Context, id models.ResourceIdentifie
 		INNER JOIN k8s_metadata m ON s.resource_version = m.resource_version
 		WHERE s.namespace = $1 AND s.name = $2`
 
-	row := r.queryRow(ctx, query, id.Namespace, id.Name)
+	// Retry mechanism for "conn busy" errors on main query
+	var service *models.Service
+	var err error
+	maxRetries := 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		row := r.queryRow(ctx, query, id.Namespace, id.Name)
+		service, err = r.scanServiceRow(row)
+		if err == nil {
+			break
+		}
 
-	service, err := r.scanServiceRow(row)
-	if err != nil {
+		if strings.Contains(err.Error(), "conn busy") && attempt < maxRetries-1 {
+			time.Sleep(time.Duration(10*(1<<attempt)) * time.Millisecond)
+			continue
+		}
+
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ports.ErrNotFound
 		}
 		return nil, errors.Wrap(err, "failed to scan service")
 	}
 
-	// Load address group relationships
-	if err := r.loadServiceAddressGroups(ctx, service); err != nil {
-		return nil, errors.Wrap(err, "failed to load service address groups")
+	var loadErr error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		loadErr = r.loadServiceAddressGroups(ctx, service)
+		if loadErr == nil {
+			break
+		}
+
+		if strings.Contains(loadErr.Error(), "conn busy") && attempt < maxRetries-1 {
+			time.Sleep(time.Duration(10*(1<<attempt)) * time.Millisecond)
+			continue
+		}
+
+		return nil, errors.Wrap(loadErr, "failed to load service address groups")
 	}
 
 	return service, nil
@@ -174,8 +220,20 @@ func (r *Reader) loadServiceAddressGroups(ctx context.Context, service *models.S
 		FROM address_group_bindings
 		WHERE service_namespace = $1 AND service_name = $2`
 
-	rows, err := r.query(ctx, query, service.Namespace, service.Name)
-	if err != nil {
+	var rows pgx.Rows
+	var err error
+	maxRetries := 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		rows, err = r.query(ctx, query, service.Namespace, service.Name)
+		if err == nil {
+			break
+		}
+
+		if strings.Contains(err.Error(), "conn busy") && attempt < maxRetries-1 {
+			time.Sleep(time.Duration(10*(1<<attempt)) * time.Millisecond)
+			continue
+		}
+
 		return errors.Wrap(err, "failed to query address group bindings")
 	}
 	defer rows.Close()

@@ -3,6 +3,7 @@ package readers
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -31,8 +32,20 @@ func (r *Reader) ListAddressGroupBindings(ctx context.Context, consume func(mode
 
 	query += " ORDER BY agb.namespace, agb.name"
 
-	rows, err := r.query(ctx, query, args...)
-	if err != nil {
+	var rows pgx.Rows
+	var err error
+	maxRetries := 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		rows, err = r.query(ctx, query, args...)
+		if err == nil {
+			break
+		}
+
+		if strings.Contains(err.Error(), "conn busy") && attempt < maxRetries-1 {
+			time.Sleep(time.Duration(10*(1<<attempt)) * time.Millisecond)
+			continue
+		}
+
 		return errors.Wrap(err, "failed to query address group bindings")
 	}
 	defer rows.Close()

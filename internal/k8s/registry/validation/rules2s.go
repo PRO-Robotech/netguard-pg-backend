@@ -110,10 +110,9 @@ func (v *RuleS2SValidator) validateTrafficRequired(traffic v1beta1.Traffic, fldP
 func (v *RuleS2SValidator) validateServiceLocalRefDomain(ref v1beta1.NamespacedObjectReference, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
-	// Domain-specific validation: Kind must be ServiceAlias
-	if ref.Kind != "ServiceAlias" {
+	if ref.Kind != "Service" {
 		allErrs = append(allErrs, field.Invalid(fldPath.Child("kind"), ref.Kind,
-			"kind must be 'ServiceAlias'"))
+			"kind must be 'Service'"))
 	}
 
 	return allErrs
@@ -123,16 +122,13 @@ func (v *RuleS2SValidator) validateServiceLocalRefDomain(ref v1beta1.NamespacedO
 func (v *RuleS2SValidator) validateServiceRefDomain(ref v1beta1.NamespacedObjectReference, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
-	// Domain-specific validation: Kind must be ServiceAlias
-	if ref.Kind != "ServiceAlias" {
+	if ref.Kind != "Service" {
 		allErrs = append(allErrs, field.Invalid(fldPath.Child("kind"), ref.Kind,
-			"kind must be 'ServiceAlias'"))
+			"kind must be 'Service'"))
 	}
 
 	return allErrs
 }
-
-// Note: NamespacedObjectReference validation is now handled by standard ValidateNamespacedObjectReference
 
 // NewRuleS2SValidator creates a new RuleS2SValidator instance
 func NewRuleS2SValidator() *RuleS2SValidator {

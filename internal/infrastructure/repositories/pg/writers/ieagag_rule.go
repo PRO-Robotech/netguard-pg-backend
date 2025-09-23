@@ -80,7 +80,6 @@ func (w *Writer) upsertIEAgAgRule(ctx context.Context, rule models.IEAgAgRule) e
 		return errors.Wrap(err, "failed to marshal conditions")
 	}
 
-	// First, check if ieagag rule exists and get existing resource version
 	var existingResourceVersion sql.NullInt64
 	existingQuery := `SELECT resource_version FROM ie_ag_ag_rules WHERE namespace = $1 AND name = $2`
 	_ = w.tx.QueryRow(ctx, existingQuery, rule.Namespace, rule.Name).Scan(&existingResourceVersion)
@@ -98,7 +97,6 @@ func (w *Writer) upsertIEAgAgRule(ctx context.Context, rule models.IEAgAgRule) e
 			return errors.Wrapf(err, "failed to update K8s metadata for ieagag rule %s/%s", rule.Namespace, rule.Name)
 		}
 	} else {
-		// INSERT new K8s metadata
 		metadataQuery := `
 			INSERT INTO k8s_metadata (labels, annotations, finalizers, conditions)
 			VALUES ($1, $2, '{}', $3)
@@ -122,11 +120,11 @@ func (w *Writer) upsertIEAgAgRule(ctx context.Context, rule models.IEAgAgRule) e
 
 	// Then, upsert the ieagag rule using the resource version (table name: ie_ag_ag_rules)
 	ruleQuery := `
-		INSERT INTO ie_ag_ag_rules (namespace, name, transport, traffic, 
+		INSERT INTO ie_ag_ag_rules (namespace, name, transport, traffic,
 			address_group_local_namespace, address_group_local_name,
-			address_group_namespace, address_group_name, 
-			ports, action, resource_version)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			address_group_namespace, address_group_name,
+			ports, action, trace, resource_version)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		ON CONFLICT (namespace, name) DO UPDATE SET
 			transport = $3,
 			traffic = $4,
@@ -136,7 +134,8 @@ func (w *Writer) upsertIEAgAgRule(ctx context.Context, rule models.IEAgAgRule) e
 			address_group_name = $8,
 			ports = $9,
 			action = $10,
-			resource_version = $11`
+			trace = $11,
+			resource_version = $12`
 
 	if err := w.exec(ctx, ruleQuery,
 		rule.Namespace,
@@ -149,6 +148,7 @@ func (w *Writer) upsertIEAgAgRule(ctx context.Context, rule models.IEAgAgRule) e
 		rule.AddressGroup.Name,
 		portsJSON,
 		string(rule.Action),
+		rule.Trace,
 		resourceVersion,
 	); err != nil {
 		return errors.Wrapf(err, "failed to upsert ieagag rule %s/%s", rule.Namespace, rule.Name)
@@ -178,7 +178,6 @@ func (w *Writer) updateIEAgAgRuleConditionsOnly(ctx context.Context, rule models
 
 	fmt.Printf("🔍 DEBUG: Found IEAgAgRule %s/%s with resource_version=%d, updating conditions only\n", rule.Namespace, rule.Name, resourceVersion)
 
-	// 🎯 OPTIMIZED_FIX: Use simpler approach with shorter timeout and better error handling
 	conditionCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
@@ -196,10 +195,8 @@ func (w *Writer) updateIEAgAgRuleConditionsOnly(ctx context.Context, rule models
 	}
 
 	rowsAffected := result.RowsAffected()
-	fmt.Printf("🔍 DEBUG: UPDATE k8s_metadata conditions affected %d rows for resource_version=%d\n", rowsAffected, resourceVersion)
 
 	if rowsAffected == 0 {
-		fmt.Printf("⚠️  WARNING: No rows affected when updating conditions for IEAgAgRule %s/%s with resource_version=%d\n", rule.Namespace, rule.Name, resourceVersion)
 		// Let's also check if the metadata row exists
 		var count int
 		checkQuery := `SELECT COUNT(*) FROM k8s_metadata WHERE resource_version = $1`
@@ -208,7 +205,6 @@ func (w *Writer) updateIEAgAgRuleConditionsOnly(ctx context.Context, rule models
 		}
 	}
 
-	fmt.Printf("✅ DEBUG: Successfully updated conditions for IEAgAgRule %s/%s\n", rule.Namespace, rule.Name)
 	return nil
 }
 
