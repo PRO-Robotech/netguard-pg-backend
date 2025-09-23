@@ -5,17 +5,16 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/pkg/errors"
-	"google.golang.org/protobuf/types/known/emptypb"
-	"google.golang.org/protobuf/types/known/timestamppb"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/klog/v2"
-
 	"netguard-pg-backend/internal/application/services"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 	"netguard-pg-backend/internal/k8s/client"
+
+	"github.com/pkg/errors"
+	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	// commonpb "github.com/H-BF/protos/pkg/api/common" - replaced with local types
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
@@ -37,11 +36,6 @@ func NewNetguardServiceServer(service *services.NetguardFacade) *NetguardService
 // convertSyncOp преобразует proto SyncOp в models.SyncOp
 func convertSyncOp(protoSyncOp netguardpb.SyncOp) models.SyncOp {
 	return models.ProtoToSyncOp(int32(protoSyncOp))
-}
-
-// convertSyncOpToPB преобразует models.SyncOp в proto SyncOp
-func convertSyncOpToPB(syncOp models.SyncOp) netguardpb.SyncOp {
-	return netguardpb.SyncOp(models.SyncOpToProto(syncOp))
 }
 
 func (s *NetguardServiceServer) Sync(ctx context.Context, req *netguardpb.SyncReq) (*emptypb.Empty, error) {
@@ -106,24 +100,16 @@ func (s *NetguardServiceServer) Sync(ctx context.Context, req *netguardpb.SyncRe
 			return &emptypb.Empty{}, nil
 		}
 
-		log.Printf("🔄 DEBUG Sync: Handling AddressGroupBindings with SyncOp=%s, count=%d", syncOp.String(), len(subject.AddressGroupBindings.AddressGroupBindings))
-		// Конвертируем привязки групп адресов
 		bindings := make([]models.AddressGroupBinding, 0, len(subject.AddressGroupBindings.AddressGroupBindings))
-		for i, b := range subject.AddressGroupBindings.AddressGroupBindings {
-			log.Printf("🔄 DEBUG: Converting protobuf binding[%d] SelfRef.Name='%s'", i, b.SelfRef.Name)
+		for _, b := range subject.AddressGroupBindings.AddressGroupBindings {
 			binding := convertAddressGroupBinding(b)
-			log.Printf("🔄 DEBUG: After conversion binding[%d] ServiceRef.Name='%s', AddressGroupRef.Name='%s'", i, binding.ServiceRef.Name, binding.AddressGroupRef.Name)
 			bindings = append(bindings, binding)
 		}
 
-		// Синхронизируем привязки групп адресов с указанной операцией
-		log.Printf("🔄 DEBUG: Calling s.service.Sync with SyncOp=%s for %d bindings", syncOp.String(), len(bindings))
 		err = s.service.Sync(ctx, syncOp, bindings)
 		if err != nil {
-			log.Printf("❌ DEBUG: s.service.Sync FAILED: %v", err)
 			return nil, errors.Wrap(err, "failed to sync address group bindings")
 		}
-		log.Printf("✅ DEBUG: s.service.Sync SUCCESS for AddressGroupBindings")
 
 	case *netguardpb.SyncReq_AddressGroupPortMappings:
 		if subject.AddressGroupPortMappings == nil || len(subject.AddressGroupPortMappings.AddressGroupPortMappings) == 0 {
@@ -181,34 +167,18 @@ func (s *NetguardServiceServer) Sync(ctx context.Context, req *netguardpb.SyncRe
 			return &emptypb.Empty{}, nil
 		}
 
-		klog.Infof("🔥 DEBUG: API received %d IEAgAgRules (operation: %s) - THIS BYPASSES PORT AGGREGATION!",
-			len(subject.IeagagRules.IeagagRules), syncOp)
-
 		// Convert IEAgAgRules
 		rules := make([]models.IEAgAgRule, 0, len(subject.IeagagRules.IeagagRules))
-		for i, r := range subject.IeagagRules.IeagagRules {
+		for _, r := range subject.IeagagRules.IeagagRules {
 			rule := client.ConvertIEAgAgRuleFromProto(r)
-
-			// Safe port logging - handle empty ports slice
-			var portInfo string
-			if len(rule.Ports) > 0 {
-				portInfo = rule.Ports[0].Destination
-			} else {
-				portInfo = "<no ports>"
-			}
-			klog.Infof("🔥 DEBUG: API IEAgAgRule[%d]: %s, ports: %s", i, rule.Key(), portInfo)
 			rules = append(rules, rule)
 		}
-
-		klog.Infof("🔥 DEBUG: API calling service.Sync with %d IEAgAgRules - DANGER: bypasses aggregation!", len(rules))
 
 		// Sync IEAgAgRules with the specified operation
 		err = s.service.Sync(ctx, syncOp, rules)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to sync IEAgAgRules")
 		}
-
-		log.Printf("✅ API: Successfully synced %d IEAgAgRules", len(rules))
 
 	case *netguardpb.SyncReq_AddressGroupBindingPolicies:
 		if subject.AddressGroupBindingPolicies == nil || len(subject.AddressGroupBindingPolicies.AddressGroupBindingPolicies) == 0 {
@@ -289,7 +259,6 @@ func (s *NetguardServiceServer) Sync(ctx context.Context, req *netguardpb.SyncRe
 			bindings = append(bindings, convertHostBinding(b))
 		}
 
-		// Синхронизируем привязки хостов с указанной операцией
 		err = s.service.Sync(ctx, syncOp, bindings)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to sync host bindings")
@@ -386,23 +355,13 @@ func (s *NetguardServiceServer) ListAddressGroups(ctx context.Context, req *netg
 // GetAddressGroup gets a specific address group by ID
 func (s *NetguardServiceServer) GetAddressGroup(ctx context.Context, req *netguardpb.GetAddressGroupReq) (*netguardpb.GetAddressGroupResp, error) {
 	id := idFromReq(req.GetIdentifier())
-	log.Printf("🚀 GRPC GetAddressGroup: request for %s", id.Key())
 	addressGroup, err := s.service.GetAddressGroupByID(ctx, id)
 	if err != nil {
 		log.Printf("❌ GRPC GetAddressGroup: failed to get %s: %v", id.Key(), err)
 		return nil, errors.Wrap(err, "failed to get address group")
 	}
 
-	log.Printf("🔍 GRPC GetAddressGroup: AddressGroup[%s] has %d networks", id.Key(), len(addressGroup.Networks))
-	for i, network := range addressGroup.Networks {
-		log.Printf("  🔍 GRPC GetAddressGroup: network[%d] Name=%s CIDR=%s", i, network.Name, network.CIDR)
-	}
-
 	pbAddressGroup := convertAddressGroupToPB(*addressGroup)
-	log.Printf("🔍 GRPC GetAddressGroup: After convertAddressGroupToPB, protobuf has %d networks", len(pbAddressGroup.Networks))
-	for i, network := range pbAddressGroup.Networks {
-		log.Printf("  🔍 GRPC GetAddressGroup: protobuf network[%d] Name=%s CIDR=%s", i, network.Name, network.Cidr)
-	}
 
 	return &netguardpb.GetAddressGroupResp{
 		AddressGroup: pbAddressGroup,
@@ -639,8 +598,6 @@ func convertAddressGroup(ag *netguardpb.AddressGroup) models.AddressGroup {
 		}
 	}
 
-	fmt.Printf("🔍 PB_TO_DOMAIN_DEBUG: AddressGroup %s/%s - pb.AggregatedHosts length: %d\n",
-		ag.GetSelfRef().GetNamespace(), ag.GetSelfRef().GetName(), len(ag.AggregatedHosts))
 	if len(ag.AggregatedHosts) > 0 {
 		result.AggregatedHosts = make([]models.HostReference, len(ag.AggregatedHosts))
 		for i, hostRef := range ag.AggregatedHosts {
@@ -687,11 +644,9 @@ func convertAddressGroupBinding(b *netguardpb.AddressGroupBinding) models.Addres
 		}
 	}
 	if serviceName == "" {
-		// ❌ CRITICAL: Don't create corrupted objects! Log and create a safe fallback
-		log.Printf("⚠️  CORRUPTION PREVENTION: convertAddressGroupBinding received protobuf with empty ServiceRef.Name for binding %s/%s - using placeholder to prevent corruption", result.Namespace, result.Name)
-		serviceName = "CORRUPTED-SERVICE-REF"
-		serviceNamespace = result.Namespace
+		return result
 	}
+
 	result.ServiceRef = models.NewServiceRef(serviceName, models.WithNamespace(serviceNamespace))
 
 	// Convert AddressGroupRef with nil-safe access
@@ -702,12 +657,11 @@ func convertAddressGroupBinding(b *netguardpb.AddressGroupBinding) models.Addres
 			agNamespace = agId.GetNamespace()
 		}
 	}
+
 	if agName == "" {
-		// ❌ CRITICAL: Don't create corrupted objects! Log and create a safe fallback
-		log.Printf("⚠️  CORRUPTION PREVENTION: convertAddressGroupBinding received protobuf with empty AddressGroupRef.Name for binding %s/%s - using placeholder to prevent corruption", result.Namespace, result.Name)
-		agName = "CORRUPTED-ADDRESSGROUP-REF"
-		agNamespace = result.Namespace
+		return result
 	}
+
 	result.AddressGroupRef = models.NewAddressGroupRef(agName, models.WithNamespace(agNamespace))
 
 	// Copy Meta if presented
@@ -889,7 +843,7 @@ func convertServiceToPB(svc models.Service) *netguardpb.Service {
 			Generation:         svc.Meta.Generation,
 			Labels:             svc.Meta.Labels,
 			Annotations:        svc.Meta.Annotations,
-			Conditions:         models.K8sConditionsToProto(svc.Meta.Conditions), // ✅ ИСПРАВЛЕНО: добавляем conditions
+			Conditions:         models.K8sConditionsToProto(svc.Meta.Conditions),
 			ObservedGeneration: svc.Meta.ObservedGeneration,
 		},
 	}
@@ -991,8 +945,6 @@ func convertAddressGroupToPB(ag models.AddressGroup) *netguardpb.AddressGroup {
 	if len(ag.AggregatedHosts) > 0 {
 		result.AggregatedHosts = make([]*netguardpb.HostReference, len(ag.AggregatedHosts))
 		for i, hostRef := range ag.AggregatedHosts {
-			fmt.Printf("  Converting host[%d]: Name=%s, UUID=%s, Source=%s\n",
-				i, hostRef.GetName(), hostRef.UUID, hostRef.Source)
 			result.AggregatedHosts[i] = &netguardpb.HostReference{
 				Ref: &netguardpb.ObjectReference{
 					ApiVersion: hostRef.ObjectReference.APIVersion,
@@ -1059,7 +1011,7 @@ func convertAddressGroupBindingToPB(b models.AddressGroupBinding) *netguardpb.Ad
 		Generation:         b.Meta.Generation,
 		Labels:             b.Meta.Labels,
 		Annotations:        b.Meta.Annotations,
-		Conditions:         models.K8sConditionsToProto(b.Meta.Conditions), // ✅ ИСПРАВЛЕНО
+		Conditions:         models.K8sConditionsToProto(b.Meta.Conditions),
 		ObservedGeneration: b.Meta.ObservedGeneration,
 	}
 	if !b.Meta.CreationTS.IsZero() {
@@ -1084,7 +1036,7 @@ func convertAddressGroupPortMappingToPB(m models.AddressGroupPortMapping) *netgu
 		Generation:         m.Meta.Generation,
 		Labels:             m.Meta.Labels,
 		Annotations:        m.Meta.Annotations,
-		Conditions:         models.K8sConditionsToProto(m.Meta.Conditions), // ✅ ИСПРАВЛЕНО
+		Conditions:         models.K8sConditionsToProto(m.Meta.Conditions),
 		ObservedGeneration: m.Meta.ObservedGeneration,
 	}
 	if !m.Meta.CreationTS.IsZero() {
@@ -1404,8 +1356,9 @@ func convertAddressGroupBindingPolicy(policy *netguardpb.AddressGroupBindingPoli
 		}
 	}
 	if serviceName == "" {
-		return result // Skip conversion if ServiceRef is incomplete
+		return result
 	}
+
 	result.ServiceRef = models.NewServiceRef(serviceName, models.WithNamespace(serviceNamespace))
 
 	// Convert AddressGroupRef with nil-safe access
@@ -1416,9 +1369,11 @@ func convertAddressGroupBindingPolicy(policy *netguardpb.AddressGroupBindingPoli
 			agNamespace = agId.GetNamespace()
 		}
 	}
+
 	if agName == "" {
 		return result
 	}
+
 	result.AddressGroupRef = models.NewAddressGroupRef(agName, models.WithNamespace(agNamespace))
 
 	// Copy Meta information if present
@@ -1549,30 +1504,11 @@ func (s *NetguardServiceServer) GetNetwork(ctx context.Context, req *netguardpb.
 		return nil, errors.Wrap(err, "failed to get network")
 	}
 
-	if network != nil {
-		if network.BindingRef != nil {
-			log.Printf("  🔍 GRPC GetNetwork: network[%s].BindingRef=%s", id.Key(), network.BindingRef.Name)
-		} else {
-			log.Printf("  🔍 GRPC GetNetwork: network[%s].BindingRef=nil", id.Key())
-		}
-	}
-
 	if network == nil {
 		return nil, errors.New("network not found")
 	}
 
 	pbNetwork := convertNetworkToPB(*network)
-	log.Printf("🔍 GRPC GetNetwork: After convertNetworkToPB, protobuf Network has IsBound=%t", pbNetwork.IsBound)
-	if pbNetwork.BindingRef != nil {
-		log.Printf("  🔍 GRPC GetNetwork: protobuf.BindingRef=%s", pbNetwork.BindingRef.Name)
-	} else {
-		log.Printf("  🔍 GRPC GetNetwork: protobuf.BindingRef=nil")
-	}
-	if pbNetwork.AddressGroupRef != nil {
-		log.Printf("  🔍 GRPC GetNetwork: protobuf.AddressGroupRef=%s (ns=%s)", pbNetwork.AddressGroupRef.Name, pbNetwork.AddressGroupRef.Namespace)
-	} else {
-		log.Printf("  🔍 GRPC GetNetwork: protobuf.AddressGroupRef=nil")
-	}
 
 	return &netguardpb.GetNetworkResp{
 		Network: pbNetwork,
@@ -1925,17 +1861,12 @@ func convertHost(protoHost *netguardpb.Host) models.Host {
 
 	// Convert IP list if present
 	if len(protoHost.IpList) > 0 {
-		log.Printf("🔍 GRPC_CONVERTER_DEBUG: convertHost - Converting %d IP items from protobuf for host %s/%s",
-			len(protoHost.IpList), protoHost.SelfRef.Namespace, protoHost.SelfRef.Name)
 		host.IpList = make([]models.IPItem, len(protoHost.IpList))
 		for i, ipItem := range protoHost.IpList {
 			host.IpList[i] = models.IPItem{
 				IP: ipItem.Ip,
 			}
 		}
-	} else {
-		log.Printf("❌ GRPC_CONVERTER_DEBUG: convertHost - No IP list in protobuf for host %s/%s",
-			protoHost.SelfRef.Namespace, protoHost.SelfRef.Name)
 	}
 
 	// Convert Meta if provided
@@ -1994,18 +1925,12 @@ func convertHostToPB(host models.Host) *netguardpb.Host {
 
 	// Convert IP list if present
 	if len(host.IpList) > 0 {
-		log.Printf("🔍 GRPC_CONVERTER_DEBUG: convertHostToPB - Converting %d IP items to protobuf for host %s/%s",
-			len(host.IpList), host.Namespace, host.Name)
 		pbHost.IpList = make([]*netguardpb.IPItem, len(host.IpList))
 		for i, ipItem := range host.IpList {
-			log.Printf("🔍 GRPC_CONVERTER_DEBUG: convertHostToPB - IP[%d] = %s", i, ipItem.IP)
 			pbHost.IpList[i] = &netguardpb.IPItem{
 				Ip: ipItem.IP,
 			}
 		}
-	} else {
-		log.Printf("❌ GRPC_CONVERTER_DEBUG: convertHostToPB - No IP list in domain model for host %s/%s",
-			host.Namespace, host.Name)
 	}
 
 	// Populate Meta information
