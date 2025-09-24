@@ -128,8 +128,8 @@ func (w *Writer) upsertService(ctx context.Context, service models.Service) erro
 	}
 
 	serviceQuery := `
-		INSERT INTO services (namespace, name, description, ingress_ports, address_groups, resource_version)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO services (namespace, name, description, ingress_ports, address_groups, aggregated_address_groups, resource_version)
+		VALUES ($1, $2, $3, $4, $5, '[]', $6)
 		ON CONFLICT (namespace, name) DO UPDATE SET
 			description = $3,
 			ingress_ports = $4,
