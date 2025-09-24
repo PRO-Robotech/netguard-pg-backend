@@ -26,11 +26,11 @@ BEGIN
     IF address_groups_field IS NOT NULL AND address_groups_field != 'null'::jsonb
        AND jsonb_typeof(address_groups_field) = 'array' AND jsonb_array_length(address_groups_field) > 0 THEN
         FOR group_ref IN
-            SELECT jsonb_array_elements(address_groups_field) as group_obj
+            SELECT value FROM jsonb_array_elements(address_groups_field) AS value
         LOOP
             aggregated_groups_json := aggregated_groups_json || jsonb_build_array(
                 jsonb_build_object(
-                    'ref', group_ref,
+                    'ref', group_ref.value,
                     'source', 'spec'
                 )
             );
@@ -91,10 +91,10 @@ BEGIN
         spec_groups := COALESCE(service_record.address_groups, '[]'::jsonb);
 
         FOR spec_group IN
-            SELECT jsonb_array_elements(spec_groups) as group_obj
+            SELECT value FROM jsonb_array_elements(spec_groups) AS value
         LOOP
-            IF (spec_group->>'name') = NEW.address_group_name
-               AND COALESCE(spec_group->>'namespace', NEW.service_namespace) = NEW.address_group_namespace THEN
+            IF (spec_group.value->>'name') = NEW.address_group_name
+               AND COALESCE(spec_group.value->>'namespace', NEW.service_namespace) = NEW.address_group_namespace THEN
                 RAISE EXCEPTION 'AddressGroup %.% is already referenced by Service %.% via spec.addressGroups - cannot create AddressGroupBinding for dual registration conflict',
                     NEW.address_group_namespace, NEW.address_group_name,
                     NEW.service_namespace, NEW.service_name;
@@ -106,18 +106,18 @@ BEGIN
         spec_groups := COALESCE(NEW.address_groups, '[]'::jsonb);
 
         FOR spec_group IN
-            SELECT jsonb_array_elements(spec_groups) as group_obj
+            SELECT value FROM jsonb_array_elements(spec_groups) AS value
         LOOP
             SELECT COUNT(*) INTO conflicting_count
             FROM address_group_bindings agb
             WHERE agb.service_namespace = NEW.namespace
             AND agb.service_name = NEW.name
-            AND agb.address_group_name = (spec_group->>'name')::resource_name
-            AND agb.address_group_namespace = COALESCE((spec_group->>'namespace')::namespace_name, NEW.namespace);
+            AND agb.address_group_name = (spec_group.value->>'name')::resource_name
+            AND agb.address_group_namespace = COALESCE((spec_group.value->>'namespace')::namespace_name, NEW.namespace);
 
             IF conflicting_count > 0 THEN
                 RAISE EXCEPTION 'AddressGroup %.% is already bound to Service %.% via AddressGroupBinding - cannot add to spec.addressGroups for dual registration conflict',
-                    COALESCE(spec_group->>'namespace', NEW.namespace), spec_group->>'name',
+                    COALESCE(spec_group.value->>'namespace', NEW.namespace), spec_group.value->>'name',
                     NEW.namespace, NEW.name;
             END IF;
         END LOOP;
