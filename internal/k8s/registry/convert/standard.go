@@ -89,8 +89,6 @@ func ConvertMetadataFromDomain(meta models.Meta, name, namespace string) metav1.
 		}
 	}
 
-	// 🚨 CRITICAL: ManagedFields restoration (fixes visibility issue)
-	// This ensures ManagedFields are properly restored in K8s objects
 	if meta.ManagedFields != nil {
 		objMeta.ManagedFields = make([]metav1.ManagedFieldsEntry, len(meta.ManagedFields))
 		copy(objMeta.ManagedFields, meta.ManagedFields)

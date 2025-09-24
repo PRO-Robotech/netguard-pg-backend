@@ -50,7 +50,7 @@ BEGIN
     host_obj := jsonb_build_object(
         'name', OLD.name,
         'namespace', OLD.namespace,
-        'apiVersion', 'netguard.io/v1beta1',
+        'apiVersion', 'netguard.sgroups.io/v1beta1',
         'kind', 'Host'
     );
     

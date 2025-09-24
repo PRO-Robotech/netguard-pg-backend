@@ -136,7 +136,7 @@ func (r *Reader) scanHost(rows pgx.Rows) (models.Host, error) {
 	// Set binding ref if exists (ObjectReference doesn't include namespace)
 	if bindingRefNamespace != nil && bindingRefName != nil {
 		host.BindingRef = &v1beta1.ObjectReference{
-			APIVersion: "netguard.io/v1beta1",
+			APIVersion: "netguard.sgroups.io/v1beta1",
 			Kind:       "HostBinding",
 			Name:       *bindingRefName,
 		}
@@ -145,7 +145,7 @@ func (r *Reader) scanHost(rows pgx.Rows) (models.Host, error) {
 	// Set address group ref if exists (ObjectReference doesn't include namespace)
 	if addressGroupRefNamespace != nil && addressGroupRefName != nil {
 		host.AddressGroupRef = &v1beta1.ObjectReference{
-			APIVersion: "netguard.io/v1beta1",
+			APIVersion: "netguard.sgroups.io/v1beta1",
 			Kind:       "AddressGroup",
 			Name:       *addressGroupRefName,
 		}
@@ -222,7 +222,7 @@ func (r *Reader) scanHostRow(row pgx.Row) (*models.Host, error) {
 	// Set binding ref if exists
 	if bindingRefNamespace != nil && bindingRefName != nil {
 		host.BindingRef = &v1beta1.ObjectReference{
-			APIVersion: "netguard.io/v1beta1",
+			APIVersion: "netguard.sgroups.io/v1beta1",
 			Kind:       "HostBinding",
 			Name:       *bindingRefName,
 		}
@@ -231,7 +231,7 @@ func (r *Reader) scanHostRow(row pgx.Row) (*models.Host, error) {
 	// Set address group ref if exists
 	if addressGroupRefNamespace != nil && addressGroupRefName != nil {
 		host.AddressGroupRef = &v1beta1.ObjectReference{
-			APIVersion: "netguard.io/v1beta1",
+			APIVersion: "netguard.sgroups.io/v1beta1",
 			Kind:       "AddressGroup",
 			Name:       *addressGroupRefName,
 		}

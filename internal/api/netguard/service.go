@@ -560,17 +560,32 @@ func convertService(svc *netguardpb.Service) models.Service {
 		})
 	}
 
-	// Convert address groups with nil-safe access
 	for _, ag := range svc.AddressGroups {
 		var agName, agNamespace string
 		if agId := ag.GetIdentifier(); agId != nil {
 			agName = agId.GetName()
 			agNamespace = agId.GetNamespace()
 		}
-		// Skip empty AddressGroup references
 		if agName != "" {
 			ref := models.NewAddressGroupRef(agName, models.WithNamespace(agNamespace))
 			result.AddressGroups = append(result.AddressGroups, ref)
+		}
+	}
+
+	if len(svc.XAggregatedAddressGroups) > 0 {
+		result.XAggregatedAddressGroups = make([]models.AddressGroupReference, len(svc.XAggregatedAddressGroups))
+		for i, agRef := range svc.XAggregatedAddressGroups {
+			result.XAggregatedAddressGroups[i] = models.AddressGroupReference{
+				Ref: v1beta1.NamespacedObjectReference{
+					ObjectReference: v1beta1.ObjectReference{
+						APIVersion: agRef.Ref.ApiVersion,
+						Kind:       agRef.Ref.Kind,
+						Name:       agRef.Ref.Name,
+					},
+					Namespace: agRef.Ref.Namespace,
+				},
+				Source: convertAddressGroupRegistrationSourceFromPB(agRef.Source),
+			}
 		}
 	}
 
@@ -586,7 +601,6 @@ func convertAddressGroup(ag *netguardpb.AddressGroup) models.AddressGroup {
 		Meta:          models.Meta{},
 	}
 
-	// Convert hosts field (NEW: hosts belonging to this address group)
 	if len(ag.Hosts) > 0 {
 		result.Hosts = make([]v1beta1.ObjectReference, len(ag.Hosts))
 		for i, host := range ag.Hosts {
@@ -649,7 +663,6 @@ func convertAddressGroupBinding(b *netguardpb.AddressGroupBinding) models.Addres
 
 	result.ServiceRef = models.NewServiceRef(serviceName, models.WithNamespace(serviceNamespace))
 
-	// Convert AddressGroupRef with nil-safe access
 	var agName, agNamespace string
 	if agRef := b.GetAddressGroupRef(); agRef != nil {
 		if agId := agRef.GetIdentifier(); agId != nil {
@@ -688,7 +701,6 @@ func convertAddressGroupPortMapping(m *netguardpb.AddressGroupPortMapping) model
 		Meta:        models.Meta{},
 	}
 
-	// Copy Meta
 	if m.Meta != nil {
 		result.Meta = models.Meta{
 			UID:             m.Meta.Uid,
@@ -702,15 +714,12 @@ func convertAddressGroupPortMapping(m *netguardpb.AddressGroupPortMapping) model
 		}
 	}
 
-	// Convert access ports
 	for _, ap := range m.AccessPorts {
 		spr := models.NewServiceRef(
 			ap.Identifier.Name,
 			models.WithNamespace(ap.GetIdentifier().GetNamespace()),
 		)
 		ports := make(models.ProtocolPorts)
-
-		// Convert ports
 		for proto, ranges := range ap.Ports.Ports {
 			portRanges := make([]models.PortRange, 0, len(ranges.Ranges))
 			for _, r := range ranges.Ranges {
@@ -754,7 +763,7 @@ func convertRuleS2S(r *netguardpb.RuleS2S) models.RuleS2S {
 		}
 	}
 	if localName == "" {
-		return result // Skip conversion if ServiceLocalRef is incomplete
+		return result
 	}
 	result.ServiceLocalRef = v1beta1.NamespacedObjectReference{
 		ObjectReference: v1beta1.ObjectReference{
@@ -852,7 +861,6 @@ func convertServiceToPB(svc models.Service) *netguardpb.Service {
 		result.Meta.CreationTs = timestamppb.New(svc.Meta.CreationTS.Time)
 	}
 
-	// Convert ingress ports
 	for _, p := range svc.IngressPorts {
 		var proto netguardpb.Networks_NetIP_Transport
 		switch p.Protocol {
@@ -869,7 +877,6 @@ func convertServiceToPB(svc models.Service) *netguardpb.Service {
 		})
 	}
 
-	// Convert address groups
 	for _, ag := range svc.AddressGroups {
 		result.AddressGroups = append(result.AddressGroups, &netguardpb.AddressGroupRef{
 			Identifier: &netguardpb.ResourceIdentifier{
@@ -879,11 +886,25 @@ func convertServiceToPB(svc models.Service) *netguardpb.Service {
 		})
 	}
 
+	if len(svc.XAggregatedAddressGroups) > 0 {
+		result.XAggregatedAddressGroups = make([]*netguardpb.AddressGroupReference, len(svc.XAggregatedAddressGroups))
+		for i, agRef := range svc.XAggregatedAddressGroups {
+			result.XAggregatedAddressGroups[i] = &netguardpb.AddressGroupReference{
+				Ref: &netguardpb.NamespacedObjectReference{
+					ApiVersion: agRef.Ref.APIVersion,
+					Kind:       agRef.Ref.Kind,
+					Name:       agRef.Ref.Name,
+					Namespace:  agRef.Ref.Namespace,
+				},
+				Source: convertAddressGroupRegistrationSourceToPB(agRef.Source),
+			}
+		}
+	}
+
 	return result
 }
 
 func convertAddressGroupToPB(ag models.AddressGroup) *netguardpb.AddressGroup {
-	// Конвертация RuleAction string в protobuf enum
 	var defaultAction netguardpb.RuleAction
 	switch ag.DefaultAction {
 	case models.ActionAccept:
@@ -909,7 +930,7 @@ func convertAddressGroupToPB(ag models.AddressGroup) *netguardpb.AddressGroup {
 			Generation:         ag.Meta.Generation,
 			Labels:             ag.Meta.Labels,
 			Annotations:        ag.Meta.Annotations,
-			Conditions:         models.K8sConditionsToProto(ag.Meta.Conditions), // ✅ ИСПРАВЛЕНО
+			Conditions:         models.K8sConditionsToProto(ag.Meta.Conditions),
 			ObservedGeneration: ag.Meta.ObservedGeneration,
 		},
 	}
@@ -981,6 +1002,28 @@ func convertHostRegistrationSourceFromPB(source netguardpb.HostRegistrationSourc
 		return models.HostSourceBinding
 	default:
 		return models.HostSourceSpec // default
+	}
+}
+
+func convertAddressGroupRegistrationSourceToPB(source v1beta1.AddressGroupRegistrationSource) netguardpb.AddressGroupRegistrationSource {
+	switch source {
+	case v1beta1.AddressGroupSourceSpec:
+		return netguardpb.AddressGroupRegistrationSource_ADDRESS_GROUP_SOURCE_SPEC
+	case v1beta1.AddressGroupSourceBinding:
+		return netguardpb.AddressGroupRegistrationSource_ADDRESS_GROUP_SOURCE_BINDING
+	default:
+		return netguardpb.AddressGroupRegistrationSource_ADDRESS_GROUP_SOURCE_SPEC // default
+	}
+}
+
+func convertAddressGroupRegistrationSourceFromPB(source netguardpb.AddressGroupRegistrationSource) v1beta1.AddressGroupRegistrationSource {
+	switch source {
+	case netguardpb.AddressGroupRegistrationSource_ADDRESS_GROUP_SOURCE_SPEC:
+		return v1beta1.AddressGroupSourceSpec
+	case netguardpb.AddressGroupRegistrationSource_ADDRESS_GROUP_SOURCE_BINDING:
+		return v1beta1.AddressGroupSourceBinding
+	default:
+		return v1beta1.AddressGroupSourceSpec // default
 	}
 }
 
@@ -1141,7 +1184,7 @@ func convertRuleS2SToPB(r models.RuleS2S) *netguardpb.RuleS2S {
 		Generation:         r.Meta.Generation,
 		Labels:             r.Meta.Labels,
 		Annotations:        r.Meta.Annotations,
-		Conditions:         models.K8sConditionsToProto(r.Meta.Conditions), // ✅ ИСПРАВЛЕНО
+		Conditions:         models.K8sConditionsToProto(r.Meta.Conditions),
 		ObservedGeneration: r.Meta.ObservedGeneration,
 	}
 	if !r.Meta.CreationTS.IsZero() {
@@ -1169,7 +1212,7 @@ func convertServiceAliasToPB(a models.ServiceAlias) *netguardpb.ServiceAlias {
 			Generation:         a.Meta.Generation,
 			Labels:             a.Meta.Labels,
 			Annotations:        a.Meta.Annotations,
-			Conditions:         models.K8sConditionsToProto(a.Meta.Conditions), // ✅ ИСПРАВЛЕНО
+			Conditions:         models.K8sConditionsToProto(a.Meta.Conditions),
 			ObservedGeneration: a.Meta.ObservedGeneration,
 		},
 	}
@@ -1323,7 +1366,7 @@ func convertIEAgAgRuleToPB(rule models.IEAgAgRule) *netguardpb.IEAgAgRule {
 		Generation:         rule.Meta.Generation,
 		Labels:             rule.Meta.Labels,
 		Annotations:        rule.Meta.Annotations,
-		Conditions:         models.K8sConditionsToProto(rule.Meta.Conditions), // ✅ ИСПРАВЛЕНО
+		Conditions:         models.K8sConditionsToProto(rule.Meta.Conditions),
 		ObservedGeneration: rule.Meta.ObservedGeneration,
 	}
 	if !rule.Meta.CreationTS.IsZero() {
@@ -1420,7 +1463,7 @@ func convertAddressGroupBindingPolicyToPB(policy models.AddressGroupBindingPolic
 		Generation:         policy.Meta.Generation,
 		Labels:             policy.Meta.Labels,
 		Annotations:        policy.Meta.Annotations,
-		Conditions:         models.K8sConditionsToProto(policy.Meta.Conditions), // ✅ ИСПРАВЛЕНО
+		Conditions:         models.K8sConditionsToProto(policy.Meta.Conditions),
 		ObservedGeneration: policy.Meta.ObservedGeneration,
 	}
 	if !policy.Meta.CreationTS.IsZero() {

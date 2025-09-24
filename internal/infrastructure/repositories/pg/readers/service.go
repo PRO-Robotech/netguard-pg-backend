@@ -2,6 +2,7 @@ package readers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -17,7 +18,7 @@ import (
 // ListServices lists services with K8s metadata support and relationship loading
 func (r *Reader) ListServices(ctx context.Context, consume func(models.Service) error, scope ports.Scope) error {
 	query := `
-		SELECT s.namespace, s.name, s.description, s.ingress_ports,
+		SELECT s.namespace, s.name, s.description, s.ingress_ports, s.address_groups, s.aggregated_address_groups,
 			   m.resource_version, m.labels, m.annotations, m.conditions,
 			   m.created_at, m.updated_at
 		FROM services s
@@ -82,7 +83,7 @@ func (r *Reader) ListServices(ctx context.Context, consume func(models.Service) 
 // GetServiceByID gets a service by ID with full relationship loading
 func (r *Reader) GetServiceByID(ctx context.Context, id models.ResourceIdentifier) (*models.Service, error) {
 	query := `
-		SELECT s.namespace, s.name, s.description, s.ingress_ports,
+		SELECT s.namespace, s.name, s.description, s.ingress_ports, s.address_groups, s.aggregated_address_groups,
 			   m.resource_version, m.labels, m.annotations, m.conditions,
 			   m.created_at, m.updated_at
 		FROM services s
@@ -132,7 +133,7 @@ func (r *Reader) GetServiceByID(ctx context.Context, id models.ResourceIdentifie
 // scanService scans a service from pgx.Rows
 func (r *Reader) scanService(rows pgx.Rows) (models.Service, error) {
 	var service models.Service
-	var ingressPortsJSON []byte
+	var ingressPortsJSON, addressGroupsJSON, aggregatedAddressGroupsJSON []byte
 	var labelsJSON, annotationsJSON, conditionsJSON []byte
 	var createdAt, updatedAt time.Time // Temporary variables for timestamps
 	var resourceVersion int64          // Scan as int64 from database
@@ -142,6 +143,8 @@ func (r *Reader) scanService(rows pgx.Rows) (models.Service, error) {
 		&service.Name,
 		&service.Description,
 		&ingressPortsJSON,
+		&addressGroupsJSON,
+		&aggregatedAddressGroupsJSON,
 		&resourceVersion,
 		&labelsJSON,
 		&annotationsJSON,
@@ -155,6 +158,11 @@ func (r *Reader) scanService(rows pgx.Rows) (models.Service, error) {
 
 	// Parse ingress ports
 	service.IngressPorts, err = utils.ParseIngressPorts(ingressPortsJSON)
+	if err != nil {
+		return service, err
+	}
+
+	service.XAggregatedAddressGroups, err = r.parseAggregatedAddressGroups(aggregatedAddressGroupsJSON)
 	if err != nil {
 		return service, err
 	}
@@ -174,7 +182,7 @@ func (r *Reader) scanService(rows pgx.Rows) (models.Service, error) {
 // scanServiceRow scans a service from pgx.Row
 func (r *Reader) scanServiceRow(row pgx.Row) (*models.Service, error) {
 	var service models.Service
-	var ingressPortsJSON []byte
+	var ingressPortsJSON, addressGroupsJSON, aggregatedAddressGroupsJSON []byte
 	var labelsJSON, annotationsJSON, conditionsJSON []byte
 	var createdAt, updatedAt time.Time // Temporary variables for timestamps
 	var resourceVersion int64          // Scan as int64 from database
@@ -184,6 +192,8 @@ func (r *Reader) scanServiceRow(row pgx.Row) (*models.Service, error) {
 		&service.Name,
 		&service.Description,
 		&ingressPortsJSON,
+		&addressGroupsJSON,
+		&aggregatedAddressGroupsJSON,
 		&resourceVersion,
 		&labelsJSON,
 		&annotationsJSON,
@@ -201,6 +211,11 @@ func (r *Reader) scanServiceRow(row pgx.Row) (*models.Service, error) {
 		return nil, err
 	}
 
+	service.XAggregatedAddressGroups, err = r.parseAggregatedAddressGroups(aggregatedAddressGroupsJSON)
+	if err != nil {
+		return nil, err
+	}
+
 	// Convert K8s metadata (convert int64 to string) - skip finalizers for now
 	service.Meta, err = utils.ConvertK8sMetadata(fmt.Sprintf("%d", resourceVersion), labelsJSON, annotationsJSON, conditionsJSON, createdAt, updatedAt)
 	if err != nil {
@@ -213,7 +228,19 @@ func (r *Reader) scanServiceRow(row pgx.Row) (*models.Service, error) {
 	return &service, nil
 }
 
-// loadServiceAddressGroups loads address group relationships for a service
+func (r *Reader) parseAggregatedAddressGroups(jsonData []byte) ([]models.AddressGroupReference, error) {
+	if len(jsonData) == 0 {
+		return nil, nil
+	}
+
+	var aggregatedGroups []models.AddressGroupReference
+	if err := json.Unmarshal(jsonData, &aggregatedGroups); err != nil {
+		return nil, errors.Wrap(err, "failed to parse aggregated address groups")
+	}
+
+	return aggregatedGroups, nil
+}
+
 func (r *Reader) loadServiceAddressGroups(ctx context.Context, service *models.Service) error {
 	query := `
 		SELECT address_group_namespace, address_group_name
