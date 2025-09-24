@@ -65,9 +65,7 @@ func NewHostBindingStorage(backendClient client.BackendClient) *HostBindingStora
 	validator := &validation.HostBindingValidator{}
 	watcher := watch.NewBroadcaster(1000, watch.DropIfChannelFull)
 
-	// Use factory to create backend operations adapter
 	backendOps := base.NewHostBindingPtrOps(backendClient)
-
 	baseStorage := base.NewBaseStorage[*netguardv1beta1.HostBinding, *models.HostBinding](
 		func() *netguardv1beta1.HostBinding { return &netguardv1beta1.HostBinding{} },
 		func() runtime.Object { return &netguardv1beta1.HostBindingList{} },
@@ -85,13 +83,9 @@ func NewHostBindingStorage(backendClient client.BackendClient) *HostBindingStora
 		backendClient: backendClient,
 	}
 
-	// TODO: Set up custom create logic for host binding and SGroups registration
-	// This will be implemented when we add hook support to BaseStorage
-
 	return storage
 }
 
-// handleHostBindingCreate implements custom logic when a HostBinding is created
 func (s *HostBindingStorage) handleHostBindingCreate(ctx context.Context, obj *netguardv1beta1.HostBinding, domainObj *models.HostBinding) error {
 	// Update Host status to reflect the binding
 	if err := s.updateHostBindingStatus(ctx, domainObj, true); err != nil {
@@ -101,7 +95,6 @@ func (s *HostBindingStorage) handleHostBindingCreate(ctx context.Context, obj *n
 	return nil
 }
 
-// handleHostBindingUpdate implements custom logic when a HostBinding is updated
 func (s *HostBindingStorage) handleHostBindingUpdate(ctx context.Context, obj, oldObj *netguardv1beta1.HostBinding, domainObj *models.HostBinding) error {
 	// Update Host status to reflect any changes in the binding
 	if err := s.updateHostBindingStatus(ctx, domainObj, true); err != nil {
@@ -111,9 +104,7 @@ func (s *HostBindingStorage) handleHostBindingUpdate(ctx context.Context, obj, o
 	return nil
 }
 
-// handleHostBindingDelete implements custom logic when a HostBinding is deleted
 func (s *HostBindingStorage) handleHostBindingDelete(ctx context.Context, obj *netguardv1beta1.HostBinding, domainObj *models.HostBinding) error {
-	// Clear Host status to reflect the unbinding (isBound=false, clear refs)
 	if err := s.updateHostBindingStatus(ctx, domainObj, false); err != nil {
 		return fmt.Errorf("failed to clear host status on binding delete: %w", err)
 	}
@@ -128,7 +119,6 @@ func (s *HostBindingStorage) GetSingularName() string {
 
 // DeleteCollection implements rest.CollectionDeleter
 func (s *HostBindingStorage) DeleteCollection(ctx context.Context, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions, listOptions *internalversion.ListOptions) (runtime.Object, error) {
-	// TODO: Implement collection deletion when needed
 	return &netguardv1beta1.HostBindingList{}, nil
 }
 
@@ -154,7 +144,7 @@ func (s *HostBindingStorage) updateHostBindingStatus(ctx context.Context, hostBi
 		host.IsBound = true
 		host.AddressGroupName = hostBinding.AddressGroupRef.Name
 		host.BindingRef = &netguardv1beta1.ObjectReference{
-			APIVersion: "netguard.io/v1beta1",
+			APIVersion: "netguard.sgroups.io/v1beta1",
 			Kind:       "HostBinding",
 			Name:       hostBinding.Name,
 		}
@@ -164,14 +154,12 @@ func (s *HostBindingStorage) updateHostBindingStatus(ctx context.Context, hostBi
 			Name:       hostBinding.AddressGroupRef.Name,
 		}
 	} else {
-		// Clear binding information
 		host.IsBound = false
 		host.AddressGroupName = ""
 		host.BindingRef = nil
 		host.AddressGroupRef = nil
 	}
 
-	// Update the Host in backend
 	if err := s.backendClient.UpdateHost(ctx, host); err != nil {
 		return fmt.Errorf("failed to update host status: %w", err)
 	}
