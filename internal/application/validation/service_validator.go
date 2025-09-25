@@ -81,23 +81,16 @@ func (v *ServiceValidator) ValidateNoDuplicatePorts(ingressPorts []models.Ingres
 	return nil
 }
 
-// ValidateForPostCommit validates a service after it has been committed to database
-// This skips duplicate checking since the entity already exists in the database
 func (v *ServiceValidator) ValidateForPostCommit(ctx context.Context, service models.Service) error {
-	// PHASE 1: Skip duplicate entity check (entity is already committed)
-	// This method is called AFTER the entity is saved to database, so existence is expected
 
-	// PHASE 2: Validate references (existing validation)
 	if err := v.ValidateReferences(ctx, service); err != nil {
 		return err
 	}
 
-	// PHASE 3: Validate internal port consistency (existing validation)
 	if err := v.ValidateNoDuplicatePorts(service.IngressPorts); err != nil {
 		return err
 	}
 
-	// PHASE 4: Validate port conflicts with other services (existing validation)
 	if err := v.CheckPortOverlaps(ctx, service); err != nil {
 		return err
 	}
@@ -168,10 +161,31 @@ func (v *ServiceValidator) CheckPortOverlaps(ctx context.Context, service models
 	return nil
 }
 
+func (v *ServiceValidator) ValidateNoDuplicateAddressGroups(addressGroups []models.AddressGroupRef, serviceID models.ResourceIdentifier) error {
+	seen := make(map[string]bool)
+
+	for _, agRef := range addressGroups {
+		namespace := agRef.Namespace
+		if namespace == "" {
+			namespace = serviceID.Namespace
+		}
+
+		key := namespace + "/" + agRef.Name
+
+		if seen[key] {
+			return fmt.Errorf("Duplicate AddressGroup %s.%s found in Service %s.%s spec.addressGroups - each AddressGroup can only be referenced once per Service",
+				namespace, agRef.Name,
+				serviceID.Namespace, serviceID.Name)
+		}
+
+		seen[key] = true
+	}
+
+	return nil
+}
+
 // ValidateForCreation validates a service before creation
 func (v *ServiceValidator) ValidateForCreation(ctx context.Context, service models.Service) error {
-	// PHASE 1: Check for duplicate entity (CRITICAL FIX for overwrite issue)
-	// This prevents creation of entities with the same namespace/name combination
 	keyExtractor := func(entity interface{}) string {
 		if svc, ok := entity.(*models.Service); ok {
 			return svc.Key()
@@ -188,7 +202,10 @@ func (v *ServiceValidator) ValidateForCreation(ctx context.Context, service mode
 		return err
 	}
 
-	// PHASE 3: Validate internal port consistency (existing validation)
+	if err := v.ValidateNoDuplicateAddressGroups(service.AddressGroups, service.ResourceIdentifier); err != nil {
+		return err
+	}
+
 	if err := v.ValidateNoDuplicatePorts(service.IngressPorts); err != nil {
 		return err
 	}
@@ -227,15 +244,8 @@ func (v *ServiceValidator) CheckBindingsPortOverlaps(ctx context.Context, servic
 			continue
 		}
 
-		// Создаем временную копию портмаппинга для проверки
 		tempMapping := *portMapping
 
-		// Удаляем текущий сервис из временной копии
-		//if tempMapping.AccessPorts != nil {
-		//	delete(tempMapping.AccessPorts, models.ServiceRef{ResourceIdentifier: service.ResourceIdentifier})
-		//}
-
-		// Проверяем перекрытие портов
 		if err := CheckPortOverlaps(service, tempMapping); err != nil {
 			return err
 		}
@@ -246,18 +256,14 @@ func (v *ServiceValidator) CheckBindingsPortOverlaps(ctx context.Context, servic
 
 // ValidateForUpdate валидирует сервис перед обновлением
 func (v *ServiceValidator) ValidateForUpdate(ctx context.Context, oldService, newService models.Service) error {
-	// 🎯 SERVICE BUSINESS RULE: Services CAN modify ports and description when Ready=True
-	// This matches k8s-controller service_webhook.go behavior - NO Ready=True spec blocking
-	// Only AddressGroupBinding, ServiceAlias, RuleS2S have spec immutability when Ready=True
-
-	// Continue with existing validation logic (port overlaps, duplicates, references)
-
-	// Проверяем ссылки
 	if err := v.ValidateReferences(ctx, newService); err != nil {
 		return err
 	}
 
-	// Проверяем на дубликаты портов внутри сервиса
+	if err := v.ValidateNoDuplicateAddressGroups(newService.AddressGroups, newService.ResourceIdentifier); err != nil {
+		return err
+	}
+
 	if err := v.ValidateNoDuplicatePorts(newService.IngressPorts); err != nil {
 		return err
 	}
