@@ -30,7 +30,7 @@ BEGIN
         LOOP
             aggregated_groups_json := aggregated_groups_json || jsonb_build_array(
                 jsonb_build_object(
-                    'ref', group_ref.value,
+                    'ref', group_ref,
                     'source', 'spec'
                 )
             );
@@ -93,8 +93,8 @@ BEGIN
         FOR spec_group IN
             SELECT value FROM jsonb_array_elements(spec_groups) AS value
         LOOP
-            IF (spec_group.value->>'name') = NEW.address_group_name
-               AND COALESCE(spec_group.value->>'namespace', NEW.service_namespace) = NEW.address_group_namespace THEN
+            IF (spec_group->>'name') = NEW.address_group_name
+               AND COALESCE(spec_group->>'namespace', NEW.service_namespace) = NEW.address_group_namespace THEN
                 RAISE EXCEPTION 'AddressGroup %.% is already referenced by Service %.% via spec.addressGroups - cannot create AddressGroupBinding for dual registration conflict',
                     NEW.address_group_namespace, NEW.address_group_name,
                     NEW.service_namespace, NEW.service_name;
@@ -112,8 +112,8 @@ BEGIN
                 group_name resource_name;
                 group_namespace namespace_name;
             BEGIN
-                group_name := (spec_group.value->>'name')::resource_name;
-                group_namespace := COALESCE((spec_group.value->>'namespace')::namespace_name, NEW.namespace);
+                group_name := (spec_group->>'name')::resource_name;
+                group_namespace := COALESCE((spec_group->>'namespace')::namespace_name, NEW.namespace);
 
                 SELECT COUNT(*) INTO conflicting_count
                 FROM address_group_bindings agb
