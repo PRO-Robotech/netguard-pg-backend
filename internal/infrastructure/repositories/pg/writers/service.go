@@ -153,7 +153,8 @@ func (w *Writer) upsertService(ctx context.Context, service models.Service) erro
 func (w *Writer) marshalSpecAddressGroups(service models.Service) ([]byte, error) {
 	specAddressGroups := service.GetSpecAddressGroups()
 
-	var dbAddressGroups []models.AddressGroupRef
+	// Initialize with an empty slice to ensure JSON marshals to [] instead of null
+	dbAddressGroups := make([]models.AddressGroupRef, 0, len(specAddressGroups))
 	for _, agRef := range specAddressGroups {
 		dbAddressGroups = append(dbAddressGroups, agRef.Ref)
 	}

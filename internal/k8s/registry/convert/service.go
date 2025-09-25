@@ -46,20 +46,40 @@ func (c *ServiceConverter) ToDomain(ctx context.Context, k8sObj *netguardv1beta1
 		}
 	}
 
-	if len(k8sObj.AddressGroups.Items) > 0 {
-		domainService.AddressGroups = make([]models.AddressGroupRef, len(k8sObj.AddressGroups.Items))
-		for i, agRef := range k8sObj.AddressGroups.Items {
+	// FIXED: Read from spec.addressGroups (user input) instead of subresource
+	if len(k8sObj.Spec.AddressGroups) > 0 {
+		domainService.AddressGroups = make([]models.AddressGroupRef, len(k8sObj.Spec.AddressGroups))
+		for i, agRef := range k8sObj.Spec.AddressGroups {
 			domainService.AddressGroups[i] = models.NewAddressGroupRef(agRef.Name, models.WithNamespace(agRef.Namespace))
 		}
 	}
 
+	// Use XAggregatedAddressGroups if provided (for reads from database with PostgreSQL aggregation)
+	// Otherwise populate from spec.addressGroups (for CREATE operations)
 	if len(k8sObj.XAggregatedAddressGroups) > 0 {
+		// Database read: use the aggregated data from PostgreSQL triggers
 		domainService.XAggregatedAddressGroups = make([]models.AddressGroupReference, len(k8sObj.XAggregatedAddressGroups))
 		for i, agRef := range k8sObj.XAggregatedAddressGroups {
 			domainService.XAggregatedAddressGroups[i] = models.AddressGroupReference{
 				Ref:    agRef.Ref,
 				Source: agRef.Source,
 			}
+		}
+	} else if len(k8sObj.Spec.AddressGroups) > 0 {
+		// CREATE operation: populate XAggregatedAddressGroups from spec with source=spec
+		domainService.XAggregatedAddressGroups = make([]models.AddressGroupReference, len(k8sObj.Spec.AddressGroups))
+		for i, agRef := range k8sObj.Spec.AddressGroups {
+			domainService.XAggregatedAddressGroups[i] = models.NewAddressGroupReference(
+				netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
+						APIVersion: "netguard.sgroups.io/v1beta1",
+						Kind:       "AddressGroup",
+						Name:       agRef.Name,
+					},
+					Namespace: agRef.Namespace,
+				},
+				netguardv1beta1.AddressGroupSourceSpec,
+			)
 		}
 	}
 
@@ -104,25 +124,6 @@ func (c *ServiceConverter) FromDomain(ctx context.Context, domainObj *models.Ser
 	k8sService.Status = netguardv1beta1.ServiceStatus{
 		ObservedGeneration: observedGeneration,
 		Conditions:         conditions,
-	}
-
-	k8sService.AddressGroups = netguardv1beta1.AddressGroupsSpec{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "AddressGroupsSpec",
-		},
-		Items: make([]netguardv1beta1.NamespacedObjectReference, len(domainObj.AddressGroups)),
-	}
-
-	for i, agRef := range domainObj.AddressGroups {
-		k8sService.AddressGroups.Items[i] = netguardv1beta1.NamespacedObjectReference{
-			ObjectReference: netguardv1beta1.ObjectReference{
-				APIVersion: "netguard.sgroups.io/v1beta1",
-				Kind:       "AddressGroup",
-				Name:       agRef.Name,
-			},
-			Namespace: agRef.Namespace,
-		}
 	}
 
 	if len(domainObj.XAggregatedAddressGroups) > 0 {

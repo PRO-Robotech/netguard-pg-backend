@@ -2177,8 +2177,8 @@ func (s *AddressGroupResourceService) synchronizeServiceAddressGroups(ctx contex
 		return errors.Wrapf(err, "failed to get service %s for AddressGroups sync", serviceID.Key())
 	}
 
-	for i, ag := range service.AddressGroups {
-		log.Printf("  [%d] %s/%s", i, ag.Namespace, ag.Name)
+	for i, ag := range service.GetAggregatedAddressGroups() {
+		log.Printf("  [%d] %s/%s", i, ag.Ref.Namespace, ag.Ref.Name)
 	}
 
 	var writer ports.Writer

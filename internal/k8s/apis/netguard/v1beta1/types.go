@@ -49,9 +49,8 @@ type Service struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec          ServiceSpec       `json:"spec,omitempty"`
-	Status        ServiceStatus     `json:"status,omitempty"`
-	AddressGroups AddressGroupsSpec `json:"addressGroups,omitempty"`
+	Spec   ServiceSpec   `json:"spec,omitempty"`
+	Status ServiceStatus `json:"status,omitempty"`
 
 	// XAggregatedAddressGroups contains all AddressGroup references from both spec and bindings
 	// +optional
@@ -109,24 +108,6 @@ type ServiceStatus struct {
 	// ObservedGeneration is the most recent generation observed by the controller
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
-}
-
-// AddressGroupsSpec defines the address groups associated with a Service
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-type AddressGroupsSpec struct {
-	metav1.TypeMeta `json:",inline"`
-	// +optional
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-	// Items contains the list of address groups
-	Items []NamespacedObjectReference `json:"items,omitempty"`
-}
-
-// AddressGroupsSpecList contains a list of AddressGroupsSpec
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-type AddressGroupsSpecList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []AddressGroupsSpec `json:"items"`
 }
 
 // RuleS2SDstOwnRefSpec defines the RuleS2S objects that reference this Service from other namespaces

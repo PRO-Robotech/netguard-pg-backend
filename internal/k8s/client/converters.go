@@ -1,7 +1,6 @@
 package client
 
 import (
-	"fmt"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 	// commonpb "github.com/H-BF/protos/pkg/api/common" - replaced with local types
@@ -197,11 +196,11 @@ func convertServiceToProto(service models.Service) *netguardpb.Service {
 	}
 
 	// Конвертация AddressGroups
-	for _, agRef := range service.AddressGroups {
+	for _, agRef := range service.GetAggregatedAddressGroups() {
 		protoSvc.AddressGroups = append(protoSvc.AddressGroups, &netguardpb.AddressGroupRef{
 			Identifier: &netguardpb.ResourceIdentifier{
-				Name:      agRef.Name,
-				Namespace: agRef.Namespace,
+				Name:      agRef.Ref.Name,
+				Namespace: agRef.Ref.Namespace,
 			},
 		})
 	}
@@ -278,7 +277,6 @@ func convertAddressGroupFromProto(protoAG *netguardpb.AddressGroup) models.Addre
 		})
 	}
 
-	// Convert hosts field (NEW: hosts belonging to this address group)
 	if len(protoAG.Hosts) > 0 {
 		addressGroup.Hosts = make([]v1beta1.ObjectReference, len(protoAG.Hosts))
 		for i, host := range protoAG.Hosts {
@@ -290,14 +288,9 @@ func convertAddressGroupFromProto(protoAG *netguardpb.AddressGroup) models.Addre
 		}
 	}
 
-	// Convert AggregatedHosts field (NEW: aggregated hosts from protobuf)
-	fmt.Printf("🔍 CLIENT_CONVERSION_DEBUG: Converting %d aggregated hosts from protobuf for %s/%s\n",
-		len(protoAG.AggregatedHosts), protoAG.SelfRef.Namespace, protoAG.SelfRef.Name)
 	if len(protoAG.AggregatedHosts) > 0 {
 		addressGroup.AggregatedHosts = make([]models.HostReference, len(protoAG.AggregatedHosts))
 		for i, hostRef := range protoAG.AggregatedHosts {
-			fmt.Printf("  Converting protobuf host[%d]: Name=%s, UUID=%s, Source=%s\n",
-				i, hostRef.Ref.Name, hostRef.Uuid, hostRef.Source.String())
 			addressGroup.AggregatedHosts[i] = models.HostReference{
 				ObjectReference: v1beta1.ObjectReference{
 					APIVersion: hostRef.Ref.ApiVersion,

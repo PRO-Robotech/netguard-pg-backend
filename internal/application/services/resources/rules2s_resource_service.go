@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -130,7 +129,6 @@ func (s *RuleS2SResourceService) GetRuleS2SByIDs(ctx context.Context, ids []mode
 
 // CreateRuleS2S creates a new RuleS2S with IEAgAgRule generation
 func (s *RuleS2SResourceService) CreateRuleS2S(ctx context.Context, rule models.RuleS2S) error {
-	log.Printf("CreateRuleS2S: Starting creation of RuleS2S %s", rule.Key())
 
 	reader, err := s.registry.Reader(ctx)
 	if err != nil {
@@ -138,16 +136,13 @@ func (s *RuleS2SResourceService) CreateRuleS2S(ctx context.Context, rule models.
 	}
 	defer reader.Close()
 
-	// Validate rule for creation
 	validator := validation.NewDependencyValidator(reader)
 	ruleValidator := validator.GetRuleS2SValidator()
 
-	log.Printf("CreateRuleS2S: Validating RuleS2S %s", rule.Key())
 	if err := ruleValidator.ValidateForCreation(ctx, rule); err != nil {
 		log.Printf("CreateRuleS2S: Validation failed for RuleS2S %s: %v", rule.Key(), err)
 		return err
 	}
-	log.Printf("CreateRuleS2S: Validation passed for RuleS2S %s", rule.Key())
 
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
@@ -160,10 +155,7 @@ func (s *RuleS2SResourceService) CreateRuleS2S(ctx context.Context, rule models.
 		}
 	}()
 
-	// Use syncRuleS2S for IEAgAgRule generation and IEAgAgRuleRefs population
-	log.Printf("CreateRuleS2S: Syncing RuleS2S %s with IEAgAgRule generation", rule.Key())
 	if err = s.syncRuleS2S(ctx, writer, []models.RuleS2S{rule}, models.SyncOpUpsert); err != nil {
-		log.Printf("CreateRuleS2S: Failed to sync RuleS2S %s: %v", rule.Key(), err)
 		return errors.Wrap(err, "failed to create rule s2s")
 	}
 
@@ -171,60 +163,38 @@ func (s *RuleS2SResourceService) CreateRuleS2S(ctx context.Context, rule models.
 		log.Printf("CreateRuleS2S: Failed to commit transaction for RuleS2S %s: %v", rule.Key(), err)
 		return errors.Wrap(err, "failed to commit")
 	}
-	log.Printf("CreateRuleS2S: Successfully committed RuleS2S %s", rule.Key())
 
-	// 🎯 CRITICAL FIX: After successful RuleS2S creation, trigger IEAgAgRule regeneration
-	// This handles the timing issue where AddressGroupBindings existed before RuleS2S creation
-	// The dependency chain: AddressGroupBinding → Service.AddressGroups → RuleS2S → IEAgAgRule
-	// If AddressGroupBindings were created before this RuleS2S, we need to manually trigger regeneration
-	log.Printf("🔄 CreateRuleS2S: Triggering post-creation IEAgAgRule regeneration for %s", rule.Key())
 	if err := s.triggerPostCreationIEAgAgRuleGeneration(ctx, rule); err != nil {
 		log.Printf("⚠️ CreateRuleS2S: Failed to trigger post-creation IEAgAgRule regeneration for %s: %v", rule.Key(), err)
-		// Don't fail the entire creation, but log the issue
 	}
 
 	// Process conditions
 	if s.conditionManager != nil {
-		log.Printf("CreateRuleS2S: Processing conditions for RuleS2S %s", rule.Key())
 		if err := s.conditionManager.ProcessRuleS2SConditions(ctx, &rule); err != nil {
-			log.Printf("CreateRuleS2S: Failed to process conditions for RuleS2S %s: %v", rule.Key(), err)
 			return errors.Wrap(err, "failed to process rule s2s conditions")
 		}
-		// Note: ProcessRuleS2SConditions already saves the conditions internally
 	}
 
-	log.Printf("CreateRuleS2S: Successfully created RuleS2S %s", rule.Key())
 	return nil
 }
 
 // UpdateRuleS2S updates an existing RuleS2S
 func (s *RuleS2SResourceService) UpdateRuleS2S(ctx context.Context, rule models.RuleS2S) error {
-	log.Printf("UpdateRuleS2S: Starting update of RuleS2S %s", rule.Key())
-
 	reader, err := s.registry.Reader(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get reader")
 	}
 	defer reader.Close()
 
-	// Get existing rule for validation AND condition preservation
 	existingRule, err := reader.GetRuleS2SByID(ctx, rule.ResourceIdentifier)
 	if err != nil {
 		return errors.Wrap(err, "failed to get existing RuleS2S")
-	}
-
-	// 🔍 CONDITION_PRESERVATION: Preserve existing conditions during update to prevent race condition
-	log.Printf("🔍 UPDATE_CONDITIONS: Preserving existing conditions from current RuleS2S %s", rule.Key())
-	log.Printf("   - Existing conditions count: %d", len(existingRule.Meta.Conditions))
-	for i, cond := range existingRule.Meta.Conditions {
-		log.Printf("   - Condition[%d]: Type=%s, Status=%s, Reason=%s", i, cond.Type, cond.Status, cond.Reason)
 	}
 
 	// Preserve existing conditions in the update rule to prevent overwrite
 	if len(existingRule.Meta.Conditions) > 0 {
 		rule.Meta.Conditions = existingRule.Meta.Conditions
 		rule.Meta.Generation = existingRule.Meta.Generation // Preserve generation too
-		log.Printf("🔄 UPDATE_CONDITIONS: Preserved %d existing conditions in update rule", len(rule.Meta.Conditions))
 	} else {
 		log.Printf("ℹ️ UPDATE_CONDITIONS: No existing conditions to preserve for %s", rule.Key())
 	}
@@ -233,12 +203,10 @@ func (s *RuleS2SResourceService) UpdateRuleS2S(ctx context.Context, rule models.
 	validator := validation.NewDependencyValidator(reader)
 	ruleValidator := validator.GetRuleS2SValidator()
 
-	log.Printf("UpdateRuleS2S: Validating RuleS2S %s", rule.Key())
 	if err := ruleValidator.ValidateForUpdate(ctx, *existingRule, rule); err != nil {
 		log.Printf("UpdateRuleS2S: Validation failed for RuleS2S %s: %v", rule.Key(), err)
 		return err
 	}
-	log.Printf("UpdateRuleS2S: Validation passed for RuleS2S %s", rule.Key())
 
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
@@ -251,60 +219,31 @@ func (s *RuleS2SResourceService) UpdateRuleS2S(ctx context.Context, rule models.
 		}
 	}()
 
-	// Use syncRuleS2S for IEAgAgRule generation and updates
-	log.Printf("UpdateRuleS2S: Syncing RuleS2S %s with IEAgAgRule updates", rule.Key())
 	if err = s.syncRuleS2S(ctx, writer, []models.RuleS2S{rule}, models.SyncOpUpsert); err != nil {
-		log.Printf("UpdateRuleS2S: Failed to sync RuleS2S %s: %v", rule.Key(), err)
 		return errors.Wrap(err, "failed to update rule s2s")
 	}
 
 	if err = writer.Commit(); err != nil {
-		log.Printf("UpdateRuleS2S: Failed to commit transaction for RuleS2S %s: %v", rule.Key(), err)
 		return errors.Wrap(err, "failed to commit")
 	}
-	log.Printf("UpdateRuleS2S: Successfully committed RuleS2S %s", rule.Key())
 
-	// 🔍 ENHANCED CONDITION DEBUGGING: Process conditions with detailed tracking
 	if s.conditionManager != nil {
-		log.Printf("🔍 UPDATE_CONDITIONS: Starting condition processing for RuleS2S %s", rule.Key())
-		log.Printf("🔍 UPDATE_CONDITIONS: Pre-processing rule state:")
-		log.Printf("   - ServiceLocalRef: %s/%s", rule.ServiceLocalRef.Namespace, rule.ServiceLocalRef.Name)
-		log.Printf("   - ServiceRef: %s/%s", rule.ServiceRef.Namespace, rule.ServiceRef.Name)
-		log.Printf("   - Traffic: %s", rule.Traffic)
-		log.Printf("   - Generation: %d", rule.Meta.Generation)
-
-		// Process conditions with enhanced error reporting
 		if err := s.conditionManager.ProcessRuleS2SConditions(ctx, &rule); err != nil {
-			log.Printf("❌ UPDATE_CONDITIONS: FAILED to process conditions for RuleS2S %s: %v", rule.Key(), err)
-			log.Printf("❌ UPDATE_CONDITIONS: Failure context:")
-			log.Printf("   - conditionManager type: %T", s.conditionManager)
-			log.Printf("   - Error details: %v", err)
 			return errors.Wrap(err, "failed to process rule s2s conditions")
 		}
-
-		log.Printf("✅ UPDATE_CONDITIONS: Successfully processed conditions for RuleS2S %s", rule.Key())
-		log.Printf("🔍 UPDATE_CONDITIONS: Post-processing - conditions should be saved internally")
-		// Note: ProcessRuleS2SConditions already saves the conditions internally
 	} else {
 		log.Printf("⚠️ UPDATE_CONDITIONS: conditionManager is NIL for RuleS2S %s - conditions will NOT be processed!", rule.Key())
 	}
 
-	log.Printf("UpdateRuleS2S: Successfully updated RuleS2S %s", rule.Key())
 	return nil
 }
 
 // SyncRuleS2S synchronizes multiple RuleS2S
 func (s *RuleS2SResourceService) SyncRuleS2S(ctx context.Context, rules []models.RuleS2S, scope ports.Scope, syncOp models.SyncOp) error {
-	// 🎯 CRITICAL FIX: For DELETE operations, use our enhanced DeleteRuleS2SByIDs method
-	// which includes targeted cleanup to prevent mass external sync DELETE bug
 	if syncOp == models.SyncOpDelete {
-		klog.Infof("🗑️ SYNC_DELETE_REDIRECT: Redirecting DELETE sync to enhanced DeleteRuleS2SByIDs for %d rules", len(rules))
-
-		// Extract resource identifiers from rules to delete
 		var idsToDelete []models.ResourceIdentifier
 		for _, rule := range rules {
 			idsToDelete = append(idsToDelete, rule.ResourceIdentifier)
-			klog.Infof("  🎯 SYNC_DELETE_REDIRECT: Will delete RuleS2S %s via enhanced method", rule.Key())
 		}
 
 		// Use our enhanced deletion method with targeted cleanup
@@ -330,8 +269,6 @@ func (s *RuleS2SResourceService) SyncRuleS2S(ctx context.Context, rules []models
 		return errors.Wrap(err, "failed to commit transaction")
 	}
 
-	// 🎯 CRITICAL FIX: After successful sync commit, trigger IEAgAgRule regeneration for timing issues
-	// This handles cases where AddressGroupBindings existed before RuleS2S creation via K8s API server
 	if syncOp != models.SyncOpDelete {
 		klog.Infof("🔄 SyncRuleS2S: Triggering post-sync IEAgAgRule regeneration check for %d rules", len(rules))
 		for _, rule := range rules {
@@ -349,40 +286,13 @@ func (s *RuleS2SResourceService) SyncRuleS2S(ctx context.Context, rules []models
 
 	if s.conditionManager != nil {
 		for i := range rules {
-			ruleName := fmt.Sprintf("%s/%s", rules[i].Namespace, rules[i].Name)
-			klog.Infof("🔄 SyncRuleS2S: [%d/%d] Processing conditions for RuleS2S %s", i+1, len(rules), ruleName)
-
-			// Pre-condition checks for detailed diagnosis
-			klog.Infof("🔍 SyncRuleS2S: Pre-checks for %s - ServiceLocalRef=%s/%s, ServiceRef=%s/%s",
-				ruleName,
-				rules[i].ServiceLocalRef.Namespace, rules[i].ServiceLocalRef.Name,
-				rules[i].ServiceRef.Namespace, rules[i].ServiceRef.Name)
-
 			if err := s.conditionManager.ProcessRuleS2SConditions(ctx, &rules[i]); err != nil {
 				failureCount++
-				klog.Errorf("❌ SyncRuleS2S: [%d/%d] FAILED to process conditions for %s: %v",
-					i+1, len(rules), ruleName, err)
-				klog.Errorf("❌ SyncRuleS2S: Failure details for %s:", ruleName)
-				klog.Errorf("   - ServiceLocalRef: %s/%s", rules[i].ServiceLocalRef.Namespace, rules[i].ServiceLocalRef.Name)
-				klog.Errorf("   - ServiceRef: %s/%s", rules[i].ServiceRef.Namespace, rules[i].ServiceRef.Name)
-				klog.Errorf("   - Traffic: %s", rules[i].Traffic)
-				klog.Errorf("   - Error: %v", err)
 				// Don't fail the operation if condition processing fails, but track it
 			} else {
 				successCount++
-				klog.Infof("✅ SyncRuleS2S: [%d/%d] SUCCESS processing conditions for %s", i+1, len(rules), ruleName)
 			}
-			// Note: ProcessRuleS2SConditions already saves the conditions internally
 		}
-	}
-
-	// Summary logging to identify patterns
-	if failureCount > 0 {
-		klog.Errorf("🚨 SyncRuleS2S: BULK CONDITION PROCESSING SUMMARY - Success: %d/%d, Failures: %d/%d",
-			successCount, len(rules), failureCount, len(rules))
-		klog.Errorf("🚨 SyncRuleS2S: This indicates dependency resolution or validation issues during bulk operations!")
-	} else {
-		klog.Infof("✅ SyncRuleS2S: BULK CONDITION PROCESSING SUCCESS - All %d/%d RuleS2S got conditions", successCount, len(rules))
 	}
 
 	return nil
@@ -390,9 +300,6 @@ func (s *RuleS2SResourceService) SyncRuleS2S(ctx context.Context, rules []models
 
 // DeleteRuleS2SByIDs deletes RuleS2S by IDs and triggers targeted IEAgAg rule cleanup
 func (s *RuleS2SResourceService) DeleteRuleS2SByIDs(ctx context.Context, ids []models.ResourceIdentifier) error {
-	klog.Infof("🗑️ RULES2S_DELETE: Starting deletion of %d RuleS2S with targeted cleanup", len(ids))
-
-	// Validate dependencies for each RuleS2S
 	reader, err := s.registry.Reader(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get reader for validation")
@@ -403,16 +310,11 @@ func (s *RuleS2SResourceService) DeleteRuleS2SByIDs(ctx context.Context, ids []m
 	ruleS2SValidator := validator.GetRuleS2SValidator()
 
 	for _, id := range ids {
-		log.Printf("DeleteRuleS2SByIDs: Validating dependencies for RuleS2S %s", id.Key())
 		if err := ruleS2SValidator.CheckDependencies(ctx, id); err != nil {
-			log.Printf("DeleteRuleS2SByIDs: Cannot delete RuleS2S %s due to dependencies: %v", id.Key(), err)
 			return errors.Wrapf(err, "cannot delete RuleS2S %s", id.Key())
 		}
 	}
 
-	log.Printf("DeleteRuleS2SByIDs: All %d RuleS2S validated for deletion", len(ids))
-
-	// 🎯 CRITICAL FIX: Capture IEAgAgRules that are referenced by RuleS2S being deleted BEFORE deletion
 	var referencedIEAgAgRules []models.ResourceIdentifier
 	for _, id := range ids {
 		rule, err := reader.GetRuleS2SByID(ctx, id)
@@ -433,20 +335,12 @@ func (s *RuleS2SResourceService) DeleteRuleS2SByIDs(ctx context.Context, ids []m
 					Name:      ieagagRef.Name,
 				}
 				referencedIEAgAgRules = append(referencedIEAgAgRules, refID)
-				klog.Infof("🎯 RULES2S_DELETE: RuleS2S %s references IEAgAgRule %s for cleanup", id.Key(), refID.Key())
 			}
 		} else {
-			// 🚨 CRITICAL FALLBACK: If IEAgAgRuleRefs is empty, generate expected rules and check their existence
-			klog.Warningf("🔍 FALLBACK_CLEANUP: RuleS2S %s has no IEAgAgRuleRefs, using fallback rule generation for cleanup", id.Key())
-
 			expectedRules, err := s.GenerateIEAgAgRulesFromRuleS2SWithReader(ctx, reader, *rule)
 			if err != nil {
-				klog.Errorf("❌ FALLBACK_CLEANUP: Failed to generate expected rules for RuleS2S %s: %v", id.Key(), err)
-				// Continue with other RuleS2S - don't fail entire operation
 				continue
 			}
-
-			klog.Infof("🔍 FALLBACK_CLEANUP: Generated %d expected IEAgAgRules for RuleS2S %s", len(expectedRules), id.Key())
 
 			// Check which expected rules actually exist in database
 			for _, expectedRule := range expectedRules {
@@ -456,21 +350,15 @@ func (s *RuleS2SResourceService) DeleteRuleS2SByIDs(ctx context.Context, ids []m
 						klog.Infof("  📋 FALLBACK_CLEANUP: Expected IEAgAgRule %s not found, skipping", expectedRule.Key())
 						continue
 					}
-					klog.Errorf("❌ FALLBACK_CLEANUP: Error checking IEAgAgRule %s: %v", expectedRule.Key(), err)
 					continue
 				}
 
 				if existingRule != nil {
 					referencedIEAgAgRules = append(referencedIEAgAgRules, expectedRule.ResourceIdentifier)
-					klog.Infof("✅ FALLBACK_CLEANUP: Found existing IEAgAgRule %s for cleanup", expectedRule.Key())
 				}
 			}
-
-			klog.Infof("🎯 FALLBACK_CLEANUP: RuleS2S %s fallback found %d existing IEAgAgRules for cleanup", id.Key(), len(expectedRules))
 		}
 	}
-
-	klog.Infof("🎯 RULES2S_DELETE: Found %d IEAgAgRules referenced by RuleS2S being deleted", len(referencedIEAgAgRules))
 
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
@@ -491,31 +379,12 @@ func (s *RuleS2SResourceService) DeleteRuleS2SByIDs(ctx context.Context, ids []m
 		return errors.Wrap(err, "failed to commit transaction")
 	}
 
-	klog.Infof("✅ RULES2S_DELETE: Successfully deleted %d RuleS2S", len(ids))
-
-	// Step 2: 🎯 CRITICAL FIX: Targeted cleanup for ONLY the affected IEAgAgRules
-	// This prevents the massive DELETE operation bug by only affecting rules that were
-	// actually generated by the deleted RuleS2S
 	if len(referencedIEAgAgRules) > 0 {
-		klog.Infof("🔄 RULES2S_DELETE: Triggering targeted cleanup for %d affected IEAgAgRules", len(referencedIEAgAgRules))
-
-		// 🔍 DEBUG: Log each referenced IEAgAgRule before cleanup
-		for i, ruleID := range referencedIEAgAgRules {
-			klog.Infof("  📋 RULES2S_DELETE[%d]: Referenced IEAgAgRule: %s", i+1, ruleID.Key())
-		}
-
-		// Use targeted cleanup that only affects specific referenced rules
 		reason := fmt.Sprintf("rules2s-deletion-cleanup-%d-rules", len(ids))
-		klog.Infof("🚀 RULES2S_DELETE: CALLING RecalculateTargetedIEAgAgRules with reason: %s", reason)
-
 		if err := s.RecalculateTargetedIEAgAgRules(ctx, referencedIEAgAgRules, reason); err != nil {
 			klog.Errorf("⚠️ RULES2S_DELETE: Targeted cleanup failed after deletion: %v", err)
 			// Don't fail the deletion for recalculation errors, just log them
-		} else {
-			klog.Infof("✅ RULES2S_DELETE: Targeted cleanup completed successfully")
 		}
-	} else {
-		klog.Infof("✅ RULES2S_DELETE: No IEAgAgRules referenced by deleted RuleS2S, no cleanup needed")
 	}
 
 	return nil
@@ -601,18 +470,11 @@ func (s *RuleS2SResourceService) SyncIEAgAgRules(ctx context.Context, rules []mo
 	klog.Infof("🔄 SYNC_CONDITION_DEBUG: Processing conditions for %d IEAgAgRules, conditionManager nil? %v", len(rules), s.conditionManager == nil)
 	if s.conditionManager != nil {
 		for i := range rules {
-			klog.Infof("🔄 SYNC_CONDITION_DEBUG: Processing conditions for IEAgAgRule %s/%s", rules[i].Namespace, rules[i].Name)
-			klog.Infof("🔄 SYNC_CONDITION_DEBUG: Rule %s has %d conditions before: %v", rules[i].Key(), len(rules[i].Meta.Conditions), rules[i].Meta.Conditions)
-
 			if err := s.conditionManager.ProcessIEAgAgRuleConditions(ctx, &rules[i]); err != nil {
 				klog.Errorf("❌ SYNC_CONDITION_DEBUG: Failed to process IEAgAgRule conditions for %s/%s: %v",
 					rules[i].Namespace, rules[i].Name, err)
 				// Don't fail the operation if condition processing fails
-			} else {
-				klog.Infof("✅ SYNC_CONDITION_DEBUG: Successfully processed conditions for %s", rules[i].Key())
-				klog.Infof("🔄 SYNC_CONDITION_DEBUG: Rule %s now has %d conditions after: %v", rules[i].Key(), len(rules[i].Meta.Conditions), rules[i].Meta.Conditions)
 			}
-			// Note: ProcessIEAgAgRuleConditions already saves the conditions internally
 		}
 	} else {
 		klog.Warningf("⚠️ SYNC_CONDITION_DEBUG: conditionManager is NIL in SyncIEAgAgRules - no conditions will be processed for %d IEAgAgRules", len(rules))
@@ -623,9 +485,6 @@ func (s *RuleS2SResourceService) SyncIEAgAgRules(ctx context.Context, rules []mo
 
 // DeleteIEAgAgRulesByIDs deletes IEAgAgRules by IDs WITH external sync
 func (s *RuleS2SResourceService) DeleteIEAgAgRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier) error {
-	klog.Infof("🗑️ IEAGAG_DELETE: Starting deletion of %d IEAgAgRules with external sync", len(ids))
-
-	// CRITICAL FIX: First get the rules to delete for external sync BEFORE deletion
 	reader, err := s.registry.Reader(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get reader for external sync preparation")
@@ -640,21 +499,17 @@ func (s *RuleS2SResourceService) DeleteIEAgAgRulesByIDs(ctx context.Context, ids
 			continue // Continue with other rules
 		}
 		rulesToDelete = append(rulesToDelete, *rule)
-		klog.Infof("  📋 IEAGAG_DELETE: Prepared rule for deletion: %s", rule.SelfRef.Key())
 	}
 
-	// 🔧 SERIALIZATION_FIX: Use WriterForDeletes to reduce serialization conflicts during concurrent delete operations
 	var writer ports.Writer
 	if registryWithDeletes, ok := s.registry.(interface {
 		WriterForDeletes(context.Context) (ports.Writer, error)
 	}); ok {
-		klog.V(2).Infof("🔧 SERIALIZATION_FIX: Using WriterForDeletes with ReadCommitted isolation for %d rules", len(ids))
 		writer, err = registryWithDeletes.WriterForDeletes(ctx)
 		if err != nil {
 			return errors.Wrap(err, "failed to get delete writer with ReadCommitted isolation")
 		}
 	} else {
-		klog.V(2).Infof("🔧 SERIALIZATION_FIX: WriterForDeletes not available, using standard writer for %d rules", len(ids))
 		writer, err = s.registry.Writer(ctx)
 		if err != nil {
 			return errors.Wrap(err, "failed to get writer")
@@ -666,8 +521,6 @@ func (s *RuleS2SResourceService) DeleteIEAgAgRulesByIDs(ctx context.Context, ids
 		}
 	}()
 
-	// Delete from backend
-	klog.Infof("🗄️ IEAGAG_DELETE: Deleting %d rules from backend", len(ids))
 	if err = writer.DeleteIEAgAgRulesByIDs(ctx, ids); err != nil {
 		return errors.Wrap(err, "failed to delete IEAgAgRules from backend")
 	}
@@ -676,22 +529,17 @@ func (s *RuleS2SResourceService) DeleteIEAgAgRulesByIDs(ctx context.Context, ids
 		return errors.Wrap(err, "failed to commit backend deletion transaction")
 	}
 
-	// 🔄 CRITICAL FIX: Sync deletions to external systems (SGROUP)
-	klog.Infof("🔄 IEAGAG_DELETE: Syncing deletion of %d rules to external systems", len(rulesToDelete))
 	if s.syncManager != nil {
 		for _, rule := range rulesToDelete {
 			if syncErr := s.syncManager.SyncEntity(ctx, &rule, types.SyncOperationDelete); syncErr != nil {
 				klog.Errorf("⚠️ IEAGAG_DELETE: Failed to sync deletion of rule %s to external systems: %v", rule.SelfRef.Key(), syncErr)
 				// Don't fail the entire deletion for external sync errors, but log them
-			} else {
-				klog.Infof("✅ IEAGAG_DELETE: Successfully synced deletion of rule %s to external systems", rule.SelfRef.Key())
 			}
 		}
 	} else {
 		klog.Warningf("⚠️ IEAGAG_DELETE: syncManager is nil - external sync SKIPPED for %d deleted rules", len(rulesToDelete))
 	}
 
-	klog.Infof("✅ IEAGAG_DELETE: Completed deletion of %d IEAgAgRules (backend + external sync)", len(ids))
 	return nil
 }
 
@@ -742,9 +590,8 @@ func (s *RuleS2SResourceService) GenerateIEAgAgRulesFromRuleS2SWithReader(ctx co
 
 	allPorts := s.extractPortsFromService(*portsSource)
 	var generatedRules []models.IEAgAgRule
-	for _, localAG := range localService.AddressGroups {
-		for _, targetAG := range targetService.AddressGroups {
-			// Group by protocol
+	for _, localAG := range localService.GetAggregatedAddressGroups() {
+		for _, targetAG := range targetService.GetAggregatedAddressGroups() {
 			for _, protocol := range []models.TransportProtocol{models.TCP, models.UDP} {
 				var protocolPorts []models.IngressPort
 				for _, port := range allPorts {
@@ -762,14 +609,14 @@ func (s *RuleS2SResourceService) GenerateIEAgAgRulesFromRuleS2SWithReader(ctx co
 				ieAgAgRule := models.IEAgAgRule{
 					SelfRef: models.SelfRef{
 						ResourceIdentifier: models.ResourceIdentifier{
-							Name:      s.generateRuleNameForRuleS2S(ruleS2S, localAG, targetAG, protocol),
+							Name:      s.generateRuleNameForRuleS2S(ruleS2S, localAG.Ref, targetAG.Ref, protocol),
 							Namespace: ruleS2S.Namespace,
 						},
 					},
 					Traffic:           ruleS2S.Traffic,
 					Transport:         protocol, // Set the transport protocol
-					AddressGroupLocal: localAG,
-					AddressGroup:      targetAG,
+					AddressGroupLocal: localAG.Ref,
+					AddressGroup:      targetAG.Ref,
 					Ports:             s.convertIngressPortsToPortSpecs(protocolPorts),
 					Action:            models.ActionAccept, // Default action for generated rules
 					Logs:              false,               // Logs disabled by default
@@ -782,7 +629,6 @@ func (s *RuleS2SResourceService) GenerateIEAgAgRulesFromRuleS2SWithReader(ctx co
 		}
 	}
 
-	log.Printf("🔨 GenerateIEAgAgRulesFromRuleS2S: Generated %d IEAgAgRules for RuleS2S %s", len(generatedRules), ruleS2S.Key())
 	return generatedRules, nil
 }
 
@@ -844,15 +690,8 @@ func (s *RuleS2SResourceService) UpdateIEAgAgRulesForRuleS2S(ctx context.Context
 
 // UpdateIEAgAgRulesForRuleS2SWithReaderAndExclusions updates IEAgAgRules using existing reader with exclusions
 func (s *RuleS2SResourceService) UpdateIEAgAgRulesForRuleS2SWithReaderAndExclusions(ctx context.Context, writer ports.Writer, reader ports.Reader, rules []models.RuleS2S, syncOp models.SyncOp, excludeRuleIDs []models.ResourceIdentifier) error {
-	log.Printf("🔄 UpdateIEAgAgRulesForRuleS2S: Processing %d RuleS2S for operation %s (excluding %d rules)", len(rules), syncOp, len(excludeRuleIDs))
-
-	// Track affected services for optimization
 	affectedServices := make(map[string]models.ResourceIdentifier)
-
-	// Process each RuleS2S
 	for _, rule := range rules {
-		log.Printf("🔍 UpdateIEAgAgRulesForRuleS2S: Processing RuleS2S %s", rule.Key())
-
 		localServiceID := models.ResourceIdentifier{
 			Name:      rule.ServiceLocalRef.Name,
 			Namespace: rule.ServiceLocalRef.Namespace,
@@ -883,11 +722,7 @@ func (s *RuleS2SResourceService) UpdateIEAgAgRulesForRuleS2SWithReaderAndExclusi
 // UpdateIEAgAgRulesForRuleS2SWithReader updates IEAgAgRules using existing reader
 func (s *RuleS2SResourceService) UpdateIEAgAgRulesForRuleS2SWithReader(ctx context.Context, writer ports.Writer, reader ports.Reader, rules []models.RuleS2S, syncOp models.SyncOp) error {
 	affectedServices := make(map[string]models.ResourceIdentifier)
-
-	// Process each RuleS2S
 	for _, rule := range rules {
-		log.Printf("🔍 UpdateIEAgAgRulesForRuleS2S: Processing RuleS2S %s", rule.Key())
-
 		localServiceID := models.ResourceIdentifier{
 			Name:      rule.ServiceLocalRef.Name,
 			Namespace: rule.ServiceLocalRef.Namespace,
@@ -917,7 +752,6 @@ func (s *RuleS2SResourceService) UpdateIEAgAgRulesForRuleS2SWithReader(ctx conte
 // UpdateIEAgAgRulesForAffectedServicesWithExclusions updates IEAgAgRules for services affected by changes with exclusions
 func (s *RuleS2SResourceService) UpdateIEAgAgRulesForAffectedServicesWithExclusions(ctx context.Context, writer ports.Writer, reader ports.Reader, affectedServices map[string]models.ResourceIdentifier, syncOp models.SyncOp, excludeRuleIDs []models.ResourceIdentifier) error {
 	var allAffectedRules []models.RuleS2S
-
 	for _, serviceID := range affectedServices {
 		rules, err := s.findAllRelatedRuleS2S(ctx, reader, serviceID)
 		if err != nil {
@@ -1169,10 +1003,10 @@ func (s *RuleS2SResourceService) RegenerateIEAgAgRulesForService(ctx context.Con
 
 	// 2. Find rules via aggregation group relationships
 	aggregationRuleCount := 0
-	for _, ag := range changedService.AddressGroups {
-		rules, err := s.findRuleS2SByAddressGroupInteraction(ctx, reader, ag)
+	for _, ag := range changedService.GetAggregatedAddressGroups() {
+		rules, err := s.findRuleS2SByAddressGroupInteraction(ctx, reader, ag.Ref)
 		if err != nil {
-			log.Printf("❌ Error finding rules for AddressGroup %s: %v", ag.Name, err)
+			log.Printf("❌ Error finding rules for AddressGroup %s: %v", ag.Ref.Name, err)
 			continue
 		}
 		for _, rule := range rules {
@@ -1194,7 +1028,7 @@ func (s *RuleS2SResourceService) RegenerateIEAgAgRulesForService(ctx context.Con
 		return nil
 	}
 
-	reason := fmt.Sprintf("service %s changed (AddressGroups: %d)", serviceID.Key(), len(changedService.AddressGroups))
+	reason := fmt.Sprintf("service %s changed (AddressGroups: %d)", serviceID.Key(), len(changedService.GetAggregatedAddressGroups()))
 	return s.RecalculateIEAgAgRulesForAffectedRuleS2S(ctx, affectedRules, reason)
 }
 
@@ -1323,12 +1157,12 @@ func (s *RuleS2SResourceService) NotifyServiceAddressGroupsChanged(ctx context.C
 	// Log current service state for debugging
 	service, serviceErr := reader.GetServiceByID(ctx, serviceID)
 	if serviceErr == nil {
-		agRefs := make([]string, len(service.AddressGroups))
-		for i, agRef := range service.AddressGroups {
-			agRefs[i] = fmt.Sprintf("%s/%s", agRef.Namespace, agRef.Name)
+		agRefs := make([]string, len(service.GetAggregatedAddressGroups()))
+		for i, agRef := range service.GetAggregatedAddressGroups() {
+			agRefs[i] = fmt.Sprintf("%s/%s", agRef.Ref.Namespace, agRef.Ref.Name)
 		}
 		log.Printf("🔍 SERVICE_CURRENT_STATE: Service %s currently has %d AddressGroups: [%s]",
-			service.Key(), len(service.AddressGroups), strings.Join(agRefs, ", "))
+			service.Key(), len(service.GetAggregatedAddressGroups()), strings.Join(agRefs, ", "))
 	} else {
 		log.Printf("❌ SERVICE_LOOKUP_ERROR: Failed to get current state of Service %s: %v", serviceID.Key(), serviceErr)
 	}
@@ -1619,35 +1453,17 @@ func (s *RuleS2SResourceService) updateIEAgAgRulesForRuleS2SWithReader(ctx conte
 	return nil
 }
 
-// generateAggregatedIEAgAgRules generates aggregated IEAgAgRules from multiple RuleS2S
-// 🎯 CROSS-RULES2S AGGREGATION ENGINE (Phase 1 Implementation) - COMPLETE REWRITE
-// This replaces the old per-RuleS2S approach with proper cross-RuleS2S aggregation
 func (s *RuleS2SResourceService) generateAggregatedIEAgAgRules(ctx context.Context, reader ports.Reader, rules []models.RuleS2S, excludeRuleIDs ...models.ResourceIdentifier) (map[string]bool, []models.IEAgAgRule, error) {
-
-	// Create exclusion map for fast lookup
 	excludeMap := make(map[string]bool)
 	for _, id := range excludeRuleIDs {
 		excludeMap[id.Key()] = true
-		klog.Infof("🚫 EXCLUSION_FILTER: Excluding RuleS2S %s from aggregation", id.Key())
-	}
-
-	// Phase 1: Process unique AG combinations across ALL RuleS2S, not per individual rule
-	type ruleGroupMetadata struct {
-		traffic   models.Traffic
-		localAG   models.AddressGroupRef
-		targetAG  models.AddressGroupRef
-		protocol  models.TransportProtocol
-		namespace string
-		trace     bool
 	}
 
 	expectedRules := make(map[string]bool)
 	var newRules []models.IEAgAgRule
 	processedCombinations := make(map[string]bool) // Track processed AG+Protocol combinations
 
-	// Phase 2: For each rule, find all contributing RuleS2S and aggregate
 	for _, currentRule := range rules {
-
 		if excludeMap[currentRule.ResourceIdentifier.Key()] {
 			continue
 		}
@@ -1656,15 +1472,13 @@ func (s *RuleS2SResourceService) generateAggregatedIEAgAgRules(ctx context.Conte
 			continue
 		}
 
-		// Get services for current rule (using same reader session for consistency)
 		localService, targetService, err := s.getServicesForRuleWithReader(ctx, reader, &currentRule)
 		if err != nil {
 			continue
 		}
 
-		// Generate IEAgAg rules for each AG combination with cross-RuleS2S aggregation
-		for _, localAG := range localService.AddressGroups {
-			for _, targetAG := range targetService.AddressGroups {
+		for _, localAG := range localService.GetAggregatedAddressGroups() {
+			for _, targetAG := range targetService.GetAggregatedAddressGroups() {
 				var portsSource *models.Service
 				if currentRule.Traffic == models.INGRESS {
 					portsSource = localService
@@ -1683,8 +1497,8 @@ func (s *RuleS2SResourceService) generateAggregatedIEAgAgRules(ctx context.Conte
 					// Create unique combination key
 					combinationKey := fmt.Sprintf("%s|%s|%s|%s",
 						currentRule.Traffic,
-						s.addressGroupRefKey(localAG),
-						s.addressGroupRefKey(targetAG),
+						s.addressGroupRefKey(localAG.Ref),
+						s.addressGroupRefKey(targetAG.Ref),
 						protocol)
 
 					// Skip if we already processed this combination
@@ -1707,7 +1521,7 @@ func (s *RuleS2SResourceService) generateAggregatedIEAgAgRules(ctx context.Conte
 					aggregatedTrace := s.aggregateTraceValue(ruleS2SList)
 
 					if len(aggregatedPorts) == 0 {
-						ruleName := s.generateRuleName(string(currentRule.Traffic), localAG.Name, targetAG.Name, string(protocol))
+						ruleName := s.generateRuleName(string(currentRule.Traffic), localAG.Ref.Name, targetAG.Ref.Name, string(protocol))
 						err := s.cleanupOrphanedIEAgAgRule(ctx, reader, ruleName, currentRule.Namespace, combinationKey)
 						if err != nil {
 							klog.Errorf("    ❌ CROSS_AGGREGATION: Failed to cleanup orphaned rule %s: %v", ruleName, err)
@@ -1715,15 +1529,13 @@ func (s *RuleS2SResourceService) generateAggregatedIEAgAgRules(ctx context.Conte
 						continue
 					}
 
-					ruleName := s.generateRuleName(string(currentRule.Traffic), localAG.Name, targetAG.Name, string(protocol))
+					ruleName := s.generateRuleName(string(currentRule.Traffic), localAG.Ref.Name, targetAG.Ref.Name, string(protocol))
 
 					var ruleNamespace string
 					if currentRule.Traffic == models.INGRESS {
-						// For ingress, rule goes in the local AG namespace (receiver)
-						ruleNamespace = localAG.Namespace
+						ruleNamespace = localAG.Ref.Namespace
 					} else {
-						// For egress, rule goes in the target AG namespace (receiver)
-						ruleNamespace = targetAG.Namespace
+						ruleNamespace = targetAG.Ref.Namespace
 					}
 
 					ieRule := models.IEAgAgRule{
@@ -1735,8 +1547,8 @@ func (s *RuleS2SResourceService) generateAggregatedIEAgAgRules(ctx context.Conte
 						},
 						Transport:         protocol,
 						Traffic:           currentRule.Traffic,
-						AddressGroupLocal: localAG,
-						AddressGroup:      targetAG,
+						AddressGroupLocal: localAG.Ref,
+						AddressGroup:      targetAG.Ref,
 						Ports: []models.PortSpec{
 							{
 								Destination: strings.Join(aggregatedPorts, ","), // Single aggregated port string
@@ -1758,14 +1570,7 @@ func (s *RuleS2SResourceService) generateAggregatedIEAgAgRules(ctx context.Conte
 	return expectedRules, newRules, nil
 }
 
-// Helper methods
-
-// cleanupOrphanedIEAgAgRule deletes an existing IEAgAg rule when aggregation results in empty ports
-// This implements the reference controller cleanup logic from lines 892-925
 func (s *RuleS2SResourceService) cleanupOrphanedIEAgAgRule(ctx context.Context, reader ports.Reader, ruleName, namespace string, combinationKey string) error {
-	klog.Infof("🧹 CLEANUP: Checking for orphaned IEAgAg rule %s/%s (combination: %s)", namespace, ruleName, combinationKey)
-
-	// Check if rule exists
 	ruleID := models.ResourceIdentifier{
 		Name:      ruleName,
 		Namespace: namespace,
@@ -1774,7 +1579,6 @@ func (s *RuleS2SResourceService) cleanupOrphanedIEAgAgRule(ctx context.Context, 
 	existingRule, err := reader.GetIEAgAgRuleByID(ctx, ruleID)
 	if err != nil {
 		if errors.Is(err, ports.ErrNotFound) {
-			klog.Infof("  ✅ CLEANUP: No existing rule %s/%s to clean up", namespace, ruleName)
 			return nil // Rule doesn't exist, nothing to clean up
 		}
 		return errors.Wrapf(err, "failed to check if rule %s/%s exists", namespace, ruleName)
@@ -1791,28 +1595,19 @@ func (s *RuleS2SResourceService) cleanupOrphanedIEAgAgRule(ctx context.Context, 
 		}
 	}()
 
-	// Delete the orphaned rule
 	err = writer.DeleteIEAgAgRulesByIDs(ctx, []models.ResourceIdentifier{ruleID})
 	if err != nil {
-		klog.Errorf("  ❌ CLEANUP: Failed to delete orphaned rule %s/%s: %v", namespace, ruleName, err)
 		return errors.Wrapf(err, "failed to delete orphaned rule %s/%s", namespace, ruleName)
 	}
 
 	// Commit the deletion
 	if err = writer.Commit(); err != nil {
-		klog.Errorf("  ❌ CLEANUP: Failed to commit deletion of rule %s/%s: %v", namespace, ruleName, err)
 		return errors.Wrapf(err, "failed to commit deletion of rule %s/%s", namespace, ruleName)
 	}
 
-	klog.Infof("  ✅ CLEANUP: Successfully deleted orphaned IEAgAg rule %s/%s", namespace, ruleName)
-
-	// Sync deletion to external systems (like SGroups)
 	if s.syncManager != nil {
-		klog.Infof("  🔄 CLEANUP: Syncing deletion of orphaned rule %s/%s to external systems", namespace, ruleName)
 		err = s.syncManager.SyncEntity(ctx, existingRule, types.SyncOperationDelete)
 		if err != nil {
-			klog.Errorf("  ⚠️ CLEANUP: Failed to sync deletion to external systems for %s/%s: %v", namespace, ruleName, err)
-			// Don't fail the cleanup for sync errors, just log them
 		}
 	}
 
@@ -1843,9 +1638,6 @@ func (s *RuleS2SResourceService) RecalculateAllAffectedIEAgAgRules(ctx context.C
 		return errors.Wrap(err, "failed to list existing IEAgAg rules")
 	}
 
-	klog.Infof("  📊 UNIVERSAL_RECALC: Found %d existing IEAgAg rules to evaluate", len(existingRules))
-
-	// Phase 2: Get ALL RuleS2S for recalculation
 	var allRuleS2S []models.RuleS2S
 	err = reader.ListRuleS2S(ctx, func(rule models.RuleS2S) error {
 		allRuleS2S = append(allRuleS2S, rule)
@@ -1855,23 +1647,13 @@ func (s *RuleS2SResourceService) RecalculateAllAffectedIEAgAgRules(ctx context.C
 		return errors.Wrap(err, "failed to list all RuleS2S")
 	}
 
-	klog.Infof("  📋 UNIVERSAL_RECALC: Found %d total RuleS2S for aggregation calculations", len(allRuleS2S))
-
-	// Phase 3: Generate fresh aggregated rules using existing cross-RuleS2S engine
-	// Pass ALL RuleS2S to the aggregation engine for proper cross-rule aggregation
 	_, freshRules, err := s.generateAggregatedIEAgAgRules(ctx, reader, allRuleS2S)
 	if err != nil {
 		return errors.Wrap(err, "failed to generate fresh aggregated IEAgAg rules")
 	}
 
-	klog.Infof("  🆕 UNIVERSAL_RECALC: Generated %d fresh aggregated rules", len(freshRules))
-
-	// Phase 4: Compare existing vs fresh rules and determine operations
 	operations := s.calculateRuleOperations(existingRules, freshRules)
-	klog.Infof("  📈 UNIVERSAL_RECALC: Operations needed - Create: %d, Update: %d, Delete: %d",
-		len(operations.toCreate), len(operations.toUpdate), len(operations.toDelete))
 
-	// Phase 5: Execute operations with proper external sync
 	if err := s.executeRuleOperations(ctx, operations, reason); err != nil {
 		return errors.Wrapf(err, "failed to execute rule operations for reason: %s", reason)
 	}
@@ -1894,41 +1676,26 @@ func (s *RuleS2SResourceService) RecalculateIEAgAgRulesForAffectedRuleS2S(ctx co
 	}
 	defer reader.Close()
 
-	// Log affected RuleS2S for debugging
-	for i, rule := range affectedRules {
-		klog.Infof("  📄 SCOPED_RECALC: Affected RuleS2S[%d]: %s (traffic: %s)", i, rule.Key(), rule.Traffic)
-	}
-
 	var existingRules []models.IEAgAgRule
 	affectedServices := make(map[string]bool)
 
-	// Collect all services involved in affected RuleS2S
 	for _, rule := range affectedRules {
-		// Get the services for this RuleS2S to find potentially affected IEAgAgRules
 		localService, targetService, err := s.getServicesForRuleWithReader(ctx, reader, &rule)
 		if err != nil {
 			klog.Errorf("  ⚠️ SCOPED_RECALC: Failed to get services for affected RuleS2S %s: %v", rule.Key(), err)
 			continue
 		}
 
-		// Track all services involved (for finding related IEAgAgRules)
 		affectedServices[localService.Key()] = true
 		affectedServices[targetService.Key()] = true
-
-		klog.V(4).Infof("  📋 SCOPED_RECALC: Affected RuleS2S %s involves services %s and %s",
-			rule.Key(), localService.Key(), targetService.Key())
 	}
 
-	// Find existing IEAgAgRules that involve any of the affected services
-	// This captures rules that might need to be updated or deleted based on service changes
 	err = reader.ListIEAgAgRules(ctx, func(rule models.IEAgAgRule) error {
-		// Check if this IEAgAgRule involves any affected service (via AddressGroups)
 		for serviceKey := range affectedServices {
 			serviceNamespace := strings.Split(serviceKey, "/")[0]
 			if rule.AddressGroupLocal.Namespace == serviceNamespace ||
 				rule.AddressGroup.Namespace == serviceNamespace {
 				existingRules = append(existingRules, rule)
-				klog.V(4).Infof("  📊 SCOPED_RECALC: Including existing IEAgAg rule %s (involves affected service namespace %s)", rule.Key(), serviceNamespace)
 				break
 			}
 		}
@@ -1938,7 +1705,6 @@ func (s *RuleS2SResourceService) RecalculateIEAgAgRulesForAffectedRuleS2S(ctx co
 		return errors.Wrap(err, "failed to list existing IEAgAg rules for affected services")
 	}
 
-	// Phase 2: Get ALL RuleS2S for cross-aggregation (still need all for proper aggregation)
 	var allRuleS2S []models.RuleS2S
 	err = reader.ListRuleS2S(ctx, func(rule models.RuleS2S) error {
 		allRuleS2S = append(allRuleS2S, rule)
@@ -1948,19 +1714,12 @@ func (s *RuleS2SResourceService) RecalculateIEAgAgRulesForAffectedRuleS2S(ctx co
 		return errors.Wrap(err, "failed to list all RuleS2S for cross-aggregation")
 	}
 
-	// Phase 3: Generate fresh aggregated rules using existing cross-RuleS2S engine
-	// We still need ALL RuleS2S for proper cross-rule aggregation accuracy
 	_, freshRules, err := s.generateAggregatedIEAgAgRules(ctx, reader, allRuleS2S)
 	if err != nil {
 		return errors.Wrap(err, "failed to generate fresh aggregated IEAgAg rules for scoped recalculation")
 	}
 
-	// Phase 5: Compare scoped existing vs fresh rules and determine operations
 	operations := s.calculateRuleOperations(existingRules, freshRules)
-	klog.Infof("  📈 SCOPED_RECALC: Operations needed - Create: %d, Update: %d, Delete: %d",
-		len(operations.toCreate), len(operations.toUpdate), len(operations.toDelete))
-
-	// Phase 6: Execute operations with proper external sync
 	if err := s.executeRuleOperations(ctx, operations, reason); err != nil {
 		return errors.Wrapf(err, "failed to execute scoped rule operations for reason: %s", reason)
 	}
@@ -1975,17 +1734,12 @@ func (s *RuleS2SResourceService) RecalculateTargetedIEAgAgRules(ctx context.Cont
 		return nil
 	}
 
-	klog.Infof("🎯 TARGETED_RECALC: Starting targeted IEAgAg rule recalculation for %d specific rules (reason: %s)", len(targetedIEAgAgRuleIDs), reason)
-
-	startTime := time.Now()
-
 	reader, err := s.registry.Reader(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get reader for targeted recalculation")
 	}
 	defer reader.Close()
 
-	// Phase 1: Get ONLY the specific existing IEAgAg rules that were referenced by deleted RuleS2S
 	var existingTargetedRules []models.IEAgAgRule
 	for _, ruleID := range targetedIEAgAgRuleIDs {
 		existingRule, err := reader.GetIEAgAgRuleByID(ctx, ruleID)
@@ -1997,12 +1751,8 @@ func (s *RuleS2SResourceService) RecalculateTargetedIEAgAgRules(ctx context.Cont
 			return errors.Wrapf(err, "failed to get existing IEAgAgRule %s", ruleID.Key())
 		}
 		existingTargetedRules = append(existingTargetedRules, *existingRule)
-		klog.Infof("  📊 TARGETED_RECALC: Including existing IEAgAg rule %s for evaluation", ruleID.Key())
 	}
 
-	klog.Infof("  📊 TARGETED_RECALC: Found %d existing targeted IEAgAg rules to evaluate", len(existingTargetedRules))
-
-	// Phase 2: Get ALL remaining RuleS2S for fresh calculations (excludes deleted ones)
 	var allRemainingRuleS2S []models.RuleS2S
 	err = reader.ListRuleS2S(ctx, func(rule models.RuleS2S) error {
 		allRemainingRuleS2S = append(allRemainingRuleS2S, rule)
@@ -2012,22 +1762,14 @@ func (s *RuleS2SResourceService) RecalculateTargetedIEAgAgRules(ctx context.Cont
 		return errors.Wrap(err, "failed to list remaining RuleS2S")
 	}
 
-	klog.Infof("  📋 TARGETED_RECALC: Found %d remaining RuleS2S for fresh calculations", len(allRemainingRuleS2S))
-
-	// Phase 3: Generate fresh aggregated rules using remaining RuleS2S
 	_, allFreshRules, err := s.generateAggregatedIEAgAgRules(ctx, reader, allRemainingRuleS2S)
 	if err != nil {
 		return errors.Wrap(err, "failed to generate fresh aggregated IEAgAg rules for targeted recalculation")
 	}
 
-	klog.Infof("  🆕 TARGETED_RECALC: Generated %d fresh aggregated rules from remaining RuleS2S", len(allFreshRules))
-
-	// Phase 4: Filter fresh rules to only include those that match our targeted rule patterns
-	// We need to check which of the fresh rules correspond to the same 4-tuple patterns as our targeted rules
 	freshTargetedRules := make([]models.IEAgAgRule, 0)
 	targetedPatterns := make(map[string]bool)
 
-	// Create pattern map from existing targeted rules
 	for _, existingRule := range existingTargetedRules {
 		pattern := fmt.Sprintf("%s:%s:%s:%s",
 			existingRule.Traffic,
@@ -2037,7 +1779,6 @@ func (s *RuleS2SResourceService) RecalculateTargetedIEAgAgRules(ctx context.Cont
 		targetedPatterns[pattern] = true
 	}
 
-	// Filter fresh rules to only those matching targeted patterns
 	for _, freshRule := range allFreshRules {
 		pattern := fmt.Sprintf("%s:%s:%s:%s",
 			freshRule.Traffic,
@@ -2046,25 +1787,13 @@ func (s *RuleS2SResourceService) RecalculateTargetedIEAgAgRules(ctx context.Cont
 			freshRule.Transport)
 		if targetedPatterns[pattern] {
 			freshTargetedRules = append(freshTargetedRules, freshRule)
-			klog.Infof("  🎯 TARGETED_RECALC: Fresh rule %s matches targeted pattern %s", freshRule.Key(), pattern)
 		}
 	}
 
-	klog.Infof("  🎯 TARGETED_RECALC: Filtered to %d fresh rules matching targeted patterns", len(freshTargetedRules))
-
-	// Phase 5: Compare existing targeted vs fresh targeted rules and determine operations
 	operations := s.calculateRuleOperations(existingTargetedRules, freshTargetedRules)
-	klog.Infof("  📈 TARGETED_RECALC: Operations needed - Create: %d, Update: %d, Delete: %d",
-		len(operations.toCreate), len(operations.toUpdate), len(operations.toDelete))
-
-	// Phase 6: Execute operations with proper external sync
 	if err := s.executeRuleOperations(ctx, operations, reason); err != nil {
 		return errors.Wrapf(err, "failed to execute targeted rule operations for reason: %s", reason)
 	}
-
-	duration := time.Since(startTime)
-	klog.Infof("✅ TARGETED_RECALC: Completed targeted recalculation in %v for %d specific IEAgAgRules (reason: %s)",
-		duration, len(targetedIEAgAgRuleIDs), reason)
 
 	return nil
 }
@@ -2100,24 +1829,17 @@ func (s *RuleS2SResourceService) calculateRuleOperations(existing []models.IEAgA
 	// Find rules to create or update
 	for key, freshRule := range freshMap {
 		if existingRule, exists := existingMap[key]; exists {
-			// Rule exists - check if update needed
 			if s.needsUpdate(existingRule, freshRule) {
 				klog.Infof("    🔄 UNIVERSAL_RECALC: Rule %s needs UPDATE (ports changed)", key)
 				operations.toUpdate = append(operations.toUpdate, *freshRule)
-			} else {
-				klog.V(2).Infof("    ✅ UNIVERSAL_RECALC: Rule %s unchanged", key)
 			}
 		} else {
-			// Rule doesn't exist - create it
-			klog.Infof("    🆕 UNIVERSAL_RECALC: Rule %s needs CREATE", key)
 			operations.toCreate = append(operations.toCreate, *freshRule)
 		}
 	}
 
-	// Find rules to delete (exist but not in fresh calculations)
 	for key, existingRule := range existingMap {
 		if _, exists := freshMap[key]; !exists {
-			klog.Infof("    🗑️ UNIVERSAL_RECALC: Rule %s needs DELETE (orphaned)", key)
 			operations.toDelete = append(operations.toDelete, *existingRule)
 		}
 	}
@@ -2292,10 +2014,10 @@ func (s *RuleS2SResourceService) triggerPostCreationIEAgAgRuleGeneration(ctx con
 	}
 
 	log.Printf("🔍 triggerPostCreationIEAgAgRuleGeneration: Service AddressGroup counts - Local: %d, Target: %d",
-		len(localService.AddressGroups), len(targetService.AddressGroups))
+		len(localService.GetAggregatedAddressGroups()), len(targetService.GetAggregatedAddressGroups()))
 
 	// Check if both services have AddressGroups - if yes, we should have generated IEAgAgRules
-	if len(localService.AddressGroups) > 0 && len(targetService.AddressGroups) > 0 {
+	if len(localService.GetAggregatedAddressGroups()) > 0 && len(targetService.GetAggregatedAddressGroups()) > 0 {
 
 		// Notify about both services to ensure complete aggregation
 		if err := s.NotifyServiceAddressGroupsChanged(ctx, localServiceID); err != nil {
@@ -2308,7 +2030,7 @@ func (s *RuleS2SResourceService) triggerPostCreationIEAgAgRuleGeneration(ctx con
 
 	} else {
 		log.Printf("⚠️ triggerPostCreationIEAgAgRuleGeneration: Services don't have sufficient AddressGroups - Local: %d, Target: %d",
-			len(localService.AddressGroups), len(targetService.AddressGroups))
+			len(localService.GetAggregatedAddressGroups()), len(targetService.GetAggregatedAddressGroups()))
 	}
 
 	return nil
@@ -2394,24 +2116,24 @@ func (s *RuleS2SResourceService) servicesHaveSameAddressGroups(
 		service1.Key(), service2.Key())
 
 	// First check lengths
-	if len(service1.AddressGroups) != len(service2.AddressGroups) {
+	if len(service1.GetAggregatedAddressGroups()) != len(service2.GetAggregatedAddressGroups()) {
 		klog.V(2).Infof("  ❌ COMPARE_SERVICES: Different AG counts - %s has %d, %s has %d",
-			service1.Key(), len(service1.AddressGroups),
-			service2.Key(), len(service2.AddressGroups))
+			service1.Key(), len(service1.GetAggregatedAddressGroups()),
+			service2.Key(), len(service2.GetAggregatedAddressGroups()))
 		return false
 	}
 
 	// Create map of AddressGroup keys from service1
 	agMap := make(map[string]bool)
-	for _, ag := range service1.AddressGroups {
-		key := s.addressGroupRefKey(ag)
+	for _, ag := range service1.GetAggregatedAddressGroups() {
+		key := s.addressGroupRefKey(ag.Ref)
 		agMap[key] = true
 		klog.V(2).Infof("  📍 COMPARE_SERVICES: Service1 AddressGroup: %s", key)
 	}
 
 	// Check if all AddressGroups from service2 exist in service1
-	for _, ag := range service2.AddressGroups {
-		key := s.addressGroupRefKey(ag)
+	for _, ag := range service2.GetAggregatedAddressGroups() {
+		key := s.addressGroupRefKey(ag.Ref)
 		klog.V(2).Infof("  📍 COMPARE_SERVICES: Service2 AddressGroup: %s", key)
 		if !agMap[key] {
 			klog.V(2).Infof("  ❌ COMPARE_SERVICES: AddressGroup %s from %s not found in %s",
@@ -2433,26 +2155,11 @@ func (s *RuleS2SResourceService) aggregatePortsWithProtocol(
 	contributingRules []ContributingRule,
 	protocol models.TransportProtocol,
 ) []string {
-	klog.Infof("🔀 PORT_AGGREGATION: Aggregating ports for protocol %s from %d contributing rules (using reference pattern)",
-		protocol, len(contributingRules))
-
-	// Simple deduplication using map[string]bool like reference implementation (lines 793-798)
 	portSet := make(map[string]bool)
-
-	// Process ALL pre-populated ports from ContributingRule.Ports (NO PROTOCOL FILTERING)
-	// Following reference implementation exactly - just aggregate all ports
 	for _, rule := range contributingRules {
-		klog.V(2).Infof("  📦 PORT_AGGREGATION: Processing rule %s with %d pre-populated ports",
-			rule.RuleS2S.Key(), len(rule.Ports))
-
-		// 🚀 REFERENCE MATCH: Aggregate ALL ports without protocol filtering (reference lines 795-798)
 		for _, port := range rule.Ports {
 			portSet[port] = true
-			klog.V(3).Infof("    ➕ PORT_AGGREGATION: Added port %s from rule %s", port, rule.RuleS2S.Key())
 		}
-
-		klog.V(2).Infof("    ✅ PORT_AGGREGATION: Rule %s contributed %d ports",
-			rule.RuleS2S.Key(), len(rule.Ports))
 	}
 
 	// Convert set to sorted slice (same as reference)
@@ -2463,14 +2170,9 @@ func (s *RuleS2SResourceService) aggregatePortsWithProtocol(
 
 	sort.Strings(aggregatedPorts)
 
-	klog.Infof("🎯 PORT_AGGREGATION: Final aggregated ports for protocol %s: %s (%d unique ports)",
-		protocol, strings.Join(aggregatedPorts, ","), len(aggregatedPorts))
-
 	return aggregatedPorts
 }
 
-// checkIfRuleContributes checks if a candidate rule should contribute to the same IEAgAg aggregation
-// Based on reference lines 656-693
 func (s *RuleS2SResourceService) checkIfRuleContributes(
 	ctx context.Context,
 	candidateRule *models.RuleS2S,
@@ -2478,10 +2180,6 @@ func (s *RuleS2SResourceService) checkIfRuleContributes(
 	localService *models.Service,
 	targetService *models.Service,
 ) (bool, []string, error) {
-	klog.Infof("🔍 CHECK_CONTRIBUTION: Checking if rule %s contributes to aggregation with rule %s",
-		candidateRule.Key(), currentRule.Key())
-
-	// Check if traffic direction matches
 	if candidateRule.Traffic != currentRule.Traffic {
 		klog.Infof("  ❌ CHECK_CONTRIBUTION: Traffic mismatch - candidate: %s, current: %s",
 			candidateRule.Traffic, currentRule.Traffic)
@@ -2500,20 +2198,11 @@ func (s *RuleS2SResourceService) checkIfRuleContributes(
 	currentCombinations := s.generateAGCombinations(localService, targetService, currentRule.Traffic)
 	candidateCombinations := s.generateAGCombinations(candidateLocalService, candidateTargetService, candidateRule.Traffic)
 
-	klog.Infof("  🔍 CHECK_CONTRIBUTION: Current rule %s generates %d AG combinations: %v",
-		currentRule.Key(), len(currentCombinations), currentCombinations)
-	klog.Infof("  🔍 CHECK_CONTRIBUTION: Candidate rule %s generates %d AG combinations: %v",
-		candidateRule.Key(), len(candidateCombinations), candidateCombinations)
-
-	// Find overlapping combinations (same traffic direction and same localAG→targetAG pair)
 	hasOverlap := false
-	var overlappingCombination string
 	for _, currentCombo := range currentCombinations {
 		for _, candidateCombo := range candidateCombinations {
 			if currentCombo == candidateCombo {
 				hasOverlap = true
-				overlappingCombination = currentCombo
-				klog.Infof("  ✅ CHECK_CONTRIBUTION: Found overlapping combination: %s", currentCombo)
 				break
 			}
 		}
@@ -2527,25 +2216,13 @@ func (s *RuleS2SResourceService) checkIfRuleContributes(
 		return false, nil, nil
 	}
 
-	klog.Infof("  ✅ CHECK_CONTRIBUTION: Rules share combination '%s' - aggregation possible", overlappingCombination)
-
 	// Extract ports based on traffic direction (same logic as reference)
 	var ports []string
-	// Extract ports based on traffic direction (following reference implementation)
-	// INGRESS: use local service ports (service receiving traffic)
-	// EGRESS: use target service ports (service receiving traffic)
 	if strings.ToLower(string(candidateRule.Traffic)) == "ingress" {
 		ports = s.extractPortStringsFromService(*candidateLocalService)
-		klog.Infof("  📍 DEBUG_PORT_EXTRACTION: INGRESS rule %s - extracting ports from LOCAL service %s: %s",
-			candidateRule.Key(), candidateLocalService.Key(), strings.Join(ports, ","))
 	} else {
 		ports = s.extractPortStringsFromService(*candidateTargetService)
-		klog.Infof("  📍 DEBUG_PORT_EXTRACTION: EGRESS rule %s - extracting ports from TARGET service %s: %s",
-			candidateRule.Key(), candidateTargetService.Key(), strings.Join(ports, ","))
 	}
-
-	klog.Infof("  ✅ CHECK_CONTRIBUTION: Rule %s contributes %d ports: %s",
-		candidateRule.Key(), len(ports), strings.Join(ports, ","))
 
 	return true, ports, nil
 }
@@ -2568,10 +2245,6 @@ func (s *RuleS2SResourceService) getServicesForRuleWithReader(
 	reader ports.Reader,
 	rule *models.RuleS2S,
 ) (*models.Service, *models.Service, error) {
-	// Use provided reader instead of creating new session
-	// This ensures consistent Service.AddressGroups state
-
-	// Get service IDs directly from RuleS2S references (no ServiceAlias lookup needed)
 	localServiceID := models.ResourceIdentifier{
 		Name:      rule.ServiceLocalRef.Name,
 		Namespace: rule.ServiceLocalRef.Namespace,
@@ -2581,7 +2254,6 @@ func (s *RuleS2SResourceService) getServicesForRuleWithReader(
 		return nil, nil, errors.Wrapf(err, "local service %s not found", localServiceID.Key())
 	}
 
-	// Get target service
 	targetServiceID := models.ResourceIdentifier{
 		Name:      rule.ServiceRef.Name,
 		Namespace: rule.ServiceRef.Namespace,
@@ -2591,8 +2263,6 @@ func (s *RuleS2SResourceService) getServicesForRuleWithReader(
 		return nil, nil, errors.Wrapf(err, "target service %s not found", targetServiceID.Key())
 	}
 
-	// 🚀 CRITICAL FIX: Populate AddressGroups from AddressGroupBinding relationships
-	// This was the root cause - services had empty AddressGroups so all appeared identical
 	localService, err = s.populateServiceAddressGroups(ctx, reader, localService)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to populate AddressGroups for local service %s", localServiceID.Key())
@@ -2606,60 +2276,42 @@ func (s *RuleS2SResourceService) getServicesForRuleWithReader(
 	return localService, targetService, nil
 }
 
-// populateServiceAddressGroups populates Service.AddressGroups from AddressGroupBinding relationships
-// 🚀 CRITICAL FIX: This method fixes the Cross-RuleS2S aggregation bug by ensuring services have
-// their AddressGroups field properly populated from AddressGroupBinding relationships
 func (s *RuleS2SResourceService) populateServiceAddressGroups(
 	ctx context.Context,
 	reader ports.Reader,
 	service *models.Service,
 ) (*models.Service, error) {
-	klog.V(2).Infof("🔧 POPULATE_ADDRESSGROUPS: Starting AddressGroup population for service %s", service.Key())
-
-	// Create a copy of the service to avoid modifying the original
 	serviceCopy := *service
-	serviceCopy.AddressGroups = []models.AddressGroupRef{} // Reset to empty slice
-
-	// Find all AddressGroupBindings that reference this service
-	err := reader.ListAddressGroupBindings(ctx, func(binding models.AddressGroupBinding) error {
-		// Check if this binding references our service
-		if binding.ServiceRef.Name == service.Name && binding.ServiceRef.Namespace == service.Namespace {
-			klog.V(2).Infof("  🔗 FOUND_BINDING: %s → AddressGroup %s/%s",
-				binding.Key(), binding.AddressGroupRef.Namespace, binding.AddressGroupRef.Name)
-
-			// Create AddressGroupRef from the binding
-			agRef := models.AddressGroupRef{
-				ObjectReference: v1beta1.ObjectReference{
-					APIVersion: binding.AddressGroupRef.APIVersion,
-					Kind:       binding.AddressGroupRef.Kind,
-					Name:       binding.AddressGroupRef.Name,
-				},
-				Namespace: binding.AddressGroupRef.Namespace,
-			}
-
-			// Add to service's AddressGroups
-			serviceCopy.AddressGroups = append(serviceCopy.AddressGroups, agRef)
-		}
-		return nil
-	}, ports.EmptyScope{})
-
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to list AddressGroupBindings for service %s", service.Key())
-	}
-
-	klog.V(2).Infof("  ✅ POPULATE_ADDRESSGROUPS: Service %s now has %d AddressGroups populated",
-		service.Key(), len(serviceCopy.AddressGroups))
-
-	// Log the AddressGroups for debugging
-	for i, ag := range serviceCopy.AddressGroups {
-		klog.V(2).Infof("    📍 AG[%d]: %s/%s", i, ag.Namespace, ag.Name)
-	}
+	//serviceCopy.XAggregatedAddressGroups = []models.AddressGroupReference{} // Reset aggregated slice
+	//
+	//err := reader.ListAddressGroupBindings(ctx, func(binding models.AddressGroupBinding) error {
+	//	if binding.ServiceRef.Name == service.Name && binding.ServiceRef.Namespace == service.Namespace {
+	//		// Create NamespacedObjectReference for the new aggregated system
+	//		agRef := v1beta1.NamespacedObjectReference{
+	//			ObjectReference: v1beta1.ObjectReference{
+	//				APIVersion: binding.AddressGroupRef.APIVersion,
+	//				Kind:       binding.AddressGroupRef.Kind,
+	//				Name:       binding.AddressGroupRef.Name,
+	//			},
+	//			Namespace: binding.AddressGroupRef.Namespace,
+	//		}
+	//
+	//		// Create AddressGroupReference with binding source
+	//		agReference := models.NewAddressGroupReference(agRef, v1beta1.AddressGroupSourceBinding)
+	//
+	//		// Add to service's XAggregatedAddressGroups
+	//		serviceCopy.XAggregatedAddressGroups = append(serviceCopy.XAggregatedAddressGroups, agReference)
+	//	}
+	//	return nil
+	//}, ports.EmptyScope{})
+	//
+	//if err != nil {
+	//	return nil, errors.Wrapf(err, "failed to list AddressGroupBindings for service %s", service.Key())
+	//}
 
 	return &serviceCopy, nil
 }
 
-// extractPortStringsFromService extracts port strings from a service's ingress ports
-// Based on reference lines 777-786 - returns []string for cross-RuleS2S aggregation
 func (s *RuleS2SResourceService) extractPortStringsFromService(
 	service models.Service,
 ) []string {
@@ -2667,8 +2319,7 @@ func (s *RuleS2SResourceService) extractPortStringsFromService(
 	for _, port := range service.IngressPorts {
 		ports = append(ports, port.Port)
 	}
-	klog.V(2).Infof("  📦 EXTRACT_PORTS: Service %s has %d ingress ports: %s",
-		service.Key(), len(ports), strings.Join(ports, ","))
+
 	return ports
 }
 
@@ -2817,11 +2468,11 @@ func (s *RuleS2SResourceService) ruleContributesToAggregationGroup(ctx context.C
 	}
 
 	// Check if this rule would generate IEAgAg rules for the same AG combinations and protocol
-	for _, localAG := range localService.AddressGroups {
-		for _, targetAG := range targetService.AddressGroups {
+	for _, localAG := range localService.GetAggregatedAddressGroups() {
+		for _, targetAG := range targetService.GetAggregatedAddressGroups() {
 			// Check if this combination matches the aggregation group
-			if s.addressGroupRefMatches(localAG, group.LocalAG) &&
-				s.addressGroupRefMatches(targetAG, group.TargetAG) {
+			if s.addressGroupRefMatches(localAG.Ref, group.LocalAG) &&
+				s.addressGroupRefMatches(targetAG.Ref, group.TargetAG) {
 
 				// Check if the service has ports for the specified protocol
 				hasProtocolPorts := false
@@ -2913,8 +2564,8 @@ func (s *RuleS2SResourceService) extractAggregationGroupsFromRuleS2S(ctx context
 	var groups []AggregationGroup
 
 	// Generate aggregation groups for all AG combinations and protocols
-	for _, localAG := range localService.AddressGroups {
-		for _, targetAG := range targetService.AddressGroups {
+	for _, localAG := range localService.GetAggregatedAddressGroups() {
+		for _, targetAG := range targetService.GetAggregatedAddressGroups() {
 			// Check what protocols this service supports
 			protocolsSupported := make(map[models.TransportProtocol]bool)
 			for _, port := range portsSource.IngressPorts {
@@ -2925,8 +2576,8 @@ func (s *RuleS2SResourceService) extractAggregationGroupsFromRuleS2S(ctx context
 			for protocol := range protocolsSupported {
 				group := AggregationGroup{
 					Traffic:   rule.Traffic,
-					LocalAG:   localAG,
-					TargetAG:  targetAG,
+					LocalAG:   localAG.Ref,
+					TargetAG:  targetAG.Ref,
 					Protocol:  protocol,
 					Namespace: rule.Namespace,
 				}
@@ -3145,7 +2796,7 @@ func (s *RuleS2SResourceService) applyTimingFixConditionsOnly(ctx context.Contex
 // based on understanding the reference implementation's actual aggregation pattern
 
 // generateAGCombinations generates all localAG→targetAG combinations for a rule
-// This matches the reference implementation's nested loop: for localAG, for targetAG
+// This matches the reference implementation's nested loop: for localAG.Ref, for targetAG
 func (s *RuleS2SResourceService) generateAGCombinations(
 	localService, targetService *models.Service,
 	traffic models.Traffic,
@@ -3178,15 +2829,15 @@ func (s *RuleS2SResourceService) generateAGCombinations(
 		protocolsWithPorts)
 
 	// Generate combinations for each localAG x targetAG x protocol
-	// This mirrors reference implementation lines 427-428: for localAG, for targetAG
-	for _, localAG := range localService.AddressGroups {
-		for _, targetAG := range targetService.AddressGroups {
+	// This mirrors reference implementation lines 427-428: for localAG.Ref, for targetAG
+	for _, localAG := range localService.GetAggregatedAddressGroups() {
+		for _, targetAG := range targetService.GetAggregatedAddressGroups() {
 			for protocol := range protocolsWithPorts {
 				// Format: traffic-localAG_namespace/name-targetAG_namespace/name-protocol
 				combination := fmt.Sprintf("%s-%s/%s-%s/%s-%s",
 					traffic,
-					localAG.Namespace, localAG.Name,
-					targetAG.Namespace, targetAG.Name,
+					localAG.Ref.Namespace, localAG.Ref.Name,
+					targetAG.Ref.Namespace, targetAG.Ref.Name,
 					protocol)
 				combinations = append(combinations, combination)
 				klog.V(2).Infof("  🔧 GENERATE_COMBINATIONS: Generated combination: %s", combination)
@@ -3330,25 +2981,19 @@ func (s *RuleS2SResourceService) CleanupIEAgAgRulesForRuleS2S(ctx context.Contex
 			deletedRules := s.findDeletedIEAgAgRules(existingIEAgAgRules, currentIEAgAgRules)
 
 			if len(deletedRules) > 0 {
-				klog.Infof("🗑️ CleanupIEAgAgRulesForRuleS2S: Found %d IEAgAgRules that were deleted, syncing to sgroups", len(deletedRules))
 
 				// Sync each deleted rule to sgroups with DELETE operation
 				for _, deletedRule := range deletedRules {
 					if err := s.syncManager.SyncEntity(ctx, &deletedRule, types.SyncOperationDelete); err != nil {
 						klog.Errorf("❌ CleanupIEAgAgRulesForRuleS2S: Failed to sync deleted rule %s to sgroups: %v", deletedRule.GetSyncKey(), err)
-					} else {
-						klog.Infof("✅ CleanupIEAgAgRulesForRuleS2S: Successfully synced deletion of rule %s to sgroups", deletedRule.GetSyncKey())
 					}
 				}
-			} else {
-				klog.Infof("✅ CleanupIEAgAgRulesForRuleS2S: No IEAgAgRules were deleted during regeneration")
 			}
 		}
 	} else if s.syncManager == nil {
 		klog.Warningf("⚠️ CleanupIEAgAgRulesForRuleS2S: syncManager is nil - external sync SKIPPED")
 	}
 
-	klog.Infof("🏁 CleanupIEAgAgRulesForRuleS2S: Completed aggregation-based cleanup WITH external sync for RuleS2S %s/%s", ruleS2S.Namespace, ruleS2S.Name)
 	return nil
 }
 

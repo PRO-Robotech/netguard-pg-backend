@@ -207,8 +207,7 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 		"hosts/status":                       hoststorage.NewStatusREST(hostStore),
 		"hostbindings/status":                hostbindingstorage.NewStatusREST(hostBindingStore),
 
-		// Дополнительные subresources
-		"services/addressgroups":               svcstorage.NewAddressGroupsREST(bClient),
+		// Additional subresources (REMOVED services/addressgroups - not needed anymore)
 		"services/rules2sdstownref":            svcstorage.NewRuleS2SDstOwnRefREST(bClient),
 		"addressgroupportmappings/accessports": portmappingstorage.NewAccessPortsREST(bClient),
 		"addressgroups/networks":               agstorage.NewNetworksREST(bClient),

@@ -58,8 +58,6 @@ func (s *NetworkBindingResourceService) CreateNetworkBinding(ctx context.Context
 	// Initialize metadata
 	binding.GetMeta().TouchOnCreate()
 
-	// No finalizers needed - we'll force sync immediately after AddressGroup Networks update
-
 	// Create the network binding
 	writer, err := s.repo.Writer(ctx)
 	if err != nil {
@@ -129,13 +127,11 @@ func (s *NetworkBindingResourceService) CreateNetworkBinding(ctx context.Context
 		return fmt.Errorf("failed to update address group networks: %w", err)
 	}
 
-	// FORCE SYNC: Immediately sync AddressGroup with sgroups after Networks update
 	if err := s.forceSyncAddressGroupWithSGroups(ctx, addressGroupRef); err != nil {
 		log.Printf("❌ Failed to force sync AddressGroup %s with sgroups: %v", addressGroupRef.Key(), err)
 		// Don't fail the operation - AddressGroup was updated successfully in database
 	}
 
-	// Sync with external systems
 	return s.syncNetworkBindingWithExternal(ctx, binding, "create")
 }
 
@@ -243,9 +239,6 @@ func (s *NetworkBindingResourceService) UpdateNetworkBinding(ctx context.Context
 
 // DeleteNetworkBinding deletes a NetworkBinding with cleanup logic
 func (s *NetworkBindingResourceService) DeleteNetworkBinding(ctx context.Context, id models.ResourceIdentifier) error {
-	log.Printf("🔥 DEBUG: NetworkBindingResourceService.DeleteNetworkBinding called for %s", id.Key())
-
-	// Check if NetworkBinding exists
 	existing, err := s.getNetworkBindingByID(ctx, id.Key())
 	if err != nil && !errors.Is(err, ports.ErrNotFound) {
 		log.Printf("❌ DEBUG: Failed to get network binding for deletion: %v", err)
@@ -253,39 +246,24 @@ func (s *NetworkBindingResourceService) DeleteNetworkBinding(ctx context.Context
 	}
 	if existing == nil || errors.Is(err, ports.ErrNotFound) {
 		log.Printf("⚠️  DEBUG: Network binding %s doesn't exist - delete is idempotent", id.Key())
-		// Network binding doesn't exist - delete is idempotent, so this is success
 		return nil
 	}
 
-	log.Printf("✅ DEBUG: Found existing network binding %s, proceeding with deletion", existing.Key())
-
-	// Convert ObjectReference to ResourceIdentifier
 	networkRef := models.ResourceIdentifier{Name: existing.NetworkRef.Name, Namespace: existing.Namespace}
 	addressGroupRef := models.ResourceIdentifier{Name: existing.AddressGroupRef.Name, Namespace: existing.Namespace}
 
-	// Remove binding from Network
-	log.Printf("🔧 DEBUG: Removing binding from Network %s", networkRef.Key())
 	if err := s.networkResourceService.RemoveNetworkBinding(ctx, networkRef); err != nil {
-		log.Printf("❌ DEBUG: Failed to remove network binding from Network: %v", err)
 		return fmt.Errorf("failed to remove network binding: %w", err)
 	}
-	log.Printf("✅ DEBUG: Successfully removed binding from Network")
-
 	// Remove Network from AddressGroup
-	log.Printf("🔧 DEBUG: Removing Network %s from AddressGroup %s", networkRef.Key(), addressGroupRef.Key())
 	if err := s.updateAddressGroupNetworks(ctx, addressGroupRef, networkRef, existing, false); err != nil {
 		log.Printf("❌ DEBUG: Failed to remove network from AddressGroup: %v", err)
 		return fmt.Errorf("failed to remove network from address group: %w", err)
 	}
-	log.Printf("✅ DEBUG: Successfully removed Network from AddressGroup")
-
-	// FORCE SYNC: Immediately sync AddressGroup with sgroups after network removal
 	if err := s.forceSyncAddressGroupWithSGroups(ctx, addressGroupRef); err != nil {
 		log.Printf("❌ Failed to force sync AddressGroup %s with sgroups after deletion: %v", addressGroupRef.Key(), err)
 	}
 
-	// Delete the network binding
-	log.Printf("🔧 DEBUG: Getting repository writer for deletion")
 	writer, err := s.repo.Writer(ctx)
 	if err != nil {
 		log.Printf("❌ DEBUG: Failed to get repository writer: %v", err)
@@ -293,28 +271,20 @@ func (s *NetworkBindingResourceService) DeleteNetworkBinding(ctx context.Context
 	}
 	defer writer.Abort()
 
-	log.Printf("🔧 DEBUG: Calling writer.DeleteNetworkBindingsByIDs for %s", id.Key())
 	if err := writer.DeleteNetworkBindingsByIDs(ctx, []models.ResourceIdentifier{id}); err != nil {
 		log.Printf("❌ DEBUG: writer.DeleteNetworkBindingsByIDs failed: %v", err)
 		return fmt.Errorf("failed to delete network binding: %w", err)
 	}
-	log.Printf("✅ DEBUG: writer.DeleteNetworkBindingsByIDs completed successfully")
 
-	log.Printf("🔧 DEBUG: Committing transaction for NetworkBinding deletion")
 	if err := writer.Commit(); err != nil {
-		log.Printf("❌ DEBUG: Failed to commit deletion transaction: %v", err)
 		return fmt.Errorf("failed to commit network binding deletion: %w", err)
 	}
-	log.Printf("✅ DEBUG: Transaction committed successfully")
 
-	// Sync deletion with external systems
-	log.Printf("🔧 DEBUG: Syncing NetworkBinding deletion with external systems")
 	err = s.syncNetworkBindingWithExternal(ctx, existing, "delete")
 	if err != nil {
 		log.Printf("❌ DEBUG: Failed to sync with external systems: %v", err)
 		return err
 	}
-	log.Printf("✅ DEBUG: NetworkBinding deletion completed successfully for %s", id.Key())
 	return nil
 }
 

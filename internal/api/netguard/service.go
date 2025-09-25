@@ -877,11 +877,11 @@ func convertServiceToPB(svc models.Service) *netguardpb.Service {
 		})
 	}
 
-	for _, ag := range svc.AddressGroups {
+	for _, ag := range svc.GetAggregatedAddressGroups() {
 		result.AddressGroups = append(result.AddressGroups, &netguardpb.AddressGroupRef{
 			Identifier: &netguardpb.ResourceIdentifier{
-				Name:      ag.Name,
-				Namespace: ag.Namespace,
+				Name:      ag.Ref.Name,
+				Namespace: ag.Ref.Namespace,
 			},
 		})
 	}

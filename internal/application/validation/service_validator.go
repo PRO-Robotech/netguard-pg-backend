@@ -21,8 +21,8 @@ func (v *ServiceValidator) ValidateExists(ctx context.Context, id models.Resourc
 func (v *ServiceValidator) ValidateReferences(ctx context.Context, service models.Service) error {
 	agValidator := NewAddressGroupValidator(v.reader)
 
-	for _, agRef := range service.AddressGroups {
-		if err := agValidator.ValidateExists(ctx, models.ResourceIdentifier{Name: agRef.Name, Namespace: agRef.Namespace}); err != nil {
+	for _, agRef := range service.GetAggregatedAddressGroups() {
+		if err := agValidator.ValidateExists(ctx, models.ResourceIdentifier{Name: agRef.Ref.Name, Namespace: agRef.Ref.Namespace}); err != nil {
 			return errors.Wrapf(err, "invalid address group reference in service %s", service.Key())
 		}
 	}
@@ -108,9 +108,9 @@ func (v *ServiceValidator) ValidateForPostCommit(ctx context.Context, service mo
 // CheckPortOverlaps проверяет перекрытие портов между сервисом и существующими сервисами в AddressGroup
 func (v *ServiceValidator) CheckPortOverlaps(ctx context.Context, service models.Service) error {
 	// Для каждой AddressGroup, к которой привязан сервис
-	for _, agRef := range service.AddressGroups {
+	for _, agRef := range service.GetAggregatedAddressGroups() {
 		// Получаем AddressGroupPortMapping
-		portMapping, err := v.reader.GetAddressGroupPortMappingByID(ctx, models.ResourceIdentifier{Name: agRef.Name, Namespace: agRef.Namespace})
+		portMapping, err := v.reader.GetAddressGroupPortMappingByID(ctx, models.ResourceIdentifier{Name: agRef.Ref.Name, Namespace: agRef.Ref.Namespace})
 		if err != nil {
 			// Если портмаппинг не найден, пропускаем проверку для этой AddressGroup
 			continue
@@ -264,7 +264,7 @@ func (v *ServiceValidator) ValidateForUpdate(ctx context.Context, oldService, ne
 
 	// Проверяем, изменились ли порты или AddressGroups
 	portsChanged := !reflect.DeepEqual(oldService.IngressPorts, newService.IngressPorts)
-	addressGroupsChanged := !reflect.DeepEqual(oldService.AddressGroups, newService.AddressGroups)
+	addressGroupsChanged := !reflect.DeepEqual(oldService.GetAggregatedAddressGroups(), newService.GetAggregatedAddressGroups())
 
 	if portsChanged || addressGroupsChanged {
 		// Проверяем перекрытие портов в AddressGroups, к которым привязан сервис

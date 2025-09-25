@@ -1687,8 +1687,6 @@ func (c *GRPCBackendClient) syncHostBinding(ctx context.Context, syncOp models.S
 }
 
 func (c *GRPCBackendClient) UpdateHostMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
-	// TODO: Реализовать когда backend добавит UpdateMeta endpoints
-	// На данный момент используем обычный Update через GetHost + UpdateHost
 	host, err := c.GetHost(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to get host for meta update: %w", err)
@@ -2036,18 +2034,12 @@ func convertHostFromProto(protoHost *netguardpb.Host) models.Host {
 
 	// Convert IP list if present
 	if len(protoHost.GetIpList()) > 0 {
-		log.Printf("🔍 K8S_CLIENT_CONVERTER_DEBUG: convertHostFromProto - Converting %d IP items for host %s/%s",
-			len(protoHost.GetIpList()), protoHost.GetSelfRef().GetNamespace(), protoHost.GetSelfRef().GetName())
 		result.IpList = make([]models.IPItem, len(protoHost.GetIpList()))
 		for i, ipItem := range protoHost.GetIpList() {
-			log.Printf("🔍 K8S_CLIENT_CONVERTER_DEBUG: convertHostFromProto - IP[%d] = %s", i, ipItem.GetIp())
 			result.IpList[i] = models.IPItem{
 				IP: ipItem.GetIp(),
 			}
 		}
-	} else {
-		log.Printf("❌ K8S_CLIENT_CONVERTER_DEBUG: convertHostFromProto - No IP list in protobuf for host %s/%s",
-			protoHost.GetSelfRef().GetNamespace(), protoHost.GetSelfRef().GetName())
 	}
 
 	return result

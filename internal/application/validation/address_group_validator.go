@@ -236,8 +236,8 @@ func (v *AddressGroupValidator) CheckDependencies(ctx context.Context, id models
 	// Check Services referencing the address group to be deleted
 	hasServices := false
 	err := v.reader.ListServices(ctx, func(service models.Service) error {
-		for _, agRef := range service.AddressGroups {
-			if models.AddressGroupRefKey(agRef) == id.Key() {
+		for _, agRef := range service.GetAggregatedAddressGroups() {
+			if models.AddressGroupRefKey(agRef.Ref) == id.Key() {
 				hasServices = true
 				break
 			}

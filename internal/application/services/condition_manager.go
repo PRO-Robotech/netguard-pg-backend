@@ -160,20 +160,20 @@ func (cm *ConditionManager) ProcessServiceConditions(ctx context.Context, servic
 	service.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "Service passed validation")
 
 	// Проверяем что AddressGroups РЕАЛЬНО существуют в committed состоянии
-	klog.Infof("🔄 ConditionManager: Checking %d AddressGroups for %s/%s", len(service.AddressGroups), service.Namespace, service.Name)
+	klog.Infof("🔄 ConditionManager: Checking %d AddressGroups for %s/%s", len(service.GetAggregatedAddressGroups()), service.Namespace, service.Name)
 	missingAddressGroups := []string{}
-	for _, agRef := range service.AddressGroups {
-		_, err := reader.GetAddressGroupByID(ctx, models.ResourceIdentifier{Name: agRef.Name, Namespace: agRef.Namespace})
+	for _, agRef := range service.GetAggregatedAddressGroups() {
+		_, err := reader.GetAddressGroupByID(ctx, models.ResourceIdentifier{Name: agRef.Ref.Name, Namespace: agRef.Ref.Namespace})
 		if err == ports.ErrNotFound {
-			missingAddressGroups = append(missingAddressGroups, models.AddressGroupRefKey(agRef))
-			klog.Infof("❌ ConditionManager: AddressGroup %s not found for %s/%s", models.AddressGroupRefKey(agRef), service.Namespace, service.Name)
+			missingAddressGroups = append(missingAddressGroups, models.AddressGroupRefKey(agRef.Ref))
+			klog.Infof("❌ ConditionManager: AddressGroup %s not found for %s/%s", models.AddressGroupRefKey(agRef.Ref), service.Namespace, service.Name)
 		} else if err != nil {
-			klog.Errorf("❌ ConditionManager: Failed to check AddressGroup %s for %s/%s: %v", models.AddressGroupRefKey(agRef), service.Namespace, service.Name, err)
-			service.Meta.SetErrorCondition(models.ReasonDependencyError, fmt.Sprintf("Failed to check AddressGroup %s: %v", models.AddressGroupRefKey(agRef), err))
+			klog.Errorf("❌ ConditionManager: Failed to check AddressGroup %s for %s/%s: %v", models.AddressGroupRefKey(agRef.Ref), service.Namespace, service.Name, err)
+			service.Meta.SetErrorCondition(models.ReasonDependencyError, fmt.Sprintf("Failed to check AddressGroup %s: %v", models.AddressGroupRefKey(agRef.Ref), err))
 			service.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "AddressGroup validation failed")
 			return nil
 		} else {
-			klog.Infof("✅ ConditionManager: AddressGroup %s found for %s/%s", models.AddressGroupRefKey(agRef), service.Namespace, service.Name)
+			klog.Infof("✅ ConditionManager: AddressGroup %s found for %s/%s", models.AddressGroupRefKey(agRef.Ref), service.Namespace, service.Name)
 		}
 	}
 
@@ -348,10 +348,6 @@ func (cm *ConditionManager) ProcessRuleS2SConditions(ctx context.Context, rule *
 				rule.Meta.SetErrorCondition(models.ReasonDependencyError, fmt.Sprintf("Failed to generate IEAgAgRules: %v", err))
 				// Keep Ready=True but log the generation failure
 			} else {
-				klog.Infof("🔨 ConditionManager: Generated %d IEAgAgRules for Ready RuleS2S %s/%s", len(ieAgAgRules), rule.Namespace, rule.Name)
-
-				// 🎯 CRITICAL FIX: Use proper service delegation for IEAgAgRule processing
-				// This ensures conditions and external sync are handled correctly
 				if len(ieAgAgRules) > 0 && cm.ruleS2SService != nil {
 					klog.Infof("💾 CONDITION_MANAGER_FIX: Processing %d generated IEAgAgRules via proper service for RuleS2S %s/%s", len(ieAgAgRules), rule.Namespace, rule.Name)
 
@@ -369,87 +365,54 @@ func (cm *ConditionManager) ProcessRuleS2SConditions(ctx context.Context, rule *
 				}
 			}
 		} else {
-			// Fallback for nil generator (shouldn't happen in production)
 			klog.Warningf("⚠️ ConditionManager: IEAgAgGenerator is nil for RuleS2S %s/%s", rule.Namespace, rule.Name)
 		}
 	} else {
-		// Dependencies missing - RuleS2S is not ready
-		klog.Infof("⚠️ ConditionManager: RuleS2S %s/%s is not ready (missing dependencies)", rule.Namespace, rule.Name)
 		rule.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonPending, "Missing dependencies for IEAgAg rule generation")
-
-		// 🧹 CLEANUP TRIGGER: When RuleS2S becomes Ready=False, clean up associated IEAgAgRules
-		klog.Infof("🧹 CLEANUP_TRIGGER: RuleS2S %s/%s Ready=False, triggering IEAgAgRule cleanup", rule.Namespace, rule.Name)
 		if cm.ieAgAgManager != nil {
 			if err := cm.ieAgAgManager.CleanupIEAgAgRulesForRuleS2S(ctx, *rule); err != nil {
 				klog.Errorf("❌ ConditionManager: Failed to cleanup IEAgAgRules for not-ready RuleS2S %s/%s: %v", rule.Namespace, rule.Name, err)
 				rule.Meta.SetErrorCondition(models.ReasonCleanupError, fmt.Sprintf("Failed to cleanup IEAgAgRules: %v", err))
-				// Continue processing - don't fail condition update due to cleanup errors
-			} else {
-				klog.Infof("✅ ConditionManager: Successfully cleaned up IEAgAgRules for not-ready RuleS2S %s/%s", rule.Namespace, rule.Name)
 			}
 		} else {
 			klog.Warningf("⚠️ ConditionManager: IEAgAgManager is nil, cannot cleanup rules for RuleS2S %s/%s", rule.Namespace, rule.Name)
 		}
 	}
 
-	klog.V(4).Infof("ConditionManager.ProcessRuleS2SConditions: rule %s/%s processed, checking if conditions need saving...", rule.Namespace, rule.Name)
-
-	// 🎯 CONDITION_BATCHING: Only queue conditions here if Ready=False (Ready=True already flushed above)
-	// This avoids double-batching conditions for Ready=True case while ensuring Ready=False is queued
 	if !rule.Meta.IsReady() {
 		klog.Infof("💾 CONDITION_BATCHING: Queuing Ready=False conditions for RuleS2S %s/%s", rule.Namespace, rule.Name)
 		cm.batchConditionUpdate("RuleS2S", rule)
-	} else {
-		klog.Infof("✅ CONDITION_BATCHING: Skipping condition queue for Ready=True RuleS2S %s/%s (already flushed before generation)", rule.Namespace, rule.Name)
 	}
 
-	klog.Infof("✅ ConditionManager: Successfully processed and saved conditions for RuleS2S %s/%s", rule.Namespace, rule.Name)
 	return nil
 }
 
 // ProcessIEAgAgRuleConditions формирует условия для IEAgAgRule ПОСЛЕ успешного commit
 func (cm *ConditionManager) ProcessIEAgAgRuleConditions(ctx context.Context, rule *models.IEAgAgRule) error {
-	// 🔍 IEAGAG_CONDITION_DEBUG: Enhanced debugging for IEAgAgRule condition processing
-	klog.Infof("🔍 IEAGAG_CONDITIONS: Starting condition processing for IEAgAgRule %s/%s", rule.Namespace, rule.Name)
-	klog.Infof("   - Traffic: %s", rule.Traffic)
-	klog.Infof("   - LocalAG: %s/%s", rule.AddressGroupLocal.Namespace, rule.AddressGroupLocal.Name)
-	klog.Infof("   - TargetAG: %s/%s", rule.AddressGroup.Namespace, rule.AddressGroup.Name)
-	klog.Infof("   - Current conditions count: %d", len(rule.Meta.Conditions))
-
-	// Очищаем старые ошибки и обновляем метаданные
 	rule.Meta.ClearErrorCondition()
 	rule.Meta.TouchOnWrite("v1")
 
-	// Получаем reader для валидации
 	reader, err := cm.registry.Reader(ctx)
 	if err != nil {
-		klog.Errorf("❌ IEAGAG_CONDITIONS: Failed to get reader for %s/%s: %v", rule.Namespace, rule.Name, err)
 		rule.Meta.SetErrorCondition(models.ReasonBackendError, fmt.Sprintf("Failed to get reader for validation: %v", err))
 		rule.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Backend validation unavailable")
 		return nil
 	}
 	defer reader.Close()
 
-	// Backend синхронизирован (коммит прошел успешно)
-	klog.Infof("✅ IEAGAG_CONDITIONS: Setting Synced=True for IEAgAgRule %s/%s", rule.Namespace, rule.Name)
 	rule.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "IEAgAgRule committed to backend successfully")
 
 	// Создаем валидатор и выполняем валидацию РЕАЛЬНОГО состояния
 	validator := validation.NewDependencyValidator(reader)
 	ruleValidator := validator.GetIEAgAgRuleValidator()
 
-	// Проверяем валидацию коммиченного объекта (без проверки дубликатов)
-	klog.Infof("🔄 IEAGAG_CONDITIONS: Validating IEAgAgRule %s/%s", rule.Namespace, rule.Name)
 	if err := ruleValidator.ValidateForPostCommit(ctx, *rule); err != nil {
-		klog.Errorf("❌ IEAGAG_CONDITIONS: Validation failed for %s/%s: %v", rule.Namespace, rule.Name, err)
 		rule.Meta.SetErrorCondition(models.ReasonValidationFailed, fmt.Sprintf("IEAgAgRule validation failed: %v", err))
 		rule.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "IEAgAgRule has validation errors")
 		rule.Meta.SetValidatedCondition(metav1.ConditionFalse, models.ReasonValidationFailed, fmt.Sprintf("Validation failed: %v", err))
 		return nil
 	}
 
-	// Устанавливаем Validated = true
-	klog.Infof("✅ IEAGAG_CONDITIONS: Validation passed for IEAgAgRule %s/%s", rule.Namespace, rule.Name)
 	rule.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "IEAgAgRule passed validation")
 
 	// Проверяем существование связанных AddressGroups
@@ -470,28 +433,17 @@ func (cm *ConditionManager) ProcessIEAgAgRuleConditions(ctx context.Context, rul
 		Namespace: rule.AddressGroup.Namespace,
 	}); err != nil {
 		targetAGExists = false
-		klog.Warningf("⚠️ IEAGAG_CONDITIONS: Target AddressGroup %s/%s not found for IEAgAgRule %s/%s",
-			rule.AddressGroup.Namespace, rule.AddressGroup.Name, rule.Namespace, rule.Name)
 	}
 
 	if !localAGExists || !targetAGExists {
 		rule.Meta.SetErrorCondition(models.ReasonDependencyError, "Referenced AddressGroups not found")
 		rule.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Missing AddressGroup dependencies")
-		klog.Infof("⚠️ IEAGAG_CONDITIONS: IEAgAgRule %s/%s not ready due to missing AddressGroups", rule.Namespace, rule.Name)
 	} else {
-		// Все проверки прошли успешно - устанавливаем позитивные условия
-		klog.Infof("✅ IEAGAG_CONDITIONS: Setting Ready=True for IEAgAgRule %s/%s", rule.Namespace, rule.Name)
 		rule.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "IEAgAgRule is ready and operational")
 	}
 
-	klog.Infof("🔄 IEAGAG_CONDITIONS: Saving conditions for IEAgAgRule %s/%s (conditions count: %d)",
-		rule.Namespace, rule.Name, len(rule.Meta.Conditions))
-
-	// 🎯 CONDITION_BATCHING: Queue conditions for batch update (non-blocking)
 	cm.batchConditionUpdate("IEAgAgRule", rule)
-	klog.V(3).Infof("🎯 CONDITION_BATCHING: Queued IEAgAgRule %s/%s for batch condition update", rule.Namespace, rule.Name)
 
-	klog.Infof("✅ IEAGAG_CONDITIONS: Successfully processed and saved conditions for IEAgAgRule %s/%s", rule.Namespace, rule.Name)
 	return nil
 }
 
@@ -501,9 +453,6 @@ func (cm *ConditionManager) ProcessAddressGroupBindingConditions(ctx context.Con
 	binding.Meta.ClearErrorCondition()
 	binding.Meta.TouchOnWrite("v1")
 
-	klog.Infof("🔄 ConditionManager.ProcessAddressGroupBindingConditions: processing binding %s/%s after commit", binding.Namespace, binding.Name)
-
-	// Получаем reader для валидации
 	reader, err := cm.registry.Reader(ctx)
 	if err != nil {
 		binding.Meta.SetErrorCondition(models.ReasonBackendError, fmt.Sprintf("Failed to get reader for validation: %v", err))
@@ -514,16 +463,12 @@ func (cm *ConditionManager) ProcessAddressGroupBindingConditions(ctx context.Con
 
 	// Backend синхронизирован (коммит прошел успешно)
 	binding.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "AddressGroupBinding committed to backend successfully")
-	klog.Infof("🔄 Step 1: Set Synced condition for binding %s/%s", binding.Namespace, binding.Name)
 
 	// Создаем валидатор и выполняем валидацию РЕАЛЬНОГО состояния
 	validator := validation.NewDependencyValidator(reader)
 	bindingValidator := validator.GetAddressGroupBindingValidator()
 
-	// Проверяем валидацию коммиченного объекта (без проверки дубликатов)
-	klog.Infof("🔄 Step 2: Starting validation for binding %s/%s", binding.Namespace, binding.Name)
 	if err := bindingValidator.ValidateForPostCommit(ctx, binding); err != nil {
-		klog.Errorf("❌ Step 2: Validation failed for binding %s/%s: %v", binding.Namespace, binding.Name, err)
 		binding.Meta.SetErrorCondition(models.ReasonValidationFailed, fmt.Sprintf("AddressGroupBinding validation failed: %v", err))
 		binding.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "AddressGroupBinding has validation errors")
 		binding.Meta.SetValidatedCondition(metav1.ConditionFalse, models.ReasonValidationFailed, fmt.Sprintf("Validation failed: %v", err))
@@ -531,31 +476,23 @@ func (cm *ConditionManager) ProcessAddressGroupBindingConditions(ctx context.Con
 	}
 	klog.Infof("✅ Step 2: Validation passed for binding %s/%s", binding.Namespace, binding.Name)
 
-	// Устанавливаем Validated = true
 	binding.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "AddressGroupBinding passed validation")
 
-	// Проверяем что Service РЕАЛЬНО существует в committed состоянии
-	// Create ResourceIdentifier from ObjectReference
 	serviceID := models.NewResourceIdentifier(binding.ServiceRef.Name, models.WithNamespace(binding.Namespace))
 	klog.Infof("🔄 Step 3: Checking service %s exists", serviceID.Key())
 	service, err := reader.GetServiceByID(ctx, serviceID)
 	if err == ports.ErrNotFound {
-		klog.Errorf("❌ Step 3: Service %s not found", binding.ServiceRefKey())
 		binding.Meta.SetErrorCondition(models.ReasonDependencyError, fmt.Sprintf("Service %s not found", binding.ServiceRefKey()))
 		binding.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Required Service not found")
 		return nil
 	} else if err != nil {
-		klog.Errorf("❌ Step 3: Failed to get Service %s: %v", binding.ServiceRefKey(), err)
 		binding.Meta.SetErrorCondition(models.ReasonDependencyError, fmt.Sprintf("Failed to get Service %s: %v", binding.ServiceRefKey(), err))
 		binding.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Service validation failed")
 		return nil
 	}
 	klog.Infof("✅ Step 3: Service %s found", serviceID.Key())
 
-	// Проверяем что AddressGroup РЕАЛЬНО существует в committed состоянии
-	// Create ResourceIdentifier from NamespacedObjectReference
 	agID := models.NewResourceIdentifier(binding.AddressGroupRef.Name, models.WithNamespace(binding.AddressGroupRef.Namespace))
-	klog.Infof("🔄 Step 4: Checking address group %s exists", agID.Key())
 	_, err = reader.GetAddressGroupByID(ctx, agID)
 	if err == ports.ErrNotFound {
 		klog.Errorf("❌ Step 4: AddressGroup %s not found", binding.AddressGroupRefKey())
@@ -563,25 +500,17 @@ func (cm *ConditionManager) ProcessAddressGroupBindingConditions(ctx context.Con
 		binding.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Required AddressGroup not found")
 		return nil
 	} else if err != nil {
-		klog.Errorf("❌ Step 4: Failed to get AddressGroup %s: %v", binding.AddressGroupRefKey(), err)
 		binding.Meta.SetErrorCondition(models.ReasonDependencyError, fmt.Sprintf("Failed to get AddressGroup %s: %v", binding.AddressGroupRefKey(), err))
 		binding.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "AddressGroup validation failed")
 		return nil
 	}
-	klog.Infof("✅ Step 4: AddressGroup %s found", agID.Key())
 
-	// Проверяем port overlaps в РЕАЛЬНОМ состоянии
-	klog.Infof("🔄 Step 5: Checking port overlaps for binding %s/%s", binding.Namespace, binding.Name)
 	if err := validation.CheckPortOverlaps(*service, models.AddressGroupPortMapping{}); err != nil {
-		klog.Errorf("❌ Step 5: Port overlap detected for binding %s/%s: %v", binding.Namespace, binding.Name, err)
 		binding.Meta.SetErrorCondition(models.ReasonValidationFailed, fmt.Sprintf("Port overlap detected: %v", err))
 		binding.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Port conflicts detected")
 		return nil
 	}
-	klog.Infof("✅ Step 5: No port overlaps detected for binding %s/%s", binding.Namespace, binding.Name)
 
-	// Проверяем что AddressGroupPortMapping РЕАЛЬНО создан
-	klog.Infof("🔄 Step 6: Checking port mapping %s exists", agID.Key())
 	portMapping, err := reader.GetAddressGroupPortMappingByID(ctx, agID)
 	if err == ports.ErrNotFound {
 		klog.Errorf("❌ Step 6: AddressGroupPortMapping %s not found", agID.Key())
@@ -589,20 +518,15 @@ func (cm *ConditionManager) ProcessAddressGroupBindingConditions(ctx context.Con
 		binding.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Port mapping was not created")
 		return nil
 	} else if err != nil {
-		klog.Errorf("❌ Step 6: Failed to get port mapping %s: %v", agID.Key(), err)
 		binding.Meta.SetErrorCondition(models.ReasonDependencyError, fmt.Sprintf("Failed to verify port mapping: %v", err))
 		binding.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Port mapping verification failed")
 		return nil
 	}
-	klog.Infof("✅ Step 6: Port mapping %s found with %d access ports", agID.Key(), len(portMapping.AccessPorts))
 
 	// Все проверки пройдены - binding готов
 	accessPortsCount := len(portMapping.AccessPorts)
 	binding.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, fmt.Sprintf("AddressGroupBinding is ready, %d access ports configured", accessPortsCount))
 
-	klog.Infof("✅ ConditionManager.ProcessAddressGroupBindingConditions: binding %s/%s processed successfully with 3 conditions", binding.Namespace, binding.Name)
-
-	// Save the processed conditions back to storage
 	if err := cm.saveAddressGroupBindingConditions(ctx, binding); err != nil {
 		klog.Errorf("❌ ConditionManager: Failed to save conditions for address group binding %s/%s: %v", binding.Namespace, binding.Name, err)
 		return nil
@@ -680,9 +604,6 @@ func (cm *ConditionManager) ProcessAddressGroupPortMappingConditions(ctx context
 	mapping.Meta.ClearErrorCondition()
 	mapping.Meta.TouchOnWrite("v1")
 
-	klog.V(4).Infof("ConditionManager.ProcessAddressGroupPortMappingConditions: processing port mapping %s/%s after commit", mapping.Namespace, mapping.Name)
-
-	// Получаем reader для валидации
 	reader, err := cm.registry.Reader(ctx)
 	if err != nil {
 		mapping.Meta.SetErrorCondition(models.ReasonBackendError, fmt.Sprintf("Failed to get reader for validation: %v", err))
@@ -706,16 +627,13 @@ func (cm *ConditionManager) ProcessAddressGroupPortMappingConditions(ctx context
 		return nil
 	}
 
-	// Устанавливаем Validated = true
 	mapping.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "AddressGroupPortMapping passed validation")
 
-	// Проверяем что у mapping есть хотя бы один access port
 	if len(mapping.AccessPorts) == 0 {
 		mapping.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonPending, "No access ports configured")
 		return nil
 	}
 
-	// Проверяем что все Service, на которые ссылается mapping, РЕАЛЬНО существуют
 	missingServices := []string{}
 	for serviceRef := range mapping.AccessPorts {
 		_, err := reader.GetServiceByID(ctx, models.ResourceIdentifier{Name: serviceRef.Name, Namespace: serviceRef.Namespace})
@@ -781,11 +699,7 @@ func (cm *ConditionManager) ProcessAddressGroupBindingPolicyConditions(ctx conte
 		return nil
 	}
 
-	// Устанавливаем Validated = true
 	policy.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "AddressGroupBindingPolicy passed validation")
-
-	// Проверяем что AddressGroup РЕАЛЬНО существует в committed состоянии
-	// Create ResourceIdentifier from NamespacedObjectReference
 	agID := models.NewResourceIdentifier(policy.AddressGroupRef.Name, models.WithNamespace(policy.AddressGroupRef.Namespace))
 	_, err = reader.GetAddressGroupByID(ctx, agID)
 	if err == ports.ErrNotFound {
@@ -798,8 +712,6 @@ func (cm *ConditionManager) ProcessAddressGroupBindingPolicyConditions(ctx conte
 		return nil
 	}
 
-	// Проверяем что Service РЕАЛЬНО существует в committed состоянии
-	// Create ResourceIdentifier from NamespacedObjectReference
 	serviceID := models.NewResourceIdentifier(policy.ServiceRef.Name, models.WithNamespace(policy.ServiceRef.Namespace))
 	_, err = reader.GetServiceByID(ctx, serviceID)
 	if err == ports.ErrNotFound {
@@ -812,12 +724,8 @@ func (cm *ConditionManager) ProcessAddressGroupBindingPolicyConditions(ctx conte
 		return nil
 	}
 
-	// Все проверки пройдены - политика готова
 	policy.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "AddressGroupBindingPolicy is ready and operational")
 
-	klog.V(4).Infof("ConditionManager.ProcessAddressGroupBindingPolicyConditions: policy %s/%s processed successfully", policy.Namespace, policy.Name)
-
-	// Save the processed conditions back to storage
 	if err := cm.saveAddressGroupBindingPolicyConditions(ctx, policy); err != nil {
 		klog.Errorf("❌ ConditionManager: Failed to save conditions for AddressGroupBindingPolicy %s/%s: %v", policy.Namespace, policy.Name, err)
 		return nil
@@ -832,63 +740,43 @@ func (cm *ConditionManager) ProcessNetworkConditions(ctx context.Context, networ
 	network.Meta.ClearErrorCondition()
 	network.Meta.TouchOnWrite("v1")
 
-	klog.Infof("🔄 ConditionManager.ProcessNetworkConditions: processing network %s/%s after commit", network.Namespace, network.Name)
-
-	// Получаем reader для валидации (транзакция уже закоммичена)
 	reader, err := cm.registry.Reader(ctx)
 	if err != nil {
-		klog.Errorf("❌ ConditionManager: Failed to get reader for %s/%s: %v", network.Namespace, network.Name, err)
 		network.Meta.SetErrorCondition(models.ReasonBackendError, fmt.Sprintf("Failed to get reader for validation: %v", err))
 		network.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Backend validation unavailable")
 		return nil
 	}
 	defer reader.Close()
 
-	// Проверяем результат синхронизации с sgroups
 	if syncResult != nil {
-		klog.Errorf("❌ ConditionManager: sgroups sync failed for %s/%s: %v", network.Namespace, network.Name, syncResult)
 		network.Meta.SetSyncedCondition(metav1.ConditionFalse, models.ReasonSyncFailed, fmt.Sprintf("Failed to sync with sgroups: %v", syncResult))
 		network.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Network sync with external source failed")
 		network.Meta.SetValidatedCondition(metav1.ConditionFalse, models.ReasonValidating, "Validation skipped due to sync failure")
 		return nil
 	}
 
-	// Backend и sgroups синхронизированы (коммит прошел успешно и sgroups тоже)
-	klog.Infof("✅ ConditionManager: Setting Synced=true for %s/%s", network.Namespace, network.Name)
 	network.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Network committed to backend and synced with sgroups successfully")
 
 	// Создаем валидатор и выполняем валидацию РЕАЛЬНОГО состояния
 	validator := validation.NewDependencyValidator(reader)
 	networkValidator := validator.GetNetworkValidator()
 
-	// Проверяем только CIDR формат для уже созданного объекта
-	klog.Infof("🔄 ConditionManager: Validating committed network %s/%s", network.Namespace, network.Name)
 	if err := networkValidator.ValidateCIDR(network.CIDR); err != nil {
-		klog.Errorf("❌ ConditionManager: Network CIDR validation failed for %s/%s: %v", network.Namespace, network.Name, err)
 		network.Meta.SetErrorCondition(models.ReasonValidationFailed, fmt.Sprintf("Network CIDR validation failed: %v", err))
 		network.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Network has validation errors")
 		network.Meta.SetValidatedCondition(metav1.ConditionFalse, models.ReasonValidationFailed, fmt.Sprintf("CIDR validation failed: %v", err))
 		return nil
 	}
 
-	// Устанавливаем Validated = true
-	klog.Infof("✅ ConditionManager: Setting Validated=true for %s/%s", network.Namespace, network.Name)
 	network.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "Network passed validation")
-
-	// Все проверки пройдены - сеть готова
-	klog.Infof("🎉 ConditionManager: All checks passed, setting Ready=true for %s/%s", network.Namespace, network.Name)
 	network.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Network is ready for use")
 
-	klog.Infof("✅ ConditionManager.ProcessNetworkConditions: network %s/%s processed successfully with %d conditions", network.Namespace, network.Name, len(network.Meta.Conditions))
-
-	// Save the processed conditions back to storage
 	if err := cm.saveNetworkConditions(ctx, network); err != nil {
 		klog.Errorf("❌ ConditionManager: Failed to save conditions for network %s/%s: %v", network.Namespace, network.Name, err)
 		// Don't fail the entire operation, conditions will be reprocessed on next update
 		return nil
 	}
 
-	klog.Infof("💾 ConditionManager: Successfully saved conditions for network %s/%s", network.Namespace, network.Name)
 	return nil
 }
 
@@ -898,82 +786,56 @@ func (cm *ConditionManager) ProcessNetworkBindingConditions(ctx context.Context,
 	binding.Meta.ClearErrorCondition()
 	binding.Meta.TouchOnWrite("v1")
 
-	klog.Infof("🔄 ConditionManager.ProcessNetworkBindingConditions: processing network binding %s/%s after commit", binding.Namespace, binding.Name)
-
-	// Получаем reader для валидации (транзакция уже закоммичена)
 	reader, err := cm.registry.Reader(ctx)
 	if err != nil {
-		klog.Errorf("❌ ConditionManager: Failed to get reader for %s/%s: %v", binding.Namespace, binding.Name, err)
 		binding.Meta.SetErrorCondition(models.ReasonBackendError, fmt.Sprintf("Failed to get reader for validation: %v", err))
 		binding.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Backend validation unavailable")
 		return nil
 	}
 	defer reader.Close()
 
-	// Backend синхронизирован (коммит прошел успешно)
-	klog.Infof("✅ ConditionManager: Setting Synced=true for %s/%s", binding.Namespace, binding.Name)
 	binding.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "NetworkBinding committed to backend successfully")
 
-	// Создаем валидатор и выполняем валидацию РЕАЛЬНОГО состояния
 	validator := validation.NewDependencyValidator(reader)
 	bindingValidator := validator.GetNetworkBindingValidator()
 
-	// Проверяем валидацию коммиченного объекта (без проверки дубликатов)
-	klog.Infof("🔄 ConditionManager: Validating committed network binding %s/%s", binding.Namespace, binding.Name)
 	if err := bindingValidator.ValidateForPostCommit(ctx, *binding); err != nil {
-		klog.Errorf("❌ ConditionManager: NetworkBinding validation failed for %s/%s: %v", binding.Namespace, binding.Name, err)
 		binding.Meta.SetErrorCondition(models.ReasonValidationFailed, fmt.Sprintf("NetworkBinding validation failed: %v", err))
 		binding.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "NetworkBinding has validation errors")
 		binding.Meta.SetValidatedCondition(metav1.ConditionFalse, models.ReasonValidationFailed, fmt.Sprintf("Validation failed: %v", err))
 		return nil
 	}
 
-	// Устанавливаем Validated = true
-	klog.Infof("✅ ConditionManager: Setting Validated=true for %s/%s", binding.Namespace, binding.Name)
 	binding.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "NetworkBinding passed validation")
-
-	// Проверяем что Network и AddressGroup РЕАЛЬНО существуют в committed состоянии
-	klog.Infof("🔄 ConditionManager: Checking Network and AddressGroup references for %s/%s", binding.Namespace, binding.Name)
 
 	// Проверяем Network
 	networkID := models.ResourceIdentifier{Name: binding.NetworkRef.Name, Namespace: binding.Namespace}
 	_, err = reader.GetNetworkByID(ctx, networkID)
 	if err == ports.ErrNotFound {
-		klog.Errorf("❌ ConditionManager: Network %s not found for %s/%s", networkID.Key(), binding.Namespace, binding.Name)
 		binding.Meta.SetErrorCondition(models.ReasonDependencyError, fmt.Sprintf("Network %s not found", networkID.Key()))
 		binding.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Referenced Network not found")
 		return nil
 	} else if err != nil {
-		klog.Errorf("❌ ConditionManager: Failed to check Network %s for %s/%s: %v", networkID.Key(), binding.Namespace, binding.Name, err)
 		binding.Meta.SetErrorCondition(models.ReasonDependencyError, fmt.Sprintf("Failed to check Network %s: %v", networkID.Key(), err))
 		binding.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Network validation failed")
 		return nil
-	} else {
-		klog.Infof("✅ ConditionManager: Network %s found for %s/%s", networkID.Key(), binding.Namespace, binding.Name)
 	}
 
-	// Проверяем AddressGroup
 	addressGroupID := models.ResourceIdentifier{Name: binding.AddressGroupRef.Name, Namespace: binding.Namespace}
 	_, err = reader.GetAddressGroupByID(ctx, addressGroupID)
 	if err == ports.ErrNotFound {
-		klog.Errorf("❌ ConditionManager: AddressGroup %s not found for %s/%s", addressGroupID.Key(), binding.Namespace, binding.Name)
 		binding.Meta.SetErrorCondition(models.ReasonDependencyError, fmt.Sprintf("AddressGroup %s not found", addressGroupID.Key()))
 		binding.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Referenced AddressGroup not found")
 		return nil
 	} else if err != nil {
-		klog.Errorf("❌ ConditionManager: Failed to check AddressGroup %s for %s/%s: %v", addressGroupID.Key(), binding.Namespace, binding.Name, err)
 		binding.Meta.SetErrorCondition(models.ReasonDependencyError, fmt.Sprintf("Failed to check AddressGroup %s: %v", addressGroupID.Key(), err))
 		binding.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "AddressGroup validation failed")
 		return nil
-	} else {
-		klog.Infof("✅ ConditionManager: AddressGroup %s found for %s/%s", addressGroupID.Key(), binding.Namespace, binding.Name)
 	}
 
 	// Все проверки пройдены - binding готов
-	klog.Infof("🎉 ConditionManager: All checks passed, setting Ready=true for %s/%s", binding.Namespace, binding.Name)
 	binding.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "NetworkBinding is ready for use")
 
-	klog.Infof("✅ ConditionManager.ProcessNetworkBindingConditions: network binding %s/%s processed successfully with %d conditions", binding.Namespace, binding.Name, len(binding.Meta.Conditions))
 	return nil
 }
 
@@ -997,14 +859,9 @@ func (cm *ConditionManager) validateServicesHaveAddressGroups(ctx context.Contex
 	// Check AddressGroups on services (following k8s-controller pattern)
 	var inactiveConditions []string
 
-	// Get address groups from services (like k8s-controller: localService.AddressGroups.Items)
-	localAddressGroupsCount := len(localService.AddressGroups)
-	targetAddressGroupsCount := len(targetService.AddressGroups)
+	localAddressGroupsCount := len(localService.GetAggregatedAddressGroups())
+	targetAddressGroupsCount := len(targetService.GetAggregatedAddressGroups())
 
-	klog.Infof("🔍 validateServicesHaveAddressGroups: LocalService %s has %d AddressGroups", localServiceID.Key(), localAddressGroupsCount)
-	klog.Infof("🔍 validateServicesHaveAddressGroups: TargetService %s has %d AddressGroups", targetServiceID.Key(), targetAddressGroupsCount)
-
-	// Check address groups (following k8s-controller logic exactly)
 	if localAddressGroupsCount == 0 && targetAddressGroupsCount == 0 {
 		inactiveConditions = append(inactiveConditions,
 			fmt.Sprintf("Both services have no address groups: localService '%s', targetService '%s'",
@@ -1019,11 +876,9 @@ func (cm *ConditionManager) validateServicesHaveAddressGroups(ctx context.Contex
 
 	// If there are any inactive conditions, the RuleS2S should be marked as not ready
 	if len(inactiveConditions) > 0 {
-		klog.Errorf("❌ validateServicesHaveAddressGroups: RuleS2S %s/%s has inactive conditions: %s", rule.Namespace, rule.Name, strings.Join(inactiveConditions, "; "))
 		return fmt.Errorf("rule is invalid due to missing address groups: %s", strings.Join(inactiveConditions, "; "))
 	}
 
-	klog.Infof("✅ validateServicesHaveAddressGroups: All services have AddressGroups - RuleS2S %s/%s is valid", rule.Namespace, rule.Name)
 	return nil
 }
 
@@ -1905,13 +1760,13 @@ func (cm *ConditionManager) checkRuleS2SCanGenerateIEAgAg(ctx context.Context, r
 	}
 
 	// Check if both services have AddressGroups
-	if len(localService.AddressGroups) == 0 {
+	if len(localService.GetAggregatedAddressGroups()) == 0 {
 		klog.V(4).Infof("❌ DEPENDENCY_CHECK: LocalService %s has no AddressGroups for RuleS2S %s/%s",
 			localServiceID.Key(), rule.Namespace, rule.Name)
 		return false
 	}
 
-	if len(targetService.AddressGroups) == 0 {
+	if len(targetService.GetAggregatedAddressGroups()) == 0 {
 		klog.V(4).Infof("❌ DEPENDENCY_CHECK: TargetService %s has no AddressGroups for RuleS2S %s/%s",
 			targetServiceID.Key(), rule.Namespace, rule.Name)
 		return false
