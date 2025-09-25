@@ -108,18 +108,26 @@ BEGIN
         FOR spec_group IN
             SELECT value FROM jsonb_array_elements(spec_groups) AS value
         LOOP
-            SELECT COUNT(*) INTO conflicting_count
-            FROM address_group_bindings agb
-            WHERE agb.service_namespace = NEW.namespace
-            AND agb.service_name = NEW.name
-            AND agb.address_group_name = (spec_group.value->>'name')::resource_name
-            AND agb.address_group_namespace = COALESCE((spec_group.value->>'namespace')::namespace_name, NEW.namespace);
+            DECLARE
+                group_name resource_name;
+                group_namespace namespace_name;
+            BEGIN
+                group_name := (spec_group.value->>'name')::resource_name;
+                group_namespace := COALESCE((spec_group.value->>'namespace')::namespace_name, NEW.namespace);
 
-            IF conflicting_count > 0 THEN
-                RAISE EXCEPTION 'AddressGroup %.% is already bound to Service %.% via AddressGroupBinding - cannot add to spec.addressGroups for dual registration conflict',
-                    COALESCE(spec_group.value->>'namespace', NEW.namespace), spec_group.value->>'name',
-                    NEW.namespace, NEW.name;
-            END IF;
+                SELECT COUNT(*) INTO conflicting_count
+                FROM address_group_bindings agb
+                WHERE agb.service_namespace = NEW.namespace
+                AND agb.service_name = NEW.name
+                AND agb.address_group_name = group_name
+                AND agb.address_group_namespace = group_namespace;
+
+                IF conflicting_count > 0 THEN
+                    RAISE EXCEPTION 'AddressGroup %.% is already bound to Service %.% via AddressGroupBinding - cannot add to spec.addressGroups for dual registration conflict',
+                        group_namespace, group_name,
+                        NEW.namespace, NEW.name;
+                END IF;
+            END;
         END LOOP;
     END IF;
 
