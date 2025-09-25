@@ -1507,7 +1507,7 @@ func (s *RuleS2SResourceService) generateAggregatedIEAgAgRules(ctx context.Conte
 					}
 					processedCombinations[combinationKey] = true
 
-					contributingRules, err := s.findContributingRuleS2S(ctx, &currentRule, localService, targetService, excludeMap)
+					contributingRules, err := s.findContributingRuleS2S(ctx, &currentRule, localService, targetService, excludeMap, protocol)
 					if err != nil {
 						continue
 					}
@@ -2048,6 +2048,7 @@ func (s *RuleS2SResourceService) findContributingRuleS2S(
 	localService *models.Service,
 	targetService *models.Service,
 	excludeMap map[string]bool,
+	protocol models.TransportProtocol,
 ) ([]ContributingRule, error) {
 	klog.Infof("🔍 CROSS_AGGREGATION: Finding contributing RuleS2S for current rule %s (local: %s, target: %s)",
 		currentRule.Key(), localService.Key(), targetService.Key())
@@ -2080,7 +2081,7 @@ func (s *RuleS2SResourceService) findContributingRuleS2S(
 		}
 
 		// No deletion checking needed in our backend implementation
-		contributes, ports, err := s.checkIfRuleContributes(ctx, &rule, currentRule, localService, targetService)
+		contributes, ports, err := s.checkIfRuleContributes(ctx, &rule, currentRule, localService, targetService, protocol)
 		if err != nil {
 			klog.Errorf("  ❌ CROSS_AGGREGATION: Error checking rule contribution for %s: %v", rule.Key(), err)
 			continue
@@ -2179,6 +2180,7 @@ func (s *RuleS2SResourceService) checkIfRuleContributes(
 	currentRule *models.RuleS2S,
 	localService *models.Service,
 	targetService *models.Service,
+	protocol models.TransportProtocol,
 ) (bool, []string, error) {
 	if candidateRule.Traffic != currentRule.Traffic {
 		klog.Infof("  ❌ CHECK_CONTRIBUTION: Traffic mismatch - candidate: %s, current: %s",
@@ -2219,9 +2221,9 @@ func (s *RuleS2SResourceService) checkIfRuleContributes(
 	// Extract ports based on traffic direction (same logic as reference)
 	var ports []string
 	if strings.ToLower(string(candidateRule.Traffic)) == "ingress" {
-		ports = s.extractPortStringsFromService(*candidateLocalService)
+		ports = s.extractPortStringsFromService(*candidateLocalService, protocol)
 	} else {
-		ports = s.extractPortStringsFromService(*candidateTargetService)
+		ports = s.extractPortStringsFromService(*candidateTargetService, protocol)
 	}
 
 	return true, ports, nil
@@ -2314,10 +2316,13 @@ func (s *RuleS2SResourceService) populateServiceAddressGroups(
 
 func (s *RuleS2SResourceService) extractPortStringsFromService(
 	service models.Service,
+	protocol models.TransportProtocol,
 ) []string {
 	var ports []string
 	for _, port := range service.IngressPorts {
-		ports = append(ports, port.Port)
+		if port.Protocol == protocol {
+			ports = append(ports, port.Port)
+		}
 	}
 
 	return ports
