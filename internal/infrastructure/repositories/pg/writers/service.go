@@ -13,6 +13,15 @@ import (
 	"netguard-pg-backend/internal/domain/ports"
 )
 
+// addressGroupRefJSON represents the JSON structure for address group references in the database
+// This avoids importing K8s types in the repository layer
+type addressGroupRefJSON struct {
+	APIVersion string `json:"apiVersion"`
+	Kind       string `json:"kind"`
+	Name       string `json:"name"`
+	Namespace  string `json:"namespace"`
+}
+
 // SyncServices implements hybrid sync strategy for services
 func (w *Writer) SyncServices(ctx context.Context, services []models.Service, scope ports.Scope, opts ...ports.Option) error {
 	// 🔍 TRACE: Log services received from ServiceResourceService
@@ -115,6 +124,28 @@ func (w *Writer) upsertService(ctx context.Context, service models.Service) erro
 		return errors.Wrap(err, "failed to marshal ingress ports")
 	}
 
+	// Marshal address_groups to JSON using intermediate structure
+	var addressGroupsJSON []byte
+	if len(service.AddressGroups) > 0 {
+		// Convert domain AddressGroups to intermediate JSON structure for database
+		agRefs := make([]addressGroupRefJSON, len(service.AddressGroups))
+		for i, ag := range service.AddressGroups {
+			agRefs[i] = addressGroupRefJSON{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "AddressGroup",
+				Name:       ag.Name,
+				Namespace:  ag.Namespace,
+			}
+		}
+		var err error
+		addressGroupsJSON, err = json.Marshal(agRefs)
+		if err != nil {
+			return errors.Wrap(err, "failed to marshal address_groups")
+		}
+	} else {
+		addressGroupsJSON = []byte("[]")
+	}
+
 	// Marshal K8s metadata
 	labelsJSON, annotationsJSON, err := w.marshalLabelsAnnotations(service.Meta.Labels, service.Meta.Annotations)
 	if err != nil {
@@ -147,7 +178,7 @@ func (w *Writer) upsertService(ctx context.Context, service models.Service) erro
 		fmt.Printf("✅ DEBUG: FOUND existing service %s/%s with resource_version=%d, using UPDATE path\n", service.Namespace, service.Name, existingResourceVersion.Int64)
 		fmt.Printf("🔧 DEBUG: Updating k8s_metadata with UID='%s', Generation=%d\n", service.Meta.UID, service.Meta.Generation)
 		metadataQuery := `
-			UPDATE k8s_metadata 
+			UPDATE k8s_metadata
 			SET labels = $1, annotations = $2, conditions = $3, uid = $4, generation = $5, updated_at = NOW()
 			WHERE resource_version = $6
 			RETURNING resource_version`
@@ -171,16 +202,18 @@ func (w *Writer) upsertService(ctx context.Context, service models.Service) erro
 
 	// Then, upsert the service using the resource version
 	serviceQuery := `
-		INSERT INTO services (namespace, name, description, ingress_ports, resource_version)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO services (namespace, name, description, ingress_ports, address_groups, resource_version)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (namespace, name) DO UPDATE SET
 			description = $3,
 			ingress_ports = $4,
-			resource_version = $5`
+			address_groups = $5,
+			resource_version = $6`
 
 	fmt.Printf("🔧 DEBUG: About to execute service upsert query for %s/%s:\n", service.Namespace, service.Name)
 	fmt.Printf("  - Description: '%s'\n", service.Description)
 	fmt.Printf("  - IngressPorts: %s\n", string(ingressPortsJSON))
+	fmt.Printf("  - AddressGroups: %s\n", string(addressGroupsJSON))
 	fmt.Printf("  - ResourceVersion: %d\n", resourceVersion)
 
 	if err := w.exec(ctx, serviceQuery,
@@ -188,6 +221,7 @@ func (w *Writer) upsertService(ctx context.Context, service models.Service) erro
 		service.Name,
 		service.Description,
 		ingressPortsJSON,
+		addressGroupsJSON,
 		resourceVersion,
 	); err != nil {
 		return errors.Wrapf(err, "failed to upsert service %s/%s", service.Namespace, service.Name)
@@ -202,9 +236,9 @@ func (w *Writer) upsertService(ctx context.Context, service models.Service) erro
 func (w *Writer) getExistingServiceUID(ctx context.Context, namespace, name string) (string, error) {
 	var uid string
 	query := `
-		SELECT km.uid 
-		FROM services s 
-		JOIN k8s_metadata km ON s.resource_version = km.resource_version 
+		SELECT km.uid
+		FROM services s
+		JOIN k8s_metadata km ON s.resource_version = km.resource_version
 		WHERE s.namespace = $1 AND s.name = $2`
 
 	err := w.tx.QueryRow(ctx, query, namespace, name).Scan(&uid)
@@ -237,7 +271,7 @@ func (w *Writer) updateServiceConditionsOnly(ctx context.Context, service models
 
 	// Update only the conditions in k8s_metadata using the resource_version
 	conditionUpdateQuery := `
-		UPDATE k8s_metadata 
+		UPDATE k8s_metadata
 		SET conditions = $1, updated_at = NOW()
 		WHERE resource_version = $2`
 
@@ -521,7 +555,7 @@ func (w *Writer) updateServiceAliasConditionsOnly(ctx context.Context, alias mod
 
 	// Update only the conditions in k8s_metadata using the resource_version
 	conditionUpdateQuery := `
-		UPDATE k8s_metadata 
+		UPDATE k8s_metadata
 		SET conditions = $1, updated_at = NOW()
 		WHERE resource_version = $2`
 

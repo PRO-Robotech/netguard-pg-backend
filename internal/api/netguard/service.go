@@ -574,6 +574,24 @@ func convertService(svc *netguardpb.Service) models.Service {
 		}
 	}
 
+	// Convert AggregatedAddressGroups from proto to domain
+	if len(svc.AggregatedAddressGroups) > 0 {
+		result.AggregatedAddressGroups = make([]models.AddressGroupReference, len(svc.AggregatedAddressGroups))
+		for i, agRef := range svc.AggregatedAddressGroups {
+			result.AggregatedAddressGroups[i] = models.AddressGroupReference{
+				Ref: v1beta1.NamespacedObjectReference{
+					ObjectReference: v1beta1.ObjectReference{
+						APIVersion: agRef.Ref.ApiVersion,
+						Kind:       agRef.Ref.Kind,
+						Name:       agRef.Ref.Name,
+					},
+					Namespace: agRef.Ref.Namespace,
+				},
+				Source: convertAGRegistrationSourceFromPB(agRef.Source),
+			}
+		}
+	}
+
 	return result
 }
 
@@ -879,6 +897,22 @@ func convertServiceToPB(svc models.Service) *netguardpb.Service {
 		})
 	}
 
+
+	// Convert AggregatedAddressGroups from domain to proto
+	if len(svc.AggregatedAddressGroups) > 0 {
+		result.AggregatedAddressGroups = make([]*netguardpb.AddressGroupReference, len(svc.AggregatedAddressGroups))
+		for i, agRef := range svc.AggregatedAddressGroups {
+			result.AggregatedAddressGroups[i] = &netguardpb.AddressGroupReference{
+				Ref: &netguardpb.NamespacedObjectReference{
+					ApiVersion: agRef.Ref.APIVersion,
+					Kind:       agRef.Ref.Kind,
+					Name:       agRef.Ref.Name,
+					Namespace:  agRef.Ref.Namespace,
+				},
+				Source: convertAGRegistrationSourceToPB(agRef.Source),
+			}
+		}
+	}
 	return result
 }
 
@@ -981,6 +1015,30 @@ func convertHostRegistrationSourceFromPB(source netguardpb.HostRegistrationSourc
 		return models.HostSourceBinding
 	default:
 		return models.HostSourceSpec // default
+	}
+}
+
+// convertAGRegistrationSourceFromPB converts proto AddressGroupRegistrationSource to domain
+func convertAGRegistrationSourceFromPB(source netguardpb.AddressGroupRegistrationSource) models.AddressGroupRegistrationSource {
+	switch source {
+	case netguardpb.AddressGroupRegistrationSource_AG_SOURCE_SPEC:
+		return models.AddressGroupSourceSpec
+	case netguardpb.AddressGroupRegistrationSource_AG_SOURCE_BINDING:
+		return models.AddressGroupSourceBinding
+	default:
+		return models.AddressGroupSourceSpec // default
+	}
+}
+
+// convertAGRegistrationSourceToPB converts domain AddressGroupRegistrationSource to proto
+func convertAGRegistrationSourceToPB(source models.AddressGroupRegistrationSource) netguardpb.AddressGroupRegistrationSource {
+	switch source {
+	case models.AddressGroupSourceSpec:
+		return netguardpb.AddressGroupRegistrationSource_AG_SOURCE_SPEC
+	case models.AddressGroupSourceBinding:
+		return netguardpb.AddressGroupRegistrationSource_AG_SOURCE_BINDING
+	default:
+		return netguardpb.AddressGroupRegistrationSource_AG_SOURCE_SPEC // default
 	}
 }
 

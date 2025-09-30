@@ -33,11 +33,13 @@ func TestServiceAliasConverter_ToDomain(t *testing.T) {
 					UID:       types.UID("test-uid-123"),
 				},
 				Spec: netguardv1beta1.ServiceAliasSpec{
-					ServiceRef: netguardv1beta1.ObjectReference{
+					ServiceRef: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
 						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Service",
-						Name:       "test-service",
+						Kind: "Service",
+						Name: "test-service",
 					},
+				},
 				},
 				Status: netguardv1beta1.ServiceAliasStatus{
 					Conditions: []metav1.Condition{
@@ -56,12 +58,7 @@ func TestServiceAliasConverter_ToDomain(t *testing.T) {
 						Namespace: "default",
 					},
 				},
-				ServiceRef: models.ServiceRef{
-					ResourceIdentifier: models.ResourceIdentifier{
-						Name:      "test-service",
-						Namespace: "default",
-					},
-				},
+				ServiceRef: models.NewServiceRef("test-service", models.WithNamespace("default")),
 				Meta: models.Meta{
 					UID: "test-uid-123",
 					Conditions: []metav1.Condition{
@@ -95,11 +92,13 @@ func TestServiceAliasConverter_ToDomain(t *testing.T) {
 					},
 				},
 				Spec: netguardv1beta1.ServiceAliasSpec{
-					ServiceRef: netguardv1beta1.ObjectReference{
+					ServiceRef: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
 						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Service",
-						Name:       "full-service",
+						Kind: "Service",
+						Name: "full-service",
 					},
+				},
 				},
 				Status: netguardv1beta1.ServiceAliasStatus{
 					ObservedGeneration: 3,
@@ -119,12 +118,7 @@ func TestServiceAliasConverter_ToDomain(t *testing.T) {
 						Namespace: "test-namespace",
 					},
 				},
-				ServiceRef: models.ServiceRef{
-					ResourceIdentifier: models.ResourceIdentifier{
-						Name:      "full-service",
-						Namespace: "test-namespace",
-					},
-				},
+				ServiceRef: models.NewServiceRef("full-service", models.WithNamespace("test-namespace")),
 				Meta: models.Meta{
 					UID: "test-uid-456",
 				},
@@ -182,12 +176,7 @@ func TestServiceAliasConverter_FromDomain(t *testing.T) {
 						Namespace: "default",
 					},
 				},
-				ServiceRef: models.ServiceRef{
-					ResourceIdentifier: models.ResourceIdentifier{
-						Name:      "test-service",
-						Namespace: "default",
-					},
-				},
+				ServiceRef: models.NewServiceRef("test-service", models.WithNamespace("default")),
 				Meta: models.Meta{
 					UID:             "test-uid-123",
 					ResourceVersion: "123",
@@ -206,12 +195,7 @@ func TestServiceAliasConverter_FromDomain(t *testing.T) {
 						Namespace: "alias-namespace",
 					},
 				},
-				ServiceRef: models.ServiceRef{
-					ResourceIdentifier: models.ResourceIdentifier{
-						Name:      "target-service",
-						Namespace: "service-namespace",
-					},
-				},
+				ServiceRef: models.NewServiceRef("target-service", models.WithNamespace("service-namespace")),
 				Meta: models.Meta{
 					UID:             "test-uid-456",
 					ResourceVersion: "456",
@@ -265,12 +249,7 @@ func TestServiceAliasConverter_RoundTrip(t *testing.T) {
 						Namespace: "default",
 					},
 				},
-				ServiceRef: models.ServiceRef{
-					ResourceIdentifier: models.ResourceIdentifier{
-						Name:      "test-service",
-						Namespace: "default",
-					},
-				},
+				ServiceRef: models.NewServiceRef("test-service", models.WithNamespace("default")),
 				Meta: models.Meta{
 					UID:             "test-uid-123",
 					ResourceVersion: "123",
@@ -325,12 +304,7 @@ func TestServiceAliasConverter_ToList(t *testing.T) {
 							Namespace: "default",
 						},
 					},
-					ServiceRef: models.ServiceRef{
-						ResourceIdentifier: models.ResourceIdentifier{
-							Name:      "service1",
-							Namespace: "default",
-						},
-					},
+					ServiceRef: models.NewServiceRef("service1", models.WithNamespace("default")),
 					Meta: models.Meta{
 						UID: "uid-1",
 					},
@@ -348,12 +322,7 @@ func TestServiceAliasConverter_ToList(t *testing.T) {
 							Namespace: "default",
 						},
 					},
-					ServiceRef: models.ServiceRef{
-						ResourceIdentifier: models.ResourceIdentifier{
-							Name:      "service1",
-							Namespace: "default",
-						},
-					},
+					ServiceRef: models.NewServiceRef("service1", models.WithNamespace("default")),
 					Meta: models.Meta{
 						UID: "uid-1",
 					},
@@ -365,12 +334,7 @@ func TestServiceAliasConverter_ToList(t *testing.T) {
 							Namespace: "test",
 						},
 					},
-					ServiceRef: models.ServiceRef{
-						ResourceIdentifier: models.ResourceIdentifier{
-							Name:      "service2",
-							Namespace: "test",
-						},
-					},
+					ServiceRef: models.NewServiceRef("service2", models.WithNamespace("test")),
 					Meta: models.Meta{
 						UID: "uid-2",
 					},

@@ -742,8 +742,13 @@ func (s *RuleS2SResourceService) GenerateIEAgAgRulesFromRuleS2SWithReader(ctx co
 
 	allPorts := s.extractPortsFromService(*portsSource)
 	var generatedRules []models.IEAgAgRule
-	for _, localAG := range localService.AddressGroups {
-		for _, targetAG := range targetService.AddressGroups {
+
+	// 🎯 STORY-001: Use AggregatedAddressGroups (spec + bindings) instead of AddressGroups (spec only)
+	localAGs := extractAddressGroupRefs(localService.AggregatedAddressGroups)
+	targetAGs := extractAddressGroupRefs(targetService.AggregatedAddressGroups)
+
+	for _, localAG := range localAGs {
+		for _, targetAG := range targetAGs {
 			// Group by protocol
 			for _, protocol := range []models.TransportProtocol{models.TCP, models.UDP} {
 				var protocolPorts []models.IngressPort
@@ -1323,12 +1328,13 @@ func (s *RuleS2SResourceService) NotifyServiceAddressGroupsChanged(ctx context.C
 	// Log current service state for debugging
 	service, serviceErr := reader.GetServiceByID(ctx, serviceID)
 	if serviceErr == nil {
-		agRefs := make([]string, len(service.AddressGroups))
-		for i, agRef := range service.AddressGroups {
-			agRefs[i] = fmt.Sprintf("%s/%s", agRef.Namespace, agRef.Name)
+		// 🎯 STORY-001: Log AggregatedAddressGroups (spec + bindings) instead of AddressGroups (spec only)
+		agRefs := make([]string, len(service.AggregatedAddressGroups))
+		for i, agRef := range service.AggregatedAddressGroups {
+			agRefs[i] = fmt.Sprintf("%s/%s (source=%s)", agRef.Ref.Namespace, agRef.Ref.Name, agRef.Source)
 		}
-		log.Printf("🔍 SERVICE_CURRENT_STATE: Service %s currently has %d AddressGroups: [%s]",
-			service.Key(), len(service.AddressGroups), strings.Join(agRefs, ", "))
+		log.Printf("🔍 SERVICE_CURRENT_STATE: Service %s currently has %d AggregatedAddressGroups: [%s]",
+			service.Key(), len(service.AggregatedAddressGroups), strings.Join(agRefs, ", "))
 	} else {
 		log.Printf("❌ SERVICE_LOOKUP_ERROR: Failed to get current state of Service %s: %v", serviceID.Key(), serviceErr)
 	}
@@ -1662,9 +1668,13 @@ func (s *RuleS2SResourceService) generateAggregatedIEAgAgRules(ctx context.Conte
 			continue
 		}
 
+		// 🎯 STORY-001: Use AggregatedAddressGroups (spec + bindings) instead of AddressGroups (spec only)
+		localAGs := extractAddressGroupRefs(localService.AggregatedAddressGroups)
+		targetAGs := extractAddressGroupRefs(targetService.AggregatedAddressGroups)
+
 		// Generate IEAgAg rules for each AG combination with cross-RuleS2S aggregation
-		for _, localAG := range localService.AddressGroups {
-			for _, targetAG := range targetService.AddressGroups {
+		for _, localAG := range localAGs {
+			for _, targetAG := range targetAGs {
 				var portsSource *models.Service
 				if currentRule.Traffic == models.INGRESS {
 					portsSource = localService
@@ -1693,7 +1703,8 @@ func (s *RuleS2SResourceService) generateAggregatedIEAgAgRules(ctx context.Conte
 					}
 					processedCombinations[combinationKey] = true
 
-					contributingRules, err := s.findContributingRuleS2S(ctx, &currentRule, localService, targetService, excludeMap)
+					// CLOUD-187: Pass protocol parameter to filter ports by TCP/UDP
+				contributingRules, err := s.findContributingRuleS2S(ctx, &currentRule, localService, targetService, excludeMap, protocol)
 					if err != nil {
 						continue
 					}
@@ -2320,12 +2331,14 @@ func (s *RuleS2SResourceService) extractPortsFromService(service models.Service)
 
 // findContributingRuleS2S finds all RuleS2S that contribute to the same IEAgAg rule aggregation
 // Based on reference lines 603-654
+// CLOUD-187: Added protocol parameter to filter ports by TCP/UDP
 func (s *RuleS2SResourceService) findContributingRuleS2S(
 	ctx context.Context,
 	currentRule *models.RuleS2S,
 	localService *models.Service,
 	targetService *models.Service,
 	excludeMap map[string]bool,
+	protocol models.TransportProtocol,
 ) ([]ContributingRule, error) {
 	klog.Infof("🔍 CROSS_AGGREGATION: Finding contributing RuleS2S for current rule %s (local: %s, target: %s)",
 		currentRule.Key(), localService.Key(), targetService.Key())
@@ -2358,7 +2371,8 @@ func (s *RuleS2SResourceService) findContributingRuleS2S(
 		}
 
 		// No deletion checking needed in our backend implementation
-		contributes, ports, err := s.checkIfRuleContributes(ctx, &rule, currentRule, localService, targetService)
+		// CLOUD-187: Pass protocol parameter to filter ports
+		contributes, ports, err := s.checkIfRuleContributes(ctx, &rule, currentRule, localService, targetService, protocol)
 		if err != nil {
 			klog.Errorf("  ❌ CROSS_AGGREGATION: Error checking rule contribution for %s: %v", rule.Key(), err)
 			continue
@@ -2471,12 +2485,14 @@ func (s *RuleS2SResourceService) aggregatePortsWithProtocol(
 
 // checkIfRuleContributes checks if a candidate rule should contribute to the same IEAgAg aggregation
 // Based on reference lines 656-693
+// CLOUD-187: Added protocol parameter to filter ports by TCP/UDP
 func (s *RuleS2SResourceService) checkIfRuleContributes(
 	ctx context.Context,
 	candidateRule *models.RuleS2S,
 	currentRule *models.RuleS2S,
 	localService *models.Service,
 	targetService *models.Service,
+	protocol models.TransportProtocol,
 ) (bool, []string, error) {
 	klog.Infof("🔍 CHECK_CONTRIBUTION: Checking if rule %s contributes to aggregation with rule %s",
 		candidateRule.Key(), currentRule.Key())
@@ -2534,12 +2550,13 @@ func (s *RuleS2SResourceService) checkIfRuleContributes(
 	// Extract ports based on traffic direction (following reference implementation)
 	// INGRESS: use local service ports (service receiving traffic)
 	// EGRESS: use target service ports (service receiving traffic)
+	// CLOUD-187: Pass protocol parameter to filter ports
 	if strings.ToLower(string(candidateRule.Traffic)) == "ingress" {
-		ports = s.extractPortStringsFromService(*candidateLocalService)
+		ports = s.extractPortStringsFromService(*candidateLocalService, protocol)
 		klog.Infof("  📍 DEBUG_PORT_EXTRACTION: INGRESS rule %s - extracting ports from LOCAL service %s: %s",
 			candidateRule.Key(), candidateLocalService.Key(), strings.Join(ports, ","))
 	} else {
-		ports = s.extractPortStringsFromService(*candidateTargetService)
+		ports = s.extractPortStringsFromService(*candidateTargetService, protocol)
 		klog.Infof("  📍 DEBUG_PORT_EXTRACTION: EGRESS rule %s - extracting ports from TARGET service %s: %s",
 			candidateRule.Key(), candidateTargetService.Key(), strings.Join(ports, ","))
 	}
@@ -2609,66 +2626,22 @@ func (s *RuleS2SResourceService) getServicesForRuleWithReader(
 // populateServiceAddressGroups populates Service.AddressGroups from AddressGroupBinding relationships
 // 🚀 CRITICAL FIX: This method fixes the Cross-RuleS2S aggregation bug by ensuring services have
 // their AddressGroups field properly populated from AddressGroupBinding relationships
-func (s *RuleS2SResourceService) populateServiceAddressGroups(
-	ctx context.Context,
-	reader ports.Reader,
-	service *models.Service,
-) (*models.Service, error) {
-	klog.V(2).Infof("🔧 POPULATE_ADDRESSGROUPS: Starting AddressGroup population for service %s", service.Key())
-
-	// Create a copy of the service to avoid modifying the original
-	serviceCopy := *service
-	serviceCopy.AddressGroups = []models.AddressGroupRef{} // Reset to empty slice
-
-	// Find all AddressGroupBindings that reference this service
-	err := reader.ListAddressGroupBindings(ctx, func(binding models.AddressGroupBinding) error {
-		// Check if this binding references our service
-		if binding.ServiceRef.Name == service.Name && binding.ServiceRef.Namespace == service.Namespace {
-			klog.V(2).Infof("  🔗 FOUND_BINDING: %s → AddressGroup %s/%s",
-				binding.Key(), binding.AddressGroupRef.Namespace, binding.AddressGroupRef.Name)
-
-			// Create AddressGroupRef from the binding
-			agRef := models.AddressGroupRef{
-				ObjectReference: v1beta1.ObjectReference{
-					APIVersion: binding.AddressGroupRef.APIVersion,
-					Kind:       binding.AddressGroupRef.Kind,
-					Name:       binding.AddressGroupRef.Name,
-				},
-				Namespace: binding.AddressGroupRef.Namespace,
-			}
-
-			// Add to service's AddressGroups
-			serviceCopy.AddressGroups = append(serviceCopy.AddressGroups, agRef)
-		}
-		return nil
-	}, ports.EmptyScope{})
-
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to list AddressGroupBindings for service %s", service.Key())
-	}
-
-	klog.V(2).Infof("  ✅ POPULATE_ADDRESSGROUPS: Service %s now has %d AddressGroups populated",
-		service.Key(), len(serviceCopy.AddressGroups))
-
-	// Log the AddressGroups for debugging
-	for i, ag := range serviceCopy.AddressGroups {
-		klog.V(2).Infof("    📍 AG[%d]: %s/%s", i, ag.Namespace, ag.Name)
-	}
-
-	return &serviceCopy, nil
-}
 
 // extractPortStringsFromService extracts port strings from a service's ingress ports
 // Based on reference lines 777-786 - returns []string for cross-RuleS2S aggregation
+// CLOUD-187: Filter ports by protocol to separate TCP and UDP
 func (s *RuleS2SResourceService) extractPortStringsFromService(
 	service models.Service,
+	protocol models.TransportProtocol,
 ) []string {
 	var ports []string
 	for _, port := range service.IngressPorts {
-		ports = append(ports, port.Port)
+		if port.Protocol == protocol {
+			ports = append(ports, port.Port)
+		}
 	}
-	klog.V(2).Infof("  📦 EXTRACT_PORTS: Service %s has %d ingress ports: %s",
-		service.Key(), len(ports), strings.Join(ports, ","))
+	klog.V(2).Infof("  📦 EXTRACT_PORTS: Service %s has %d ingress ports for protocol %s: %s",
+		service.Key(), len(ports), protocol, strings.Join(ports, ","))
 	return ports
 }
 
@@ -2816,9 +2789,13 @@ func (s *RuleS2SResourceService) ruleContributesToAggregationGroup(ctx context.C
 		portsSource = targetService
 	}
 
+	// 🎯 STORY-001: Use AggregatedAddressGroups (spec + bindings) instead of AddressGroups (spec only)
+	localAGs := extractAddressGroupRefs(localService.AggregatedAddressGroups)
+	targetAGs := extractAddressGroupRefs(targetService.AggregatedAddressGroups)
+
 	// Check if this rule would generate IEAgAg rules for the same AG combinations and protocol
-	for _, localAG := range localService.AddressGroups {
-		for _, targetAG := range targetService.AddressGroups {
+	for _, localAG := range localAGs {
+		for _, targetAG := range targetAGs {
 			// Check if this combination matches the aggregation group
 			if s.addressGroupRefMatches(localAG, group.LocalAG) &&
 				s.addressGroupRefMatches(targetAG, group.TargetAG) {
@@ -2881,62 +2858,6 @@ func (s *RuleS2SResourceService) FindAggregationGroupsForServices(ctx context.Co
 }
 
 // extractAggregationGroupsFromRuleS2S extracts all possible aggregation groups from a single RuleS2S
-func (s *RuleS2SResourceService) extractAggregationGroupsFromRuleS2S(ctx context.Context, reader ports.Reader, rule models.RuleS2S) ([]AggregationGroup, error) {
-	// Get service IDs directly from RuleS2S references (no ServiceAlias lookup needed)
-	localServiceID := models.ResourceIdentifier{
-		Name:      rule.ServiceLocalRef.Name,
-		Namespace: rule.ServiceLocalRef.Namespace,
-	}
-	targetServiceID := models.ResourceIdentifier{
-		Name:      rule.ServiceRef.Name,
-		Namespace: rule.ServiceRef.Namespace,
-	}
-
-	localService, err := reader.GetServiceByID(ctx, localServiceID)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to get local service %s", localServiceID.Key())
-	}
-
-	targetService, err := reader.GetServiceByID(ctx, targetServiceID)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to get target service %s", targetServiceID.Key())
-	}
-
-	// Extract ports based on traffic direction
-	var portsSource *models.Service
-	if rule.Traffic == models.INGRESS {
-		portsSource = localService
-	} else {
-		portsSource = targetService
-	}
-
-	var groups []AggregationGroup
-
-	// Generate aggregation groups for all AG combinations and protocols
-	for _, localAG := range localService.AddressGroups {
-		for _, targetAG := range targetService.AddressGroups {
-			// Check what protocols this service supports
-			protocolsSupported := make(map[models.TransportProtocol]bool)
-			for _, port := range portsSource.IngressPorts {
-				protocolsSupported[port.Protocol] = true
-			}
-
-			// Create aggregation groups for each protocol
-			for protocol := range protocolsSupported {
-				group := AggregationGroup{
-					Traffic:   rule.Traffic,
-					LocalAG:   localAG,
-					TargetAG:  targetAG,
-					Protocol:  protocol,
-					Namespace: rule.Namespace,
-				}
-				groups = append(groups, group)
-			}
-		}
-	}
-
-	return groups, nil
-}
 
 // 🆕 Helper methods for aggregation-aware regeneration
 
@@ -2975,33 +2896,6 @@ func (s *RuleS2SResourceService) findRuleS2SReferencingServiceAlias(ctx context.
 }
 
 // findRuleS2SByAddressGroupInteraction finds all RuleS2S where the specified AddressGroup appears in aggregation
-func (s *RuleS2SResourceService) findRuleS2SByAddressGroupInteraction(ctx context.Context, reader ports.Reader, addressGroup models.AddressGroupRef) ([]models.RuleS2S, error) {
-	var rules []models.RuleS2S
-
-	err := reader.ListRuleS2S(ctx, func(rule models.RuleS2S) error {
-		// Extract aggregation groups from this rule to see if it interacts with the AddressGroup
-		groups, err := s.extractAggregationGroupsFromRuleS2S(ctx, reader, rule)
-		if err != nil {
-			// Skip this rule if we can't analyze it
-			log.Printf("⚠️ findRuleS2SByAddressGroupInteraction: Failed to extract aggregation groups from rule %s: %v", rule.Key(), err)
-			return nil
-		}
-
-		// Check if any aggregation group involves the specified AddressGroup
-		for _, group := range groups {
-			if (group.LocalAG.Name == addressGroup.Name && group.LocalAG.Namespace == addressGroup.Namespace) ||
-				(group.TargetAG.Name == addressGroup.Name && group.TargetAG.Namespace == addressGroup.Namespace) {
-				rules = append(rules, rule)
-				log.Printf("🔍 findRuleS2SByAddressGroupInteraction: Rule %s interacts with AddressGroup %s/%s via aggregation", rule.Key(), addressGroup.Namespace, addressGroup.Name)
-				return nil // Found interaction, no need to check more groups for this rule
-			}
-		}
-
-		return nil
-	}, ports.EmptyScope{})
-
-	return rules, err
-}
 
 // regenerateAllIEAgAgRules is a safety fallback that regenerates all IEAgAg rules
 func (s *RuleS2SResourceService) regenerateAllIEAgAgRules(ctx context.Context, reader ports.Reader, reason string) error {
@@ -3030,33 +2924,6 @@ func (s *RuleS2SResourceService) processIEAgAgRuleConditionsInMemory(ctx context
 	}
 
 	klog.Infof("🧠 MEMORY_CONDITION: Processing conditions in memory for IEAgAgRule %s/%s", rule.Namespace, rule.Name)
-
-	// Clear old error conditions and update metadata (same as ConditionManager)
-	rule.Meta.ClearErrorCondition()
-	rule.Meta.TouchOnWrite("v1")
-
-	// Create a reader for validation (transaction already contains the new data)
-	reader, err := s.registry.Reader(ctx)
-	if err != nil {
-		rule.Meta.SetErrorCondition(models.ReasonBackendError, fmt.Sprintf("Failed to get reader for validation: %v", err))
-		rule.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Backend validation unavailable")
-		return err
-	}
-
-	// Set Synced condition (rule has been synced to backend)
-	rule.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "IEAgAgRule committed to backend successfully")
-
-	// Validate the rule exists and has proper structure
-	if _, err := reader.GetIEAgAgRuleByID(ctx, rule.ResourceIdentifier); err != nil {
-		if errors.Is(err, ports.ErrNotFound) {
-			// Rule doesn't exist yet (expected during creation)
-			klog.Infof("🧠 MEMORY_CONDITION: Rule %s not found in reader (expected during creation)", rule.Key())
-		} else {
-			rule.Meta.SetErrorCondition(models.ReasonBackendError, fmt.Sprintf("Backend validation failed: %v", err))
-			rule.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Backend validation failed")
-			return err
-		}
-	}
 
 	// Set Validated condition (rule passes validation)
 	rule.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "IEAgAgRule passed validation")
@@ -3177,10 +3044,14 @@ func (s *RuleS2SResourceService) generateAGCombinations(
 	klog.V(2).Infof("  🔧 GENERATE_COMBINATIONS: Detected protocols: %v",
 		protocolsWithPorts)
 
+	// 🎯 STORY-001: Use AggregatedAddressGroups (spec + bindings) instead of AddressGroups (spec only)
+	localAGs := extractAddressGroupRefs(localService.AggregatedAddressGroups)
+	targetAGs := extractAddressGroupRefs(targetService.AggregatedAddressGroups)
+
 	// Generate combinations for each localAG x targetAG x protocol
 	// This mirrors reference implementation lines 427-428: for localAG, for targetAG
-	for _, localAG := range localService.AddressGroups {
-		for _, targetAG := range targetService.AddressGroups {
+	for _, localAG := range localAGs {
+		for _, targetAG := range targetAGs {
 			for protocol := range protocolsWithPorts {
 				// Format: traffic-localAG_namespace/name-targetAG_namespace/name-protocol
 				combination := fmt.Sprintf("%s-%s/%s-%s/%s-%s",

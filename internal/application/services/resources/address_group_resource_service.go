@@ -1601,11 +1601,20 @@ func (s *AddressGroupResourceService) RegeneratePortMappingsForService(ctx conte
 	}
 	defer reader.Close()
 
+	// Collect AddressGroups from both bindings AND spec.addressGroups
+	addressGroupsToRegenerate := make(map[string]models.ResourceIdentifier)
+
+	// 1. Collect from AddressGroupBindings
 	var affectedBindings []models.AddressGroupBinding
 	err = reader.ListAddressGroupBindings(ctx, func(binding models.AddressGroupBinding) error {
 		// Check if this binding references our service (name and namespace must match exactly)
 		if binding.ServiceRef.Name == serviceID.Name && binding.ServiceRef.Namespace == serviceID.Namespace {
 			affectedBindings = append(affectedBindings, binding)
+			agKey := fmt.Sprintf("%s/%s", binding.AddressGroupRef.Namespace, binding.AddressGroupRef.Name)
+			addressGroupsToRegenerate[agKey] = models.ResourceIdentifier{
+				Name:      binding.AddressGroupRef.Name,
+				Namespace: binding.AddressGroupRef.Namespace,
+			}
 		}
 		return nil
 	}, ports.EmptyScope{}) // EmptyScope = search ALL namespaces
@@ -1614,19 +1623,25 @@ func (s *AddressGroupResourceService) RegeneratePortMappingsForService(ctx conte
 		return errors.Wrap(err, "failed to list address group bindings")
 	}
 
-	if len(affectedBindings) == 0 {
-		log.Printf("RegeneratePortMappingsForService: No bindings found for service %s", serviceID.Key())
-		return nil
+	// 2. Collect from Service.Spec.AddressGroups
+	service, err := reader.GetServiceByID(ctx, serviceID)
+	if err != nil && !errors.Is(err, ports.ErrNotFound) {
+		return errors.Wrap(err, "failed to get service for spec.addressGroups")
+	}
+	if service != nil && len(service.AddressGroups) > 0 {
+		log.Printf("RegeneratePortMappingsForService: Service %s has %d spec.addressGroups", serviceID.Key(), len(service.AddressGroups))
+		for _, agRef := range service.AddressGroups {
+			agKey := fmt.Sprintf("%s/%s", agRef.Namespace, agRef.Name)
+			addressGroupsToRegenerate[agKey] = models.ResourceIdentifier{
+				Name:      agRef.Name,
+				Namespace: agRef.Namespace,
+			}
+		}
 	}
 
-	// Group bindings by their target AddressGroup to avoid duplicate regeneration
-	addressGroupsToRegenerate := make(map[string]models.ResourceIdentifier)
-	for _, binding := range affectedBindings {
-		agKey := fmt.Sprintf("%s/%s", binding.AddressGroupRef.Namespace, binding.AddressGroupRef.Name)
-		addressGroupsToRegenerate[agKey] = models.ResourceIdentifier{
-			Name:      binding.AddressGroupRef.Name,
-			Namespace: binding.AddressGroupRef.Namespace,
-		}
+	if len(addressGroupsToRegenerate) == 0 {
+		log.Printf("RegeneratePortMappingsForService: No AddressGroups (bindings or spec) found for service %s", serviceID.Key())
+		return nil
 	}
 
 	log.Printf("RegeneratePortMappingsForService: Service %s affects %d AddressGroups",
@@ -1675,6 +1690,66 @@ func (s *AddressGroupResourceService) RegeneratePortMappingsForService(ctx conte
 
 	}
 
+	return nil
+}
+
+// RegeneratePortMappingsForAddressGroup regenerates AddressGroupPortMapping for a specific AddressGroup
+// This is called when a Service with spec.addressGroups is created/updated/deleted
+func (s *AddressGroupResourceService) RegeneratePortMappingsForAddressGroup(ctx context.Context, addressGroupID models.ResourceIdentifier) error {
+	log.Printf("RegeneratePortMappingsForAddressGroup: Regenerating port mapping for AddressGroup %s", addressGroupID.Key())
+
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Generate the complete mapping with all services (both from bindings and spec)
+	addressGroupPortMapping, err := s.generateCompleteAddressGroupPortMapping(ctx, reader, addressGroupID)
+	if err != nil {
+		return errors.Wrapf(err, "port conflict detected while regenerating mapping for AddressGroup %s", addressGroupID.Key())
+	}
+
+	// Always create a mapping (empty if no services) to ensure resource exists
+	if addressGroupPortMapping == nil {
+		addressGroupPortMapping = &models.AddressGroupPortMapping{
+			SelfRef: models.SelfRef{
+				ResourceIdentifier: addressGroupID,
+			},
+			AccessPorts: make(map[models.ServiceRef]models.ServicePorts),
+		}
+	}
+
+	// Update the mapping in storage
+	writer, err := s.registry.Writer(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get writer")
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	if err := s.syncAddressGroupPortMappings(ctx, writer, []models.AddressGroupPortMapping{*addressGroupPortMapping}, models.SyncOpUpsert); err != nil {
+		writer.Abort()
+		return errors.Wrapf(err, "failed to sync regenerated mapping for AddressGroup %s", addressGroupID.Key())
+	}
+
+	if err := writer.Commit(); err != nil {
+		writer.Abort()
+		return errors.Wrapf(err, "failed to commit regenerated mapping for AddressGroup %s", addressGroupID.Key())
+	}
+
+	// Process conditions for the regenerated mapping
+	if s.conditionManager != nil {
+		if err := s.conditionManager.ProcessAddressGroupPortMappingConditions(ctx, addressGroupPortMapping); err != nil {
+			klog.Errorf("Failed to process conditions for regenerated AddressGroupPortMapping %s: %v", addressGroupID.Key(), err)
+			// Don't fail the operation if condition processing fails
+		}
+	}
+
+	log.Printf("RegeneratePortMappingsForAddressGroup: Successfully regenerated port mapping for AddressGroup %s", addressGroupID.Key())
 	return nil
 }
 
@@ -2016,7 +2091,18 @@ func (s *AddressGroupResourceService) generateAddressGroupPortMapping(ctx contex
 // Returns error if port conflicts are detected to prevent binding creation
 func (s *AddressGroupResourceService) generateCompleteAddressGroupPortMapping(ctx context.Context, reader ports.Reader, addressGroupRef models.ResourceIdentifier) (*models.AddressGroupPortMapping, error) {
 
-	// Find all bindings for this AddressGroup
+	// Create the port mapping
+	addressGroupPortMapping := &models.AddressGroupPortMapping{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: addressGroupRef,
+		},
+		AccessPorts: make(map[models.ServiceRef]models.ServicePorts),
+	}
+
+	// Collect services from TWO sources: bindings AND spec.addressGroups
+	servicesToProcess := make(map[string]*models.Service) // Deduplicate by service key
+
+	// SOURCE 1: Find all bindings for this AddressGroup
 	var bindings []models.AddressGroupBinding
 	err := reader.ListAddressGroupBindings(ctx, func(binding models.AddressGroupBinding) error {
 		// Check if this binding targets our AddressGroup
@@ -2031,38 +2117,40 @@ func (s *AddressGroupResourceService) generateCompleteAddressGroupPortMapping(ct
 		return nil, errors.Wrapf(err, "failed to list bindings for AddressGroup %s", addressGroupRef.Key())
 	}
 
-	if len(bindings) == 0 {
-		log.Printf("generateCompleteAddressGroupPortMapping: No bindings found for AddressGroup %s, creating empty mapping", addressGroupRef.Key())
-		emptyMapping := &models.AddressGroupPortMapping{
-			SelfRef: models.SelfRef{
-				ResourceIdentifier: addressGroupRef,
-			},
-			AccessPorts: make(map[models.ServiceRef]models.ServicePorts), // Empty services map
-		}
-		return emptyMapping, nil
-	}
-
-	// Create the port mapping
-	addressGroupPortMapping := &models.AddressGroupPortMapping{
-		SelfRef: models.SelfRef{
-			ResourceIdentifier: addressGroupRef,
-		},
-		AccessPorts: make(map[models.ServiceRef]models.ServicePorts),
-	}
-
-	// Collect services from all bindings
+	// Collect services from bindings
 	for _, binding := range bindings {
-		// Get the service referenced in this binding
 		service, err := reader.GetServiceByID(ctx, models.ResourceIdentifier{
 			Name:      binding.ServiceRef.Name,
 			Namespace: binding.ServiceRef.Namespace,
 		})
 		if err != nil {
-			log.Printf("generateCompleteAddressGroupPortMapping: Failed to get service %s/%s: %v",
+			log.Printf("generateCompleteAddressGroupPortMapping: Failed to get service %s/%s from binding: %v",
 				binding.ServiceRef.Namespace, binding.ServiceRef.Name, err)
-			continue // Skip this service but continue with others
+			continue
 		}
+		servicesToProcess[service.Key()] = service
+	}
 
+	// SOURCE 2: Find all Services with this AddressGroup in spec.addressGroups
+	err = reader.ListServices(ctx, func(service models.Service) error {
+		for _, agRef := range service.AddressGroups {
+			if agRef.Name == addressGroupRef.Name && agRef.Namespace == addressGroupRef.Namespace {
+				servicesToProcess[service.Key()] = &service
+				break
+			}
+		}
+		return nil
+	}, ports.EmptyScope{})
+
+	if err != nil {
+		log.Printf("generateCompleteAddressGroupPortMapping: Failed to list services for AddressGroup %s: %v", addressGroupRef.Key(), err)
+		return nil, errors.Wrapf(err, "failed to list services for AddressGroup %s", addressGroupRef.Key())
+	}
+
+	log.Printf("generateCompleteAddressGroupPortMapping: AddressGroup %s has %d total services (from bindings + spec)", addressGroupRef.Key(), len(servicesToProcess))
+
+	// Process all collected services
+	for _, service := range servicesToProcess {
 		// Add service ports to the mapping
 		serviceRef := models.NewServiceRef(service.Name, models.WithNamespace(service.Namespace))
 		servicePorts := models.ServicePorts{

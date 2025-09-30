@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"reflect"
 
 	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
@@ -25,6 +26,7 @@ type ServiceConditionManagerInterface interface {
 // AddressGroupPortMappingRegenerator provides the ability to regenerate port mappings when service ports change
 type AddressGroupPortMappingRegenerator interface {
 	RegeneratePortMappingsForService(ctx context.Context, serviceID models.ResourceIdentifier) error
+	RegeneratePortMappingsForAddressGroup(ctx context.Context, addressGroupID models.ResourceIdentifier) error
 }
 
 // RuleS2SRegenerator interface is now defined in interfaces.go to avoid circular dependencies
@@ -162,6 +164,11 @@ func (s *ServiceResourceService) CreateService(ctx context.Context, service mode
 		}
 	}
 
+	// Sync port mappings for AddressGroups in spec
+	if err := s.syncPortMappingsForServiceSpecAGs(ctx, &service); err != nil {
+		return errors.Wrap(err, "failed to sync port mappings after service creation")
+	}
+
 	log.Printf("CreateService: Successfully created Service %s", service.Key())
 	return nil
 }
@@ -258,6 +265,44 @@ func (s *ServiceResourceService) UpdateService(ctx context.Context, service mode
 		}
 	}
 
+	// Check if AddressGroups or ports changed
+	addressGroupsChanged := !reflect.DeepEqual(existingService.AddressGroups, service.AddressGroups)
+	portsChanged = !reflect.DeepEqual(existingService.IngressPorts, service.IngressPorts)
+
+	if addressGroupsChanged || portsChanged {
+		// Sync port mappings for current AddressGroups
+		if err := s.syncPortMappingsForServiceSpecAGs(ctx, &service); err != nil {
+			return errors.Wrap(err, "failed to sync port mappings after service update")
+		}
+
+		// If AddressGroups changed, also regenerate for removed AGs
+		if addressGroupsChanged {
+			// Find removed AGs
+			oldAGKeys := make(map[string]bool)
+			for _, ag := range existingService.AddressGroups {
+				oldAGKeys[fmt.Sprintf("%s/%s", ag.Namespace, ag.Name)] = true
+			}
+
+			newAGKeys := make(map[string]bool)
+			for _, ag := range service.AddressGroups {
+				newAGKeys[fmt.Sprintf("%s/%s", ag.Namespace, ag.Name)] = true
+			}
+
+			// Regenerate for removed AGs
+			if s.portMappingRegenerator != nil {
+				for _, ag := range existingService.AddressGroups {
+					key := fmt.Sprintf("%s/%s", ag.Namespace, ag.Name)
+					if !newAGKeys[key] {
+						agID := models.NewResourceIdentifier(ag.Name, models.WithNamespace(ag.Namespace))
+						if err := s.portMappingRegenerator.RegeneratePortMappingsForAddressGroup(ctx, agID); err != nil {
+							return errors.Wrapf(err, "failed to regenerate port mappings for removed address group %s", agID.Key())
+						}
+					}
+				}
+			}
+		}
+	}
+
 	log.Printf("UpdateService: Successfully updated Service %s", service.Key())
 	return nil
 }
@@ -272,13 +317,14 @@ func (s *ServiceResourceService) SyncServices(ctx context.Context, services []mo
 
 	// Before syncing, check for port changes to trigger port mapping regeneration
 	var servicesWithPortChanges []models.ResourceIdentifier
+	var removedAddressGroups []models.ResourceIdentifier // Track removed AGs for cleanup
 
 	if s.portMappingRegenerator != nil {
 		reader, readerErr := s.registry.Reader(ctx)
 		if readerErr == nil {
 			defer reader.Close()
 
-			// Check each service for port changes
+			// Check each service for port changes OR new services with spec.addressGroups
 			for _, newService := range services {
 				serviceID := models.ResourceIdentifier{
 					Name:      newService.Name,
@@ -287,9 +333,36 @@ func (s *ServiceResourceService) SyncServices(ctx context.Context, services []mo
 
 				existingService, getErr := reader.GetServiceByID(ctx, serviceID)
 				if getErr == nil && existingService != nil {
-					// Service exists, check for port changes
-					if s.servicePortsChanged(*existingService, newService) {
-						log.Printf("SyncServices: Service %s ports changed, scheduling for regeneration", newService.Key())
+					// Service exists, check for port changes OR addressGroups changes
+					portsChanged := s.servicePortsChanged(*existingService, newService)
+					addressGroupsChanged := !reflect.DeepEqual(existingService.AddressGroups, newService.AddressGroups)
+
+					if portsChanged || addressGroupsChanged {
+						log.Printf("SyncServices: Service %s changed (ports=%v, addressGroups=%v), scheduling for regeneration",
+							newService.Key(), portsChanged, addressGroupsChanged)
+						servicesWithPortChanges = append(servicesWithPortChanges, serviceID)
+
+						// If AddressGroups changed, collect removed AGs for cleanup
+						if addressGroupsChanged {
+							newAGKeys := make(map[string]bool)
+							for _, ag := range newService.AddressGroups {
+								newAGKeys[fmt.Sprintf("%s/%s", ag.Namespace, ag.Name)] = true
+							}
+
+							for _, ag := range existingService.AddressGroups {
+								key := fmt.Sprintf("%s/%s", ag.Namespace, ag.Name)
+								if !newAGKeys[key] {
+									agID := models.NewResourceIdentifier(ag.Name, models.WithNamespace(ag.Namespace))
+									removedAddressGroups = append(removedAddressGroups, agID)
+									log.Printf("SyncServices: Service %s removed AddressGroup %s, scheduling for cleanup", newService.Key(), agID.Key())
+								}
+							}
+						}
+					}
+				} else {
+					// New service - check if it has spec.addressGroups that need port mapping creation
+					if len(newService.AddressGroups) > 0 {
+						log.Printf("SyncServices: New Service %s has %d spec.addressGroups, scheduling for port mapping creation", newService.Key(), len(newService.AddressGroups))
 						servicesWithPortChanges = append(servicesWithPortChanges, serviceID)
 					}
 				}
@@ -317,6 +390,71 @@ func (s *ServiceResourceService) SyncServices(ctx context.Context, services []mo
 
 	if err = s.syncServices(ctx, writer, services, syncOp); err != nil {
 		return errors.Wrap(err, "failed to sync services")
+	}
+
+	// CRITICAL: Validate services BEFORE commit to catch port conflicts early
+	// This prevents invalid Services from being persisted to the database
+	if syncOp != models.SyncOpDelete {
+		reader, readerErr := s.registry.Reader(ctx)
+		if readerErr != nil {
+			writer.Abort()
+			return errors.Wrap(readerErr, "failed to get reader for pre-commit validation")
+		}
+		defer reader.Close()
+
+		validator := validation.NewDependencyValidator(reader)
+		serviceValidator := validator.GetServiceValidator()
+
+		for _, service := range services {
+			serviceID := service.ResourceIdentifier
+
+			// Check if service exists to determine validation type
+			existingService, getErr := reader.GetServiceByID(ctx, serviceID)
+
+			if getErr == nil && existingService != nil {
+				// Service exists - this is an UPDATE operation
+				// Use ValidateForUpdate to check port conflicts with proper context
+				if err := serviceValidator.ValidateForUpdate(ctx, *existingService, service); err != nil {
+					writer.Abort()
+					log.Printf("❌ SyncServices: Pre-commit validation failed for UPDATE service %s: %v", service.Key(), err)
+					return errors.Wrapf(err, "pre-commit validation failed for service %s", service.Key())
+				}
+				log.Printf("✅ SyncServices: Pre-commit validation passed for UPDATE service %s", service.Key())
+			} else {
+				// Service does not exist - this is a CREATE operation
+				// Use ValidateWithoutDuplicateCheck (creation validation without entity existence check)
+				if err := serviceValidator.ValidateWithoutDuplicateCheck(ctx, service); err != nil {
+					writer.Abort()
+					log.Printf("❌ SyncServices: Pre-commit validation failed for CREATE service %s: %v", service.Key(), err)
+					return errors.Wrapf(err, "pre-commit validation failed for service %s", service.Key())
+				}
+				log.Printf("✅ SyncServices: Pre-commit validation passed for CREATE service %s", service.Key())
+			}
+		}
+		log.Printf("✅ SyncServices: Pre-commit validation passed for all %d services", len(services))
+	}
+
+	// CRITICAL: Validate services BEFORE commit to catch port conflicts early
+	// This prevents invalid Services from being persisted to the database
+	if syncOp != models.SyncOpDelete {
+		reader, readerErr := s.registry.Reader(ctx)
+		if readerErr != nil {
+			writer.Abort()
+			return errors.Wrap(readerErr, "failed to get reader for pre-commit validation")
+		}
+		defer reader.Close()
+
+		validator := validation.NewDependencyValidator(reader)
+		serviceValidator := validator.GetServiceValidator()
+
+		for _, service := range services {
+			if err := serviceValidator.ValidateWithoutDuplicateCheck(ctx, service); err != nil {
+				writer.Abort()
+				log.Printf("❌ SyncServices: Pre-commit validation failed for service %s: %v", service.Key(), err)
+				return errors.Wrapf(err, "pre-commit validation failed for service %s", service.Key())
+			}
+		}
+		log.Printf("✅ SyncServices: Pre-commit validation passed for %d services", len(services))
 	}
 
 	if err = writer.Commit(); err != nil {
@@ -351,6 +489,21 @@ func (s *ServiceResourceService) SyncServices(ctx context.Context, services []mo
 				// Don't fail the operation if port mapping regeneration fails
 			} else {
 				log.Printf("✅ SyncServices: Successfully regenerated AddressGroupPortMappings for service %s", serviceID.Key())
+			}
+		}
+	}
+
+	// Regenerate port mappings for removed AddressGroups to clean up stale service references
+	if s.portMappingRegenerator != nil && len(removedAddressGroups) > 0 {
+		log.Printf("🧹 SyncServices: Cleaning up %d removed AddressGroups from port mappings", len(removedAddressGroups))
+
+		for _, agID := range removedAddressGroups {
+			if err := s.portMappingRegenerator.RegeneratePortMappingsForAddressGroup(ctx, agID); err != nil {
+				klog.Errorf("SyncServices: Failed to regenerate port mapping for removed AddressGroup %s: %v",
+					agID.Key(), err)
+				// Don't fail the operation if cleanup fails
+			} else {
+				log.Printf("✅ SyncServices: Successfully cleaned up port mapping for removed AddressGroup %s", agID.Key())
 			}
 		}
 	}
@@ -413,7 +566,23 @@ func (s *ServiceResourceService) DeleteServicesByIDs(ctx context.Context, ids []
 
 	log.Printf("DeleteServicesByIDs: All %d Services validated for deletion", len(ids))
 
-	// 3. Proceed with deletion
+	// 3. For each service to be deleted, regenerate port mappings for its AddressGroups
+	for _, id := range ids {
+		service, err := reader.GetServiceByID(ctx, id)
+		if err != nil {
+			if errors.Is(err, ports.ErrNotFound) {
+				continue // Service doesn't exist, skip
+			}
+			return errors.Wrapf(err, "failed to get service %s before deletion", id.Key())
+		}
+
+		// Regenerate port mappings for all AddressGroups to remove this service
+		if err := s.syncPortMappingsForServiceSpecAGs(ctx, service); err != nil {
+			return errors.Wrapf(err, "failed to sync port mappings before deleting service %s", id.Key())
+		}
+	}
+
+	// 4. Proceed with deletion
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get writer")
@@ -764,6 +933,29 @@ func (s *ServiceResourceService) servicePortsChanged(oldService, newService mode
 	}
 
 	return false
+}
+
+// syncPortMappingsForServiceSpecAGs regenerates port mappings for all AddressGroups in Service.Spec
+func (s *ServiceResourceService) syncPortMappingsForServiceSpecAGs(ctx context.Context, service *models.Service) error {
+	if service == nil || len(service.AddressGroups) == 0 {
+		return nil
+	}
+
+	if s.portMappingRegenerator == nil {
+		return nil
+	}
+
+	for _, agRef := range service.AddressGroups {
+		agID := models.NewResourceIdentifier(agRef.Name, models.WithNamespace(agRef.Namespace))
+
+		// Regenerate port mapping for this AddressGroup
+		// This will include all Services (both from spec and bindings)
+		if err := s.portMappingRegenerator.RegeneratePortMappingsForAddressGroup(ctx, agID); err != nil {
+			return errors.Wrapf(err, "failed to regenerate port mappings for address group %s", agID.Key())
+		}
+	}
+
+	return nil
 }
 
 // FindServicesForAddressGroups finds all services that are bound to given address groups

@@ -35,12 +35,16 @@ func TestIEAgAgRuleConverter_ToDomain(t *testing.T) {
 				Spec: netguardv1beta1.IEAgAgRuleSpec{
 					Transport: netguardv1beta1.ProtocolTCP,
 					Traffic:   netguardv1beta1.INGRESS,
-					AddressGroupLocal: netguardv1beta1.ObjectReference{
+					AddressGroupLocal: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
 						Name: "local-ag",
 					},
-					AddressGroup: netguardv1beta1.ObjectReference{
+				},
+					AddressGroup: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
 						Name: "remote-ag",
 					},
+				},
 					Action: netguardv1beta1.ActionAccept,
 				},
 			},
@@ -53,18 +57,14 @@ func TestIEAgAgRuleConverter_ToDomain(t *testing.T) {
 				},
 				Transport: models.TCP,
 				Traffic:   models.INGRESS,
-				AddressGroupLocal: models.AddressGroupRef{
-					ResourceIdentifier: models.ResourceIdentifier{
-						Name:      "local-ag",
-						Namespace: "default", // inherited from rule namespace
-					},
-				},
-				AddressGroup: models.AddressGroupRef{
-					ResourceIdentifier: models.ResourceIdentifier{
-						Name:      "remote-ag",
-						Namespace: "default", // inherited from rule namespace
-					},
-				},
+				AddressGroupLocal: models.NewAddressGroupRef(
+					"local-ag",
+					models.WithNamespace("default"), // inherited from rule namespace
+				),
+				AddressGroup: models.NewAddressGroupRef(
+					"remote-ag",
+					models.WithNamespace("default"), // inherited from rule namespace
+				),
 				Action:   models.ActionAccept,
 				Logs:     false,
 				Priority: 0,
@@ -88,12 +88,16 @@ func TestIEAgAgRuleConverter_ToDomain(t *testing.T) {
 				Spec: netguardv1beta1.IEAgAgRuleSpec{
 					Transport: netguardv1beta1.ProtocolUDP,
 					Traffic:   netguardv1beta1.EGRESS,
-					AddressGroupLocal: netguardv1beta1.ObjectReference{
+					AddressGroupLocal: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
 						Name: "local-ag",
 					},
-					AddressGroup: netguardv1beta1.ObjectReference{
+				},
+					AddressGroup: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
 						Name: "remote-ag",
 					},
+				},
 					Ports: []netguardv1beta1.PortSpec{
 						{
 							Port: 80,
@@ -115,18 +119,14 @@ func TestIEAgAgRuleConverter_ToDomain(t *testing.T) {
 				},
 				Transport: models.UDP,
 				Traffic:   models.EGRESS,
-				AddressGroupLocal: models.AddressGroupRef{
-					ResourceIdentifier: models.ResourceIdentifier{
-						Name:      "local-ag",
-						Namespace: "webapp",
-					},
-				},
-				AddressGroup: models.AddressGroupRef{
-					ResourceIdentifier: models.ResourceIdentifier{
-						Name:      "remote-ag",
-						Namespace: "webapp",
-					},
-				},
+				AddressGroupLocal: models.NewAddressGroupRef(
+					"local-ag",
+					models.WithNamespace("webapp"),
+				),
+				AddressGroup: models.NewAddressGroupRef(
+					"remote-ag",
+					models.WithNamespace("webapp"),
+				),
 				Ports: []models.PortSpec{
 					{Destination: "80"},
 					{Destination: "443"},
@@ -154,12 +154,16 @@ func TestIEAgAgRuleConverter_ToDomain(t *testing.T) {
 				Spec: netguardv1beta1.IEAgAgRuleSpec{
 					Transport: netguardv1beta1.ProtocolTCP,
 					Traffic:   netguardv1beta1.INGRESS,
-					AddressGroupLocal: netguardv1beta1.ObjectReference{
+					AddressGroupLocal: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
 						Name: "local-ag",
 					},
-					AddressGroup: netguardv1beta1.ObjectReference{
+				},
+					AddressGroup: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
 						Name: "remote-ag",
 					},
+				},
 					Ports: []netguardv1beta1.PortSpec{
 						{
 							PortRange: &netguardv1beta1.PortRange{
@@ -183,18 +187,14 @@ func TestIEAgAgRuleConverter_ToDomain(t *testing.T) {
 				},
 				Transport: models.TCP,
 				Traffic:   models.INGRESS,
-				AddressGroupLocal: models.AddressGroupRef{
-					ResourceIdentifier: models.ResourceIdentifier{
-						Name:      "local-ag",
-						Namespace: "default",
-					},
-				},
-				AddressGroup: models.AddressGroupRef{
-					ResourceIdentifier: models.ResourceIdentifier{
-						Name:      "remote-ag",
-						Namespace: "default",
-					},
-				},
+				AddressGroupLocal: models.NewAddressGroupRef(
+					"local-ag",
+					models.WithNamespace("default"),
+				),
+				AddressGroup: models.NewAddressGroupRef(
+					"remote-ag",
+					models.WithNamespace("default"),
+				),
 				Ports: []models.PortSpec{
 					{Destination: "8000-8999"},
 					{Destination: "443"},
@@ -233,12 +233,16 @@ func TestIEAgAgRuleConverter_ToDomain(t *testing.T) {
 				Spec: netguardv1beta1.IEAgAgRuleSpec{
 					Transport: netguardv1beta1.ProtocolTCP,
 					Traffic:   netguardv1beta1.INGRESS,
-					AddressGroupLocal: netguardv1beta1.ObjectReference{
+					AddressGroupLocal: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
 						Name: "local-ag",
 					},
-					AddressGroup: netguardv1beta1.ObjectReference{
+				},
+					AddressGroup: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
 						Name: "remote-ag",
 					},
+				},
 					Action:   netguardv1beta1.ActionAccept,
 					Priority: 200,
 				},
@@ -262,18 +266,14 @@ func TestIEAgAgRuleConverter_ToDomain(t *testing.T) {
 				},
 				Transport: models.TCP,
 				Traffic:   models.INGRESS,
-				AddressGroupLocal: models.AddressGroupRef{
-					ResourceIdentifier: models.ResourceIdentifier{
-						Name:      "local-ag",
-						Namespace: "test-ns",
-					},
-				},
-				AddressGroup: models.AddressGroupRef{
-					ResourceIdentifier: models.ResourceIdentifier{
-						Name:      "remote-ag",
-						Namespace: "test-ns",
-					},
-				},
+				AddressGroupLocal: models.NewAddressGroupRef(
+					"local-ag",
+					models.WithNamespace("test-ns"),
+				),
+				AddressGroup: models.NewAddressGroupRef(
+					"remote-ag",
+					models.WithNamespace("test-ns"),
+				),
 				Action:   models.ActionAccept,
 				Logs:     false,
 				Priority: 200,
@@ -316,12 +316,16 @@ func TestIEAgAgRuleConverter_ToDomain(t *testing.T) {
 				Spec: netguardv1beta1.IEAgAgRuleSpec{
 					Transport: "INVALID",
 					Traffic:   netguardv1beta1.INGRESS,
-					AddressGroupLocal: netguardv1beta1.ObjectReference{
+					AddressGroupLocal: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
 						Name: "local-ag",
 					},
-					AddressGroup: netguardv1beta1.ObjectReference{
+				},
+					AddressGroup: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
 						Name: "remote-ag",
 					},
+				},
 					Action: netguardv1beta1.ActionAccept,
 				},
 			},
@@ -338,12 +342,16 @@ func TestIEAgAgRuleConverter_ToDomain(t *testing.T) {
 				Spec: netguardv1beta1.IEAgAgRuleSpec{
 					Transport: netguardv1beta1.ProtocolTCP,
 					Traffic:   "INVALID",
-					AddressGroupLocal: netguardv1beta1.ObjectReference{
+					AddressGroupLocal: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
 						Name: "local-ag",
 					},
-					AddressGroup: netguardv1beta1.ObjectReference{
+				},
+					AddressGroup: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
 						Name: "remote-ag",
 					},
+				},
 					Action: netguardv1beta1.ActionAccept,
 				},
 			},
@@ -389,18 +397,14 @@ func TestIEAgAgRuleConverter_FromDomain(t *testing.T) {
 				},
 				Transport: models.TCP,
 				Traffic:   models.INGRESS,
-				AddressGroupLocal: models.AddressGroupRef{
-					ResourceIdentifier: models.ResourceIdentifier{
-						Name:      "local-ag",
-						Namespace: "default",
-					},
-				},
-				AddressGroup: models.AddressGroupRef{
-					ResourceIdentifier: models.ResourceIdentifier{
-						Name:      "remote-ag",
-						Namespace: "default",
-					},
-				},
+				AddressGroupLocal: models.NewAddressGroupRef(
+					"local-ag",
+					models.WithNamespace("default"),
+				),
+				AddressGroup: models.NewAddressGroupRef(
+					"remote-ag",
+					models.WithNamespace("default"),
+				),
 				Action: models.ActionAccept,
 			},
 			checkFunc: func(t *testing.T, result *netguardv1beta1.IEAgAgRule) {
@@ -426,18 +430,14 @@ func TestIEAgAgRuleConverter_FromDomain(t *testing.T) {
 				},
 				Transport: models.UDP,
 				Traffic:   models.EGRESS,
-				AddressGroupLocal: models.AddressGroupRef{
-					ResourceIdentifier: models.ResourceIdentifier{
-						Name:      "local-ag",
-						Namespace: "webapp",
-					},
-				},
-				AddressGroup: models.AddressGroupRef{
-					ResourceIdentifier: models.ResourceIdentifier{
-						Name:      "remote-ag",
-						Namespace: "webapp",
-					},
-				},
+				AddressGroupLocal: models.NewAddressGroupRef(
+					"local-ag",
+					models.WithNamespace("webapp"),
+				),
+				AddressGroup: models.NewAddressGroupRef(
+					"remote-ag",
+					models.WithNamespace("webapp"),
+				),
 				Ports: []models.PortSpec{
 					{Destination: "80"},
 					{Destination: "443"},
@@ -470,18 +470,14 @@ func TestIEAgAgRuleConverter_FromDomain(t *testing.T) {
 				},
 				Transport: models.TCP,
 				Traffic:   models.INGRESS,
-				AddressGroupLocal: models.AddressGroupRef{
-					ResourceIdentifier: models.ResourceIdentifier{
-						Name:      "local-ag",
-						Namespace: "default",
-					},
-				},
-				AddressGroup: models.AddressGroupRef{
-					ResourceIdentifier: models.ResourceIdentifier{
-						Name:      "remote-ag",
-						Namespace: "default",
-					},
-				},
+				AddressGroupLocal: models.NewAddressGroupRef(
+					"local-ag",
+					models.WithNamespace("default"),
+				),
+				AddressGroup: models.NewAddressGroupRef(
+					"remote-ag",
+					models.WithNamespace("default"),
+				),
 				Ports: []models.PortSpec{
 					{Destination: "8000-8999"},
 					{Destination: "443"},
@@ -545,12 +541,16 @@ func TestIEAgAgRuleConverter_RoundTrip(t *testing.T) {
 				Spec: netguardv1beta1.IEAgAgRuleSpec{
 					Transport: netguardv1beta1.ProtocolTCP,
 					Traffic:   netguardv1beta1.INGRESS,
-					AddressGroupLocal: netguardv1beta1.ObjectReference{
+					AddressGroupLocal: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
 						Name: "local-ag",
 					},
-					AddressGroup: netguardv1beta1.ObjectReference{
+				},
+					AddressGroup: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
 						Name: "remote-ag",
 					},
+				},
 					Action: netguardv1beta1.ActionAccept,
 				},
 			},
@@ -565,12 +565,16 @@ func TestIEAgAgRuleConverter_RoundTrip(t *testing.T) {
 				Spec: netguardv1beta1.IEAgAgRuleSpec{
 					Transport: netguardv1beta1.ProtocolUDP,
 					Traffic:   netguardv1beta1.EGRESS,
-					AddressGroupLocal: netguardv1beta1.ObjectReference{
+					AddressGroupLocal: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
 						Name: "local-ag",
 					},
-					AddressGroup: netguardv1beta1.ObjectReference{
+				},
+					AddressGroup: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
 						Name: "remote-ag",
 					},
+				},
 					Ports: []netguardv1beta1.PortSpec{
 						{Port: 80},
 						{PortRange: &netguardv1beta1.PortRange{From: 8000, To: 8999}},
@@ -657,12 +661,16 @@ func TestIEAgAgRuleConverter_EnumConversions(t *testing.T) {
 				Spec: netguardv1beta1.IEAgAgRuleSpec{
 					Transport: tc.k8sTransport,
 					Traffic:   tc.k8sTraffic,
-					AddressGroupLocal: netguardv1beta1.ObjectReference{
+					AddressGroupLocal: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
 						Name: "local-ag",
 					},
-					AddressGroup: netguardv1beta1.ObjectReference{
+				},
+					AddressGroup: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
 						Name: "remote-ag",
 					},
+				},
 					Action: tc.k8sAction,
 				},
 			}
@@ -742,16 +750,14 @@ func TestIEAgAgRuleConverter_PortParsing(t *testing.T) {
 				},
 				Transport: models.TCP,
 				Traffic:   models.INGRESS,
-				AddressGroupLocal: models.AddressGroupRef{
-					ResourceIdentifier: models.ResourceIdentifier{
-						Name: "local-ag",
-					},
-				},
-				AddressGroup: models.AddressGroupRef{
-					ResourceIdentifier: models.ResourceIdentifier{
-						Name: "remote-ag",
-					},
-				},
+				AddressGroupLocal: models.NewAddressGroupRef(
+					"local-ag",
+					models.WithNamespace("default"),
+				),
+				AddressGroup: models.NewAddressGroupRef(
+					"remote-ag",
+					models.WithNamespace("default"),
+				),
 				Ports:  tc.domainPorts,
 				Action: models.ActionAccept,
 			}
@@ -795,11 +801,15 @@ func TestIEAgAgRuleConverter_Trace_Conversion(t *testing.T) {
 			Spec: netguardv1beta1.IEAgAgRuleSpec{
 				Transport: netguardv1beta1.ProtocolTCP,
 				Traffic:   netguardv1beta1.INGRESS,
-				AddressGroupLocal: netguardv1beta1.ObjectReference{
-					Name: "local-ag",
+				AddressGroupLocal: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
+						Name: "local-ag",
+					},
 				},
-				AddressGroup: netguardv1beta1.ObjectReference{
-					Name: "remote-ag",
+				AddressGroup: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
+						Name: "remote-ag",
+					},
 				},
 				Action: netguardv1beta1.ActionAccept,
 				Trace:  true, // Test trace enabled
@@ -826,18 +836,14 @@ func TestIEAgAgRuleConverter_Trace_Conversion(t *testing.T) {
 			},
 			Transport: models.TCP,
 			Traffic:   models.INGRESS,
-			AddressGroupLocal: models.AddressGroupRef{
-				ResourceIdentifier: models.ResourceIdentifier{
-					Name:      "local-ag",
-					Namespace: "default",
-				},
-			},
-			AddressGroup: models.AddressGroupRef{
-				ResourceIdentifier: models.ResourceIdentifier{
-					Name:      "remote-ag",
-					Namespace: "default",
-				},
-			},
+			AddressGroupLocal: models.NewAddressGroupRef(
+				"local-ag",
+				models.WithNamespace("default"),
+			),
+			AddressGroup: models.NewAddressGroupRef(
+				"remote-ag",
+				models.WithNamespace("default"),
+			),
 			Action: models.ActionAccept,
 			Trace:  true, // Test trace enabled
 		}

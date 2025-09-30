@@ -154,7 +154,7 @@ func (s *HostBindingStorage) updateHostBindingStatus(ctx context.Context, hostBi
 		host.IsBound = true
 		host.AddressGroupName = hostBinding.AddressGroupRef.Name
 		host.BindingRef = &netguardv1beta1.ObjectReference{
-			APIVersion: "netguard.io/v1beta1",
+			APIVersion: "netguard.sgroups.io/v1beta1",
 			Kind:       "HostBinding",
 			Name:       hostBinding.Name,
 		}

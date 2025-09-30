@@ -10,6 +10,10 @@ type Service struct {
 	Description   string
 	IngressPorts  []IngressPort
 	AddressGroups []AddressGroupRef
+
+	// AggregatedAddressGroups contains all address groups from both spec and bindings
+	AggregatedAddressGroups []AddressGroupReference
+
 	Meta          Meta
 }
 
@@ -33,3 +37,19 @@ func NewServiceRef(name string, opts ...ResourceIdentifierOption) ServiceRef {
 		Namespace: id.Namespace,
 	}
 }
+
+// AddressGroupReference represents a reference to an AddressGroup with source tracking
+type AddressGroupReference struct {
+	Ref    netguardv1beta1.NamespacedObjectReference
+	Source AddressGroupRegistrationSource
+}
+
+// AddressGroupRegistrationSource indicates how an address group was registered
+type AddressGroupRegistrationSource string
+
+const (
+	// AddressGroupSourceSpec indicates the address group was registered via Service.spec.addressGroups
+	AddressGroupSourceSpec AddressGroupRegistrationSource = "spec"
+	// AddressGroupSourceBinding indicates the address group was registered via AddressGroupBinding
+	AddressGroupSourceBinding AddressGroupRegistrationSource = "binding"
+)

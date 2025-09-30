@@ -49,9 +49,15 @@ type Service struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec          ServiceSpec       `json:"spec,omitempty"`
-	Status        ServiceStatus     `json:"status,omitempty"`
-	AddressGroups AddressGroupsSpec `json:"addressGroups,omitempty"`
+	Spec   ServiceSpec   `json:"spec,omitempty"`
+	Status ServiceStatus `json:"status,omitempty"`
+
+	// xAggregatedAddressGroups contains all address groups from both spec.addressGroups and AddressGroupBindings.
+	// This field is automatically populated by PostgreSQL triggers and is READ-ONLY.
+	// Users should NOT modify this field directly - changes will be ignored.
+	// Source field values: "spec" = direct registration via spec.addressGroups, "binding" = registration via AddressGroupBinding
+	// +optional
+	AggregatedAddressGroups []AddressGroupReference `json:"xAggregatedAddressGroups,omitempty"`
 }
 
 // ServiceSpec defines the desired state of Service
@@ -63,6 +69,10 @@ type ServiceSpec struct {
 	// IngressPorts defines the ports that are allowed for ingress traffic
 	// +optional
 	IngressPorts []IngressPort `json:"ingressPorts,omitempty"`
+
+	// AddressGroups is a list of address group references
+	// +optional
+	AddressGroups []NamespacedObjectReference `json:"addressGroups,omitempty"`
 }
 
 // IngressPort defines a port configuration for ingress traffic
@@ -311,6 +321,28 @@ type HostReference struct {
 
 	// Source indicates how this host was registered (spec or binding)
 	Source HostRegistrationSource `json:"source"`
+}
+
+// AddressGroupRegistrationSource represents the source of address group registration
+// +kubebuilder:validation:Enum=spec;binding
+type AddressGroupRegistrationSource string
+
+const (
+	// AddressGroupSourceSpec indicates the address group was registered via Service.spec.addressGroups
+	AddressGroupSourceSpec AddressGroupRegistrationSource = "spec"
+	// AddressGroupSourceBinding indicates the address group was registered via AddressGroupBinding
+	AddressGroupSourceBinding AddressGroupRegistrationSource = "binding"
+)
+
+// AddressGroupReference represents a reference to an AddressGroup with source tracking
+type AddressGroupReference struct {
+	// Ref contains the full Kubernetes object reference
+	Ref NamespacedObjectReference `json:"ref"`
+
+	// Source indicates how this address group was registered
+	// +kubebuilder:validation:Enum=spec;binding
+	// +kubebuilder:validation:Required
+	Source AddressGroupRegistrationSource `json:"source"`
 }
 
 // PortConfig defines a port or port range configuration

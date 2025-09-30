@@ -101,6 +101,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupPortMappingList":     schema_k8s_apis_netguard_v1beta1_AddressGroupPortMappingList(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupPortMappingSpec":     schema_k8s_apis_netguard_v1beta1_AddressGroupPortMappingSpec(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupPortMappingStatus":   schema_k8s_apis_netguard_v1beta1_AddressGroupPortMappingStatus(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupReference":           schema_k8s_apis_netguard_v1beta1_AddressGroupReference(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupSpec":                schema_k8s_apis_netguard_v1beta1_AddressGroupSpec(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupStatus":              schema_k8s_apis_netguard_v1beta1_AddressGroupStatus(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupsSpec":               schema_k8s_apis_netguard_v1beta1_AddressGroupsSpec(ref),
@@ -3524,6 +3525,37 @@ func schema_k8s_apis_netguard_v1beta1_AddressGroupPortMappingStatus(ref common.R
 	}
 }
 
+func schema_k8s_apis_netguard_v1beta1_AddressGroupReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "AddressGroupReference represents a reference to an AddressGroup with source tracking",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"ref": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Ref contains the full Kubernetes object reference",
+							Default:     map[string]interface{}{},
+							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"),
+						},
+					},
+					"source": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Source indicates how this address group was registered",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"ref", "source"},
+			},
+		},
+		Dependencies: []string{
+			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"},
+	}
+}
+
 func schema_k8s_apis_netguard_v1beta1_AddressGroupSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -5499,17 +5531,25 @@ func schema_k8s_apis_netguard_v1beta1_Service(ref common.ReferenceCallback) comm
 							Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ServiceStatus"),
 						},
 					},
-					"addressGroups": {
+					"xAggregatedAddressGroups": {
 						SchemaProps: spec.SchemaProps{
-							Default: map[string]interface{}{},
-							Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupsSpec"),
+							Description: "xAggregatedAddressGroups contains all address groups from both spec.addressGroups and AddressGroupBindings. This field is automatically populated by PostgreSQL triggers and is READ-ONLY. Users should NOT modify this field directly - changes will be ignored. Source field values: \"spec\" = direct registration via spec.addressGroups, \"binding\" = registration via AddressGroupBinding",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupReference"),
+									},
+								},
+							},
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupsSpec", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ServiceSpec", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ServiceStatus"},
+			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupReference", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ServiceSpec", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ServiceStatus"},
 	}
 }
 
@@ -5799,11 +5839,25 @@ func schema_k8s_apis_netguard_v1beta1_ServiceSpec(ref common.ReferenceCallback) 
 							},
 						},
 					},
+					"addressGroups": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AddressGroups is a list of address group references",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"),
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IngressPort"},
+			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IngressPort", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"},
 	}
 }
 
