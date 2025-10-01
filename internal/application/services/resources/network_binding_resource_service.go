@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -131,7 +130,6 @@ func (s *NetworkBindingResourceService) CreateNetworkBinding(ctx context.Context
 
 	// FORCE SYNC: Immediately sync AddressGroup with sgroups after Networks update
 	if err := s.forceSyncAddressGroupWithSGroups(ctx, addressGroupRef); err != nil {
-		log.Printf("❌ Failed to force sync AddressGroup %s with sgroups: %v", addressGroupRef.Key(), err)
 		// Don't fail the operation - AddressGroup was updated successfully in database
 	}
 
@@ -198,7 +196,6 @@ func (s *NetworkBindingResourceService) UpdateNetworkBinding(ctx context.Context
 
 		// FORCE SYNC: Immediately sync new AddressGroup with sgroups after Networks update
 		if err := s.forceSyncAddressGroupWithSGroups(ctx, addressGroupRef); err != nil {
-			log.Printf("❌ Failed to force sync new AddressGroup %s with sgroups: %v", addressGroupRef.Key(), err)
 		}
 	}
 
@@ -243,78 +240,56 @@ func (s *NetworkBindingResourceService) UpdateNetworkBinding(ctx context.Context
 
 // DeleteNetworkBinding deletes a NetworkBinding with cleanup logic
 func (s *NetworkBindingResourceService) DeleteNetworkBinding(ctx context.Context, id models.ResourceIdentifier) error {
-	log.Printf("🔥 DEBUG: NetworkBindingResourceService.DeleteNetworkBinding called for %s", id.Key())
 
 	// Check if NetworkBinding exists
 	existing, err := s.getNetworkBindingByID(ctx, id.Key())
 	if err != nil && !errors.Is(err, ports.ErrNotFound) {
-		log.Printf("❌ DEBUG: Failed to get network binding for deletion: %v", err)
 		return fmt.Errorf("failed to get network binding: %w", err)
 	}
 	if existing == nil || errors.Is(err, ports.ErrNotFound) {
-		log.Printf("⚠️  DEBUG: Network binding %s doesn't exist - delete is idempotent", id.Key())
 		// Network binding doesn't exist - delete is idempotent, so this is success
 		return nil
 	}
 
-	log.Printf("✅ DEBUG: Found existing network binding %s, proceeding with deletion", existing.Key())
 
 	// Convert ObjectReference to ResourceIdentifier
 	networkRef := models.ResourceIdentifier{Name: existing.NetworkRef.Name, Namespace: existing.Namespace}
 	addressGroupRef := models.ResourceIdentifier{Name: existing.AddressGroupRef.Name, Namespace: existing.Namespace}
 
 	// Remove binding from Network
-	log.Printf("🔧 DEBUG: Removing binding from Network %s", networkRef.Key())
 	if err := s.networkResourceService.RemoveNetworkBinding(ctx, networkRef); err != nil {
-		log.Printf("❌ DEBUG: Failed to remove network binding from Network: %v", err)
 		return fmt.Errorf("failed to remove network binding: %w", err)
 	}
-	log.Printf("✅ DEBUG: Successfully removed binding from Network")
 
 	// Remove Network from AddressGroup
-	log.Printf("🔧 DEBUG: Removing Network %s from AddressGroup %s", networkRef.Key(), addressGroupRef.Key())
 	if err := s.updateAddressGroupNetworks(ctx, addressGroupRef, networkRef, existing, false); err != nil {
-		log.Printf("❌ DEBUG: Failed to remove network from AddressGroup: %v", err)
 		return fmt.Errorf("failed to remove network from address group: %w", err)
 	}
-	log.Printf("✅ DEBUG: Successfully removed Network from AddressGroup")
 
 	// FORCE SYNC: Immediately sync AddressGroup with sgroups after network removal
 	if err := s.forceSyncAddressGroupWithSGroups(ctx, addressGroupRef); err != nil {
-		log.Printf("❌ Failed to force sync AddressGroup %s with sgroups after deletion: %v", addressGroupRef.Key(), err)
 	}
 
 	// Delete the network binding
-	log.Printf("🔧 DEBUG: Getting repository writer for deletion")
 	writer, err := s.repo.Writer(ctx)
 	if err != nil {
-		log.Printf("❌ DEBUG: Failed to get repository writer: %v", err)
 		return fmt.Errorf("failed to get writer: %w", err)
 	}
 	defer writer.Abort()
 
-	log.Printf("🔧 DEBUG: Calling writer.DeleteNetworkBindingsByIDs for %s", id.Key())
 	if err := writer.DeleteNetworkBindingsByIDs(ctx, []models.ResourceIdentifier{id}); err != nil {
-		log.Printf("❌ DEBUG: writer.DeleteNetworkBindingsByIDs failed: %v", err)
 		return fmt.Errorf("failed to delete network binding: %w", err)
 	}
-	log.Printf("✅ DEBUG: writer.DeleteNetworkBindingsByIDs completed successfully")
 
-	log.Printf("🔧 DEBUG: Committing transaction for NetworkBinding deletion")
 	if err := writer.Commit(); err != nil {
-		log.Printf("❌ DEBUG: Failed to commit deletion transaction: %v", err)
 		return fmt.Errorf("failed to commit network binding deletion: %w", err)
 	}
-	log.Printf("✅ DEBUG: Transaction committed successfully")
 
 	// Sync deletion with external systems
-	log.Printf("🔧 DEBUG: Syncing NetworkBinding deletion with external systems")
 	err = s.syncNetworkBindingWithExternal(ctx, existing, "delete")
 	if err != nil {
-		log.Printf("❌ DEBUG: Failed to sync with external systems: %v", err)
 		return err
 	}
-	log.Printf("✅ DEBUG: NetworkBinding deletion completed successfully for %s", id.Key())
 	return nil
 }
 
@@ -481,7 +456,6 @@ func (s *NetworkBindingResourceService) updateAddressGroupNetworks(ctx context.C
 
 	if add {
 		// Add network to AddressGroup.Networks.Items
-		log.Printf("🔗 Adding network %s to AddressGroup %s", networkName, addressGroupRef.Key())
 
 		// Check if network already exists
 		networkExists := false
@@ -504,13 +478,10 @@ func (s *NetworkBindingResourceService) updateAddressGroupNetworks(ctx context.C
 
 			// Add to Networks slice
 			addressGroup.Networks = append(addressGroup.Networks, networkItem)
-			log.Printf("✅ Added network %s to AddressGroup %s", networkName, addressGroupRef.Key())
 		} else {
-			log.Printf("ℹ️  Network %s already exists in AddressGroup %s", networkName, addressGroupRef.Key())
 		}
 	} else {
 		// Remove network from AddressGroup.Networks.Items
-		log.Printf("🔗 Removing network %s from AddressGroup %s", networkName, addressGroupRef.Key())
 
 		var updatedNetworks []models.NetworkItem
 		for _, existingNetwork := range addressGroup.Networks {
@@ -521,9 +492,7 @@ func (s *NetworkBindingResourceService) updateAddressGroupNetworks(ctx context.C
 
 		if len(updatedNetworks) != len(addressGroup.Networks) {
 			addressGroup.Networks = updatedNetworks
-			log.Printf("✅ Removed network %s from AddressGroup %s", networkName, addressGroupRef.Key())
 		} else {
-			log.Printf("ℹ️  Network %s not found in AddressGroup %s", networkName, addressGroupRef.Key())
 		}
 	}
 
@@ -531,13 +500,10 @@ func (s *NetworkBindingResourceService) updateAddressGroupNetworks(ctx context.C
 	addressGroup.Meta.TouchOnWrite(fmt.Sprintf("%d", time.Now().UnixNano()))
 
 	// Sync the updated AddressGroup using NetworkService (this commits to database)
-	log.Printf("🔧 updateAddressGroupNetworks: About to call UpdateAddressGroup for %s", addressGroupRef.Key())
 	if err := s.networkResourceService.UpdateAddressGroup(ctx, addressGroup); err != nil {
 		return fmt.Errorf("failed to update address group: %w", err)
 	}
-	log.Printf("✅ updateAddressGroupNetworks: UpdateAddressGroup completed for %s", addressGroupRef.Key())
 
-	log.Printf("✅ updateAddressGroupNetworks: AddressGroup Networks field updated successfully")
 	return nil
 }
 
@@ -553,7 +519,6 @@ func (s *NetworkBindingResourceService) syncNetworkBindingWithExternal(ctx conte
 	err := utils.ExecuteWithRetry(ctx, s.retryConfig, func() error {
 		// NetworkBinding itself is not synced with SGROUP
 		// Only Network and AddressGroup resources are synced
-		log.Printf("ℹ️  NetworkBinding %s is not synced with SGROUP (it's just a linking document)", binding.Key())
 		return nil
 	})
 
@@ -571,9 +536,7 @@ func (s *NetworkBindingResourceService) syncNetworkBindingWithExternal(ctx conte
 	// for a resource that has already been deleted from the database
 	if operation != "delete" {
 		utils.SetSyncSuccessCondition(binding)
-		log.Printf("✅ Successfully set sync success condition for NetworkBinding %s", binding.Key())
 	} else {
-		log.Printf("✅ Successfully completed delete sync for NetworkBinding %s (skipped condition saving)", binding.Key())
 	}
 	return nil
 }
@@ -608,7 +571,6 @@ func (s *NetworkBindingResourceService) saveNetworkBindingConditions(ctx context
 // forceSyncAddressGroupWithSGroups forces immediate sync of AddressGroup with sgroups
 // This bypasses debouncing using SyncEntityForced and ensures fresh database data is used
 func (s *NetworkBindingResourceService) forceSyncAddressGroupWithSGroups(ctx context.Context, addressGroupRef models.ResourceIdentifier) error {
-	log.Printf("🚀 FORCE SYNC: Starting immediate sgroups sync for AddressGroup %s", addressGroupRef.Key())
 
 	// Get fresh AddressGroup data from database
 	freshAddressGroup, err := s.getFreshAddressGroupFromDatabase(ctx, addressGroupRef)
@@ -616,19 +578,15 @@ func (s *NetworkBindingResourceService) forceSyncAddressGroupWithSGroups(ctx con
 		return fmt.Errorf("failed to get fresh AddressGroup %s: %w", addressGroupRef.Key(), err)
 	}
 
-	log.Printf("🔧 FORCE SYNC: Fresh AddressGroup %s has %d networks", addressGroupRef.Key(), len(freshAddressGroup.Networks))
 
 	// Force sync with sgroups using SyncEntityForced (bypasses debouncing)
 	if s.syncManager != nil {
-		log.Printf("🔄 FORCE SYNC: Using SyncEntityForced to bypass debouncing for AddressGroup %s", addressGroupRef.Key())
 
 		if err := s.syncManager.SyncEntityForced(ctx, freshAddressGroup, types.SyncOperationUpsert); err != nil {
 			return fmt.Errorf("failed to force sync AddressGroup %s with sgroups: %w", addressGroupRef.Key(), err)
 		}
 
-		log.Printf("✅ FORCE SYNC: Successfully synced AddressGroup %s with sgroups (debouncing bypassed)", addressGroupRef.Key())
 	} else {
-		log.Printf("⚠️  FORCE SYNC: SyncManager is nil - skipping sgroups sync for AddressGroup %s", addressGroupRef.Key())
 	}
 
 	return nil

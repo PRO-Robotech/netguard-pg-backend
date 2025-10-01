@@ -2,7 +2,6 @@ package converters
 
 import (
 	"context"
-	"log"
 
 	"netguard-pg-backend/internal/domain/models"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
@@ -62,19 +61,11 @@ func (c *NetworkConverter) FromDomain(ctx context.Context, domainObj *models.Net
 
 	// Debug logging
 	klog.Infof("🔍 CONVERTER FromDomain: Network[%s] has %d conditions, IsBound=%t", domainObj.Key(), len(domainObj.Meta.Conditions), domainObj.IsBound)
-	log.Printf("🔍 FromDomain: Network[%s] has %d conditions, IsBound=%t", domainObj.Key(), len(domainObj.Meta.Conditions), domainObj.IsBound)
 	if domainObj.BindingRef != nil {
-		log.Printf("  🔍 FromDomain: domainObj.BindingRef=%s", domainObj.BindingRef.Name)
 	} else {
-		log.Printf("  🔍 FromDomain: domainObj.BindingRef=nil")
 	}
 	if domainObj.AddressGroupRef != nil {
-		log.Printf("  🔍 FromDomain: domainObj.AddressGroupRef=%s", domainObj.AddressGroupRef.Name)
 	} else {
-		log.Printf("  🔍 FromDomain: domainObj.AddressGroupRef=nil")
-	}
-	for i, cond := range domainObj.Meta.Conditions {
-		log.Printf("  🔍 FromDomain: network[%s].condition[%d] Type=%s Status=%s", domainObj.Key(), i, cond.Type, cond.Status)
 	}
 
 	k8sObj := &netguardv1beta1.Network{

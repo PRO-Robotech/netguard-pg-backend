@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -104,13 +103,11 @@ func (s *HostBindingResourceService) CreateHostBinding(ctx context.Context, host
 	}
 
 	if err := s.hostResourceService.UpdateHostBinding(ctx, hostRef, bindingID, addressGroupRef); err != nil {
-		log.Printf("❌ DEBUG: Failed to update host binding status for %s: %v", hostRef.Key(), err)
 	}
 
 	// Process conditions after binding operations
 	if s.conditionManager != nil {
 		if err := s.conditionManager.ProcessHostBindingConditions(ctx, hostBinding, nil); err != nil {
-			log.Printf("⚠️ DEBUG: Failed to process conditions for host binding %s: %v", hostBinding.Key(), err)
 		}
 	}
 
@@ -126,7 +123,6 @@ func (s *HostBindingResourceService) UpdateHostBinding(ctx context.Context, host
 	}
 
 	if err := s.validateHostBinding(hostBinding); err != nil {
-		log.Printf("❌ DEBUG: HostBinding validation failed for %s: %v", hostBinding.Key(), err)
 		return fmt.Errorf("host binding validation failed: %w", err)
 	}
 
@@ -187,7 +183,6 @@ func (s *HostBindingResourceService) UpdateHostBinding(ctx context.Context, host
 	// Process conditions if condition manager is available
 	if s.conditionManager != nil {
 		if err := s.conditionManager.ProcessHostBindingConditions(ctx, hostBinding, nil); err != nil {
-			log.Printf("⚠️ DEBUG: Failed to process conditions for host binding %s: %v", hostBinding.Key(), err)
 			// Don't fail the update due to condition processing errors
 		}
 	}
@@ -230,7 +225,6 @@ func (s *HostBindingResourceService) DeleteHostBinding(ctx context.Context, id m
 		return fmt.Errorf("failed to commit deletion transaction: %w", err)
 	}
 
-	log.Printf("✅ DEBUG: HostBinding %s deleted successfully from storage", id.Key())
 
 	hostID := models.ResourceIdentifier{
 		Namespace: existingBinding.HostRef.Namespace,
@@ -240,13 +234,11 @@ func (s *HostBindingResourceService) DeleteHostBinding(ctx context.Context, id m
 	// Get reader to load the Host
 	readerForHost, err := s.repo.Reader(ctx)
 	if err != nil {
-		log.Printf("⚠️ DEBUG: Failed to get reader for Host update: %v", err)
 	} else {
 		defer readerForHost.Close()
 
 		host, err := readerForHost.GetHostByID(ctx, hostID)
 		if err != nil {
-			log.Printf("⚠️ DEBUG: Failed to load Host %s for update: %v", hostID.Key(), err)
 		} else {
 			host.IsBound = false
 			host.BindingRef = nil
@@ -256,19 +248,15 @@ func (s *HostBindingResourceService) DeleteHostBinding(ctx context.Context, id m
 			// Save updated Host to storage
 			writerForHost, err := s.repo.Writer(ctx)
 			if err != nil {
-				log.Printf("⚠️ DEBUG: Failed to get writer for Host update: %v", err)
 			} else {
 				defer writerForHost.Abort()
 
 				// Use SyncHosts with UPSERT to update the Host
 				if err := writerForHost.SyncHosts(ctx, []models.Host{*host}, ports.EmptyScope{}, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
-					log.Printf("⚠️ DEBUG: Failed to save updated Host %s: %v", host.Key(), err)
 				} else {
 					if err := writerForHost.Commit(); err != nil {
-						log.Printf("⚠️ DEBUG: Failed to commit Host update: %v", err)
 					} else {
 						if err := s.hostResourceService.syncManager.SyncEntity(ctx, host, types.SyncOperationUpsert); err != nil {
-							log.Printf("⚠️ DEBUG: Failed to sync updated Host %s with SGROUP: %v", host.Key(), err)
 						}
 					}
 				}
@@ -285,7 +273,6 @@ func (s *HostBindingResourceService) DeleteHostBinding(ctx context.Context, id m
 	// Get reader to load the AddressGroup
 	readerForAG, err := s.repo.Reader(ctx)
 	if err != nil {
-		log.Printf("⚠️ DEBUG: Failed to get reader for AddressGroup sync: %v", err)
 		// Don't fail the entire operation, just log the warning
 	} else {
 		defer readerForAG.Close()
@@ -293,10 +280,8 @@ func (s *HostBindingResourceService) DeleteHostBinding(ctx context.Context, id m
 		// Load the AddressGroup
 		addressGroup, err := readerForAG.GetAddressGroupByID(ctx, addressGroupID)
 		if err != nil {
-			log.Printf("⚠️ DEBUG: Failed to load AddressGroup %s for sync: %v", addressGroupID.Key(), err)
 		} else {
 			if err := s.addressGroupResourceService.syncManager.SyncEntity(ctx, addressGroup, types.SyncOperationUpsert); err != nil {
-				log.Printf("⚠️ DEBUG: Failed to sync AddressGroup %s after HostBinding deletion: %v", addressGroup.Key(), err)
 			}
 		}
 	}
@@ -355,7 +340,6 @@ func (s *HostBindingResourceService) ListHostBindings(ctx context.Context, scope
 
 // SyncHostBindings synchronizes multiple host bindings with the specified operation
 func (s *HostBindingResourceService) SyncHostBindings(ctx context.Context, hostBindings []models.HostBinding, scope ports.Scope, syncOp models.SyncOp) error {
-	log.Printf("🔥 DEBUG: HostBindingResourceService.SyncHostBindings called with %d host bindings, syncOp=%v", len(hostBindings), syncOp)
 
 	switch syncOp {
 	case models.SyncOpFullSync:
@@ -371,14 +355,12 @@ func (s *HostBindingResourceService) SyncHostBindings(ctx context.Context, hostB
 
 // fullSyncHostBindings performs a full synchronization of host bindings
 func (s *HostBindingResourceService) fullSyncHostBindings(ctx context.Context, hostBindings []models.HostBinding, scope ports.Scope) error {
-	log.Printf("🔥 DEBUG: Starting full sync of %d host bindings", len(hostBindings))
 
 	return s.upsertHostBindings(ctx, hostBindings)
 }
 
 // upsertHostBindings creates or updates multiple host bindings
 func (s *HostBindingResourceService) upsertHostBindings(ctx context.Context, hostBindings []models.HostBinding) error {
-	log.Printf("🔥 DEBUG: Upserting %d host bindings", len(hostBindings))
 
 	for _, hostBinding := range hostBindings {
 		if err := s.CreateHostBinding(ctx, &hostBinding); err != nil {
@@ -460,10 +442,8 @@ func (s *HostBindingResourceService) SyncStatusUpdate(ctx context.Context, resou
 		return nil
 	}
 
-	log.Printf("🔥 DEBUG: HostBindingResourceService received sync status update: %v", status)
 
 	// TODO: Implement sync status update when interface is clarified
-	log.Printf("⚠️ DEBUG: Sync status update not yet implemented for host bindings")
 
 	return nil
 }
@@ -485,16 +465,13 @@ func (s *HostBindingResourceService) validateHostBindingWithReader(ctx context.C
 		if host.BindingRef != nil {
 			expectedName := bindingID.Name
 			actualName := host.BindingRef.Name
-			log.Printf("🔍 HostBinding validation: comparing expectedName='%s' with actualName='%s'", expectedName, actualName)
 
 			if actualName == expectedName {
 				return nil
 			}
-			log.Printf("❌ HostBinding validation: Host is bound to DIFFERENT binding - expectedName='%s' vs actualName='%s'", expectedName, actualName)
 			return fmt.Errorf("host is already bound to another binding (expected: %s, actual: %s)", bindingID.Name, actualName)
 		} else {
 			// Host is bound but BindingRef is nil - means it's bound via AddressGroup.spec.hosts
-			log.Printf("❌ HostBinding validation: Host is bound via AddressGroup.spec.hosts - cannot create HostBinding")
 			return fmt.Errorf("host is already bound to AddressGroup via spec.hosts - cannot create HostBinding")
 		}
 	}
@@ -524,10 +501,8 @@ func (s *HostBindingResourceService) getHostBindingByIDWithReader(ctx context.Co
 	var resourceID models.ResourceIdentifier
 	if len(parts) == 2 {
 		resourceID = models.ResourceIdentifier{Namespace: parts[0], Name: parts[1]}
-		log.Printf("🔍 DEBUG: getHostBindingByIDWithReader parsed resourceID: namespace=%s, name=%s", parts[0], parts[1])
 	} else {
 		resourceID = models.ResourceIdentifier{Name: id}
-		log.Printf("🔍 DEBUG: getHostBindingByIDWithReader using single name: %s", id)
 	}
 
 	hostBinding, err := reader.GetHostBindingByID(ctx, resourceID)
@@ -536,7 +511,6 @@ func (s *HostBindingResourceService) getHostBindingByIDWithReader(ctx context.Co
 
 // getHostBindingByHostID finds a HostBinding that binds the specified Host
 func (s *HostBindingResourceService) getHostBindingByHostID(ctx context.Context, hostID models.ResourceIdentifier) (*models.HostBinding, error) {
-	log.Printf("🔍 DEBUG: getHostBindingByHostID called for host %s", hostID.Key())
 
 	reader, err := s.repo.Reader(ctx)
 	if err != nil {
@@ -556,15 +530,12 @@ func (s *HostBindingResourceService) getHostBindingByHostID(ctx context.Context,
 	}, ports.EmptyScope{})
 
 	if err != nil {
-		log.Printf("❌ DEBUG: Failed to list host bindings: %v", err)
 		return nil, fmt.Errorf("failed to list host bindings: %w", err)
 	}
 
 	if foundBinding == nil {
-		log.Printf("ℹ️ DEBUG: No HostBinding found for host %s", hostID.Key())
 		return nil, ports.ErrNotFound
 	}
 
-	log.Printf("✅ DEBUG: Successfully found HostBinding %s for host %s", foundBinding.Key(), hostID.Key())
 	return foundBinding, nil
 }

@@ -2,7 +2,6 @@ package resources
 
 import (
 	"context"
-	"log"
 
 	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
@@ -156,7 +155,6 @@ func (s *RuleS2SResourceService) findRuleS2SByAddressGroupInteraction(ctx contex
 		groups, err := s.extractAggregationGroupsFromRuleS2S(ctx, reader, rule)
 		if err != nil {
 			// Skip this rule if we can't analyze it
-			log.Printf("⚠️ findRuleS2SByAddressGroupInteraction: Failed to extract aggregation groups from rule %s: %v", rule.Key(), err)
 			return nil
 		}
 
@@ -165,7 +163,6 @@ func (s *RuleS2SResourceService) findRuleS2SByAddressGroupInteraction(ctx contex
 			if (group.LocalAG.Name == addressGroup.Name && group.LocalAG.Namespace == addressGroup.Namespace) ||
 				(group.TargetAG.Name == addressGroup.Name && group.TargetAG.Namespace == addressGroup.Namespace) {
 				rules = append(rules, rule)
-				log.Printf("🔍 findRuleS2SByAddressGroupInteraction: Rule %s interacts with AddressGroup %s/%s via aggregation", rule.Key(), addressGroup.Namespace, addressGroup.Name)
 				return nil // Found interaction, no need to check more groups for this rule
 			}
 		}

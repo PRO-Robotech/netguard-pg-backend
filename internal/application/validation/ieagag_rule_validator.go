@@ -2,7 +2,6 @@ package validation
 
 import (
 	"context"
-	"log"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -175,6 +174,5 @@ func (v *IEAgAgRuleValidator) CheckDependencies(ctx context.Context, id models.R
 	// It can be safely deleted as nothing should depend on it directly
 
 	// Log the dependency check for consistency with other validators
-	log.Printf("CheckDependencies: IEAgAgRule %s can be safely deleted (no dependents)", id.Key())
 	return nil
 }

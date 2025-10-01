@@ -3,7 +3,6 @@ package validation
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"netguard-pg-backend/internal/domain/models"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
@@ -238,7 +237,6 @@ func (v *RuleS2SValidator) CheckDependencies(ctx context.Context, id models.Reso
 		// IEAgAgRules are generated from RuleS2S, check if this rule contributed to any IEAgAgRule
 		// Note: Since IEAgAgRules are automatically generated, they will be regenerated if needed
 		// So we just log this dependency but don't block deletion
-		log.Printf("CheckDependencies: Found IEAgAgRule %s that may be related to RuleS2S %s", ieagagRule.Key(), id.Key())
 		hasIEAgAgRules = true
 		return nil
 	}, nil)
@@ -248,10 +246,8 @@ func (v *RuleS2SValidator) CheckDependencies(ctx context.Context, id models.Reso
 	}
 
 	if hasIEAgAgRules {
-		log.Printf("CheckDependencies: RuleS2S %s has related IEAgAgRules, but deletion is allowed (rules will be regenerated)", id.Key())
 	}
 
 	// RuleS2S can be safely deleted - IEAgAgRules are automatically regenerated
-	log.Printf("CheckDependencies: RuleS2S %s can be safely deleted", id.Key())
 	return nil
 }

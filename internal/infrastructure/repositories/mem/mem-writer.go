@@ -3,7 +3,6 @@ package mem
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"netguard-pg-backend/internal/domain/models"
@@ -603,7 +602,6 @@ func (w *writer) SyncServiceAliases(ctx context.Context, aliases []models.Servic
 				}
 			}
 			ensureMetaFill(&alias.Meta)
-			log.Printf("mem.writer SyncOpUpsert ServiceAlias key=%s uid=%s gen=%d rv=%s", alias.Key(), alias.Meta.UID, alias.Meta.Generation, alias.Meta.ResourceVersion)
 			w.serviceAliases[alias.Key()] = alias
 		}
 
@@ -706,100 +704,60 @@ func (w *writer) SyncAddressGroupBindingPolicies(ctx context.Context, policies [
 }
 
 func (w *writer) Commit() error {
-	log.Printf("💾 COMMIT: Starting database commit operation")
 
 	if w.services != nil {
-		log.Printf("💾 COMMIT: Committing %d services to database", len(w.services))
-		for key, svc := range w.services {
-			log.Printf("💾 COMMIT: Service[%s] has %d conditions", key, len(svc.Meta.Conditions))
-			for i, cond := range svc.Meta.Conditions {
-				log.Printf("  💾 COMMIT: svc[%s].condition[%d] Type=%s Status=%s", key, i, cond.Type, cond.Status)
-			}
+		for _, _ = range w.services {
 		}
 		w.registry.db.SetServices(w.services)
-		log.Printf("✅ COMMIT: Services committed to database")
 	} else {
-		log.Printf("💾 COMMIT: No services to commit")
 	}
 
 	if w.serviceAliases != nil {
-		log.Printf("💾 COMMIT: Committing %d service aliases to database", len(w.serviceAliases))
 		w.registry.db.SetServiceAliases(w.serviceAliases)
 	}
 	if w.addressGroups != nil {
-		log.Printf("💾 COMMIT: Committing %d address groups to database", len(w.addressGroups))
-		for key, ag := range w.addressGroups {
-			log.Printf("💾 COMMIT: AddressGroup[%s] has %d conditions, %d networks", key, len(ag.Meta.Conditions), len(ag.Networks))
-			for i, network := range ag.Networks {
-				log.Printf("  💾 COMMIT: ag[%s].network[%d] Name=%s CIDR=%s", key, i, network.Name, network.CIDR)
-			}
+		for _, _ = range w.addressGroups {
 		}
 		w.registry.db.SetAddressGroups(w.addressGroups)
-		log.Printf("✅ COMMIT: AddressGroups committed to database")
 	}
 	if w.addressGroupBindings != nil {
-		log.Printf("💾 COMMIT: Committing %d address group bindings to database", len(w.addressGroupBindings))
-		for key, binding := range w.addressGroupBindings {
-			log.Printf("💾 COMMIT: Binding[%s] ServiceRef.Name='%s', AddressGroupRef.Name='%s'", key, binding.ServiceRef.Name, binding.AddressGroupRef.Name)
-		}
 		w.registry.db.SetAddressGroupBindings(w.addressGroupBindings)
-		log.Printf("✅ COMMIT: AddressGroupBindings committed to database")
 	} else {
-		log.Printf("💾 COMMIT: No address group bindings to commit")
 	}
 	if w.addressGroupPortMappings != nil {
-		log.Printf("💾 COMMIT: Committing %d address group port mappings to database", len(w.addressGroupPortMappings))
 		w.registry.db.SetAddressGroupPortMappings(w.addressGroupPortMappings)
 	}
 	if w.addressGroupBindingPolicies != nil {
-		log.Printf("💾 COMMIT: Committing %d address group binding policies to database", len(w.addressGroupBindingPolicies))
 		w.registry.db.SetAddressGroupBindingPolicies(w.addressGroupBindingPolicies)
 	}
 	if w.ruleS2S != nil {
-		log.Printf("💾 COMMIT: Committing %d rule s2s to database", len(w.ruleS2S))
 		w.registry.db.SetRuleS2S(w.ruleS2S)
 	}
 	if w.ieAgAgRules != nil {
-		log.Printf("💾 COMMIT: Committing %d ieag ag rules to database", len(w.ieAgAgRules))
 		w.registry.db.SetIEAgAgRules(w.ieAgAgRules)
 	}
 
 	if w.networks != nil {
-		log.Printf("💾 COMMIT: Committing %d networks to database", len(w.networks))
-		for key, network := range w.networks {
-			log.Printf("💾 COMMIT: Network[%s] has %d conditions, IsBound=%t", key, len(network.Meta.Conditions), network.IsBound)
+		for _, network := range w.networks {
 			if network.BindingRef != nil {
-				log.Printf("  💾 COMMIT: network[%s].BindingRef=%s", key, network.BindingRef.Name)
 			}
 			if network.AddressGroupRef != nil {
-				log.Printf("  💾 COMMIT: network[%s].AddressGroupRef=%s", key, network.AddressGroupRef.Name)
-			}
-			for i, cond := range network.Meta.Conditions {
-				log.Printf("  💾 COMMIT: network[%s].condition[%d] Type=%s Status=%s", key, i, cond.Type, cond.Status)
 			}
 		}
 		w.registry.db.SetNetworks(w.networks)
-		log.Printf("✅ COMMIT: Networks committed to database")
 	}
 
 	if w.networkBindings != nil {
-		log.Printf("💾 COMMIT: Committing %d network bindings to database", len(w.networkBindings))
-		for key, binding := range w.networkBindings {
-			log.Printf("💾 COMMIT: NetworkBinding[%s] has %d conditions", key, len(binding.Meta.Conditions))
-			for i, cond := range binding.Meta.Conditions {
-				log.Printf("  💾 COMMIT: binding[%s].condition[%d] Type=%s Status=%s", key, i, cond.Type, cond.Status)
-			}
+		for _, _ = range w.networkBindings {
 		}
 		w.registry.db.SetNetworkBindings(w.networkBindings)
 	}
 
 	if w.hosts != nil {
-		log.Printf("💾 COMMIT: Committing %d hosts to database", len(w.hosts))
 		w.registry.db.SetHosts(w.hosts)
 	}
 
 	if w.hostBindings != nil {
-		log.Printf("💾 COMMIT: Committing %d host bindings to database", len(w.hostBindings))
 		w.registry.db.SetHostBindings(w.hostBindings)
 	}
 
@@ -807,7 +765,6 @@ func (w *writer) Commit() error {
 		UpdatedAt: time.Now(),
 	})
 
-	log.Printf("✅ COMMIT: Database commit operation completed successfully")
 	return nil
 }
 
@@ -847,31 +804,24 @@ func (w *writer) DeleteAddressGroupsByIDs(ctx context.Context, ids []models.Reso
 
 // DeleteAddressGroupBindingsByIDs deletes address group bindings by IDs
 func (w *writer) DeleteAddressGroupBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
-	log.Printf("🗑️ DEBUG DeleteAddressGroupBindingsByIDs: Called with %d IDs to delete", len(ids))
 
 	if w.addressGroupBindings == nil {
-		log.Printf("🗑️ DEBUG: Initializing addressGroupBindings map from database")
 		w.addressGroupBindings = make(map[string]models.AddressGroupBinding)
 		// Copy existing address group bindings
 		existing := w.registry.db.GetAddressGroupBindings()
 		for k, v := range existing {
 			w.addressGroupBindings[k] = v
 		}
-		log.Printf("🗑️ DEBUG: Copied %d existing bindings from database", len(existing))
 	}
 
 	for _, id := range ids {
 		key := id.Key()
-		log.Printf("🗑️ DEBUG: Deleting binding with key='%s' (name='%s', namespace='%s')", key, id.Name, id.Namespace)
 		if _, exists := w.addressGroupBindings[key]; exists {
 			delete(w.addressGroupBindings, key)
-			log.Printf("✅ DEBUG: Successfully deleted binding key='%s' from writer map", key)
 		} else {
-			log.Printf("❌ DEBUG: Binding key='%s' NOT FOUND in writer map", key)
 		}
 	}
 
-	log.Printf("🗑️ DEBUG: After deletion, writer map contains %d bindings", len(w.addressGroupBindings))
 
 	return nil
 }

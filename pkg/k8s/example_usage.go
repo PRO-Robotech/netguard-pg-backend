@@ -6,7 +6,6 @@ import (
 	"netguard-pg-backend/pkg/k8s/informers/externalversions"
 
 	"context"
-	"log"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -44,16 +43,13 @@ func ExampleUsage() error {
 	// Добавление обработчика событий
 	serviceInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			service := obj.(*netguardv1beta1.Service)
-			log.Printf("Service added: %s", service.Name)
+			_ = obj.(*netguardv1beta1.Service)
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			service := newObj.(*netguardv1beta1.Service)
-			log.Printf("Service updated: %s", service.Name)
+			_ = newObj.(*netguardv1beta1.Service)
 		},
 		DeleteFunc: func(obj interface{}) {
-			service := obj.(*netguardv1beta1.Service)
-			log.Printf("Service deleted: %s", service.Name)
+			_ = obj.(*netguardv1beta1.Service)
 		},
 	})
 

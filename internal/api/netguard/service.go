@@ -2,8 +2,6 @@ package netguard
 
 import (
 	"context"
-	"fmt"
-	"log"
 
 	"netguard-pg-backend/internal/application/services"
 	"netguard-pg-backend/internal/domain/models"
@@ -344,7 +342,6 @@ func (s *NetguardServiceServer) GetAddressGroup(ctx context.Context, req *netgua
 	id := idFromReq(req.GetIdentifier())
 	addressGroup, err := s.service.GetAddressGroupByID(ctx, id)
 	if err != nil {
-		log.Printf("❌ GRPC GetAddressGroup: failed to get %s: %v", id.Key(), err)
 		return nil, errors.Wrap(err, "failed to get address group")
 	}
 
@@ -1307,7 +1304,6 @@ func convertActionToPB(action models.RuleAction) netguardpb.RuleAction {
 	case models.ActionDrop:
 		return netguardpb.RuleAction_DROP
 	default:
-		log.Printf("⚠️  WARNING: Unknown Action '%s', defaulting to ACCEPT", action)
 		return netguardpb.RuleAction_ACCEPT
 	}
 }
@@ -1321,7 +1317,6 @@ func convertIEAgAgRuleToPB(rule models.IEAgAgRule) *netguardpb.IEAgAgRule {
 	case models.UDP:
 		transport = netguardpb.Networks_NetIP_UDP
 	default:
-		log.Printf("⚠️  WARNING: Unknown Transport '%s' for rule %s, defaulting to TCP", rule.Transport, rule.Key())
 		transport = netguardpb.Networks_NetIP_TCP
 	}
 
@@ -1332,7 +1327,6 @@ func convertIEAgAgRuleToPB(rule models.IEAgAgRule) *netguardpb.IEAgAgRule {
 	case models.EGRESS:
 		traffic = netguardpb.Traffic_Egress
 	default:
-		log.Printf("⚠️  WARNING: Unknown Traffic '%s' for rule %s, defaulting to Ingress", rule.Traffic, rule.Key())
 		traffic = netguardpb.Traffic_Ingress
 	}
 
@@ -1545,7 +1539,6 @@ func (s *NetguardServiceServer) GetNetwork(ctx context.Context, req *netguardpb.
 	id := idFromReq(req.GetIdentifier())
 	network, err := s.service.GetNetworkByID(ctx, id)
 	if err != nil {
-		log.Printf("❌ GRPC GetNetwork: failed to get %s: %v", id.Key(), err)
 		return nil, errors.Wrap(err, "failed to get network")
 	}
 

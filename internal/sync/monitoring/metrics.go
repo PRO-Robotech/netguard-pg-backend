@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -151,7 +150,6 @@ func NewMetricsCollector(manager MetricsProvider, config MetricsConfig) *Metrics
 
 // Start starts the metrics collection and HTTP server
 func (c *MetricsCollector) Start(ctx context.Context) error {
-	log.Printf("📊 Starting metrics collector on port %d", c.config.Port)
 
 	// Start metrics collection goroutine
 	go c.collectMetrics(ctx)
@@ -159,37 +157,27 @@ func (c *MetricsCollector) Start(ctx context.Context) error {
 	// Start HTTP server
 	go func() {
 		if err := c.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Printf("❌ Metrics server error: %v", err)
 		}
 	}()
 
-	log.Printf("✅ Metrics collector started successfully")
-	log.Printf("📊 Available endpoints:")
 	if c.config.EnableJSONEndpoint {
-		log.Printf("   - JSON metrics: http://localhost:%d/metrics/json", c.config.Port)
 	}
 	if c.config.EnablePrometheusEndpoint {
-		log.Printf("   - Prometheus metrics: http://localhost:%d/metrics", c.config.Port)
 	}
 	if c.config.EnableHealthEndpoint {
-		log.Printf("   - Health check: http://localhost:%d/health", c.config.Port)
 	}
-	log.Printf("   - Debug stats: http://localhost:%d/debug/stats", c.config.Port)
 
 	return nil
 }
 
 // Stop stops the metrics collection and HTTP server
 func (c *MetricsCollector) Stop(ctx context.Context) error {
-	log.Printf("📊 Stopping metrics collector")
 
 	// Shutdown HTTP server
 	if err := c.server.Shutdown(ctx); err != nil {
-		log.Printf("⚠️  Error shutting down metrics server: %v", err)
 		return err
 	}
 
-	log.Printf("✅ Metrics collector stopped successfully")
 	return nil
 }
 
@@ -198,12 +186,10 @@ func (c *MetricsCollector) collectMetrics(ctx context.Context) {
 	ticker := time.NewTicker(c.config.UpdateInterval)
 	defer ticker.Stop()
 
-	log.Printf("📊 Starting metrics collection (interval: %v)", c.config.UpdateInterval)
 
 	for {
 		select {
 		case <-ctx.Done():
-			log.Printf("📊 Metrics collection stopped")
 			return
 		case <-ticker.C:
 			c.updateMetrics()

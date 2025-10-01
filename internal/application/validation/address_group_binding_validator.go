@@ -3,7 +3,6 @@ package validation
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -164,9 +163,8 @@ func CheckPortOverlaps(service models.Service, portMapping models.AddressGroupPo
 		for protocol, serviceRanges := range servicePorts {
 			existingRanges := existingServicePorts.Ports[protocol]
 			if len(existingRanges) == 0 {
-				continue // No existing ranges for this protocol
-			}
-
+			continue
+		}
 			// Combine all ranges for this protocol and check for overlaps
 			allRanges := make([]models.PortRange, 0, len(serviceRanges)+len(existingRanges))
 			allRanges = append(allRanges, serviceRanges...)
@@ -614,6 +612,5 @@ func (v *AddressGroupBindingValidator) CheckDependencies(ctx context.Context, id
 	// It can be safely deleted as it doesn't have dependents
 
 	// Log the dependency check for consistency with other validators
-	log.Printf("CheckDependencies: AddressGroupBinding %s can be safely deleted (no dependents)", id.Key())
 	return nil
 }
