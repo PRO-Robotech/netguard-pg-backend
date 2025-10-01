@@ -309,11 +309,6 @@ func (s *ServiceResourceService) UpdateService(ctx context.Context, service mode
 
 // SyncServices synchronizes multiple services
 func (s *ServiceResourceService) SyncServices(ctx context.Context, services []models.Service, scope ports.Scope, syncOp models.SyncOp) error {
-	// 🔍 TRACE: Log services received from NetguardFacade
-	for i, service := range services {
-		fmt.Printf("🔍 TRACE [ServiceResource-Entry]: Service[%d] %s description='%s'\n",
-			i, service.Key(), service.Description)
-	}
 
 	// Before syncing, check for port changes to trigger port mapping regeneration
 	var servicesWithPortChanges []models.ResourceIdentifier
@@ -382,11 +377,6 @@ func (s *ServiceResourceService) SyncServices(ctx context.Context, services []mo
 		}
 	}()
 
-	// 🔍 TRACE: Log services before calling syncServices
-	for i, service := range services {
-		fmt.Printf("🔍 TRACE [ServiceResource-BeforeSync]: Service[%d] %s description='%s'\n",
-			i, service.Key(), service.Description)
-	}
 
 	if err = s.syncServices(ctx, writer, services, syncOp); err != nil {
 		return errors.Wrap(err, "failed to sync services")
@@ -856,11 +846,6 @@ func (s *ServiceResourceService) DeleteServiceAliasesByIDs(ctx context.Context, 
 func (s *ServiceResourceService) syncServices(ctx context.Context, writer ports.Writer, services []models.Service, syncOp models.SyncOp) error {
 	log.Printf("syncServices: Syncing %d services with operation %s", len(services), syncOp)
 
-	// 🔍 TRACE: Log services before calling writer.SyncServices
-	for i, service := range services {
-		fmt.Printf("🔍 TRACE [syncServices-BeforeWriter]: Service[%d] %s description='%s'\n",
-			i, service.Key(), service.Description)
-	}
 
 	// This will delegate to writer which handles the actual persistence
 	// Use passed syncOp to handle services operations correctly

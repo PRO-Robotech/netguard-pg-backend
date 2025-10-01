@@ -224,8 +224,6 @@ func (h *Host) ToSGroupsProto() (interface{}, error) {
 		}
 	}
 
-	fmt.Printf("🔍 DEBUG: Host.ToSGroupsProto - Computed values: hostName=%s, sgName=%s\n",
-		hostName, sgName)
 
 	// Convert to sgroups protobuf element
 	protoHost := &pb.Host{
@@ -235,8 +233,6 @@ func (h *Host) ToSGroupsProto() (interface{}, error) {
 		// Use host's IpList or empty list if not set
 		IpList: &pb.IPList{IPs: h.GetIpList()},
 	}
-
-	fmt.Printf("🔍 DEBUG: Host.ToSGroupsProto - Created protoHost: %+v\n", protoHost)
 
 	// Return single host element
 	return protoHost, nil

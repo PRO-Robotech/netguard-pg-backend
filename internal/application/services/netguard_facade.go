@@ -731,11 +731,6 @@ func (f *NetguardFacade) Sync(ctx context.Context, syncOp models.SyncOp, resourc
 	// Delegate to appropriate resource service based on resource type with proper syncOp
 	switch typedResources := resources.(type) {
 	case []models.Service:
-		// 🔍 TRACE: Log services received from gRPC layer
-		for i, service := range typedResources {
-			fmt.Printf("🔍 TRACE [Facade-Entry]: Service[%d] %s description='%s'\n",
-				i, service.Key(), service.Description)
-		}
 
 		return f.serviceResourceService.SyncServices(ctx, typedResources, ports.EmptyScope{}, syncOp)
 	case []models.AddressGroup:

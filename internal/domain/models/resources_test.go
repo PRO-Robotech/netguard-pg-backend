@@ -32,8 +32,8 @@ func TestTrafficConstants(t *testing.T) {
 		traffic  Traffic
 		expected string
 	}{
-		{"INGRESS", INGRESS, "ingress"},
-		{"EGRESS", EGRESS, "egress"},
+		{"INGRESS", INGRESS, "INGRESS"},
+		{"EGRESS", EGRESS, "EGRESS"},
 	}
 
 	for _, tt := range tests {

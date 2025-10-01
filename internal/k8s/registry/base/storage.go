@@ -778,10 +778,6 @@ func (s *BaseStorage[K, D]) Patch(ctx context.Context, name string, patchType ty
 		"patchType", string(patchType),
 		"dataSize", len(data))
 
-	// Additional logging with different methods to ensure we see it
-	fmt.Printf("🔥 PATCH DEBUG: %s/%s with type %s\n", namespace, name, patchType)
-	klog.Errorf("🚨 PATCH CALLED: %s/%s", namespace, name)
-
 	// For Server-Side Apply, handle both CREATE and UPDATE cases
 	var currentK8sObj K
 	var isCreateOperation bool

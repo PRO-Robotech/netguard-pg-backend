@@ -134,14 +134,6 @@ func (c *sgroupsClient) Sync(ctx context.Context, req *types.SyncRequest) error 
 		return fmt.Errorf("failed to convert sync request to proto: %w", err)
 	}
 
-	// 🔍 DEEP DEBUG: Inspect the raw protobuf message before sending
-	fmt.Printf("🔍 DEEP DEBUG: About to send SyncReq - pbReq.Subject type: %T\n", pbReq.Subject)
-	if pbReq.Subject != nil {
-		fmt.Printf("🔍 DEEP DEBUG: pbReq.Subject is not nil, proceeding with gRPC call\n")
-	} else {
-		fmt.Printf("❌ DEEP DEBUG: pbReq.Subject IS NIL BEFORE GRPC CALL!\n")
-	}
-
 	// Real GRPC call to sgroups service
 	_, err = c.client.Sync(ctx, pbReq)
 	return err
@@ -312,13 +304,7 @@ func (c *sgroupsClient) convertSyncRequestToProto(req *types.SyncRequest) (*pb.S
 	case types.SyncSubjectTypeHosts:
 		// Support batch SyncHosts
 		if hosts, ok := req.Data.(*pb.SyncHosts); ok {
-			fmt.Printf("🔍 DEBUG: SGroupsClient - Processing Hosts sync with %d hosts\n", len(hosts.Hosts))
-			for i, host := range hosts.Hosts {
-				fmt.Printf("🔍 DEBUG: SGroupsClient - Host[%d]: name=%s, uuid=%s, sg_name=%s, ip_count=%d\n",
-					i, host.Name, host.Uuid, host.SgName, len(host.IpList.IPs))
-			}
 			pbReq.Subject = &pb.SyncReq_Hosts{Hosts: hosts}
-			fmt.Printf("🔍 DEBUG: SGroupsClient - Set pbReq.Subject to SyncReq_Hosts, subject type: %T\n", pbReq.Subject)
 		} else {
 			return nil, fmt.Errorf("invalid data type for Hosts subject, expected *pb.SyncHosts, got %T", req.Data)
 		}
@@ -340,13 +326,6 @@ func (c *sgroupsClient) convertSyncRequestToProto(req *types.SyncRequest) (*pb.S
 		}
 	default:
 		return nil, fmt.Errorf("unknown subject type: %s", req.SubjectType)
-	}
-
-	// Final debug logging
-	fmt.Printf("🔍 DEBUG: SGroupsClient - Final SyncReq: SyncOp=%v, SubjectType=%s, Subject=%T\n",
-		pbReq.SyncOp, req.SubjectType, pbReq.Subject)
-	if pbReq.Subject == nil {
-		fmt.Printf("❌ WARNING: SGroupsClient - pbReq.Subject is NIL! This will cause the error!\n")
 	}
 
 	return pbReq, nil

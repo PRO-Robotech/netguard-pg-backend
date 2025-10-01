@@ -121,20 +121,14 @@ func (r *IEAgAgRule) ToSGroupsProto() (interface{}, error) {
 
 	// Convert Ports
 	var ports []*pb.AccPorts
-	fmt.Printf("🔍 DEBUG: IEAgAgRule.ToSGroupsProto - Converting %d ports for rule %s\n", len(r.Ports), r.Name)
-	for i, port := range r.Ports {
-		fmt.Printf("  🔍 DEBUG: Port[%d] - Source='%s', Destination='%s'\n", i, port.Source, port.Destination)
+	for _, port := range r.Ports {
 		if port.Destination != "" {
 			ports = append(ports, &pb.AccPorts{
 				S: port.Source,      // Source port (can be empty)
 				D: port.Destination, // Destination port
 			})
-			fmt.Printf("    ✅ Port[%d] added to proto: S='%s', D='%s'\n", i, port.Source, port.Destination)
-		} else {
-			fmt.Printf("    ❌ Port[%d] SKIPPED - empty Destination field\n", i)
 		}
 	}
-	fmt.Printf("🔍 DEBUG: Final proto ports count: %d (from %d input ports)\n", len(ports), len(r.Ports))
 
 	// Build SG and SgLocal with proper namespace handling
 	var sg, sgLocal string

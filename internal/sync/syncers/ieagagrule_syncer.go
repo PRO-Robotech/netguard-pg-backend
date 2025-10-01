@@ -31,8 +31,6 @@ func (s *IEAgAgRuleSyncer) Sync(ctx context.Context, entity interfaces.SyncableE
 		return fmt.Errorf("entity cannot be nil")
 	}
 
-	fmt.Printf("🔧 DEBUG: IEAgAgRuleSyncer.Sync - Starting sync for entity %s (operation: %s)\n", entity.GetSyncKey(), operation)
-
 	// Validate entity type
 	if entity.GetSyncSubjectType() != types.SyncSubjectTypeIEAgAgRules {
 		return fmt.Errorf("invalid entity type for IEAgAgRuleSyncer: %s", entity.GetSyncSubjectType())
@@ -41,7 +39,6 @@ func (s *IEAgAgRuleSyncer) Sync(ctx context.Context, entity interfaces.SyncableE
 	// Convert entity to single protobuf rule
 	protoData, err := entity.ToSGroupsProto()
 	if err != nil {
-		fmt.Printf("❌ ERROR: IEAgAgRuleSyncer.Sync - Failed to convert entity %s to proto: %v\n", entity.GetSyncKey(), err)
 		return fmt.Errorf("failed to convert entity to sgroups proto: %w", err)
 	}
 
@@ -56,8 +53,6 @@ func (s *IEAgAgRuleSyncer) Sync(ctx context.Context, entity interfaces.SyncableE
 		Rules: []*pb.IESgSgRule{protoRule},
 	}
 
-	fmt.Printf("🔧 DEBUG: IEAgAgRuleSyncer.Sync - Converted entity %s to proto and wrapped in batch structure\n", entity.GetSyncKey())
-
 	// Create sync request
 	syncReq := &types.SyncRequest{
 		Operation:   operation,
@@ -65,15 +60,11 @@ func (s *IEAgAgRuleSyncer) Sync(ctx context.Context, entity interfaces.SyncableE
 		Data:        singleEntityBatch, // Send single-entity batch structure
 	}
 
-	fmt.Printf("🔧 DEBUG: IEAgAgRuleSyncer.Sync - Sending sync request to gateway for entity %s\n", entity.GetSyncKey())
-
 	// Send sync request to sgroups
 	if err := s.gateway.Sync(ctx, syncReq); err != nil {
-		fmt.Printf("❌ ERROR: IEAgAgRuleSyncer.Sync - Gateway sync failed for entity %s: %v\n", entity.GetSyncKey(), err)
 		return fmt.Errorf("failed to sync entity with sgroups: %w", err)
 	}
 
-	fmt.Printf("✅ DEBUG: IEAgAgRuleSyncer.Sync - Successfully completed sync for entity %s\n", entity.GetSyncKey())
 	s.logger.V(1).Info("Successfully synced IEAgAgRule", "key", entity.GetSyncKey(), "operation", operation)
 
 	return nil
@@ -84,8 +75,6 @@ func (s *IEAgAgRuleSyncer) SyncBatch(ctx context.Context, entities []interfaces.
 	if len(entities) == 0 {
 		return nil
 	}
-
-	fmt.Printf("🔧 DEBUG: IEAgAgRuleSyncer.SyncBatch - Starting batch sync for %d entities (operation: %s)\n", len(entities), operation)
 
 	// Validate all entities and convert to protobuf rules
 	var protoRules []*pb.IESgSgRule
@@ -104,7 +93,6 @@ func (s *IEAgAgRuleSyncer) SyncBatch(ctx context.Context, entities []interfaces.
 		// Convert entity to single protobuf rule
 		protoData, err := entity.ToSGroupsProto()
 		if err != nil {
-			fmt.Printf("❌ ERROR: IEAgAgRuleSyncer.SyncBatch - Failed to convert entity %s to proto: %v\n", entity.GetSyncKey(), err)
 			return fmt.Errorf("failed to convert entity %s to sgroups proto: %w", entity.GetSyncKey(), err)
 		}
 
@@ -112,14 +100,12 @@ func (s *IEAgAgRuleSyncer) SyncBatch(ctx context.Context, entities []interfaces.
 		if protoRule, ok := protoData.(*pb.IESgSgRule); ok {
 			protoRules = append(protoRules, protoRule)
 			entityKeys = append(entityKeys, entity.GetSyncKey())
-			fmt.Printf("🔧 DEBUG: IEAgAgRuleSyncer.SyncBatch - Converted entity %s to proto\n", entity.GetSyncKey())
 		} else {
 			return fmt.Errorf("invalid proto data type for entity %s, expected *pb.IESgSgRule, got %T", entity.GetSyncKey(), protoData)
 		}
 	}
 
 	if len(protoRules) == 0 {
-		fmt.Printf("⚠️ WARNING: IEAgAgRuleSyncer.SyncBatch - No valid entities to sync\n")
 		return nil
 	}
 
@@ -134,15 +120,11 @@ func (s *IEAgAgRuleSyncer) SyncBatch(ctx context.Context, entities []interfaces.
 		Data:        batchProtoData, // Send aggregated structure
 	}
 
-	fmt.Printf("🔧 DEBUG: IEAgAgRuleSyncer.SyncBatch - Sending batch sync request with %d rules to gateway\n", len(protoRules))
-
 	// Send batch sync request to sgroups
 	if err := s.gateway.Sync(ctx, syncReq); err != nil {
-		fmt.Printf("❌ ERROR: IEAgAgRuleSyncer.SyncBatch - Gateway sync failed for batch: %v\n", err)
 		return fmt.Errorf("failed to sync IEAgAgRule batch with sgroups: %w", err)
 	}
 
-	fmt.Printf("✅ DEBUG: IEAgAgRuleSyncer.SyncBatch - Successfully completed batch sync for %d entities\n", len(entities))
 	s.logger.V(1).Info("Successfully synced batch of IEAgAgRules", "count", len(entities), "keys", entityKeys, "operation", operation)
 
 	return nil

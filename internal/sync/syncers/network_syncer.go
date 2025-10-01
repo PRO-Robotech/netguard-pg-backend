@@ -86,8 +86,6 @@ func (s *NetworkSyncer) Sync(ctx context.Context, entity interfaces.SyncableEnti
 		return fmt.Errorf("entity cannot be nil")
 	}
 
-	fmt.Printf("🔧 DEBUG: NetworkSyncer.Sync - Starting sync for entity %s (operation: %s)\n", entity.GetSyncKey(), operation)
-
 	// Validate entity type
 	if entity.GetSyncSubjectType() != types.SyncSubjectTypeNetworks {
 		return fmt.Errorf("invalid entity type for NetworkSyncer: %s", entity.GetSyncSubjectType())
@@ -96,7 +94,6 @@ func (s *NetworkSyncer) Sync(ctx context.Context, entity interfaces.SyncableEnti
 	// Convert entity to single protobuf network
 	protoData, err := entity.ToSGroupsProto()
 	if err != nil {
-		fmt.Printf("❌ ERROR: NetworkSyncer.Sync - Failed to convert entity %s to proto: %v\n", entity.GetSyncKey(), err)
 		return fmt.Errorf("failed to convert entity to sgroups proto: %w", err)
 	}
 
@@ -111,8 +108,6 @@ func (s *NetworkSyncer) Sync(ctx context.Context, entity interfaces.SyncableEnti
 		Networks: []*pb.Network{protoNetwork},
 	}
 
-	fmt.Printf("🔧 DEBUG: NetworkSyncer.Sync - Converted entity %s to proto and wrapped in batch structure\n", entity.GetSyncKey())
-
 	// Create sync request
 	syncReq := &types.SyncRequest{
 		Operation:   operation,
@@ -120,15 +115,10 @@ func (s *NetworkSyncer) Sync(ctx context.Context, entity interfaces.SyncableEnti
 		Data:        singleEntityBatch, // Send single-entity batch structure
 	}
 
-	fmt.Printf("🔧 DEBUG: NetworkSyncer.Sync - Sending sync request to gateway for entity %s\n", entity.GetSyncKey())
-
 	// Send sync request to sgroups
 	if err := s.gateway.Sync(ctx, syncReq); err != nil {
-		fmt.Printf("❌ ERROR: NetworkSyncer.Sync - Gateway sync failed for entity %s: %v\n", entity.GetSyncKey(), err)
 		return fmt.Errorf("failed to sync Network with sgroups: %w", err)
 	}
-
-	fmt.Printf("✅ DEBUG: NetworkSyncer.Sync - Successfully completed sync for entity %s\n", entity.GetSyncKey())
 
 	s.logger.V(1).Info("Successfully synced Network",
 		"key", entity.GetSyncKey(),

@@ -31,8 +31,6 @@ func (s *AddressGroupSyncer) Sync(ctx context.Context, entity interfaces.Syncabl
 		return fmt.Errorf("entity cannot be nil")
 	}
 
-	fmt.Printf("🔧 DEBUG: AddressGroupSyncer.Sync - Starting sync for entity %s (operation: %s)\n", entity.GetSyncKey(), operation)
-
 	// Validate entity type
 	if entity.GetSyncSubjectType() != types.SyncSubjectTypeGroups {
 		return fmt.Errorf("invalid entity type for AddressGroupSyncer: %s", entity.GetSyncSubjectType())
@@ -41,7 +39,6 @@ func (s *AddressGroupSyncer) Sync(ctx context.Context, entity interfaces.Syncabl
 	// Convert entity to single protobuf group
 	protoData, err := entity.ToSGroupsProto()
 	if err != nil {
-		fmt.Printf("❌ ERROR: AddressGroupSyncer.Sync - Failed to convert entity %s to proto: %v\n", entity.GetSyncKey(), err)
 		return fmt.Errorf("failed to convert entity to sgroups proto: %w", err)
 	}
 
@@ -56,8 +53,6 @@ func (s *AddressGroupSyncer) Sync(ctx context.Context, entity interfaces.Syncabl
 		Groups: []*pb.SecGroup{protoGroup},
 	}
 
-	fmt.Printf("🔧 DEBUG: AddressGroupSyncer.Sync - Converted entity %s to proto and wrapped in batch structure\n", entity.GetSyncKey())
-
 	// Create sync request
 	syncReq := &types.SyncRequest{
 		Operation:   operation,
@@ -65,15 +60,10 @@ func (s *AddressGroupSyncer) Sync(ctx context.Context, entity interfaces.Syncabl
 		Data:        singleEntityBatch, // Send single-entity batch structure
 	}
 
-	fmt.Printf("🔧 DEBUG: AddressGroupSyncer.Sync - Sending sync request to gateway for entity %s\n", entity.GetSyncKey())
-
 	// Send sync request to sgroups
 	if err := s.gateway.Sync(ctx, syncReq); err != nil {
-		fmt.Printf("❌ ERROR: AddressGroupSyncer.Sync - Gateway sync failed for entity %s: %v\n", entity.GetSyncKey(), err)
 		return fmt.Errorf("failed to sync AddressGroup with sgroups: %w", err)
 	}
-
-	fmt.Printf("✅ DEBUG: AddressGroupSyncer.Sync - Successfully completed sync for entity %s\n", entity.GetSyncKey())
 
 	s.logger.V(1).Info("Successfully synced AddressGroup",
 		"key", entity.GetSyncKey(),

@@ -53,24 +53,11 @@ func (s *NetguardServiceServer) Sync(ctx context.Context, req *netguardpb.SyncRe
 		// Конвертируем сервисы
 		services := make([]models.Service, 0, len(subject.Services.Services))
 		for _, svc := range subject.Services.Services {
-			// 🔍 TRACE: Log service data from protobuf BEFORE conversion
-			fmt.Printf("🔍 TRACE [gRPC-PreConvert]: Service %s/%s description='%s'\n",
-				svc.SelfRef.Namespace, svc.SelfRef.Name, svc.Description)
-
 			convertedService := convertService(svc)
-
-			// 🔍 TRACE: Log service data AFTER conversion to domain model
-			fmt.Printf("🔍 TRACE [gRPC-PostConvert]: Service %s description='%s'\n",
-				convertedService.Key(), convertedService.Description)
 
 			services = append(services, convertedService)
 		}
 
-		// 🔍 TRACE: Log all services BEFORE calling facade
-		for i, service := range services {
-			fmt.Printf("🔍 TRACE [gRPC-BeforeFacade]: Service[%d] %s description='%s'\n",
-				i, service.Key(), service.Description)
-		}
 
 		// Синхронизируем сервисы с указанной операцией
 		err = s.service.Sync(ctx, syncOp, services)
