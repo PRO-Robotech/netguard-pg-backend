@@ -2,7 +2,6 @@ package sync
 
 import (
 	"context"
-	"log"
 
 	"netguard-pg-backend/internal/sync/config"
 	"netguard-pg-backend/internal/sync/detector"
@@ -59,27 +58,23 @@ func NewReverseSyncSystem(
 
 // Start starts the reverse synchronization system
 func (s *ReverseSyncSystem) Start(ctx context.Context) error {
-	log.Printf("🚀 Starting reverse synchronization system")
 
 	err := s.manager.Start(ctx)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("✅ Reverse synchronization system started successfully")
 	return nil
 }
 
 // Stop stops the reverse synchronization system
 func (s *ReverseSyncSystem) Stop() error {
-	log.Printf("🛑 Stopping reverse synchronization system")
 
 	err := s.manager.Stop()
 	if err != nil {
 		return err
 	}
 
-	log.Printf("✅ Reverse synchronization system stopped successfully")
 	return nil
 }
 
@@ -104,7 +99,7 @@ func ExampleUsage() {
 	// 2. Validate configuration
 	err := config.Validate()
 	if err != nil {
-		log.Fatalf("Invalid configuration: %v", err)
+		// log.Fatalf("Invalid configuration: %v", err)
 	}
 
 	// 3. Create your implementations of required interfaces
@@ -115,14 +110,14 @@ func ExampleUsage() {
 	// 4. Create reverse sync system
 	// reverseSyncSystem, err := NewReverseSyncSystem(sgroupGateway, hostReader, hostWriter, config)
 	// if err != nil {
-	//     log.Fatalf("Failed to create reverse sync system: %v", err)
+	//     // log.Fatalf("Failed to create reverse sync system: %v", err)
 	// }
 
 	// 5. Start the system
 	// ctx := context.Background()
 	// err = reverseSyncSystem.Start(ctx)
 	// if err != nil {
-	//     log.Fatalf("Failed to start reverse sync system: %v", err)
+	//     // log.Fatalf("Failed to start reverse sync system: %v", err)
 	// }
 
 	// 6. System will now automatically:
@@ -137,9 +132,8 @@ func ExampleUsage() {
 	// defer func() {
 	//     err := reverseSyncSystem.Stop()
 	//     if err != nil {
-	//         log.Printf("Error stopping reverse sync system: %v", err)
 	//     }
 	// }()
 
-	log.Println("Reverse synchronization system example completed")
+	// log.Println("Reverse synchronization system example completed")
 }

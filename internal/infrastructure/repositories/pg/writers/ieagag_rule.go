@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -17,26 +16,22 @@ import (
 
 // SyncIEAgAgRules syncs IEAgAgRule resources to PostgreSQL with K8s metadata support
 func (w *Writer) SyncIEAgAgRules(ctx context.Context, rules []models.IEAgAgRule, scope ports.Scope, options ...ports.Option) error {
-	// 🔧 CONDITION FIX: Handle ConditionOnlyOperation like service.go
+	// Handle ConditionOnlyOperation like service.go
 	var isConditionOnly bool
 	for _, opt := range options {
 		if _, ok := opt.(ports.ConditionOnlyOperation); ok {
 			isConditionOnly = true
-			fmt.Printf("🔧 DEBUG: Detected ConditionOnlyOperation for IEAgAgRule sync\n")
 		}
 	}
 
-	// 🚨 CRITICAL: For condition-only operations, only update k8s_metadata conditions
+	// CRITICAL: For condition-only operations, only update k8s_metadata conditions
 	// Don't touch the main ieagag_rules table - just update conditions in the existing metadata
 	if isConditionOnly {
-		fmt.Printf("🚧 DEBUG: ConditionOnly operation detected - updating IEAgAgRule conditions only...\n")
-
 		for _, rule := range rules {
 			if err := w.updateIEAgAgRuleConditionsOnly(ctx, rule); err != nil {
 				return errors.Wrapf(err, "failed to update conditions for IEAgAgRule %s/%s", rule.Namespace, rule.Name)
 			}
 		}
-		fmt.Printf("✅ DEBUG: IEAgAgRule condition-only update completed successfully\n")
 		return nil
 	}
 
@@ -49,7 +44,7 @@ func (w *Writer) SyncIEAgAgRules(ctx context.Context, rules []models.IEAgAgRule,
 
 	// Upsert all provided rules
 	for i := range rules {
-		// 🔧 CRITICAL FIX: Initialize metadata fields (UID, Generation, ObservedGeneration)
+		// Initialize metadata fields (UID, Generation, ObservedGeneration)
 		// This is what Memory backend does via ensureMetaFill() -> TouchOnCreate()
 		// Without this, PATCH operations fail because objInfo.UpdatedObject() needs UID
 		// IMPORTANT: Use index-based loop to modify original, not copy!
@@ -67,8 +62,6 @@ func (w *Writer) SyncIEAgAgRules(ctx context.Context, rules []models.IEAgAgRule,
 
 // upsertIEAgAgRule inserts or updates an ieagag rule with full K8s metadata support
 func (w *Writer) upsertIEAgAgRule(ctx context.Context, rule models.IEAgAgRule) error {
-	log.Printf("🗄️ POSTGRES DEBUG: upsertIEAgAgRule called for %s/%s", rule.Namespace, rule.Name)
-
 	// Marshal K8s metadata
 	labelsJSON, annotationsJSON, err := w.marshalLabelsAnnotations(rule.Meta.Labels, rule.Meta.Annotations)
 	if err != nil {
@@ -88,7 +81,7 @@ func (w *Writer) upsertIEAgAgRule(ctx context.Context, rule models.IEAgAgRule) e
 	if existingResourceVersion.Valid {
 		// UPDATE existing K8s metadata
 		metadataQuery := `
-			UPDATE k8s_metadata 
+			UPDATE k8s_metadata
 			SET labels = $1, annotations = $2, conditions = $3, updated_at = NOW()
 			WHERE resource_version = $4
 			RETURNING resource_version`
@@ -160,8 +153,6 @@ func (w *Writer) upsertIEAgAgRule(ctx context.Context, rule models.IEAgAgRule) e
 // updateIEAgAgRuleConditionsOnly updates only the conditions in k8s_metadata for condition-only operations
 // This avoids the UID conflict issues when ConditionManager runs after main transaction commit
 func (w *Writer) updateIEAgAgRuleConditionsOnly(ctx context.Context, rule models.IEAgAgRule) error {
-	fmt.Printf("🔧 DEBUG: updateIEAgAgRuleConditionsOnly for %s/%s\n", rule.Namespace, rule.Name)
-
 	// Marshal only the conditions we need to update
 	conditionsJSON, err := json.Marshal(rule.Meta.Conditions)
 	if err != nil {
@@ -176,33 +167,18 @@ func (w *Writer) updateIEAgAgRuleConditionsOnly(ctx context.Context, rule models
 		return errors.Wrapf(err, "failed to find IEAgAgRule %s/%s for condition update", rule.Namespace, rule.Name)
 	}
 
-	fmt.Printf("🔍 DEBUG: Found IEAgAgRule %s/%s with resource_version=%d, updating conditions only\n", rule.Namespace, rule.Name, resourceVersion)
-
 	conditionCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
-	fmt.Printf("🔧 OPTIMIZED_FIX: Starting condition update for IEAgAgRule %s/%s with 3s timeout\n", rule.Namespace, rule.Name)
-
 	// Update only the conditions in k8s_metadata using the resource_version
 	conditionUpdateQuery := `
-		UPDATE k8s_metadata 
+		UPDATE k8s_metadata
 		SET conditions = $1, updated_at = NOW()
 		WHERE resource_version = $2`
 
-	result, err := w.tx.Exec(conditionCtx, conditionUpdateQuery, conditionsJSON, resourceVersion)
+	_, err = w.tx.Exec(conditionCtx, conditionUpdateQuery, conditionsJSON, resourceVersion)
 	if err != nil {
 		return errors.Wrapf(err, "failed to update conditions for IEAgAgRule %s/%s", rule.Namespace, rule.Name)
-	}
-
-	rowsAffected := result.RowsAffected()
-
-	if rowsAffected == 0 {
-		// Let's also check if the metadata row exists
-		var count int
-		checkQuery := `SELECT COUNT(*) FROM k8s_metadata WHERE resource_version = $1`
-		if err := w.tx.QueryRow(ctx, checkQuery, resourceVersion).Scan(&count); err == nil {
-			fmt.Printf("🔍 DEBUG: Found %d k8s_metadata rows for resource_version=%d\n", count, resourceVersion)
-		}
 	}
 
 	return nil

@@ -3,7 +3,6 @@ package validation
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"netguard-pg-backend/internal/domain/models"
 
@@ -156,6 +155,5 @@ func (v *AddressGroupPortMappingValidator) CheckDependencies(ctx context.Context
 	// It can be safely deleted as nothing should depend on it directly
 
 	// Log the dependency check for consistency with other validators
-	log.Printf("CheckDependencies: AddressGroupPortMapping %s can be safely deleted (no dependents)", id.Key())
 	return nil
 }

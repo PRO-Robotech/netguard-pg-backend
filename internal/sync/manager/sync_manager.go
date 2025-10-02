@@ -3,7 +3,6 @@ package manager
 import (
 	"context"
 	"fmt"
-	"log"
 	"reflect"
 	"sync"
 	"time"
@@ -86,45 +85,35 @@ func (sm *syncManager) syncEntityInternal(ctx context.Context, entity interfaces
 	subjectType := entity.GetSyncSubjectType()
 	syncKey := entity.GetSyncKey()
 
-	log.Printf("🔧 DEBUG: SyncManager.SyncEntity - Starting sync for entity %s (type: %s, operation: %s)",
-		syncKey, subjectType, operation)
 
 	// Check if we should sync (debouncing or forced)
 	var shouldSync bool
 	if forced {
 		shouldSync = sm.syncTracker.ShouldSyncForced(syncKey, operation)
-		log.Printf("🔧 DEBUG: SyncManager.SyncEntity - Forced sync for entity %s", syncKey)
 	} else {
 		shouldSync = sm.syncTracker.ShouldSync(syncKey, operation)
-		log.Printf("🔧 DEBUG: SyncManager.SyncEntity - Debouncing check result: %v for entity %s", shouldSync, syncKey)
 	}
 
 	if !shouldSync {
-		log.Printf("⚠️  DEBUG: SyncManager.SyncEntity - Skipping sync due to debouncing for entity %s", syncKey)
 		sm.logger.V(1).Info("Skipping sync due to debouncing", "key", syncKey, "operation", operation)
 		return nil
 	}
 
 	// Get the appropriate syncer
-	log.Printf("🔧 DEBUG: SyncManager.SyncEntity - Looking for syncer for subject type: %s", subjectType)
 	sm.mu.RLock()
 	syncer, exists := sm.syncers[subjectType]
 	sm.mu.RUnlock()
 
-	log.Printf("🔧 DEBUG: SyncManager.SyncEntity - Syncer found: %v for subject type: %s", exists, subjectType)
 
 	if !exists {
 		err := fmt.Errorf("no syncer registered for subject type: %s", subjectType)
-		log.Printf("❌ ERROR: SyncManager.SyncEntity - %v", err)
 		sm.syncTracker.Track(subjectType, operation, false)
 		return err
 	}
 
 	// Execute sync with retry
-	log.Printf("🔧 DEBUG: SyncManager.SyncEntity - Executing sync with retry for entity %s", syncKey)
 	startTime := time.Now()
 	err := utils.ExecuteWithRetry(ctx, sm.retryConfig, func() error {
-		log.Printf("🔧 DEBUG: SyncManager.SyncEntity - Calling executeSyncWithReflection for entity %s", syncKey)
 		return sm.executeSyncWithReflection(ctx, syncer, entity, operation)
 	})
 
@@ -133,14 +122,12 @@ func (sm *syncManager) syncEntityInternal(ctx context.Context, entity interfaces
 	sm.syncTracker.Track(subjectType, operation, success)
 
 	if success {
-		log.Printf("✅ DEBUG: SyncManager.SyncEntity - Successfully synced entity %s in %v", syncKey, time.Since(startTime))
 		sm.logger.Info("Successfully synced entity",
 			"key", syncKey,
 			"subjectType", subjectType,
 			"operation", operation,
 			"duration", time.Since(startTime))
 	} else {
-		log.Printf("❌ ERROR: SyncManager.SyncEntity - Failed to sync entity %s: %v (duration: %v)", syncKey, err, time.Since(startTime))
 		sm.logger.Error(err, "Failed to sync entity",
 			"key", syncKey,
 			"subjectType", subjectType,

@@ -3,7 +3,6 @@ package convert
 import (
 	"context"
 	"fmt"
-	"log"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -75,16 +74,11 @@ func (c *HostConverter) FromDomain(ctx context.Context, domainObj *models.Host) 
 
 	// Convert IPList from domain to K8s format
 	if domainObj.IpList != nil {
-		log.Printf("🔍 K8S_CONVERTER_DEBUG: Converting %d IP items for host %s/%s",
-			len(domainObj.IpList), domainObj.Namespace, domainObj.Name)
 		k8sHost.IPList = make([]netguardv1beta1.IPItem, len(domainObj.IpList))
 		for i, ipItem := range domainObj.IpList {
-			log.Printf("🔍 K8S_CONVERTER_DEBUG: IP[%d] = %s", i, ipItem.IP)
 			k8sHost.IPList[i] = netguardv1beta1.IPItem{IP: ipItem.IP}
 		}
 	} else {
-		log.Printf("❌ K8S_CONVERTER_DEBUG: No IP list found for host %s/%s",
-			domainObj.Namespace, domainObj.Name)
 	}
 
 	// Convert status using standard helper

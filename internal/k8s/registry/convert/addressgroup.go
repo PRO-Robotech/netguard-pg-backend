@@ -30,10 +30,6 @@ func (c *AddressGroupConverter) ToDomain(ctx context.Context, k8sObj *netguardv1
 
 	aggregatedHosts := convertHostReferencesToDomain(k8sObj.AggregatedHosts)
 
-	// Log incoming AddressGroupName value
-	fmt.Printf("🔍 REGISTRY_DEBUG: AddressGroupConverter.ToDomain for %s/%s - incoming Status.AddressGroupName: '%s'\n",
-		k8sObj.Namespace, k8sObj.Name, k8sObj.Status.AddressGroupName)
-
 	// Compute the expected AddressGroupName pattern
 	var computedAddressGroupName string
 	if k8sObj.Namespace != "" {
@@ -46,10 +42,6 @@ func (c *AddressGroupConverter) ToDomain(ctx context.Context, k8sObj *netguardv1
 	finalAddressGroupName := k8sObj.Status.AddressGroupName
 	if finalAddressGroupName == "" {
 		finalAddressGroupName = computedAddressGroupName
-		fmt.Printf("🔧 REGISTRY_DEBUG: Status.AddressGroupName was empty, using computed value: '%s'\n", finalAddressGroupName)
-	} else {
-		fmt.Printf("✅ REGISTRY_DEBUG: Using existing Status.AddressGroupName: '%s' (computed would be: '%s')\n",
-			finalAddressGroupName, computedAddressGroupName)
 	}
 
 	// Create domain address group with standard metadata conversion

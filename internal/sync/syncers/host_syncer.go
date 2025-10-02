@@ -32,8 +32,6 @@ func (s *HostSyncer) Sync(ctx context.Context, entity interfaces.SyncableEntity,
 		return fmt.Errorf("entity cannot be nil")
 	}
 
-	fmt.Printf("🔧 DEBUG: HostSyncer.Sync - Starting sync for entity %s (operation: %s)\n", entity.GetSyncKey(), operation)
-
 	// Validate entity type
 	if entity.GetSyncSubjectType() != types.SyncSubjectTypeHosts {
 		return fmt.Errorf("invalid entity type for HostSyncer: %s", entity.GetSyncSubjectType())
@@ -42,7 +40,6 @@ func (s *HostSyncer) Sync(ctx context.Context, entity interfaces.SyncableEntity,
 	// Convert entity to single protobuf host
 	protoData, err := entity.ToSGroupsProto()
 	if err != nil {
-		fmt.Printf("❌ ERROR: HostSyncer.Sync - Failed to convert entity %s to proto: %v\n", entity.GetSyncKey(), err)
 		return fmt.Errorf("failed to convert entity to sgroups proto: %w", err)
 	}
 
@@ -57,8 +54,6 @@ func (s *HostSyncer) Sync(ctx context.Context, entity interfaces.SyncableEntity,
 		Hosts: []*pb.Host{protoHost},
 	}
 
-	fmt.Printf("🔧 DEBUG: HostSyncer.Sync - Converted entity %s to proto and wrapped in batch structure\n", entity.GetSyncKey())
-
 	// Create sync request
 	syncReq := &types.SyncRequest{
 		Operation:   operation,
@@ -66,15 +61,10 @@ func (s *HostSyncer) Sync(ctx context.Context, entity interfaces.SyncableEntity,
 		Data:        singleEntityBatch, // Send single-entity batch structure
 	}
 
-	fmt.Printf("🔧 DEBUG: HostSyncer.Sync - Sending sync request to gateway for entity %s\n", entity.GetSyncKey())
-
 	// Send sync request to sgroups
 	if err := s.gateway.Sync(ctx, syncReq); err != nil {
-		fmt.Printf("❌ ERROR: HostSyncer.Sync - Gateway sync failed for entity %s: %v\n", entity.GetSyncKey(), err)
 		return fmt.Errorf("failed to sync Host with sgroups: %w", err)
 	}
-
-	fmt.Printf("✅ DEBUG: HostSyncer.Sync - Successfully completed sync for entity %s\n", entity.GetSyncKey())
 
 	s.logger.V(1).Info("Successfully synced Host",
 		"key", entity.GetSyncKey(),

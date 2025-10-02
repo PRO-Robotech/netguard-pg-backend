@@ -2,7 +2,6 @@ package pg
 
 import (
 	"context"
-	"log"
 	"net/url"
 	"sync"
 	"time"
@@ -53,11 +52,9 @@ type Registry struct {
 
 // NewRegistryFromPG creates registry from Postgres (simplified approach)
 func NewRegistryFromPG(ctx context.Context, dbURL url.URL) (ports.Registry, error) {
-	log.Printf("Creating PostgreSQL registry from URL: %s", dbURL.Host)
 
 	conf, err := pgxpool.ParseConfig(dbURL.String())
 	if err != nil {
-		log.Printf("Failed to parse PostgreSQL config: %v", err)
 		return nil, errors.WithMessage(err, "NewRegistryFromPG parse config")
 	}
 
@@ -81,23 +78,18 @@ func NewRegistryFromPG(ctx context.Context, dbURL url.URL) (ports.Registry, erro
 		"lock_timeout":                        "30000",  // 30 second lock timeout (reduced contention)
 	}
 
-	log.Printf("🎯 TIMEOUT_FIX: Optimized PostgreSQL pool config - MaxConns: %d, MinConns: %d, ConnectTimeout: %v",
-		conf.MaxConns, conf.MinConns, conf.ConnConfig.ConnectTimeout)
 
 	pool, err := pgxpool.NewWithConfig(ctx, conf)
 	if err != nil {
-		log.Printf("Failed to create PostgreSQL pool: %v", err)
 		return nil, errors.WithMessage(err, "NewRegistryFromPG create pool")
 	}
 
 	// Test connection
 	if err := pool.Ping(ctx); err != nil {
-		log.Printf("Failed to ping PostgreSQL: %v", err)
 		pool.Close()
 		return nil, errors.WithMessage(err, "NewRegistryFromPG ping")
 	}
 
-	log.Printf("PostgreSQL connection established successfully")
 
 	ret := &Registry{
 		subject: &simpleSubject{
@@ -106,7 +98,6 @@ func NewRegistryFromPG(ctx context.Context, dbURL url.URL) (ports.Registry, erro
 		pool: pool, // Simple assignment instead of atomic store
 	}
 
-	log.Printf("PostgreSQL registry created successfully")
 	return ret, nil
 }
 

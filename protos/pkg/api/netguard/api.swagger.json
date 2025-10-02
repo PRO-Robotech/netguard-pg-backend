@@ -999,6 +999,30 @@
       },
       "title": "AddressGroupRef - reference to an address group"
     },
+    "v1AddressGroupReference": {
+      "type": "object",
+      "properties": {
+        "ref": {
+          "$ref": "#/definitions/v1NamespacedObjectReference",
+          "title": "Reference to the AddressGroup object"
+        },
+        "source": {
+          "$ref": "#/definitions/v1AddressGroupRegistrationSource",
+          "title": "Source indicates how this address group was registered (spec or binding)"
+        }
+      },
+      "title": "AddressGroupReference represents a reference to an AddressGroup with source tracking"
+    },
+    "v1AddressGroupRegistrationSource": {
+      "type": "string",
+      "enum": [
+        "AG_SOURCE_SPEC",
+        "AG_SOURCE_BINDING"
+      ],
+      "default": "AG_SOURCE_SPEC",
+      "description": "- AG_SOURCE_SPEC: Registered via Service.spec.addressGroups\n - AG_SOURCE_BINDING: Registered via AddressGroupBinding resource",
+      "title": "AddressGroupRegistrationSource represents the source of address group registration"
+    },
     "v1Condition": {
       "type": "object",
       "properties": {
@@ -1831,6 +1855,13 @@
         },
         "meta": {
           "$ref": "#/definitions/v1Meta"
+        },
+        "aggregatedAddressGroups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1AddressGroupReference"
+          }
         }
       },
       "title": "Service - represents a service with ports",

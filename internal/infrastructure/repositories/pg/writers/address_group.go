@@ -20,7 +20,6 @@ func (w *Writer) SyncAddressGroups(ctx context.Context, addressGroups []models.A
 	for _, opt := range opts {
 		if _, ok := opt.(ports.ConditionOnlyOperation); ok {
 			isConditionOnly = true
-			fmt.Printf("🔧 DEBUG: Detected ConditionOnlyOperation for AddressGroup sync\n")
 			break
 		}
 	}

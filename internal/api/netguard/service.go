@@ -2,8 +2,6 @@ package netguard
 
 import (
 	"context"
-	"fmt"
-	"log"
 
 	"netguard-pg-backend/internal/application/services"
 	"netguard-pg-backend/internal/domain/models"
@@ -53,24 +51,11 @@ func (s *NetguardServiceServer) Sync(ctx context.Context, req *netguardpb.SyncRe
 		// Конвертируем сервисы
 		services := make([]models.Service, 0, len(subject.Services.Services))
 		for _, svc := range subject.Services.Services {
-			// 🔍 TRACE: Log service data from protobuf BEFORE conversion
-			fmt.Printf("🔍 TRACE [gRPC-PreConvert]: Service %s/%s description='%s'\n",
-				svc.SelfRef.Namespace, svc.SelfRef.Name, svc.Description)
-
 			convertedService := convertService(svc)
-
-			// 🔍 TRACE: Log service data AFTER conversion to domain model
-			fmt.Printf("🔍 TRACE [gRPC-PostConvert]: Service %s description='%s'\n",
-				convertedService.Key(), convertedService.Description)
 
 			services = append(services, convertedService)
 		}
 
-		// 🔍 TRACE: Log all services BEFORE calling facade
-		for i, service := range services {
-			fmt.Printf("🔍 TRACE [gRPC-BeforeFacade]: Service[%d] %s description='%s'\n",
-				i, service.Key(), service.Description)
-		}
 
 		// Синхронизируем сервисы с указанной операцией
 		err = s.service.Sync(ctx, syncOp, services)
@@ -357,7 +342,6 @@ func (s *NetguardServiceServer) GetAddressGroup(ctx context.Context, req *netgua
 	id := idFromReq(req.GetIdentifier())
 	addressGroup, err := s.service.GetAddressGroupByID(ctx, id)
 	if err != nil {
-		log.Printf("❌ GRPC GetAddressGroup: failed to get %s: %v", id.Key(), err)
 		return nil, errors.Wrap(err, "failed to get address group")
 	}
 
@@ -571,6 +555,24 @@ func convertService(svc *netguardpb.Service) models.Service {
 		if agName != "" {
 			ref := models.NewAddressGroupRef(agName, models.WithNamespace(agNamespace))
 			result.AddressGroups = append(result.AddressGroups, ref)
+		}
+	}
+
+	// Convert AggregatedAddressGroups from proto to domain
+	if len(svc.AggregatedAddressGroups) > 0 {
+		result.AggregatedAddressGroups = make([]models.AddressGroupReference, len(svc.AggregatedAddressGroups))
+		for i, agRef := range svc.AggregatedAddressGroups {
+			result.AggregatedAddressGroups[i] = models.AddressGroupReference{
+				Ref: v1beta1.NamespacedObjectReference{
+					ObjectReference: v1beta1.ObjectReference{
+						APIVersion: agRef.Ref.ApiVersion,
+						Kind:       agRef.Ref.Kind,
+						Name:       agRef.Ref.Name,
+					},
+					Namespace: agRef.Ref.Namespace,
+				},
+				Source: convertAGRegistrationSourceFromPB(agRef.Source),
+			}
 		}
 	}
 
@@ -879,6 +881,22 @@ func convertServiceToPB(svc models.Service) *netguardpb.Service {
 		})
 	}
 
+
+	// Convert AggregatedAddressGroups from domain to proto
+	if len(svc.AggregatedAddressGroups) > 0 {
+		result.AggregatedAddressGroups = make([]*netguardpb.AddressGroupReference, len(svc.AggregatedAddressGroups))
+		for i, agRef := range svc.AggregatedAddressGroups {
+			result.AggregatedAddressGroups[i] = &netguardpb.AddressGroupReference{
+				Ref: &netguardpb.NamespacedObjectReference{
+					ApiVersion: agRef.Ref.APIVersion,
+					Kind:       agRef.Ref.Kind,
+					Name:       agRef.Ref.Name,
+					Namespace:  agRef.Ref.Namespace,
+				},
+				Source: convertAGRegistrationSourceToPB(agRef.Source),
+			}
+		}
+	}
 	return result
 }
 
@@ -981,6 +999,30 @@ func convertHostRegistrationSourceFromPB(source netguardpb.HostRegistrationSourc
 		return models.HostSourceBinding
 	default:
 		return models.HostSourceSpec // default
+	}
+}
+
+// convertAGRegistrationSourceFromPB converts proto AddressGroupRegistrationSource to domain
+func convertAGRegistrationSourceFromPB(source netguardpb.AddressGroupRegistrationSource) models.AddressGroupRegistrationSource {
+	switch source {
+	case netguardpb.AddressGroupRegistrationSource_AG_SOURCE_SPEC:
+		return models.AddressGroupSourceSpec
+	case netguardpb.AddressGroupRegistrationSource_AG_SOURCE_BINDING:
+		return models.AddressGroupSourceBinding
+	default:
+		return models.AddressGroupSourceSpec // default
+	}
+}
+
+// convertAGRegistrationSourceToPB converts domain AddressGroupRegistrationSource to proto
+func convertAGRegistrationSourceToPB(source models.AddressGroupRegistrationSource) netguardpb.AddressGroupRegistrationSource {
+	switch source {
+	case models.AddressGroupSourceSpec:
+		return netguardpb.AddressGroupRegistrationSource_AG_SOURCE_SPEC
+	case models.AddressGroupSourceBinding:
+		return netguardpb.AddressGroupRegistrationSource_AG_SOURCE_BINDING
+	default:
+		return netguardpb.AddressGroupRegistrationSource_AG_SOURCE_SPEC // default
 	}
 }
 
@@ -1262,7 +1304,6 @@ func convertActionToPB(action models.RuleAction) netguardpb.RuleAction {
 	case models.ActionDrop:
 		return netguardpb.RuleAction_DROP
 	default:
-		log.Printf("⚠️  WARNING: Unknown Action '%s', defaulting to ACCEPT", action)
 		return netguardpb.RuleAction_ACCEPT
 	}
 }
@@ -1276,7 +1317,6 @@ func convertIEAgAgRuleToPB(rule models.IEAgAgRule) *netguardpb.IEAgAgRule {
 	case models.UDP:
 		transport = netguardpb.Networks_NetIP_UDP
 	default:
-		log.Printf("⚠️  WARNING: Unknown Transport '%s' for rule %s, defaulting to TCP", rule.Transport, rule.Key())
 		transport = netguardpb.Networks_NetIP_TCP
 	}
 
@@ -1287,7 +1327,6 @@ func convertIEAgAgRuleToPB(rule models.IEAgAgRule) *netguardpb.IEAgAgRule {
 	case models.EGRESS:
 		traffic = netguardpb.Traffic_Egress
 	default:
-		log.Printf("⚠️  WARNING: Unknown Traffic '%s' for rule %s, defaulting to Ingress", rule.Traffic, rule.Key())
 		traffic = netguardpb.Traffic_Ingress
 	}
 
@@ -1500,7 +1539,6 @@ func (s *NetguardServiceServer) GetNetwork(ctx context.Context, req *netguardpb.
 	id := idFromReq(req.GetIdentifier())
 	network, err := s.service.GetNetworkByID(ctx, id)
 	if err != nil {
-		log.Printf("❌ GRPC GetNetwork: failed to get %s: %v", id.Key(), err)
 		return nil, errors.Wrap(err, "failed to get network")
 	}
 

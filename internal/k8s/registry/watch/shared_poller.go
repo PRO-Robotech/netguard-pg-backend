@@ -3,7 +3,6 @@ package watch
 import (
 	"context"
 	"fmt"
-	"log"
 	"reflect"
 	"sync"
 	"time"
@@ -122,7 +121,6 @@ func (p *SharedPoller) pollLoop(converter Converter) {
 			if err != nil {
 				// Exponential backoff при ошибках
 				delay := backoffConfig.NextBackOff()
-				log.Printf("Poll error for %s, backing off for %v: %v", p.resourceType, delay, err)
 				time.Sleep(delay)
 			} else {
 				backoffConfig.Reset()
@@ -205,7 +203,6 @@ func (p *SharedPoller) broadcastEvent(event watch.Event) {
 				// Клиент закрыт, пропустить
 			default:
 				// Канал клиента переполнен, пропустить
-				log.Printf("Client %s event channel full, dropping event", client.id)
 			}
 		}
 	}
@@ -240,7 +237,6 @@ func (p *SharedPoller) sendInitialSnapshot(client *WatchClient) {
 				return
 			default:
 				// Канал переполнен, пропустить
-				log.Printf("Client %s initial snapshot channel full", client.id)
 				return
 			}
 		}

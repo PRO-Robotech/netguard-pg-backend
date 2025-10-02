@@ -110,7 +110,7 @@ func (r *Reader) scanHostBinding(rows pgx.Rows) (models.HostBinding, error) {
 	// Set host reference
 	hostBinding.HostRef = v1beta1.NamespacedObjectReference{
 		ObjectReference: v1beta1.ObjectReference{
-			APIVersion: "netguard.io/v1beta1",
+			APIVersion: "netguard.sgroups.io/v1beta1",
 			Kind:       "Host",
 			Name:       hostName,
 		},
@@ -120,7 +120,7 @@ func (r *Reader) scanHostBinding(rows pgx.Rows) (models.HostBinding, error) {
 	// Set address group reference
 	hostBinding.AddressGroupRef = v1beta1.NamespacedObjectReference{
 		ObjectReference: v1beta1.ObjectReference{
-			APIVersion: "netguard.io/v1beta1",
+			APIVersion: "netguard.sgroups.io/v1beta1",
 			Kind:       "AddressGroup",
 			Name:       addressGroupName,
 		},
@@ -168,7 +168,7 @@ func (r *Reader) scanHostBindingRow(row pgx.Row) (*models.HostBinding, error) {
 	// Set host reference
 	hostBinding.HostRef = v1beta1.NamespacedObjectReference{
 		ObjectReference: v1beta1.ObjectReference{
-			APIVersion: "netguard.io/v1beta1",
+			APIVersion: "netguard.sgroups.io/v1beta1",
 			Kind:       "Host",
 			Name:       hostName,
 		},
@@ -178,7 +178,7 @@ func (r *Reader) scanHostBindingRow(row pgx.Row) (*models.HostBinding, error) {
 	// Set address group reference
 	hostBinding.AddressGroupRef = v1beta1.NamespacedObjectReference{
 		ObjectReference: v1beta1.ObjectReference{
-			APIVersion: "netguard.io/v1beta1",
+			APIVersion: "netguard.sgroups.io/v1beta1",
 			Kind:       "AddressGroup",
 			Name:       addressGroupName,
 		},

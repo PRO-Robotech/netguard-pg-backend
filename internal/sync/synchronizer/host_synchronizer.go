@@ -3,7 +3,6 @@ package synchronizer
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"time"
 
@@ -38,7 +37,6 @@ func NewHostSynchronizer(
 
 // SyncHosts synchronizes hosts for a specific namespace
 func (s *hostSynchronizer) SyncHosts(ctx context.Context, namespace string) (*types.HostSyncResult, error) {
-	log.Printf("🔧 DEBUG: HostSynchronizer.SyncHosts - Starting sync for namespace: %s", namespace)
 
 	// Create timeout context
 	timeoutCtx, cancel := context.WithTimeout(ctx, time.Duration(s.config.SyncTimeout)*time.Second)
@@ -54,10 +52,8 @@ func (s *hostSynchronizer) SyncHosts(ctx context.Context, namespace string) (*ty
 		return result, fmt.Errorf("failed to find hosts without IPSet: %w", err)
 	}
 
-	log.Printf("🔧 DEBUG: HostSynchronizer.SyncHosts - Found %d hosts without IPSet", len(hosts))
 
 	if len(hosts) == 0 {
-		log.Printf("✅ DEBUG: HostSynchronizer.SyncHosts - No hosts to sync")
 		return result, nil
 	}
 
@@ -75,15 +71,11 @@ func (s *hostSynchronizer) SyncHosts(ctx context.Context, namespace string) (*ty
 	batches := s.createBatches(uuids, s.config.BatchSize)
 	result.SetDetail("batch_count", len(batches))
 
-	log.Printf("🔧 DEBUG: HostSynchronizer.SyncHosts - Processing %d batches", len(batches))
 
-	for i, batch := range batches {
-		log.Printf("🔧 DEBUG: HostSynchronizer.SyncHosts - Processing batch %d/%d with %d hosts",
-			i+1, len(batches), len(batch))
+	for _, batch := range batches {
 
 		batchResult, err := s.syncHostBatch(timeoutCtx, batch, hostMap)
 		if err != nil {
-			log.Printf("❌ ERROR: HostSynchronizer.SyncHosts - Batch %d failed: %v", i+1, err)
 			// Continue with other batches even if one fails
 		}
 
@@ -92,15 +84,12 @@ func (s *hostSynchronizer) SyncHosts(ctx context.Context, namespace string) (*ty
 	}
 
 	result.SetDetail("sync_end_time", time.Now())
-	log.Printf("✅ DEBUG: HostSynchronizer.SyncHosts - Completed sync. Success: %d, Failed: %d",
-		result.TotalSynced, result.TotalFailed)
 
 	return result, nil
 }
 
 // SyncHostsByUUIDs synchronizes specific hosts by their UUIDs
 func (s *hostSynchronizer) SyncHostsByUUIDs(ctx context.Context, uuids []string) (*types.HostSyncResult, error) {
-	log.Printf("🔧 DEBUG: HostSynchronizer.SyncHostsByUUIDs - Starting sync for %d UUIDs", len(uuids))
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, time.Duration(s.config.SyncTimeout)*time.Second)
 	defer cancel()
@@ -124,12 +113,10 @@ func (s *hostSynchronizer) SyncHostsByUUIDs(ctx context.Context, uuids []string)
 	batches := s.createBatches(uuids, s.config.BatchSize)
 	result.SetDetail("batch_count", len(batches))
 
-	for i, batch := range batches {
-		log.Printf("🔧 DEBUG: HostSynchronizer.SyncHostsByUUIDs - Processing batch %d/%d", i+1, len(batches))
+	for _, batch := range batches {
 
 		batchResult, err := s.syncHostBatch(timeoutCtx, batch, hostMap)
 		if err != nil {
-			log.Printf("❌ ERROR: HostSynchronizer.SyncHostsByUUIDs - Batch %d failed: %v", i+1, err)
 		}
 
 		s.mergeBatchResult(result, batchResult)
@@ -141,7 +128,6 @@ func (s *hostSynchronizer) SyncHostsByUUIDs(ctx context.Context, uuids []string)
 
 // SyncAllHosts performs full synchronization of all hosts
 func (s *hostSynchronizer) SyncAllHosts(ctx context.Context) (*types.HostSyncResult, error) {
-	log.Printf("🔧 DEBUG: HostSynchronizer.SyncAllHosts - Starting full sync")
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, time.Duration(s.config.SyncTimeout)*time.Second)
 	defer cancel()
@@ -156,7 +142,6 @@ func (s *hostSynchronizer) SyncAllHosts(ctx context.Context) (*types.HostSyncRes
 		return result, fmt.Errorf("failed to find hosts without IPSet: %w", err)
 	}
 
-	log.Printf("🔧 DEBUG: HostSynchronizer.SyncAllHosts - Found %d hosts without IPSet across all namespaces", len(hosts))
 
 	if len(hosts) == 0 {
 		return result, nil
@@ -176,20 +161,16 @@ func (s *hostSynchronizer) SyncAllHosts(ctx context.Context) (*types.HostSyncRes
 	batches := s.createBatches(uuids, s.config.BatchSize)
 	result.SetDetail("batch_count", len(batches))
 
-	for i, batch := range batches {
-		log.Printf("🔧 DEBUG: HostSynchronizer.SyncAllHosts - Processing batch %d/%d", i+1, len(batches))
+	for _, batch := range batches {
 
 		batchResult, err := s.syncHostBatch(timeoutCtx, batch, hostMap)
 		if err != nil {
-			log.Printf("❌ ERROR: HostSynchronizer.SyncAllHosts - Batch %d failed: %v", i+1, err)
 		}
 
 		s.mergeBatchResult(result, batchResult)
 	}
 
 	result.SetDetail("sync_end_time", time.Now())
-	log.Printf("✅ DEBUG: HostSynchronizer.SyncAllHosts - Full sync completed. Success: %d, Failed: %d",
-		result.TotalSynced, result.TotalFailed)
 
 	return result, nil
 }
@@ -213,7 +194,6 @@ func (s *hostSynchronizer) getHostMapByUUIDs(ctx context.Context, uuids []string
 	for _, uuid := range uuids {
 		host, err := s.hostReader.GetHostByUUID(ctx, uuid)
 		if err != nil {
-			log.Printf("⚠️  WARNING: HostSynchronizer.getHostMapByUUIDs - Failed to get host %s: %v", uuid, err)
 			continue
 		}
 		if host != nil {
@@ -239,7 +219,6 @@ func (s *hostSynchronizer) syncHostBatch(ctx context.Context, uuids []string, ho
 		return result, err
 	}
 
-	log.Printf("🔧 DEBUG: HostSynchronizer.syncHostBatch - Retrieved %d hosts from SGROUP", len(sgroupHosts))
 
 	// Create map of UUID -> SGROUP Host
 	sgroupHostMap := make(map[string]*pb.Host)
@@ -278,7 +257,6 @@ func (s *hostSynchronizer) syncHostBatch(ctx context.Context, uuids []string, ho
 					if s.isValidIP(ip) {
 						validIPs = append(validIPs, ip)
 					} else {
-						log.Printf("⚠️  WARNING: HostSynchronizer.syncHostBatch - Invalid IP %s for host %s", ip, uuid)
 					}
 				}
 				ipSet = validIPs
@@ -301,7 +279,6 @@ func (s *hostSynchronizer) syncHostBatch(ctx context.Context, uuids []string, ho
 
 	// Apply updates
 	if len(updates) > 0 {
-		log.Printf("🔧 DEBUG: HostSynchronizer.syncHostBatch - Updating %d hosts", len(updates))
 
 		err = s.hostWriter.UpdateHostsIPSet(ctx, updates)
 		if err != nil {

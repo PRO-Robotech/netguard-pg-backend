@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -84,24 +83,20 @@ func (s *HostResourceService) CreateHost(ctx context.Context, host *models.Host)
 	// Sync with external systems
 	syncErr := s.syncHostWithExternal(ctx, host, types.SyncOperationUpsert)
 	if syncErr != nil {
-		log.Printf("❌ Failed to sync Host %s with external systems: %v", host.Key(), syncErr)
 		// Continue with condition processing even if sync fails
 	}
 
 	// Process conditions after sync (so sync result can be included in conditions)
 	if s.conditionManager != nil {
 		if err := s.conditionManager.ProcessHostConditions(ctx, host, syncErr); err != nil {
-			log.Printf("⚠️ Failed to process conditions for host %s: %v", host.Key(), err)
 		}
 
 		// Update the host status with conditions in the database
 		if updateErr := s.updateHostStatus(ctx, host); updateErr != nil {
-			log.Printf("⚠️ Failed to update host %s status after condition processing: %v", host.Key(), updateErr)
 		}
 	}
 
 	if syncErr != nil {
-		log.Printf("⚠️ Host %s created successfully but SGROUP sync failed: %v", host.Key(), syncErr)
 		return fmt.Errorf("host created but SGROUP sync failed: %w", syncErr)
 	}
 
@@ -138,25 +133,20 @@ func (s *HostResourceService) UpdateHost(ctx context.Context, host *models.Host)
 	// Sync with external systems
 	syncErr := s.syncHostWithExternal(ctx, host, types.SyncOperationUpsert)
 	if syncErr != nil {
-		log.Printf("❌ Failed to sync Host %s with external systems: %v", host.Key(), syncErr)
 		// Continue with condition processing even if sync fails
 	} else {
-		log.Printf("✅ Successfully synced Host %s with external systems", host.Key())
 	}
 
 	// Process conditions after sync
 	if s.conditionManager != nil {
 		if err := s.conditionManager.ProcessHostConditions(ctx, host, syncErr); err != nil {
-			log.Printf("⚠️ Failed to process conditions for host %s: %v", host.Key(), err)
 		}
 
 		if updateErr := s.updateHostStatus(ctx, host); updateErr != nil {
-			log.Printf("⚠️ Failed to update host %s status after condition processing: %v", host.Key(), updateErr)
 		}
 	}
 
 	if syncErr != nil {
-		log.Printf("⚠️ Host %s updated but SGROUP sync failed: %v", host.Key(), syncErr)
 	}
 
 	return nil
@@ -164,17 +154,12 @@ func (s *HostResourceService) UpdateHost(ctx context.Context, host *models.Host)
 
 // DeleteHost deletes a Host by resource identifier with cascading deletion of HostBinding
 func (s *HostResourceService) DeleteHost(ctx context.Context, id models.ResourceIdentifier) error {
-	log.Printf("🔥 DEBUG: HostResourceService.DeleteHost called for %s", id.Key())
 
 	// Check if Host exists
-	log.Printf("🔍 DEBUG: Checking if Host %s exists", id.Key())
 	existing, err := s.getHostByID(ctx, id.Key())
-	log.Printf("🔍 DEBUG: getHostByID returned: existing=%v, err=%v", existing != nil, err)
 	if existing != nil {
-		log.Printf("🔍 DEBUG: Found Host %s: IsBound=%v", id.Key(), existing.IsBound)
 	}
 	if err != nil && !errors.Is(err, ports.ErrNotFound) {
-		log.Printf("❌ DEBUG: Failed to get host %s: %v", id.Key(), err)
 		return fmt.Errorf("failed to get host: %w", err)
 	}
 	if existing == nil || errors.Is(err, ports.ErrNotFound) {
@@ -182,7 +167,6 @@ func (s *HostResourceService) DeleteHost(ctx context.Context, id models.Resource
 	}
 
 	if existing.IsBound && existing.AddressGroupRef != nil && existing.BindingRef == nil {
-		log.Printf("🔍 DEBUG: Host %s is bound via AddressGroup.spec.hosts, need to remove from AG first", id.Key())
 
 		reader, err := s.repo.Reader(ctx)
 		if err != nil {
@@ -272,18 +256,15 @@ func (s *HostResourceService) DeleteHost(ctx context.Context, id models.Resource
 
 		hostBindingID := models.NewResourceIdentifier(hostBindingToDelete.Name, models.WithNamespace(hostBindingToDelete.Namespace))
 		if err := writer.DeleteHostBindingsByIDs(ctx, []models.ResourceIdentifier{hostBindingID}); err != nil {
-			log.Printf("❌ DEBUG: writer.DeleteHostBindingsByIDs failed for %s: %v", hostBindingToDelete.Key(), err)
 			return fmt.Errorf("failed to delete host binding %s: %w", hostBindingToDelete.Key(), err)
 		}
 	}
 
 	if err := writer.DeleteHostsByIDs(ctx, []models.ResourceIdentifier{id}); err != nil {
-		log.Printf("❌ DEBUG: writer.DeleteHostsByIDs failed for %s: %v", id.Key(), err)
 		return fmt.Errorf("failed to delete host: %w", err)
 	}
 
 	if err := writer.Commit(); err != nil {
-		log.Printf("❌ DEBUG: Failed to commit cascading deletion for %s: %v", id.Key(), err)
 		return fmt.Errorf("failed to commit cascading deletion: %w", err)
 	}
 
@@ -294,9 +275,7 @@ func (s *HostResourceService) DeleteHost(ctx context.Context, id models.Resource
 				Name:      addressGroupToSync.Name,
 				Namespace: addressGroupToSync.Namespace,
 			}); err == nil && updatedAG != nil {
-				log.Printf("🔄 DEBUG: Syncing updated AddressGroup %s with SGROUP after HostBinding deletion", updatedAG.Key())
 				if syncErr := s.syncManager.SyncEntityForced(ctx, updatedAG, types.SyncOperationUpsert); syncErr != nil {
-					log.Printf("⚠️ Failed to sync AddressGroup %s with SGROUP after HostBinding deletion: %v", updatedAG.Key(), syncErr)
 				}
 			}
 			reader.Close()
@@ -305,8 +284,6 @@ func (s *HostResourceService) DeleteHost(ctx context.Context, id models.Resource
 
 	err = s.syncHostWithExternal(ctx, existing, types.SyncOperationDelete)
 	if err != nil {
-		log.Printf("⚠️ External sync failed for Host %s deletion: %v", id.Key(), err)
-		log.Printf("⚠️ Host %s deleted from storage but SGROUP sync failed - continuing anyway", id.Key())
 	}
 	return nil
 }
@@ -331,7 +308,6 @@ func (s *HostResourceService) ListHosts(ctx context.Context, scope ports.Scope) 
 		return nil
 	}, scope)
 	if err != nil {
-		log.Printf("❌ DEBUG: Failed to list hosts from registry: %v", err)
 		return nil, fmt.Errorf("failed to list hosts: %w", err)
 	}
 
@@ -376,12 +352,10 @@ func (s *HostResourceService) fullSyncHosts(ctx context.Context, hosts []models.
 	for _, host := range hosts {
 		if _, exists := existingHostsMap[host.Key()]; exists {
 			if err := s.UpdateHost(ctx, &host); err != nil {
-				log.Printf("❌ DEBUG: Failed to update host %s: %v", host.Key(), err)
 				return fmt.Errorf("failed to update host %s: %w", host.Key(), err)
 			}
 		} else {
 			if err := s.CreateHost(ctx, &host); err != nil {
-				log.Printf("❌ DEBUG: Failed to create host %s: %v", host.Key(), err)
 				return fmt.Errorf("failed to create host %s: %w", host.Key(), err)
 			}
 		}
@@ -391,7 +365,6 @@ func (s *HostResourceService) fullSyncHosts(ctx context.Context, hosts []models.
 	for _, existingHost := range existingHosts {
 		if _, stillExists := incomingHosts[existingHost.Key()]; !stillExists {
 			if err := s.DeleteHost(ctx, existingHost.SelfRef.ResourceIdentifier); err != nil {
-				log.Printf("❌ DEBUG: Failed to delete host %s: %v", existingHost.Key(), err)
 				return fmt.Errorf("failed to delete host %s: %w", existingHost.Key(), err)
 			}
 		}
@@ -495,7 +468,6 @@ func (s *HostResourceService) findHostBindingByHostID(ctx context.Context, hostI
 	}, ports.EmptyScope{})
 
 	if err != nil {
-		log.Printf("❌ DEBUG: Failed to list host bindings: %v", err)
 		return nil, fmt.Errorf("failed to list host bindings: %w", err)
 	}
 
@@ -511,10 +483,8 @@ func (s *HostResourceService) findHostBindingByHostID(ctx context.Context, hostI
 
 // getHostByID retrieves a host by its key using Reader pattern
 func (s *HostResourceService) getHostByID(ctx context.Context, id string) (*models.Host, error) {
-	log.Printf("🔍 DEBUG: getHostByID called with id=%s", id)
 	reader, err := s.repo.Reader(ctx)
 	if err != nil {
-		log.Printf("❌ DEBUG: getHostByID failed to get reader: %v", err)
 		return nil, err
 	}
 	defer reader.Close()
@@ -524,14 +494,11 @@ func (s *HostResourceService) getHostByID(ctx context.Context, id string) (*mode
 	var resourceID models.ResourceIdentifier
 	if len(parts) == 2 {
 		resourceID = models.ResourceIdentifier{Namespace: parts[0], Name: parts[1]}
-		log.Printf("🔍 DEBUG: getHostByID parsed resourceID: namespace=%s, name=%s", parts[0], parts[1])
 	} else {
 		resourceID = models.ResourceIdentifier{Name: id}
-		log.Printf("🔍 DEBUG: getHostByID using single name: %s", id)
 	}
 
 	host, err := reader.GetHostByID(ctx, resourceID)
-	log.Printf("🔍 DEBUG: reader.GetHostByID returned: host=%v, err=%v", host != nil, err)
 	return host, err
 }
 
@@ -548,9 +515,7 @@ func (s *HostResourceService) syncHostWithExternal(ctx context.Context, host *mo
 	err := utils.ExecuteWithRetry(ctx, s.retryConfig, func() error {
 		// Sync Host with SGROUP
 		if s.syncManager != nil {
-			log.Printf("🔄 Syncing Host %s with SGROUP (operation: %s)", host.Key(), operation)
 			if syncErr := s.syncManager.SyncEntity(ctx, host, operation); syncErr != nil {
-				log.Printf("❌ Failed to sync Host %s with SGROUP: %v", host.Key(), syncErr)
 				return syncErr
 			}
 		}
@@ -570,7 +535,6 @@ func (s *HostResourceService) syncHostWithExternal(ctx context.Context, host *mo
 
 // UpdateHostBinding updates Host status when a binding is created
 func (s *HostResourceService) UpdateHostBinding(ctx context.Context, hostID models.ResourceIdentifier, bindingID models.ResourceIdentifier, addressGroupID models.ResourceIdentifier) error {
-	log.Printf("🔧 DEBUG: UpdateHostBinding called - hostID=%s, bindingID=%s, addressGroupID=%s", hostID.Key(), bindingID.Key(), addressGroupID.Key())
 	writer, err := s.repo.Writer(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get writer: %w", err)
@@ -598,7 +562,6 @@ func (s *HostResourceService) UpdateHostBinding(ctx context.Context, hostID mode
 
 	// CRITICAL: Only allow binding if host is ready (synchronized with SGROUP)
 	if isBinding && !utils.IsReadyConditionTrue(host) {
-		log.Printf("❌ Host %s cannot be bound to AddressGroup: not synchronized with SGROUP (Ready=false)", hostID.Key())
 		return fmt.Errorf("host %s is not ready for binding - must be synchronized with SGROUP first (Ready condition must be True)", hostID.Key())
 	}
 
@@ -642,7 +605,6 @@ func (s *HostResourceService) UpdateHostBinding(ctx context.Context, hostID mode
 	// Sync with SGROUP
 	if s.syncManager != nil {
 		if syncErr := s.syncManager.SyncEntity(ctx, host, types.SyncOperationUpsert); syncErr != nil {
-			log.Printf("❌ Failed to sync Host %s with SGROUP: %v", host.Key(), syncErr)
 			// Don't fail the operation, sync can be retried later
 		}
 	}
@@ -657,18 +619,15 @@ func (s *HostResourceService) SyncHostWithExternal(ctx context.Context, host *mo
 
 // UpdateHostBindingStatus updates Host.isBound status based on AddressGroup hosts changes
 func (s *HostResourceService) UpdateHostBindingStatus(ctx context.Context, oldAG, newAG *models.AddressGroup) error {
-	log.Printf("🔄 UpdateHostBindingStatus called for AddressGroup changes")
 
 	// Get lists of hosts from old and new AddressGroups
 	var oldHosts, newHosts []v1beta1.ObjectReference
 
 	if oldAG != nil {
 		oldHosts = oldAG.Hosts
-		log.Printf("🔍 Old AddressGroup %s has %d hosts", oldAG.Key(), len(oldHosts))
 	}
 	if newAG != nil {
 		newHosts = newAG.Hosts
-		log.Printf("🔍 New AddressGroup %s has %d hosts", newAG.Key(), len(newHosts))
 	}
 
 	// Convert to maps for easier comparison
@@ -696,7 +655,6 @@ func (s *HostResourceService) UpdateHostBindingStatus(ctx context.Context, oldAG
 	for hostName := range oldHostsMap {
 		if !newHostsMap[hostName] {
 			if err := s.updateHostBindingStatusForHost(ctx, hostName, namespace, false, ""); err != nil {
-				log.Printf("❌ Failed to unbind host %s/%s: %v", namespace, hostName, err)
 			}
 		}
 	}
@@ -705,7 +663,6 @@ func (s *HostResourceService) UpdateHostBindingStatus(ctx context.Context, oldAG
 	for hostName := range newHostsMap {
 		if !oldHostsMap[hostName] {
 			if err := s.updateHostBindingStatusForHost(ctx, hostName, namespace, true, addressGroupName); err != nil {
-				log.Printf("❌ Failed to bind host %s/%s to AddressGroup %s: %v", namespace, hostName, addressGroupName, err)
 			}
 		}
 	}
@@ -728,7 +685,6 @@ func (s *HostResourceService) updateHostBindingStatusForHost(ctx context.Context
 
 	// CRITICAL: Only allow binding via AG.spec if host is ready (synchronized with SGROUP)
 	if isBound && !utils.IsReadyConditionTrue(host) {
-		log.Printf("❌ Host %s/%s cannot be bound via AddressGroup.spec: not synchronized with SGROUP (Ready=false)", namespace, hostName)
 		return fmt.Errorf("host %s/%s is not ready for binding via AddressGroup.spec - must be synchronized with SGROUP first (Ready condition must be True)", namespace, hostName)
 	}
 
@@ -754,7 +710,6 @@ func (s *HostResourceService) updateHostBindingStatusForHost(ctx context.Context
 
 	if s.syncManager != nil {
 		if syncErr := s.syncManager.SyncEntityForced(ctx, host, types.SyncOperationUpsert); syncErr != nil {
-			log.Printf("❌ Failed to force sync Host %s with SGroup after binding change: %v", host.Key(), syncErr)
 		}
 	}
 

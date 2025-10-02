@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"flag"
 	"log"
+	"flag"
 	"net"
 	"net/http"
 	"os"
@@ -72,8 +72,7 @@ func main() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
-		sig := <-sigCh
-		log.Printf("Received signal: %v", sig)
+		_ = <-sigCh
 		cancel()
 	}()
 
@@ -119,7 +118,6 @@ func main() {
 	netguardFacade := services.NewNetguardFacade(registry, conditionManager, syncManager)
 
 	// Using immediate force sync approach instead of finalizers
-	log.Printf("💪 Using FORCE SYNC approach for immediate AddressGroup synchronization")
 
 	// Setup gRPC server
 	grpcServer := grpc.NewServer()
@@ -137,7 +135,6 @@ func main() {
 		log.Fatalf("Failed to listen: %v", err)
 	}
 	go func() {
-		log.Printf("Starting gRPC server on %s", cfg.Settings.GRPCAddr)
 		if err := grpcServer.Serve(lis); err != nil {
 			log.Fatalf("Failed to serve gRPC: %v", err)
 		}
@@ -151,7 +148,6 @@ func main() {
 
 	// Start HTTP server
 	go func() {
-		log.Printf("Starting HTTP server on %s", cfg.Settings.HTTPAddr)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Failed to serve HTTP: %v", err)
 		}
@@ -161,20 +157,16 @@ func main() {
 	<-ctx.Done()
 
 	// Gracefully stop services
-	log.Printf("Shutting down services...")
 
 	// Stop reverse sync system first
 	if reverseSyncSystem != nil {
-		log.Printf("Stopping reverse sync system...")
 		if err := reverseSyncSystem.Stop(); err != nil {
-			log.Printf("Failed to stop reverse sync system: %v", err)
 		}
 	}
 
 	// Stop gRPC and HTTP servers
 	grpcServer.GracefulStop()
 	if err := httpServer.Shutdown(context.Background()); err != nil {
-		log.Printf("Failed to shutdown HTTP server: %v", err)
 	}
 }
 
@@ -185,7 +177,6 @@ func setupSyncManager(ctx context.Context, cfg *config.Config) interfaces.SyncMa
 
 	// Validate configuration
 	if err := syncConfig.Validate(); err != nil {
-		log.Printf("❌ ERROR: Invalid sync configuration: %v", err)
 		return nil
 	}
 
@@ -197,13 +188,11 @@ func setupSyncManager(ctx context.Context, cfg *config.Config) interfaces.SyncMa
 	// Create SGroups client
 	sgroupsClient, err := clients.NewSGroupsClient(syncConfig.SGroups)
 	if err != nil {
-		log.Printf("❌ ERROR: Failed to create sgroups client: %v", err)
 		return nil
 	}
 
 	// Test connection to sgroups
 	if err := sgroupsClient.Health(ctx); err != nil {
-		log.Printf("❌ ERROR: Failed to connect to sgroups service: %v", err)
 		return nil
 	}
 
@@ -216,34 +205,29 @@ func setupSyncManager(ctx context.Context, cfg *config.Config) interfaces.SyncMa
 	// Register AddressGroup syncer
 	addressGroupSyncer := syncers.NewAddressGroupSyncer(sgroupsClient, logger)
 	if err := syncManager.RegisterSyncer(types.SyncSubjectTypeGroups, addressGroupSyncer); err != nil {
-		log.Printf("❌ ERROR: Failed to register AddressGroup syncer: %v", err)
 		return nil
 	}
 
 	// Register Network syncer
 	networkSyncer := syncers.NewNetworkSyncer(sgroupsClient, logger)
 	if err := syncManager.RegisterSyncer(types.SyncSubjectTypeNetworks, networkSyncer); err != nil {
-		log.Printf("❌ ERROR: Failed to register Network syncer: %v", err)
 		return nil
 	}
 
 	// Register Host syncer
 	hostSyncer := syncers.NewHostSyncer(sgroupsClient, logger)
 	if err := syncManager.RegisterSyncer(types.SyncSubjectTypeHosts, hostSyncer); err != nil {
-		log.Printf("❌ ERROR: Failed to register Host syncer: %v", err)
 		return nil
 	}
 
 	// Register IEAgAgRule syncer
 	ieagagRuleSyncer := syncers.NewIEAgAgRuleSyncer(sgroupsClient, logger)
 	if err := syncManager.RegisterSyncer(types.SyncSubjectTypeIEAgAgRules, ieagagRuleSyncer); err != nil {
-		log.Printf("❌ ERROR: Failed to register IEAgAgRule syncer: %v", err)
 		return nil
 	}
 
 	// Start sync manager
 	if err := syncManager.Start(ctx); err != nil {
-		log.Printf("❌ ERROR: Failed to start sync manager: %v", err)
 		return nil
 	}
 
@@ -252,30 +236,25 @@ func setupSyncManager(ctx context.Context, cfg *config.Config) interfaces.SyncMa
 
 // setupReverseSyncSystem creates and configures the reverse sync system for SGROUP -> NETGUARD synchronization
 func setupReverseSyncSystem(ctx context.Context, cfg *config.Config, registry ports.Registry, syncManager interfaces.SyncManager) *sync.ReverseSyncSystem {
-	log.Printf("🔄 Setting up reverse synchronization system...")
 
 	// Skip setup if sync manager is not available (sync disabled)
 	if syncManager == nil {
-		log.Printf("⚠️  Skipping reverse sync setup - main sync is disabled")
 		return nil
 	}
 
 	// Validate reverse sync configuration
 	if err := cfg.ReverseSync.Validate(); err != nil {
-		log.Printf("❌ ERROR: Invalid reverse sync configuration: %v", err)
 		return nil
 	}
 
 	// Create SGROUP gateway using existing sync configuration
 	sgroupsClient, err := clients.NewSGroupsClient(cfg.Sync.SGroups)
 	if err != nil {
-		log.Printf("❌ ERROR: Failed to create sgroups client for reverse sync: %v", err)
 		return nil
 	}
 
 	// Test connection to SGROUP
 	if err := sgroupsClient.Health(ctx); err != nil {
-		log.Printf("❌ ERROR: Failed to connect to SGROUP service for reverse sync: %v", err)
 		return nil
 	}
 
@@ -291,14 +270,12 @@ func setupReverseSyncSystem(ctx context.Context, cfg *config.Config, registry po
 		cfg.ReverseSync,
 	)
 	if err != nil {
-		log.Printf("❌ ERROR: Failed to create reverse sync system: %v", err)
 		return nil
 	}
 
 	// Start reverse sync system
 	go func() {
 		if err := reverseSyncSystem.Start(ctx); err != nil {
-			log.Printf("❌ ERROR: Failed to start reverse sync system: %v", err)
 			return
 		}
 
@@ -314,9 +291,7 @@ func setupReverseSyncSystem(ctx context.Context, cfg *config.Config, registry po
 						return
 					case <-ticker.C:
 						if reverseSyncSystem.IsRunning() {
-							stats := reverseSyncSystem.GetStats()
-							log.Printf("📊 Reverse Sync Stats: Running=%v, Total Events=%d, Success=%d, Failed=%d",
-								reverseSyncSystem.IsRunning(), stats.TotalEvents, stats.ProcessedEvents, stats.FailedEvents)
+							_ = reverseSyncSystem.GetStats()
 						}
 					}
 				}

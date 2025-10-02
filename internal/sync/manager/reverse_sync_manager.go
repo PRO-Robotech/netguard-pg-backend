@@ -3,7 +3,6 @@ package manager
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -130,7 +129,6 @@ func (m *ReverseSyncManager) RegisterProcessor(processor EntityProcessorInterfac
 	}
 
 	m.processors[entityType] = processor
-	log.Printf("🔧 DEBUG: ReverseSyncManager.RegisterProcessor - Registered processor for entity type: %s", entityType)
 
 	return nil
 }
@@ -145,7 +143,6 @@ func (m *ReverseSyncManager) UnregisterProcessor(entityType string) error {
 	}
 
 	delete(m.processors, entityType)
-	log.Printf("🔧 DEBUG: ReverseSyncManager.UnregisterProcessor - Unregistered processor for entity type: %s", entityType)
 
 	return nil
 }
@@ -181,7 +178,6 @@ func (m *ReverseSyncManager) Start(ctx context.Context) error {
 	}
 
 	m.isRunning = true
-	log.Printf("✅ INFO: ReverseSyncManager.Start - Reverse synchronization system started with %d processors", len(m.processors))
 
 	// Start health checks if configured
 	if m.config.HealthCheckInterval > 0 {
@@ -208,17 +204,14 @@ func (m *ReverseSyncManager) Stop() error {
 	// Stop change detector
 	err := m.changeDetector.Stop()
 	if err != nil {
-		log.Printf("⚠️  WARNING: ReverseSyncManager.Stop - Error stopping change detector: %v", err)
 	}
 
 	// Unsubscribe from change detector
 	err = m.changeDetector.Unsubscribe(m)
 	if err != nil {
-		log.Printf("⚠️  WARNING: ReverseSyncManager.Stop - Error unsubscribing from change detector: %v", err)
 	}
 
 	m.isRunning = false
-	log.Printf("✅ INFO: ReverseSyncManager.Stop - Reverse synchronization system stopped")
 
 	return nil
 }
@@ -229,8 +222,6 @@ func (m *ReverseSyncManager) OnChange(ctx context.Context, event detector.Change
 
 	m.updateEventStats(event)
 
-	log.Printf("🔧 DEBUG: ReverseSyncManager.OnChange - Processing change event from %s at %v",
-		event.Source, event.Timestamp)
 
 	// Create processing context with timeout
 	processCtx, cancel := context.WithTimeout(ctx, m.config.ProcessingTimeout)
@@ -297,12 +288,10 @@ func (m *ReverseSyncManager) OnChange(ctx context.Context, event detector.Change
 			}
 		}
 
-		log.Printf("❌ ERROR: ReverseSyncManager.OnChange - Some processors failed: %s", errorMsg)
 		return fmt.Errorf("processing failed for some entities: %s", errorMsg)
 	}
 
 	m.updateProcessedEventStats()
-	log.Printf("✅ SUCCESS: ReverseSyncManager.OnChange - Successfully processed change event with %d processors", processorsCount)
 
 	return nil
 }
@@ -316,7 +305,6 @@ func (m *ReverseSyncManager) processWithProcessor(
 ) error {
 	startTime := time.Now()
 
-	log.Printf("🔧 DEBUG: ReverseSyncManager.processWithProcessor - Processing with %s processor", entityType)
 
 	err := processor.ProcessChanges(ctx, event)
 
@@ -326,11 +314,9 @@ func (m *ReverseSyncManager) processWithProcessor(
 	}
 
 	if err != nil {
-		log.Printf("❌ ERROR: ReverseSyncManager.processWithProcessor - Processor %s failed: %v", entityType, err)
 		return err
 	}
 
-	log.Printf("✅ SUCCESS: ReverseSyncManager.processWithProcessor - Processor %s completed successfully", entityType)
 	return nil
 }
 
@@ -396,15 +382,13 @@ func (m *ReverseSyncManager) runHealthChecks() {
 func (m *ReverseSyncManager) performHealthCheck() {
 	m.mu.RLock()
 	isRunning := m.isRunning
-	processorCount := len(m.processors)
+	_ = len(m.processors)
 	m.mu.RUnlock()
 
 	if !isRunning {
-		log.Printf("⚠️  WARNING: ReverseSyncManager.performHealthCheck - Manager is not running")
 		return
 	}
 
-	log.Printf("✅ INFO: ReverseSyncManager.performHealthCheck - System healthy: %d processors active", processorCount)
 }
 
 // updateEventStats updates event statistics

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,69 +29,47 @@ func NewValidationWebhook(backendClient client.BackendClient) *ValidationWebhook
 
 func (w *ValidationWebhook) ValidateAdmissionReview(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
 	// 🔍 COMPREHENSIVE WEBHOOK TRACING - Start
-	log.Printf("🔍 WEBHOOK DISPATCHER START: %s %s/%s operation=%s, UID=%s", req.Kind.Kind, req.Namespace, req.Name, req.Operation, req.UID)
-	log.Printf("🔍 WEBHOOK DISPATCHER: Request details - GroupVersion=%s, Kind=%s", req.Kind, req.Kind.Kind)
-	log.Printf("🔍 WEBHOOK DISPATCHER: Resource details - Namespace=%s, Name=%s", req.Namespace, req.Name)
 
 	var response *admissionv1.AdmissionResponse
 	switch req.Kind.Kind {
 	case "Service":
-		log.Printf("🔍 WEBHOOK DISPATCHER: Routing to validateService for %s/%s", req.Namespace, req.Name)
 		response = w.validateService(ctx, req)
 	case "AddressGroup":
-		log.Printf("🔍 WEBHOOK DISPATCHER: Routing to validateAddressGroup for %s/%s", req.Namespace, req.Name)
 		response = w.validateAddressGroup(ctx, req)
 	case "AddressGroupBinding":
-		log.Printf("🔍 WEBHOOK DISPATCHER: Routing to validateAddressGroupBinding for %s/%s", req.Namespace, req.Name)
 		response = w.validateAddressGroupBinding(ctx, req)
 	case "AddressGroupPortMapping":
-		log.Printf("🔍 WEBHOOK DISPATCHER: Routing to validateAddressGroupPortMapping for %s/%s", req.Namespace, req.Name)
 		response = w.validateAddressGroupPortMapping(ctx, req)
 	case "RuleS2S":
-		log.Printf("🔍 WEBHOOK DISPATCHER: Routing to validateRuleS2S for %s/%s", req.Namespace, req.Name)
 		response = w.validateRuleS2S(ctx, req)
 	case "ServiceAlias":
-		log.Printf("🔍 WEBHOOK DISPATCHER: Routing to validateServiceAlias for %s/%s", req.Namespace, req.Name)
 		response = w.validateServiceAlias(ctx, req)
 	case "AddressGroupBindingPolicy":
-		log.Printf("🔍 WEBHOOK DISPATCHER: Routing to validateAddressGroupBindingPolicy for %s/%s", req.Namespace, req.Name)
 		response = w.validateAddressGroupBindingPolicy(ctx, req)
 	case "IEAgAgRule":
-		log.Printf("🔍 WEBHOOK DISPATCHER: Routing to validateIEAgAgRule for %s/%s", req.Namespace, req.Name)
 		response = w.validateIEAgAgRule(ctx, req)
 	case "Network":
-		log.Printf("🔍 WEBHOOK DISPATCHER: Routing to validateNetwork for %s/%s", req.Namespace, req.Name)
 		response = w.validateNetwork(ctx, req)
 	case "NetworkBinding":
-		log.Printf("🔍 WEBHOOK DISPATCHER: Routing to validateNetworkBinding for %s/%s", req.Namespace, req.Name)
 		response = w.validateNetworkBinding(ctx, req)
 	default:
-		log.Printf("🔍 WEBHOOK DISPATCHER: Unknown resource kind: %s", req.Kind.Kind)
 		response = w.errorResponse(req.UID, fmt.Sprintf("Unknown resource kind: %s", req.Kind.Kind))
 	}
 
 	// Log the response before returning
-	if response.Allowed {
-		log.Printf("🔍 WEBHOOK DISPATCHER END: %s %s/%s - ALLOWED", req.Kind.Kind, req.Namespace, req.Name)
-	} else {
-		log.Printf("🔍 WEBHOOK DISPATCHER END: %s %s/%s - DENIED: %s", req.Kind.Kind, req.Namespace, req.Name, response.Result.Message)
-	}
 	return response
 }
 
 func (w *ValidationWebhook) validateService(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
 	// 🔍 SERVICE WEBHOOK ENTRY POINT
-	log.Printf("🔍 SERVICE WEBHOOK ENTRY: %s %s/%s operation=%s, UID=%s", req.Kind.Kind, req.Namespace, req.Name, req.Operation, req.UID)
 
 	// CRITICAL CHECK: This should ONLY be called for Service resources
 	if req.Kind.Kind != "Service" {
-		log.Printf("🚨 SERVICE WEBHOOK ERROR: Called for non-Service resource %s! This is the cross-validation bug!", req.Kind.Kind)
 		return w.errorResponse(req.UID, fmt.Sprintf("Service webhook incorrectly called for %s resource", req.Kind.Kind))
 	}
 
 	// 🔧 FIX: Handle DELETE operations separately - no object to unmarshal
 	if req.Operation == admissionv1.Delete {
-		log.Printf("🔧 FIX: DELETE operation for Service %s/%s - performing dependency validation", req.Namespace, req.Name)
 
 		// Get validator for dependency checking
 		validator := w.backendClient.GetDependencyValidator()
@@ -101,26 +78,21 @@ func (w *ValidationWebhook) validateService(ctx context.Context, req *admissionv
 		// Check dependencies before deletion
 		serviceID := models.NewResourceIdentifier(req.Name, models.WithNamespace(req.Namespace))
 		if err := serviceValidator.CheckDependencies(ctx, serviceID); err != nil {
-			log.Printf("🔧 FIX: Service DELETE validation failed for %s/%s: %v", req.Namespace, req.Name, err)
 			return w.errorResponse(req.UID, fmt.Sprintf("Cannot delete Service: %v", err))
 		}
 
-		log.Printf("🔧 FIX: Service DELETE validation passed for %s/%s", req.Namespace, req.Name)
 		return w.allowResponse(req.UID, "Service deletion validation passed")
 	}
 
 	// For CREATE and UPDATE operations, unmarshal the object
 	var service netguardv1beta1.Service
 	if err := json.Unmarshal(req.Object.Raw, &service); err != nil {
-		log.Printf("🔍 SERVICE WEBHOOK: Failed to unmarshal Service %s/%s: %v", req.Namespace, req.Name, err)
 		return w.errorResponse(req.UID, fmt.Sprintf("Failed to unmarshal Service: %v", err))
 	}
-	log.Printf("🔍 SERVICE WEBHOOK: Successfully unmarshaled Service %s/%s", req.Namespace, req.Name)
 
 	// Получаем Reader для валидации
 	reader, err := w.backendClient.GetReader(ctx)
 	if err != nil {
-		log.Printf("🔍 SERVICE WEBHOOK: Failed to get reader for %s/%s: %v", req.Namespace, req.Name, err)
 		return w.errorResponse(req.UID, fmt.Sprintf("Failed to get reader: %v", err))
 	}
 	defer reader.Close()
@@ -128,15 +100,12 @@ func (w *ValidationWebhook) validateService(ctx context.Context, req *admissionv
 	// Получаем валидатор
 	validator := w.backendClient.GetDependencyValidator()
 	serviceValidator := validator.GetServiceValidator()
-	log.Printf("🔍 SERVICE WEBHOOK: Got service validator for %s/%s", req.Namespace, req.Name)
 
 	// Конвертируем в domain модель
 	domainService := convertServiceToDomain(service)
-	log.Printf("🔍 SERVICE WEBHOOK: Converted to domain model for %s/%s", req.Namespace, req.Name)
 
 	switch req.Operation {
 	case admissionv1.Create:
-		log.Printf("🔧 FIX: Create operation for Service %s/%s - using proper backend validation with port overlap checking", req.Namespace, req.Name)
 
 		// First run K8s-level validation for basic field validation
 		k8sValidator := k8svalidation.NewServiceValidator()
@@ -147,7 +116,6 @@ func (w *ValidationWebhook) validateService(ctx context.Context, req *admissionv
 		// Then run backend validation for port overlap checking
 		// This includes ValidateNoDuplicatePorts which checks for overlapping ranges
 		if err := serviceValidator.ValidateForCreation(ctx, domainService); err != nil {
-			log.Printf("🔧 FIX: Service CREATE validation failed for %s/%s: %v", req.Namespace, req.Name, err)
 			return w.errorResponse(req.UID, fmt.Sprintf("Service validation failed: %v", err))
 		}
 
@@ -172,7 +140,6 @@ func (w *ValidationWebhook) validateService(ctx context.Context, req *admissionv
 func (w *ValidationWebhook) validateAddressGroup(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
 	// 🔧 FIX: Handle DELETE operations separately - no object to unmarshal
 	if req.Operation == admissionv1.Delete {
-		log.Printf("🔧 FIX: DELETE operation for AddressGroup %s/%s - performing dependency validation", req.Namespace, req.Name)
 
 		// Get validator for dependency checking
 		validator := w.backendClient.GetDependencyValidator()
@@ -181,11 +148,9 @@ func (w *ValidationWebhook) validateAddressGroup(ctx context.Context, req *admis
 		// Check dependencies before deletion
 		addressGroupID := models.NewResourceIdentifier(req.Name, models.WithNamespace(req.Namespace))
 		if err := addressGroupValidator.CheckDependencies(ctx, addressGroupID); err != nil {
-			log.Printf("🔧 FIX: AddressGroup DELETE validation failed for %s/%s: %v", req.Namespace, req.Name, err)
 			return w.errorResponse(req.UID, fmt.Sprintf("Cannot delete AddressGroup: %v", err))
 		}
 
-		log.Printf("🔧 FIX: AddressGroup DELETE validation passed for %s/%s", req.Namespace, req.Name)
 		return w.allowResponse(req.UID, "AddressGroup deletion validation passed")
 	}
 
@@ -235,7 +200,6 @@ func (w *ValidationWebhook) validateAddressGroup(ctx context.Context, req *admis
 
 	case admissionv1.Delete:
 		// Для Delete операций не используем валидацию - она будет в API Server при вызове backend
-		log.Printf("Delete operation for AddressGroup %s/%s - validation will be done in API Server", req.Namespace, req.Name)
 	}
 
 	return w.allowResponse(req.UID, "AddressGroup validation passed")
@@ -243,17 +207,14 @@ func (w *ValidationWebhook) validateAddressGroup(ctx context.Context, req *admis
 
 func (w *ValidationWebhook) validateAddressGroupBinding(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
 	// 🔍 ADDRESSGROUPBINDING WEBHOOK ENTRY POINT
-	log.Printf("🔍 BINDING WEBHOOK ENTRY: %s %s/%s operation=%s, UID=%s", req.Kind.Kind, req.Namespace, req.Name, req.Operation, req.UID)
 
 	// CRITICAL CHECK: This should ONLY be called for AddressGroupBinding resources
 	if req.Kind.Kind != "AddressGroupBinding" {
-		log.Printf("🚨 BINDING WEBHOOK ERROR: Called for non-AddressGroupBinding resource %s! This should not happen!", req.Kind.Kind)
 		return w.errorResponse(req.UID, fmt.Sprintf("AddressGroupBinding webhook incorrectly called for %s resource", req.Kind.Kind))
 	}
 
 	// 🔧 FIX: Handle DELETE operations separately - no object to unmarshal
 	if req.Operation == admissionv1.Delete {
-		log.Printf("🔧 FIX: DELETE operation for AddressGroupBinding %s/%s - performing dependency validation", req.Namespace, req.Name)
 
 		// Get validator for dependency checking
 		validator := w.backendClient.GetDependencyValidator()
@@ -262,24 +223,19 @@ func (w *ValidationWebhook) validateAddressGroupBinding(ctx context.Context, req
 		// Check dependencies before deletion
 		bindingID := models.NewResourceIdentifier(req.Name, models.WithNamespace(req.Namespace))
 		if err := bindingValidator.CheckDependencies(ctx, bindingID); err != nil {
-			log.Printf("🔧 FIX: AddressGroupBinding DELETE validation failed for %s/%s: %v", req.Namespace, req.Name, err)
 			return w.errorResponse(req.UID, fmt.Sprintf("Cannot delete AddressGroupBinding: %v", err))
 		}
 
-		log.Printf("🔧 FIX: AddressGroupBinding DELETE validation passed for %s/%s", req.Namespace, req.Name)
 		return w.allowResponse(req.UID, "AddressGroupBinding deletion validation passed")
 	}
 
 	var binding netguardv1beta1.AddressGroupBinding
 	if err := json.Unmarshal(req.Object.Raw, &binding); err != nil {
-		log.Printf("🔍 BINDING WEBHOOK: Failed to unmarshal AddressGroupBinding %s/%s: %v", req.Namespace, req.Name, err)
 		return w.errorResponse(req.UID, fmt.Sprintf("Failed to unmarshal AddressGroupBinding: %v", err))
 	}
-	log.Printf("🔍 BINDING WEBHOOK: Successfully unmarshaled AddressGroupBinding %s/%s", req.Namespace, req.Name)
 
 	switch req.Operation {
 	case admissionv1.Create:
-		log.Printf("🔧 FIX: CREATE AddressGroupBinding %s/%s - using proper backend validation with port conflict checking", req.Namespace, req.Name)
 
 		// First run K8s-level validation for basic field validation
 		k8sValidator := k8svalidation.NewAddressGroupBindingValidator()
@@ -290,7 +246,6 @@ func (w *ValidationWebhook) validateAddressGroupBinding(ctx context.Context, req
 		// Then run backend validation for cross-resource validation including port conflicts
 		reader, err := w.backendClient.GetReader(ctx)
 		if err != nil {
-			log.Printf("🔧 FIX: Failed to get reader for AddressGroupBinding %s/%s: %v", req.Namespace, req.Name, err)
 			return w.errorResponse(req.UID, fmt.Sprintf("Failed to get reader: %v", err))
 		}
 		defer reader.Close()
@@ -301,7 +256,6 @@ func (w *ValidationWebhook) validateAddressGroupBinding(ctx context.Context, req
 
 		// Use ValidateForCreation which includes port conflict checking
 		if err := bindingValidator.ValidateForCreation(ctx, &domainBinding); err != nil {
-			log.Printf("🔧 FIX: AddressGroupBinding CREATE validation failed for %s/%s: %v", req.Namespace, req.Name, err)
 			return w.errorResponse(req.UID, fmt.Sprintf("AddressGroupBinding validation failed: %v", err))
 		}
 
@@ -335,7 +289,6 @@ func (w *ValidationWebhook) validateAddressGroupBinding(ctx context.Context, req
 
 	case admissionv1.Delete:
 		// Для Delete операций не используем валидацию - она будет в API Server при вызове backend
-		log.Printf("Delete operation for AddressGroupBinding %s/%s - validation will be done in API Server", req.Namespace, req.Name)
 	}
 
 	return w.allowResponse(req.UID, "AddressGroupBinding validation passed")
@@ -388,7 +341,6 @@ func (w *ValidationWebhook) validateAddressGroupPortMapping(ctx context.Context,
 
 	case admissionv1.Delete:
 		// Для Delete операций не используем валидацию - она будет в API Server при вызове backend
-		log.Printf("Delete operation for AddressGroupPortMapping %s/%s - validation will be done in API Server", req.Namespace, req.Name)
 	}
 
 	return w.allowResponse(req.UID, "AddressGroupPortMapping validation passed")
@@ -397,7 +349,6 @@ func (w *ValidationWebhook) validateAddressGroupPortMapping(ctx context.Context,
 func (w *ValidationWebhook) validateRuleS2S(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
 	// 🔧 FIX: Handle DELETE operations separately - no object to unmarshal
 	if req.Operation == admissionv1.Delete {
-		log.Printf("🔧 FIX: DELETE operation for RuleS2S %s/%s - performing dependency validation", req.Namespace, req.Name)
 
 		// Get validator for dependency checking
 		validator := w.backendClient.GetDependencyValidator()
@@ -406,11 +357,9 @@ func (w *ValidationWebhook) validateRuleS2S(ctx context.Context, req *admissionv
 		// Check dependencies before deletion
 		ruleID := models.NewResourceIdentifier(req.Name, models.WithNamespace(req.Namespace))
 		if err := ruleValidator.CheckDependencies(ctx, ruleID); err != nil {
-			log.Printf("🔧 FIX: RuleS2S DELETE validation failed for %s/%s: %v", req.Namespace, req.Name, err)
 			return w.errorResponse(req.UID, fmt.Sprintf("Cannot delete RuleS2S: %v", err))
 		}
 
-		log.Printf("🔧 FIX: RuleS2S DELETE validation passed for %s/%s", req.Namespace, req.Name)
 		return w.allowResponse(req.UID, "RuleS2S deletion validation passed")
 	}
 
@@ -460,7 +409,6 @@ func (w *ValidationWebhook) validateRuleS2S(ctx context.Context, req *admissionv
 
 	case admissionv1.Delete:
 		// Для Delete операций не используем валидацию - она будет в API Server при вызове backend
-		log.Printf("Delete operation for RuleS2S %s/%s - validation will be done in API Server", req.Namespace, req.Name)
 	}
 
 	return w.allowResponse(req.UID, "RuleS2S validation passed")
@@ -469,7 +417,6 @@ func (w *ValidationWebhook) validateRuleS2S(ctx context.Context, req *admissionv
 func (w *ValidationWebhook) validateServiceAlias(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
 	// 🔧 FIX: Handle DELETE operations separately - no object to unmarshal
 	if req.Operation == admissionv1.Delete {
-		log.Printf("🔧 FIX: DELETE operation for ServiceAlias %s/%s - performing dependency validation", req.Namespace, req.Name)
 
 		// Get validator for dependency checking
 		validator := w.backendClient.GetDependencyValidator()
@@ -478,11 +425,9 @@ func (w *ValidationWebhook) validateServiceAlias(ctx context.Context, req *admis
 		// Check dependencies before deletion
 		serviceAliasID := models.NewResourceIdentifier(req.Name, models.WithNamespace(req.Namespace))
 		if err := serviceAliasValidator.CheckDependencies(ctx, serviceAliasID); err != nil {
-			log.Printf("🔧 FIX: ServiceAlias DELETE validation failed for %s/%s: %v", req.Namespace, req.Name, err)
 			return w.errorResponse(req.UID, fmt.Sprintf("Cannot delete ServiceAlias: %v", err))
 		}
 
-		log.Printf("🔧 FIX: ServiceAlias DELETE validation passed for %s/%s", req.Namespace, req.Name)
 		return w.allowResponse(req.UID, "ServiceAlias deletion validation passed")
 	}
 
@@ -533,7 +478,6 @@ func (w *ValidationWebhook) validateServiceAlias(ctx context.Context, req *admis
 
 	case admissionv1.Delete:
 		// For DELETE operations, validate dependencies to prevent orphaned references
-		log.Printf("Delete operation for ServiceAlias %s/%s - validating dependencies", req.Namespace, req.Name)
 
 		// Get backend client to check dependencies
 		if w.backendClient == nil {
@@ -549,7 +493,6 @@ func (w *ValidationWebhook) validateServiceAlias(ctx context.Context, req *admis
 		// Get a reader to check dependencies
 		reader, err := w.backendClient.GetReader(ctx)
 		if err != nil {
-			log.Printf("Failed to get reader for ServiceAlias dependency validation: %v", err)
 			return w.errorResponse(req.UID, fmt.Sprintf("Failed to access backend for dependency validation: %v", err))
 		}
 		defer reader.Close()
@@ -559,11 +502,9 @@ func (w *ValidationWebhook) validateServiceAlias(ctx context.Context, req *admis
 
 		// Check if ServiceAlias has dependencies that would prevent deletion
 		if err := aliasValidator.CheckDependencies(ctx, serviceAliasID); err != nil {
-			log.Printf("ServiceAlias %s/%s cannot be deleted due to dependencies: %v", req.Namespace, req.Name, err)
 			return w.errorResponse(req.UID, fmt.Sprintf("Cannot delete ServiceAlias: %v", err))
 		}
 
-		log.Printf("ServiceAlias %s/%s deletion validated - no blocking dependencies found", req.Namespace, req.Name)
 	}
 
 	return w.allowResponse(req.UID, "ServiceAlias validation passed")
@@ -616,7 +557,6 @@ func (w *ValidationWebhook) validateAddressGroupBindingPolicy(ctx context.Contex
 
 	case admissionv1.Delete:
 		// Для Delete операций не используем валидацию - она будет в API Server при вызове backend
-		log.Printf("Delete operation for AddressGroupBindingPolicy %s/%s - validation will be done in API Server", req.Namespace, req.Name)
 	}
 
 	return w.allowResponse(req.UID, "AddressGroupBindingPolicy validation passed")
@@ -669,7 +609,6 @@ func (w *ValidationWebhook) validateIEAgAgRule(ctx context.Context, req *admissi
 
 	case admissionv1.Delete:
 		// Для Delete операций не используем валидацию - она будет в API Server при вызове backend
-		log.Printf("Delete operation for IEAgAgRule %s/%s - validation will be done in API Server", req.Namespace, req.Name)
 	}
 
 	return w.allowResponse(req.UID, "IEAgAgRule validation passed")
@@ -722,7 +661,6 @@ func (w *ValidationWebhook) validateNetwork(ctx context.Context, req *admissionv
 
 	case admissionv1.Delete:
 		// Для Delete операций не используем валидацию - она будет в API Server при вызове backend
-		log.Printf("Delete operation for Network %s/%s - validation will be done in API Server", req.Namespace, req.Name)
 	}
 
 	return w.allowResponse(req.UID, "Network validation passed")
@@ -775,7 +713,6 @@ func (w *ValidationWebhook) validateNetworkBinding(ctx context.Context, req *adm
 
 	case admissionv1.Delete:
 		// Для Delete операций не используем валидацию - она будет в API Server при вызове backend
-		log.Printf("Delete operation for NetworkBinding %s/%s - validation will be done in API Server", req.Namespace, req.Name)
 	}
 
 	return w.allowResponse(req.UID, "NetworkBinding validation passed")
@@ -802,7 +739,6 @@ func convertServiceToDomain(k8sService netguardv1beta1.Service) models.Service {
 		_, err := validation.ParsePortRanges(port.Port)
 		if err != nil {
 			// Если ошибка парсинга, пропускаем этот порт
-			log.Printf("Failed to parse Service port %s: %v", port.Port, err)
 			continue
 		}
 
@@ -870,10 +806,6 @@ func convertAddressGroupBindingToDomain(k8sBinding netguardv1beta1.AddressGroupB
 	}
 
 	// 🔍 EXTENSIVE DEBUG: Log the resulting domain model
-	log.Printf("🔧   Domain model ServiceRef: name=%s, namespace=%s",
-		domainBinding.ServiceRef.Name, domainBinding.ServiceRef.Namespace)
-	log.Printf("🔧   Domain model AddressGroupRef: name=%s, namespace=%s",
-		domainBinding.AddressGroupRef.Name, domainBinding.AddressGroupRef.Namespace)
 
 	return domainBinding
 }
@@ -907,7 +839,6 @@ func convertAddressGroupPortMappingToDomain(k8sMapping netguardv1beta1.AddressGr
 				parsedRanges, err := validation.ParsePortRanges(tcpPort.Port)
 				if err != nil {
 					// Если ошибка парсинга, пропускаем этот порт
-					log.Printf("Failed to parse TCP port %s: %v", tcpPort.Port, err)
 					continue
 				}
 				tcpRanges = append(tcpRanges, parsedRanges...)
@@ -925,7 +856,6 @@ func convertAddressGroupPortMappingToDomain(k8sMapping netguardv1beta1.AddressGr
 				parsedRanges, err := validation.ParsePortRanges(udpPort.Port)
 				if err != nil {
 					// Если ошибка парсинга, пропускаем этот порт
-					log.Printf("Failed to parse UDP port %s: %v", udpPort.Port, err)
 					continue
 				}
 				udpRanges = append(udpRanges, parsedRanges...)
@@ -1059,7 +989,6 @@ func convertIEAgAgRuleToDomain(k8sRule netguardv1beta1.IEAgAgRule) models.IEAgAg
 			// Проверяем что порт валидный используя validation.ParsePortRanges
 			_, err := validation.ParsePortRanges(destination)
 			if err != nil {
-				log.Printf("Failed to validate IEAgAgRule port %s: %v", destination, err)
 				continue
 			}
 

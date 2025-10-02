@@ -3,7 +3,6 @@ package resources
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/pkg/errors"
@@ -124,7 +123,6 @@ func (s *AddressGroupResourceService) GetAddressGroupsByIDs(ctx context.Context,
 
 // CreateAddressGroup creates a new address group
 func (s *AddressGroupResourceService) CreateAddressGroup(ctx context.Context, addressGroup models.AddressGroup) error {
-	log.Printf("CreateAddressGroup: Creating AddressGroup %s", addressGroup.Key())
 
 	reader, err := s.registry.Reader(ctx)
 	if err != nil {
@@ -137,7 +135,6 @@ func (s *AddressGroupResourceService) CreateAddressGroup(ctx context.Context, ad
 	addressGroupValidator := validator.GetAddressGroupValidator()
 
 	if err := addressGroupValidator.ValidateForCreation(ctx, addressGroup); err != nil {
-		log.Printf("CreateAddressGroup: Validation failed for AddressGroup %s: %v", addressGroup.Key(), err)
 		return err
 	}
 
@@ -163,15 +160,11 @@ func (s *AddressGroupResourceService) CreateAddressGroup(ctx context.Context, ad
 		return errors.Wrap(err, "failed to create address group")
 	}
 
-	log.Printf("🔍 CreateAddressGroup: SGROUP validation check for %s (syncManager_nil=%v)", addressGroup.Key(), s.syncManager == nil)
 	if s.syncManager != nil && len(addressGroup.Hosts) > 0 {
-		log.Printf("🔍 CreateAddressGroup: Calling validateHostsSGroupSync for %d hosts", len(addressGroup.Hosts))
 		if err = s.validateHostsSGroupSync(ctx, addressGroup.Hosts, addressGroup.ResourceIdentifier); err != nil {
-			log.Printf("❌ CreateAddressGroup: SGROUP validation failed: %v", err)
 			return errors.Wrap(err, "SGROUP synchronization validation failed")
 		}
 	} else {
-		log.Printf("⚠️ CreateAddressGroup: SGROUP validation skipped (syncManager_nil=%v, hosts_count=%d)", s.syncManager == nil, len(addressGroup.Hosts))
 	}
 
 	if err = writer.Commit(); err != nil {
@@ -192,12 +185,9 @@ func (s *AddressGroupResourceService) CreateAddressGroup(ctx context.Context, ad
 
 	// Update Host.isBound status for hosts in this AddressGroup
 	if s.hostService != nil && len(addressGroup.Hosts) > 0 {
-		log.Printf("CreateAddressGroup: Updating Host binding status for %d spec hosts", len(addressGroup.Hosts))
 		if err := s.hostService.UpdateHostBindingStatus(ctx, nil, &addressGroup); err != nil {
-			log.Printf("❌ Failed to update Host binding status after AddressGroup creation: %v", err)
 		} else {
 			if err := s.syncSpecHostsWithSGroups(ctx, addressGroup.Hosts, addressGroup.ResourceIdentifier); err != nil {
-				log.Printf("❌ Failed to sync spec hosts with SGROUP: %v", err)
 			}
 		}
 	}
@@ -207,7 +197,6 @@ func (s *AddressGroupResourceService) CreateAddressGroup(ctx context.Context, ad
 
 // UpdateAddressGroup updates an existing address group
 func (s *AddressGroupResourceService) UpdateAddressGroup(ctx context.Context, addressGroup models.AddressGroup) error {
-	log.Printf("UpdateAddressGroup: Updating AddressGroup %s", addressGroup.Key())
 
 	reader, err := s.registry.Reader(ctx)
 	if err != nil {
@@ -226,7 +215,6 @@ func (s *AddressGroupResourceService) UpdateAddressGroup(ctx context.Context, ad
 	addressGroupValidator := validator.GetAddressGroupValidator()
 
 	if err := addressGroupValidator.ValidateForUpdate(ctx, *existingAddressGroup, addressGroup); err != nil {
-		log.Printf("UpdateAddressGroup: Validation failed for AddressGroup %s: %v", addressGroup.Key(), err)
 		return err
 	}
 
@@ -257,9 +245,7 @@ func (s *AddressGroupResourceService) UpdateAddressGroup(ctx context.Context, ad
 	}
 
 	if s.syncManager != nil {
-		log.Printf("🔍 UpdateAddressGroup: Post-commit SGROUP sync for changed hosts")
 		if err := s.syncHostChangesWithSGroup(ctx, existingAddressGroup, &addressGroup); err != nil {
-			log.Printf("❌ Failed to sync host changes with SGROUP after commit: %v", err)
 		}
 	}
 
@@ -275,7 +261,6 @@ func (s *AddressGroupResourceService) UpdateAddressGroup(ctx context.Context, ad
 	// Sync with external systems after successful update
 	s.syncAddressGroupsWithSGroups(ctx, []models.AddressGroup{addressGroup}, types.SyncOperationUpsert)
 
-	log.Printf("UpdateAddressGroup: Successfully updated AddressGroup %s", addressGroup.Key())
 	return nil
 }
 
@@ -324,13 +309,11 @@ func (s *AddressGroupResourceService) SyncAddressGroups(ctx context.Context, add
 	}
 
 	if syncOp == models.SyncOpUpsert && s.syncManager != nil {
-		log.Printf("🔍 SyncAddressGroups: Post-commit SGROUP sync check - oldAddressGroups_count=%d", len(oldAddressGroups))
 		if len(oldAddressGroups) > 0 {
 			for _, newAG := range addressGroups {
 				oldAG := oldAddressGroups[newAG.Key()]
 				if oldAG != nil {
 					if err := s.syncHostChangesWithSGroup(ctx, oldAG, &newAG); err != nil {
-						log.Printf("❌ Failed to sync host changes with SGROUP after commit for AG %s: %v", newAG.Key(), err)
 					}
 				}
 			}
@@ -384,9 +367,7 @@ func (s *AddressGroupResourceService) DeleteAddressGroupsByIDs(ctx context.Conte
 	addressGroupValidator := validator.GetAddressGroupValidator()
 
 	for _, id := range ids {
-		log.Printf("DeleteAddressGroupsByIDs: Validating dependencies for AddressGroup %s", id.Key())
 		if err := addressGroupValidator.CheckDependencies(ctx, id); err != nil {
-			log.Printf("DeleteAddressGroupsByIDs: Cannot delete AddressGroup %s due to dependencies: %v", id.Key(), err)
 			return errors.Wrapf(err, "cannot delete AddressGroup %s", id.Key())
 		}
 	}
@@ -533,10 +514,7 @@ func (s *AddressGroupResourceService) DeleteAddressGroupsByIDs(ctx context.Conte
 	if s.hostService != nil {
 		for _, deletedAG := range addressGroupsToDelete {
 			if len(deletedAG.Hosts) > 0 {
-				log.Printf("DeleteAddressGroups: Unbinding %d hosts from deleted AddressGroup %s",
-					len(deletedAG.Hosts), deletedAG.Key())
 				if err := s.hostService.UpdateHostBindingStatus(ctx, &deletedAG, nil); err != nil {
-					log.Printf("❌ Failed to unbind hosts after AddressGroup deletion: %v", err)
 				}
 			}
 		}
@@ -606,7 +584,6 @@ func (s *AddressGroupResourceService) GetAddressGroupBindingsByIDs(ctx context.C
 
 // CreateAddressGroupBinding creates a new address group binding
 func (s *AddressGroupResourceService) CreateAddressGroupBinding(ctx context.Context, binding models.AddressGroupBinding) error {
-	log.Printf("CreateAddressGroupBinding: Creating AddressGroupBinding %s", binding.Key())
 
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
@@ -630,7 +607,6 @@ func (s *AddressGroupResourceService) CreateAddressGroupBinding(ctx context.Cont
 	bindingValidator := validator.GetAddressGroupBindingValidator()
 
 	if err := bindingValidator.ValidateForCreation(ctx, &binding); err != nil {
-		log.Printf("CreateAddressGroupBinding: Validation failed for AddressGroupBinding %s: %v", binding.Key(), err)
 		return err
 	}
 
@@ -677,7 +653,6 @@ func (s *AddressGroupResourceService) CreateAddressGroupBinding(ctx context.Cont
 	}
 
 	// Regenerate IEAgAg rules that depend on this new AddressGroupBinding
-	log.Printf("CreateAddressGroupBinding: AddressGroupBinding %s created, triggering IEAgAg rules regeneration", binding.Key())
 
 	if s.ruleS2SRegenerator != nil {
 		bindingID := models.ResourceIdentifier{Name: binding.Name, Namespace: binding.Namespace}
@@ -695,7 +670,6 @@ func (s *AddressGroupResourceService) CreateAddressGroupBinding(ctx context.Cont
 
 // UpdateAddressGroupBinding updates an existing address group binding
 func (s *AddressGroupResourceService) UpdateAddressGroupBinding(ctx context.Context, binding models.AddressGroupBinding) error {
-	log.Printf("UpdateAddressGroupBinding: Updating AddressGroupBinding %s", binding.Key())
 
 	reader, err := s.registry.Reader(ctx)
 	if err != nil {
@@ -714,7 +688,6 @@ func (s *AddressGroupResourceService) UpdateAddressGroupBinding(ctx context.Cont
 	bindingValidator := validator.GetAddressGroupBindingValidator()
 
 	if err := bindingValidator.ValidateForUpdate(ctx, *existingBinding, &binding); err != nil {
-		log.Printf("UpdateAddressGroupBinding: Validation failed for AddressGroupBinding %s: %v", binding.Key(), err)
 		return err
 	}
 
@@ -746,7 +719,6 @@ func (s *AddressGroupResourceService) UpdateAddressGroupBinding(ctx context.Cont
 		}
 	}
 
-	log.Printf("UpdateAddressGroupBinding: Triggering RuleS2S condition recalculation for updated binding %s", binding.Key())
 	serviceID := models.ResourceIdentifier{Name: binding.ServiceRef.Name, Namespace: binding.ServiceRef.Namespace}
 	if s.ruleS2SRegenerator != nil {
 		if err := s.ruleS2SRegenerator.NotifyServiceAddressGroupsChanged(ctx, serviceID); err != nil {
@@ -756,7 +728,6 @@ func (s *AddressGroupResourceService) UpdateAddressGroupBinding(ctx context.Cont
 		}
 	}
 
-	log.Printf("UpdateAddressGroupBinding: AddressGroupBinding %s updated, triggering IEAgAg rules regeneration", binding.Key())
 
 	if s.ruleS2SRegenerator != nil {
 		bindingID := models.ResourceIdentifier{Name: binding.Name, Namespace: binding.Namespace}
@@ -850,7 +821,6 @@ func (s *AddressGroupResourceService) DeleteAddressGroupBindingsByIDs(ctx contex
 		binding, err := reader.GetAddressGroupBindingByID(ctx, id)
 		if err != nil {
 			if errors.Is(err, ports.ErrNotFound) {
-				log.Printf("DeleteAddressGroupBindingsByIDs: Binding %s not found (already deleted?)", id.Key())
 				continue // Skip if binding already deleted
 			}
 			return errors.Wrapf(err, "failed to get binding %s for port mapping regeneration", id.Key())
@@ -1042,7 +1012,6 @@ func (s *AddressGroupResourceService) GetAddressGroupPortMappingsByIDs(ctx conte
 
 // CreateAddressGroupPortMapping creates a new address group port mapping
 func (s *AddressGroupResourceService) CreateAddressGroupPortMapping(ctx context.Context, mapping models.AddressGroupPortMapping) error {
-	log.Printf("CreateAddressGroupPortMapping: Creating AddressGroupPortMapping %s", mapping.Key())
 
 	reader, err := s.registry.Reader(ctx)
 	if err != nil {
@@ -1055,7 +1024,6 @@ func (s *AddressGroupResourceService) CreateAddressGroupPortMapping(ctx context.
 	mappingValidator := validator.GetAddressGroupPortMappingValidator()
 
 	if err := mappingValidator.ValidateForCreation(ctx, mapping); err != nil {
-		log.Printf("CreateAddressGroupPortMapping: Validation failed for AddressGroupPortMapping %s: %v", mapping.Key(), err)
 		return err
 	}
 
@@ -1092,7 +1060,6 @@ func (s *AddressGroupResourceService) CreateAddressGroupPortMapping(ctx context.
 
 // UpdateAddressGroupPortMapping updates an existing address group port mapping
 func (s *AddressGroupResourceService) UpdateAddressGroupPortMapping(ctx context.Context, mapping models.AddressGroupPortMapping) error {
-	log.Printf("UpdateAddressGroupPortMapping: Updating AddressGroupPortMapping %s", mapping.Key())
 
 	reader, err := s.registry.Reader(ctx)
 	if err != nil {
@@ -1111,7 +1078,6 @@ func (s *AddressGroupResourceService) UpdateAddressGroupPortMapping(ctx context.
 	mappingValidator := validator.GetAddressGroupPortMappingValidator()
 
 	if err := mappingValidator.ValidateForUpdate(ctx, *existingMapping, mapping); err != nil {
-		log.Printf("UpdateAddressGroupPortMapping: Validation failed for AddressGroupPortMapping %s: %v", mapping.Key(), err)
 		return err
 	}
 
@@ -1267,7 +1233,6 @@ func (s *AddressGroupResourceService) GetAddressGroupBindingPoliciesByIDs(ctx co
 
 // CreateAddressGroupBindingPolicy creates a new address group binding policy
 func (s *AddressGroupResourceService) CreateAddressGroupBindingPolicy(ctx context.Context, policy models.AddressGroupBindingPolicy) error {
-	log.Printf("CreateAddressGroupBindingPolicy: Creating AddressGroupBindingPolicy %s", policy.Key())
 
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
@@ -1291,7 +1256,6 @@ func (s *AddressGroupResourceService) CreateAddressGroupBindingPolicy(ctx contex
 	policyValidator := validator.GetAddressGroupBindingPolicyValidator()
 
 	if err := policyValidator.ValidateForCreation(ctx, &policy); err != nil {
-		log.Printf("CreateAddressGroupBindingPolicy: Validation failed for AddressGroupBindingPolicy %s: %v", policy.Key(), err)
 		return err
 	}
 
@@ -1313,13 +1277,11 @@ func (s *AddressGroupResourceService) CreateAddressGroupBindingPolicy(ctx contex
 		}
 	}
 
-	log.Printf("CreateAddressGroupBindingPolicy: Successfully created AddressGroupBindingPolicy %s", policy.Key())
 	return nil
 }
 
 // UpdateAddressGroupBindingPolicy updates an existing address group binding policy
 func (s *AddressGroupResourceService) UpdateAddressGroupBindingPolicy(ctx context.Context, policy models.AddressGroupBindingPolicy) error {
-	log.Printf("UpdateAddressGroupBindingPolicy: Updating AddressGroupBindingPolicy %s", policy.Key())
 
 	reader, err := s.registry.Reader(ctx)
 	if err != nil {
@@ -1338,7 +1300,6 @@ func (s *AddressGroupResourceService) UpdateAddressGroupBindingPolicy(ctx contex
 	policyValidator := validator.GetAddressGroupBindingPolicyValidator()
 
 	if err := policyValidator.ValidateForUpdate(ctx, *existingPolicy, &policy); err != nil {
-		log.Printf("UpdateAddressGroupBindingPolicy: Validation failed for AddressGroupBindingPolicy %s: %v", policy.Key(), err)
 		return err
 	}
 
@@ -1601,11 +1562,20 @@ func (s *AddressGroupResourceService) RegeneratePortMappingsForService(ctx conte
 	}
 	defer reader.Close()
 
+	// Collect AddressGroups from both bindings AND spec.addressGroups
+	addressGroupsToRegenerate := make(map[string]models.ResourceIdentifier)
+
+	// 1. Collect from AddressGroupBindings
 	var affectedBindings []models.AddressGroupBinding
 	err = reader.ListAddressGroupBindings(ctx, func(binding models.AddressGroupBinding) error {
 		// Check if this binding references our service (name and namespace must match exactly)
 		if binding.ServiceRef.Name == serviceID.Name && binding.ServiceRef.Namespace == serviceID.Namespace {
 			affectedBindings = append(affectedBindings, binding)
+			agKey := fmt.Sprintf("%s/%s", binding.AddressGroupRef.Namespace, binding.AddressGroupRef.Name)
+			addressGroupsToRegenerate[agKey] = models.ResourceIdentifier{
+				Name:      binding.AddressGroupRef.Name,
+				Namespace: binding.AddressGroupRef.Namespace,
+			}
 		}
 		return nil
 	}, ports.EmptyScope{}) // EmptyScope = search ALL namespaces
@@ -1614,23 +1584,25 @@ func (s *AddressGroupResourceService) RegeneratePortMappingsForService(ctx conte
 		return errors.Wrap(err, "failed to list address group bindings")
 	}
 
-	if len(affectedBindings) == 0 {
-		log.Printf("RegeneratePortMappingsForService: No bindings found for service %s", serviceID.Key())
-		return nil
+	// 2. Collect from Service.Spec.AddressGroups
+	service, err := reader.GetServiceByID(ctx, serviceID)
+	if err != nil && !errors.Is(err, ports.ErrNotFound) {
+		return errors.Wrap(err, "failed to get service for spec.addressGroups")
 	}
-
-	// Group bindings by their target AddressGroup to avoid duplicate regeneration
-	addressGroupsToRegenerate := make(map[string]models.ResourceIdentifier)
-	for _, binding := range affectedBindings {
-		agKey := fmt.Sprintf("%s/%s", binding.AddressGroupRef.Namespace, binding.AddressGroupRef.Name)
-		addressGroupsToRegenerate[agKey] = models.ResourceIdentifier{
-			Name:      binding.AddressGroupRef.Name,
-			Namespace: binding.AddressGroupRef.Namespace,
+	if service != nil && len(service.AddressGroups) > 0 {
+		for _, agRef := range service.AddressGroups {
+			agKey := fmt.Sprintf("%s/%s", agRef.Namespace, agRef.Name)
+			addressGroupsToRegenerate[agKey] = models.ResourceIdentifier{
+				Name:      agRef.Name,
+				Namespace: agRef.Namespace,
+			}
 		}
 	}
 
-	log.Printf("RegeneratePortMappingsForService: Service %s affects %d AddressGroups",
-		serviceID.Key(), len(addressGroupsToRegenerate))
+	if len(addressGroupsToRegenerate) == 0 {
+		return nil
+	}
+
 
 	// Regenerate each affected AddressGroupPortMapping
 	for agKey, addressGroupRef := range addressGroupsToRegenerate {
@@ -1678,13 +1650,70 @@ func (s *AddressGroupResourceService) RegeneratePortMappingsForService(ctx conte
 	return nil
 }
 
+// RegeneratePortMappingsForAddressGroup regenerates AddressGroupPortMapping for a specific AddressGroup
+// This is called when a Service with spec.addressGroups is created/updated/deleted
+func (s *AddressGroupResourceService) RegeneratePortMappingsForAddressGroup(ctx context.Context, addressGroupID models.ResourceIdentifier) error {
+
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	// Generate the complete mapping with all services (both from bindings and spec)
+	addressGroupPortMapping, err := s.generateCompleteAddressGroupPortMapping(ctx, reader, addressGroupID)
+	if err != nil {
+		return errors.Wrapf(err, "port conflict detected while regenerating mapping for AddressGroup %s", addressGroupID.Key())
+	}
+
+	// Always create a mapping (empty if no services) to ensure resource exists
+	if addressGroupPortMapping == nil {
+		addressGroupPortMapping = &models.AddressGroupPortMapping{
+			SelfRef: models.SelfRef{
+				ResourceIdentifier: addressGroupID,
+			},
+			AccessPorts: make(map[models.ServiceRef]models.ServicePorts),
+		}
+	}
+
+	// Update the mapping in storage
+	writer, err := s.registry.Writer(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get writer")
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	if err := s.syncAddressGroupPortMappings(ctx, writer, []models.AddressGroupPortMapping{*addressGroupPortMapping}, models.SyncOpUpsert); err != nil {
+		writer.Abort()
+		return errors.Wrapf(err, "failed to sync regenerated mapping for AddressGroup %s", addressGroupID.Key())
+	}
+
+	if err := writer.Commit(); err != nil {
+		writer.Abort()
+		return errors.Wrapf(err, "failed to commit regenerated mapping for AddressGroup %s", addressGroupID.Key())
+	}
+
+	// Process conditions for the regenerated mapping
+	if s.conditionManager != nil {
+		if err := s.conditionManager.ProcessAddressGroupPortMappingConditions(ctx, addressGroupPortMapping); err != nil {
+			klog.Errorf("Failed to process conditions for regenerated AddressGroupPortMapping %s: %v", addressGroupID.Key(), err)
+			// Don't fail the operation if condition processing fails
+		}
+	}
+
+	return nil
+}
+
 // =============================================================================
 // Private Helper Methods (extracted from original NetguardService)
 // =============================================================================
 
 // syncAddressGroups handles the actual address group synchronization logic
 func (s *AddressGroupResourceService) syncAddressGroups(ctx context.Context, writer ports.Writer, addressGroups []models.AddressGroup, syncOp models.SyncOp) error {
-	log.Printf("syncAddressGroups: Syncing %d address groups with operation %s", len(addressGroups), syncOp)
 
 	// Set AddressGroupName for all address groups before syncing
 	for i := range addressGroups {
@@ -1761,7 +1790,6 @@ func (s *AddressGroupResourceService) syncAddressGroups(ctx context.Context, wri
 
 // syncAddressGroupBindings handles the actual address group binding synchronization logic
 func (s *AddressGroupResourceService) syncAddressGroupBindings(ctx context.Context, writer ports.Writer, bindings []models.AddressGroupBinding, syncOp models.SyncOp) error {
-	log.Printf("syncAddressGroupBindings: Syncing %d address group bindings with operation %s", len(bindings), syncOp)
 
 	// For UPSERT/FULLSYNC operations, validate port conflicts BEFORE database sync to prevent invalid bindings
 	// SKIP backend validation for individual CREATE operations to avoid circular dependency
@@ -1837,7 +1865,6 @@ func (s *AddressGroupResourceService) syncAddressGroupBindings(ctx context.Conte
 		return errors.Wrap(err, "failed to sync address group bindings in storage")
 	}
 
-	log.Printf("syncAddressGroupBindings: Successfully synced %d address group bindings", len(bindings))
 	return nil
 }
 
@@ -1959,14 +1986,12 @@ func (s *AddressGroupResourceService) syncAddressGroupsWithSGroups(ctx context.C
 	// Perform batch sync for all syncable address groups
 	if len(syncableEntities) > 0 {
 		if err := s.syncManager.SyncBatch(ctx, syncableEntities, operation); err != nil {
-			log.Printf("❌ syncAddressGroupsWithSGroups: Failed to sync AddressGroups: %v", err)
 		}
 	}
 
 	if len(allHostReferences) > 0 {
 		reader, err := s.registry.Reader(ctx)
 		if err != nil {
-			log.Printf("❌ syncAddressGroupsWithSGroups: Failed to get reader: %v", err)
 			return
 		}
 		defer reader.Close()
@@ -1986,13 +2011,11 @@ func (s *AddressGroupResourceService) syncAddressGroupsWithSGroups(ctx context.C
 			// Load full host data from database
 			host, err := reader.GetHostByID(ctx, hostID)
 			if err != nil {
-				log.Printf("❌ syncAddressGroupsWithSGroups: Failed to load Host %s: %v", hostID.Key(), err)
 				continue
 			}
 
 			// Sync the full host with SGROUP
 			if err := s.syncManager.SyncEntity(ctx, host, operation); err != nil {
-				log.Printf("❌ syncAddressGroupsWithSGroups: Failed to sync Host %s: %v", host.Key(), err)
 			}
 		}
 	}
@@ -2016,7 +2039,18 @@ func (s *AddressGroupResourceService) generateAddressGroupPortMapping(ctx contex
 // Returns error if port conflicts are detected to prevent binding creation
 func (s *AddressGroupResourceService) generateCompleteAddressGroupPortMapping(ctx context.Context, reader ports.Reader, addressGroupRef models.ResourceIdentifier) (*models.AddressGroupPortMapping, error) {
 
-	// Find all bindings for this AddressGroup
+	// Create the port mapping
+	addressGroupPortMapping := &models.AddressGroupPortMapping{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: addressGroupRef,
+		},
+		AccessPorts: make(map[models.ServiceRef]models.ServicePorts),
+	}
+
+	// Collect services from TWO sources: bindings AND spec.addressGroups
+	servicesToProcess := make(map[string]*models.Service) // Deduplicate by service key
+
+	// SOURCE 1: Find all bindings for this AddressGroup
 	var bindings []models.AddressGroupBinding
 	err := reader.ListAddressGroupBindings(ctx, func(binding models.AddressGroupBinding) error {
 		// Check if this binding targets our AddressGroup
@@ -2027,42 +2061,39 @@ func (s *AddressGroupResourceService) generateCompleteAddressGroupPortMapping(ct
 	}, ports.EmptyScope{})
 
 	if err != nil {
-		log.Printf("generateCompleteAddressGroupPortMapping: Failed to list bindings for AddressGroup %s: %v", addressGroupRef.Key(), err)
 		return nil, errors.Wrapf(err, "failed to list bindings for AddressGroup %s", addressGroupRef.Key())
 	}
 
-	if len(bindings) == 0 {
-		log.Printf("generateCompleteAddressGroupPortMapping: No bindings found for AddressGroup %s, creating empty mapping", addressGroupRef.Key())
-		emptyMapping := &models.AddressGroupPortMapping{
-			SelfRef: models.SelfRef{
-				ResourceIdentifier: addressGroupRef,
-			},
-			AccessPorts: make(map[models.ServiceRef]models.ServicePorts), // Empty services map
-		}
-		return emptyMapping, nil
-	}
-
-	// Create the port mapping
-	addressGroupPortMapping := &models.AddressGroupPortMapping{
-		SelfRef: models.SelfRef{
-			ResourceIdentifier: addressGroupRef,
-		},
-		AccessPorts: make(map[models.ServiceRef]models.ServicePorts),
-	}
-
-	// Collect services from all bindings
+	// Collect services from bindings
 	for _, binding := range bindings {
-		// Get the service referenced in this binding
 		service, err := reader.GetServiceByID(ctx, models.ResourceIdentifier{
 			Name:      binding.ServiceRef.Name,
 			Namespace: binding.ServiceRef.Namespace,
 		})
 		if err != nil {
-			log.Printf("generateCompleteAddressGroupPortMapping: Failed to get service %s/%s: %v",
-				binding.ServiceRef.Namespace, binding.ServiceRef.Name, err)
-			continue // Skip this service but continue with others
+			continue
 		}
+		servicesToProcess[service.Key()] = service
+	}
 
+	// SOURCE 2: Find all Services with this AddressGroup in spec.addressGroups
+	err = reader.ListServices(ctx, func(service models.Service) error {
+		for _, agRef := range service.AddressGroups {
+			if agRef.Name == addressGroupRef.Name && agRef.Namespace == addressGroupRef.Namespace {
+				servicesToProcess[service.Key()] = &service
+				break
+			}
+		}
+		return nil
+	}, ports.EmptyScope{})
+
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to list services for AddressGroup %s", addressGroupRef.Key())
+	}
+
+
+	// Process all collected services
+	for _, service := range servicesToProcess {
 		// Add service ports to the mapping
 		serviceRef := models.NewServiceRef(service.Name, models.WithNamespace(service.Namespace))
 		servicePorts := models.ServicePorts{
@@ -2079,8 +2110,6 @@ func (s *AddressGroupResourceService) generateCompleteAddressGroupPortMapping(ct
 			// Parse port ranges from ingress port string (supports "80", "8080-9090", "80,443")
 			portRanges, err := validation.ParsePortRanges(ingressPort.Port)
 			if err != nil {
-				log.Printf("generateCompleteAddressGroupPortMapping: Failed to parse port %s for service %s: %v",
-					ingressPort.Port, service.Name, err)
 				continue // Skip invalid ports
 			}
 
@@ -2097,8 +2126,6 @@ func (s *AddressGroupResourceService) generateCompleteAddressGroupPortMapping(ct
 	if s.validationService != nil {
 		mappingValidator := validation.NewAddressGroupPortMappingValidator(reader)
 		if err := mappingValidator.CheckInternalPortOverlaps(*addressGroupPortMapping); err != nil {
-			log.Printf("generateCompleteAddressGroupPortMapping: Port conflict detected for AddressGroup %s: %v",
-				addressGroupRef.Key(), err)
 			// Return error to prevent creation of conflicting mapping and fail the binding operation
 			return nil, errors.Wrapf(err, "port conflict detected for AddressGroup %s", addressGroupRef.Key())
 		}
@@ -2177,9 +2204,6 @@ func (s *AddressGroupResourceService) synchronizeServiceAddressGroups(ctx contex
 		return errors.Wrapf(err, "failed to get service %s for AddressGroups sync", serviceID.Key())
 	}
 
-	for i, ag := range service.AddressGroups {
-		log.Printf("  [%d] %s/%s", i, ag.Namespace, ag.Name)
-	}
 
 	var writer ports.Writer
 	if registryWithConditions, ok := s.registry.(interface {
@@ -2224,14 +2248,12 @@ func (s *AddressGroupResourceService) updateHostBindingStatusForSyncedAddressGro
 
 		reader, err := s.registry.Reader(ctx)
 		if err != nil {
-			log.Printf("❌ Failed to get reader for loading fresh AddressGroup data: %v", err)
 			continue
 		}
 
 		freshAG, err := reader.GetAddressGroupByID(ctx, models.ResourceIdentifier{Name: ag.Name, Namespace: ag.Namespace})
 		reader.Close()
 		if err != nil {
-			log.Printf("❌ Failed to load fresh AddressGroup %s: %v", ag.Key(), err)
 			continue
 		}
 
@@ -2248,13 +2270,11 @@ func (s *AddressGroupResourceService) updateHostBindingStatusForSyncedAddressGro
 				totalHosts = len(ag.Hosts) // fallback if AggregatedHosts is empty
 			}
 			if err := s.hostService.UpdateHostBindingStatus(ctx, &ag, nil); err != nil {
-				log.Printf("❌ Failed to unbind hosts from deleted AddressGroup %s: %v", ag.Key(), err)
 			}
 
 		case models.SyncOpUpsert, models.SyncOpFullSync:
 			reader, err := s.registry.Reader(ctx)
 			if err != nil {
-				log.Printf("❌ Failed to get reader for host binding management: %v", err)
 				continue
 			}
 
@@ -2269,7 +2289,6 @@ func (s *AddressGroupResourceService) updateHostBindingStatusForSyncedAddressGro
 			}, ports.EmptyScope{})
 
 			if err != nil {
-				log.Printf("❌ Failed to list hosts for binding comparison: %v", err)
 				reader.Close()
 				continue
 			}
@@ -2295,7 +2314,6 @@ func (s *AddressGroupResourceService) updateHostBindingStatusForSyncedAddressGro
 				if _, alreadyBound := currentlyBoundHosts[hostKey]; !alreadyBound {
 					host, err := reader.GetHostByID(ctx, hostID)
 					if err != nil {
-						log.Printf("❌ Failed to get host %s for binding: %v", hostID.Key(), err)
 						continue
 					}
 
@@ -2324,18 +2342,15 @@ func (s *AddressGroupResourceService) updateHostBindingStatusForSyncedAddressGro
 			if len(hostsToUpdate) > 0 {
 				writer, err := s.registry.Writer(ctx)
 				if err != nil {
-					log.Printf("❌ Failed to get writer for host binding updates: %v", err)
 					continue
 				}
 
 				if err := writer.SyncHosts(ctx, hostsToUpdate, ports.EmptyScope{}, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
-					log.Printf("❌ Failed to sync host binding updates: %v", err)
 					writer.Abort()
 					continue
 				}
 
 				if err := writer.Commit(); err != nil {
-					log.Printf("❌ Failed to commit host binding updates: %v", err)
 					writer.Abort()
 					continue
 				}
@@ -2344,13 +2359,11 @@ func (s *AddressGroupResourceService) updateHostBindingStatusForSyncedAddressGro
 					if s.syncManager != nil {
 						hostCopy := host // Create a copy for the pointer
 						if syncErr := s.syncManager.SyncEntityForced(ctx, &hostCopy, types.SyncOperationUpsert); syncErr != nil {
-							log.Printf("❌ Failed to force sync Host %s with SGroup: %v", host.Key(), syncErr)
 						}
 					}
 				}
 			}
 		default:
-			log.Printf("⚠️ Unknown syncOp %v for AddressGroup %s", syncOp, ag.Key())
 		}
 	}
 }
@@ -2424,7 +2437,7 @@ func (s *AddressGroupResourceService) validateHostsSGroupSync(ctx context.Contex
 	}
 	defer reader.Close()
 
-	for i, hostRef := range hosts {
+	for _, hostRef := range hosts {
 		// Load the actual host entity
 		hostID := models.ResourceIdentifier{
 			Name:      hostRef.Name,
@@ -2434,9 +2447,9 @@ func (s *AddressGroupResourceService) validateHostsSGroupSync(ctx context.Contex
 		host, err := reader.GetHostByID(ctx, hostID)
 		if err != nil {
 			if errors.Is(err, ports.ErrNotFound) {
-				return errors.Errorf("host reference %d: host '%s' does not exist in namespace '%s'", i, hostRef.Name, agID.Namespace)
+				return errors.Errorf("host '%s' does not exist in namespace '%s'", hostRef.Name, agID.Namespace)
 			}
-			return errors.Wrapf(err, "host reference %d: failed to load host '%s' for SGROUP validation", i, hostRef.Name)
+			return errors.Wrapf(err, "failed to load host '%s' for SGROUP validation", hostRef.Name)
 		}
 
 		err = s.syncManager.SyncEntity(ctx, host, types.SyncOperationUpsert)
@@ -2445,7 +2458,6 @@ func (s *AddressGroupResourceService) validateHostsSGroupSync(ctx context.Contex
 				hostRef.Name, agID.Namespace, err, agID.Key())
 		}
 
-		log.Printf("✅ SGROUP validation passed for host %s/%s in AddressGroup %s", agID.Namespace, hostRef.Name, agID.Key())
 	}
 
 	return nil
@@ -2453,7 +2465,6 @@ func (s *AddressGroupResourceService) validateHostsSGroupSync(ctx context.Contex
 
 func (s *AddressGroupResourceService) forceSyncRemovedHostsWithSGroup(ctx context.Context, removedHosts []netguardv1beta1.ObjectReference, agID models.ResourceIdentifier) error {
 	if s.syncManager == nil {
-		log.Printf("⚠️ forceSyncRemovedHostsWithSGroup: syncManager is nil, skipping SGROUP sync")
 		return nil
 	}
 
@@ -2463,13 +2474,12 @@ func (s *AddressGroupResourceService) forceSyncRemovedHostsWithSGroup(ctx contex
 
 	reader, err := s.registry.Reader(ctx)
 	if err != nil {
-		log.Printf("❌ forceSyncRemovedHostsWithSGroup: Failed to get reader: %v", err)
 		return nil
 	}
 	defer reader.Close()
 
 	// Load and force sync each removed host
-	for i, hostRef := range removedHosts {
+	for _, hostRef := range removedHosts {
 		hostID := models.ResourceIdentifier{
 			Namespace: agID.Namespace, // Host must be in same namespace as AddressGroup
 			Name:      hostRef.Name,
@@ -2478,18 +2488,13 @@ func (s *AddressGroupResourceService) forceSyncRemovedHostsWithSGroup(ctx contex
 		host, err := reader.GetHostByID(ctx, hostID)
 		if err != nil {
 			if errors.Is(err, ports.ErrNotFound) {
-				log.Printf("⚠️ forceSyncRemovedHostsWithSGroup: Host reference %d: host '%s' does not exist in namespace '%s' - skipping", i, hostRef.Name, agID.Namespace)
 				continue // Skip non-existent hosts
 			}
-			log.Printf("❌ forceSyncRemovedHostsWithSGroup: Host reference %d: failed to load host '%s': %v", i, hostRef.Name, err)
 			continue // Don't fail entire operation for one host
 		}
 
 		if err := s.syncManager.SyncEntityForced(ctx, host, types.SyncOperationUpsert); err != nil {
-			log.Printf("❌ forceSyncRemovedHostsWithSGroup: Failed to force sync host '%s' with SGROUP: %v", host.Key(), err)
 			// Continue with other hosts even if one fails
-		} else {
-			log.Printf("✅ forceSyncRemovedHostsWithSGroup: Successfully force synced removed host %s with SGROUP (isBound=%v)", host.Key(), host.IsBound)
 		}
 	}
 
@@ -2498,18 +2503,15 @@ func (s *AddressGroupResourceService) forceSyncRemovedHostsWithSGroup(ctx contex
 
 func (s *AddressGroupResourceService) syncSpecHostsWithSGroups(ctx context.Context, hostRefs []netguardv1beta1.ObjectReference, agID models.ResourceIdentifier) error {
 	if s.syncManager == nil {
-		log.Printf("⚠️ syncSpecHostsWithSGroups: syncManager is nil, skipping SGROUP sync")
 		return nil
 	}
 
 	if len(hostRefs) == 0 {
-		log.Printf("ℹ️ syncSpecHostsWithSGroups: No hosts to sync for AddressGroup %s", agID.Key())
 		return nil
 	}
 
 	reader, err := s.registry.Reader(ctx)
 	if err != nil {
-		log.Printf("❌ syncSpecHostsWithSGroups: Failed to get reader: %v", err)
 		return nil
 	}
 	defer reader.Close()
@@ -2524,12 +2526,10 @@ func (s *AddressGroupResourceService) syncSpecHostsWithSGroups(ctx context.Conte
 		// Load full host data from database
 		host, err := reader.GetHostByID(ctx, hostID)
 		if err != nil {
-			log.Printf("❌ syncSpecHostsWithSGroups: Failed to load Host %s: %v", hostID.Key(), err)
 			continue // Skip this host but continue with others
 		}
 
 		if err := s.syncManager.SyncEntityForced(ctx, host, types.SyncOperationUpsert); err != nil {
-			log.Printf("❌ syncSpecHostsWithSGroups: Failed to force sync Host %s with SGROUP: %v", host.Key(), err)
 		}
 	}
 
@@ -2538,7 +2538,6 @@ func (s *AddressGroupResourceService) syncSpecHostsWithSGroups(ctx context.Conte
 
 func (s *AddressGroupResourceService) syncHostChangesWithSGroup(ctx context.Context, oldAG, newAG *models.AddressGroup) error {
 	if s.syncManager == nil {
-		log.Printf("⚠️ syncHostChangesWithSGroup: syncManager is nil, skipping")
 		return nil
 	}
 
@@ -2546,22 +2545,18 @@ func (s *AddressGroupResourceService) syncHostChangesWithSGroup(ctx context.Cont
 	addedHosts, removedHosts := s.getHostChanges(*newAG, oldAG)
 
 	if len(addedHosts) == 0 && len(removedHosts) == 0 {
-		log.Printf("📝 syncHostChangesWithSGroup: No host changes detected for AddressGroup %s", newAG.Key())
 		return nil
 	}
 
-	log.Printf("🔄 syncHostChangesWithSGroup: Processing %d added and %d removed hosts for AddressGroup %s",
-		len(addedHosts), len(removedHosts), newAG.Key())
 
 	reader, err := s.registry.Reader(ctx)
 	if err != nil {
-		log.Printf("❌ syncHostChangesWithSGroup: Failed to get reader: %v", err)
 		return nil
 	}
 	defer reader.Close()
 
 	// Sync added hosts (newly bound)
-	for i, hostRef := range addedHosts {
+	for _, hostRef := range addedHosts {
 		hostID := models.ResourceIdentifier{
 			Namespace: newAG.Namespace,
 			Name:      hostRef.Name,
@@ -2569,20 +2564,14 @@ func (s *AddressGroupResourceService) syncHostChangesWithSGroup(ctx context.Cont
 
 		host, err := reader.GetHostByID(ctx, hostID)
 		if err != nil {
-			log.Printf("❌ syncHostChangesWithSGroup: Failed to load added host %s: %v", hostID.Key(), err)
 			continue
 		}
 
-		if err := s.syncManager.SyncEntityForced(ctx, host, types.SyncOperationUpsert); err != nil {
-			log.Printf("❌ syncHostChangesWithSGroup: Failed to sync added host %s: %v", host.Key(), err)
-		} else {
-			log.Printf("✅ syncHostChangesWithSGroup: Successfully synced added host %s (isBound=%v) [%d/%d]",
-				host.Key(), host.IsBound, i+1, len(addedHosts))
-		}
+		_ = s.syncManager.SyncEntityForced(ctx, host, types.SyncOperationUpsert) // Ignore sync errors
 	}
 
 	// Sync removed hosts (now unbound)
-	for i, hostRef := range removedHosts {
+	for _, hostRef := range removedHosts {
 		hostID := models.ResourceIdentifier{
 			Namespace: newAG.Namespace,
 			Name:      hostRef.Name,
@@ -2590,18 +2579,11 @@ func (s *AddressGroupResourceService) syncHostChangesWithSGroup(ctx context.Cont
 
 		host, err := reader.GetHostByID(ctx, hostID)
 		if err != nil {
-			log.Printf("❌ syncHostChangesWithSGroup: Failed to load removed host %s: %v", hostID.Key(), err)
 			continue
 		}
 
-		if err := s.syncManager.SyncEntityForced(ctx, host, types.SyncOperationUpsert); err != nil {
-			log.Printf("❌ syncHostChangesWithSGroup: Failed to sync removed host %s: %v", host.Key(), err)
-		} else {
-			log.Printf("✅ syncHostChangesWithSGroup: Successfully synced removed host %s (isBound=%v) [%d/%d]",
-				host.Key(), host.IsBound, i+1, len(removedHosts))
-		}
+		_ = s.syncManager.SyncEntityForced(ctx, host, types.SyncOperationUpsert) // Ignore sync errors
 	}
 
-	log.Printf("🎉 syncHostChangesWithSGroup: Completed syncing host changes for AddressGroup %s", newAG.Key())
 	return nil
 }

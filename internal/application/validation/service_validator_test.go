@@ -143,9 +143,7 @@ func (m *MockReaderForServiceValidator) ListAddressGroupBindings(ctx context.Con
 			SelfRef: models.SelfRef{
 				ResourceIdentifier: models.NewResourceIdentifier("test-binding"),
 			},
-			ServiceRef: models.ServiceRef{
-				ResourceIdentifier: models.NewResourceIdentifier(m.serviceID),
-			},
+			ServiceRef: models.NewServiceRef(m.serviceID),
 		}
 		return consume(binding)
 	}
@@ -166,9 +164,7 @@ func (m *MockReaderForServiceValidator) ListServiceAliases(ctx context.Context, 
 			SelfRef: models.SelfRef{
 				ResourceIdentifier: models.NewResourceIdentifier("test-alias"),
 			},
-			ServiceRef: models.ServiceRef{
-				ResourceIdentifier: models.NewResourceIdentifier(m.serviceID),
-			},
+			ServiceRef: models.NewServiceRef(m.serviceID),
 		}
 		return consume(alias)
 	}
@@ -321,6 +317,110 @@ func TestServiceValidator_ValidateNoDuplicatePorts(t *testing.T) {
 	}
 }
 
+// TestServiceValidator_ValidateNoDuplicateAddressGroups tests the ValidateNoDuplicateAddressGroups method
+func TestServiceValidator_ValidateNoDuplicateAddressGroups(t *testing.T) {
+	mockReader := &MockReaderForServiceValidator{}
+	validator := validation.NewServiceValidator(mockReader)
+
+	tests := []struct {
+		name          string
+		addressGroups []models.AddressGroupRef
+		expectError   bool
+		errorContains string
+	}{
+		{
+			name: "No duplicates - success case",
+			addressGroups: []models.AddressGroupRef{
+				models.NewAddressGroupRef("ag-1", models.WithNamespace("default")),
+				models.NewAddressGroupRef("ag-2", models.WithNamespace("default")),
+				models.NewAddressGroupRef("ag-3", models.WithNamespace("production")),
+			},
+			expectError: false,
+		},
+		{
+			name: "Duplicate detected - same namespace and name",
+			addressGroups: []models.AddressGroupRef{
+				models.NewAddressGroupRef("ag-1", models.WithNamespace("default")),
+				models.NewAddressGroupRef("ag-2", models.WithNamespace("default")),
+				models.NewAddressGroupRef("ag-1", models.WithNamespace("default")), // DUPLICATE
+			},
+			expectError:   true,
+			errorContains: "duplicate AddressGroup in spec.addressGroups: default/ag-1",
+		},
+		{
+			name: "Same name different namespace - no duplicate",
+			addressGroups: []models.AddressGroupRef{
+				models.NewAddressGroupRef("ag-1", models.WithNamespace("default")),
+				models.NewAddressGroupRef("ag-1", models.WithNamespace("production")), // Same name, different namespace
+			},
+			expectError: false,
+		},
+		{
+			name:          "Empty array - edge case",
+			addressGroups: []models.AddressGroupRef{},
+			expectError:   false,
+		},
+		{
+			name: "Single AddressGroup - edge case",
+			addressGroups: []models.AddressGroupRef{
+				models.NewAddressGroupRef("ag-1", models.WithNamespace("default")),
+			},
+			expectError: false,
+		},
+		{
+			name: "Multiple duplicates - should catch first",
+			addressGroups: []models.AddressGroupRef{
+				models.NewAddressGroupRef("ag-1", models.WithNamespace("default")),
+				models.NewAddressGroupRef("ag-1", models.WithNamespace("default")), // First duplicate
+				models.NewAddressGroupRef("ag-1", models.WithNamespace("default")), // Second duplicate
+			},
+			expectError:   true,
+			errorContains: "duplicate AddressGroup in spec.addressGroups: default/ag-1",
+		},
+		{
+			name: "Multiple different AddressGroups across namespaces - no duplicates",
+			addressGroups: []models.AddressGroupRef{
+				models.NewAddressGroupRef("web-servers", models.WithNamespace("frontend")),
+				models.NewAddressGroupRef("api-servers", models.WithNamespace("backend")),
+				models.NewAddressGroupRef("db-servers", models.WithNamespace("backend")),
+				models.NewAddressGroupRef("web-servers", models.WithNamespace("backend")), // Same name, different namespace
+			},
+			expectError: false,
+		},
+		{
+			name: "Duplicate in middle of list",
+			addressGroups: []models.AddressGroupRef{
+				models.NewAddressGroupRef("ag-1", models.WithNamespace("default")),
+				models.NewAddressGroupRef("ag-2", models.WithNamespace("default")),
+				models.NewAddressGroupRef("ag-1", models.WithNamespace("default")), // Duplicate of first
+				models.NewAddressGroupRef("ag-3", models.WithNamespace("default")),
+			},
+			expectError:   true,
+			errorContains: "duplicate AddressGroup in spec.addressGroups: default/ag-1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validator.ValidateNoDuplicateAddressGroups(tt.addressGroups)
+
+			if tt.expectError && err == nil {
+				t.Errorf("Expected error for addressGroups %v, but got nil", tt.addressGroups)
+			}
+
+			if !tt.expectError && err != nil {
+				t.Errorf("Unexpected error for addressGroups %v: %v", tt.addressGroups, err)
+			}
+
+			if tt.expectError && err != nil && tt.errorContains != "" {
+				if err.Error() != tt.errorContains {
+					t.Errorf("Expected error message to be '%s', but got '%s'", tt.errorContains, err.Error())
+				}
+			}
+		})
+	}
+}
+
 // TestServiceValidator_ValidateForCreation тестирует обновленный метод ValidateForCreation
 func TestServiceValidator_ValidateForCreation(t *testing.T) {
 	ctx := context.Background()
@@ -372,7 +472,7 @@ func TestServiceValidator_ValidateForCreation(t *testing.T) {
 					{Protocol: models.TCP, Port: "443"},
 				},
 				AddressGroups: []models.AddressGroupRef{
-					{ResourceIdentifier: models.NewResourceIdentifier("test-ag")},
+					models.NewAddressGroupRef("test-ag"),
 				},
 			},
 			expectError: false,
@@ -385,7 +485,7 @@ func TestServiceValidator_ValidateForCreation(t *testing.T) {
 					{Protocol: models.TCP, Port: "80"},
 				},
 				AddressGroups: []models.AddressGroupRef{
-					{ResourceIdentifier: models.NewResourceIdentifier("test-ag")},
+					models.NewAddressGroupRef("test-ag"),
 				},
 			},
 			expectError: true,
@@ -556,7 +656,7 @@ func TestServiceValidator_ValidateForUpdate(t *testing.T) {
 			{Protocol: models.TCP, Port: "443"},
 		},
 		AddressGroups: []models.AddressGroupRef{
-			{ResourceIdentifier: models.NewResourceIdentifier("test-ag")},
+			models.NewAddressGroupRef("test-ag"),
 		},
 	}
 	mockReader.AddService(oldService)
@@ -593,7 +693,7 @@ func TestServiceValidator_ValidateForUpdate(t *testing.T) {
 					{Protocol: models.TCP, Port: "8080"},
 				},
 				AddressGroups: []models.AddressGroupRef{
-					{ResourceIdentifier: models.NewResourceIdentifier("test-ag")},
+					models.NewAddressGroupRef("test-ag"),
 				},
 			},
 			expectError: false,
@@ -606,7 +706,7 @@ func TestServiceValidator_ValidateForUpdate(t *testing.T) {
 					{Protocol: models.TCP, Port: "80"},
 				},
 				AddressGroups: []models.AddressGroupRef{
-					{ResourceIdentifier: models.NewResourceIdentifier("test-ag")},
+					models.NewAddressGroupRef("test-ag"),
 				},
 			},
 			expectError: true,
@@ -659,4 +759,29 @@ func (m *MockReaderForServiceValidator) GetNetworkByID(ctx context.Context, id m
 
 func (m *MockReaderForServiceValidator) GetNetworkBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.NetworkBinding, error) {
 	return nil, validation.NewEntityNotFoundError("NetworkBinding", id.Key())
+}
+
+// GetHostBindingByID returns a host binding by ID
+func (m *MockReaderForServiceValidator) GetHostBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.HostBinding, error) {
+	return nil, validation.NewEntityNotFoundError("HostBinding", id.Key())
+}
+
+// ListHostBindings lists host bindings
+func (m *MockReaderForServiceValidator) ListHostBindings(ctx context.Context, consume func(models.HostBinding) error, scope ports.Scope) error {
+	return nil
+}
+
+// GetHostByID returns a host by ID
+func (m *MockReaderForServiceValidator) GetHostByID(ctx context.Context, id models.ResourceIdentifier) (*models.Host, error) {
+	return nil, validation.NewEntityNotFoundError("Host", id.Key())
+}
+
+// ListHosts lists hosts
+func (m *MockReaderForServiceValidator) ListHosts(ctx context.Context, consume func(models.Host) error, scope ports.Scope) error {
+	return nil
+}
+
+// GetNetworkByCIDR returns a network by CIDR
+func (m *MockReaderForServiceValidator) GetNetworkByCIDR(ctx context.Context, cidr string) (*models.Network, error) {
+	return nil, validation.NewEntityNotFoundError("Network", cidr)
 }

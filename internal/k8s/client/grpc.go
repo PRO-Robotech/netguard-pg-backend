@@ -3,7 +3,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -353,15 +352,11 @@ func (c *GRPCBackendClient) UpdateAddressGroupBinding(ctx context.Context, bindi
 
 func (c *GRPCBackendClient) DeleteAddressGroupBinding(ctx context.Context, id models.ResourceIdentifier) error {
 	// ✅ FIX: First get the full object like pre-refactoring implementation
-	log.Printf("🔧 FIX DeleteAddressGroupBinding: Getting full object before delete for %s/%s", id.Namespace, id.Name)
 	fullBinding, err := c.GetAddressGroupBinding(ctx, id)
 	if err != nil {
-		log.Printf("❌ FIX: Failed to get full binding for delete: %v", err)
 		return fmt.Errorf("failed to get full binding for delete: %w", err)
 	}
 
-	log.Printf("✅ FIX: Retrieved full binding with ServiceRef.Name='%s', AddressGroupRef.Name='%s'",
-		fullBinding.ServiceRef.Name, fullBinding.AddressGroupRef.Name)
 
 	// Now send the FULL object for deletion (like pre-refactoring)
 	return c.syncAddressGroupBinding(ctx, models.SyncOpDelete, []*models.AddressGroupBinding{fullBinding})
@@ -396,19 +391,9 @@ func (c *GRPCBackendClient) syncAddressGroupBinding(ctx context.Context, syncOp 
 			},
 		},
 	}
-	for i, binding := range protoBindings {
-		log.Printf("🗑️ DEBUG: Binding[%d] SelfRef.Name='%s', SelfRef.Namespace='%s'", i, binding.SelfRef.Name, binding.SelfRef.Namespace)
-		if binding.ServiceRef != nil && binding.ServiceRef.Identifier != nil {
-			log.Printf("🗑️ DEBUG: Binding[%d] ServiceRef.Name='%s', ServiceRef.Namespace='%s'", i, binding.ServiceRef.Identifier.Name, binding.ServiceRef.Identifier.Namespace)
-		}
-		if binding.AddressGroupRef != nil && binding.AddressGroupRef.Identifier != nil {
-			log.Printf("🗑️ DEBUG: Binding[%d] AddressGroupRef.Name='%s', AddressGroupRef.Namespace='%s'", i, binding.AddressGroupRef.Identifier.Name, binding.AddressGroupRef.Identifier.Namespace)
-		}
-	}
 
 	_, err := c.client.Sync(ctx, req)
 	if err != nil {
-		log.Printf("❌ DEBUG syncAddressGroupBinding: gRPC Sync call FAILED: %v", err)
 		return fmt.Errorf("failed to sync address group bindings: %w", err)
 	}
 
@@ -578,15 +563,11 @@ func (c *GRPCBackendClient) UpdateRuleS2S(ctx context.Context, rule *models.Rule
 
 func (c *GRPCBackendClient) DeleteRuleS2S(ctx context.Context, id models.ResourceIdentifier) error {
 	// ✅ FIX: First get the full object like pre-refactoring implementation
-	log.Printf("🔧 FIX DeleteRuleS2S: Getting full object before delete for %s/%s", id.Namespace, id.Name)
 	fullRule, err := c.GetRuleS2S(ctx, id)
 	if err != nil {
-		log.Printf("❌ FIX: Failed to get full rule for delete: %v", err)
 		return fmt.Errorf("failed to get full rule for delete: %w", err)
 	}
 
-	log.Printf("✅ FIX: Retrieved full rule with ServiceLocalRef.Name='%s', ServiceRef.Name='%s'",
-		fullRule.ServiceLocalRef.Name, fullRule.ServiceRef.Name)
 
 	// Now send the FULL object for deletion (like pre-refactoring)
 	return c.syncRuleS2S(ctx, models.SyncOpDelete, []*models.RuleS2S{fullRule})
@@ -689,14 +670,11 @@ func (c *GRPCBackendClient) UpdateServiceAlias(ctx context.Context, alias *model
 
 func (c *GRPCBackendClient) DeleteServiceAlias(ctx context.Context, id models.ResourceIdentifier) error {
 	// ✅ FIX: First get the full object like pre-refactoring implementation
-	log.Printf("🔧 FIX DeleteServiceAlias: Getting full object before delete for %s/%s", id.Namespace, id.Name)
 	fullAlias, err := c.GetServiceAlias(ctx, id)
 	if err != nil {
-		log.Printf("❌ FIX: Failed to get full alias for delete: %v", err)
 		return fmt.Errorf("failed to get full alias for delete: %w", err)
 	}
 
-	log.Printf("✅ FIX: Retrieved full alias with ServiceRef.Name='%s'", fullAlias.ServiceRef.Name)
 
 	// Now send the FULL object for deletion (like pre-refactoring)
 	return c.syncServiceAlias(ctx, models.SyncOpDelete, []*models.ServiceAlias{fullAlias})
@@ -802,7 +780,6 @@ func (c *GRPCBackendClient) UpdateAddressGroupBindingPolicy(ctx context.Context,
 
 func (c *GRPCBackendClient) DeleteAddressGroupBindingPolicy(ctx context.Context, id models.ResourceIdentifier) error {
 	// ✅ FIX: First get the full object like pre-refactoring implementation
-	log.Printf("🔧 FIX DeleteAddressGroupBindingPolicy: Getting full object before delete for %s/%s", id.Namespace, id.Name)
 	fullPolicy, err := c.GetAddressGroupBindingPolicy(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to get full policy for delete: %w", err)
@@ -930,11 +907,8 @@ func (c *GRPCBackendClient) GetNetwork(ctx context.Context, id models.ResourceId
 		return nil, fmt.Errorf("failed to get network: %w", err)
 	}
 	network := convertNetworkFromProto(resp.Network)
-	log.Printf("🔍 GRPC CLIENT: Network[%s] received from backend with IsBound=%t", id.Key(), network.IsBound)
 	if network.BindingRef != nil {
-		log.Printf("  🔍 GRPC CLIENT: network[%s].BindingRef=%s", id.Key(), network.BindingRef.Name)
 	} else {
-		log.Printf("  🔍 GRPC CLIENT: network[%s].BindingRef=nil", id.Key())
 	}
 	return &network, nil
 }
@@ -1885,7 +1859,6 @@ func convertIEAgAgRuleFromProto(protoRule *netguardpb.IEAgAgRule) models.IEAgAgR
 	case netguardpb.Networks_NetIP_UDP:
 		transport = models.UDP
 	default:
-		log.Printf("⚠️  WARNING: Unknown protobuf Transport %d, defaulting to TCP", protoRule.Transport)
 		transport = models.TCP
 	}
 
@@ -1897,7 +1870,6 @@ func convertIEAgAgRuleFromProto(protoRule *netguardpb.IEAgAgRule) models.IEAgAgR
 	case netguardpb.Traffic_Egress:
 		traffic = models.EGRESS
 	default:
-		log.Printf("⚠️  WARNING: Unknown protobuf Traffic %d, defaulting to INGRESS", protoRule.Traffic)
 		traffic = models.INGRESS
 	}
 
@@ -1909,7 +1881,6 @@ func convertIEAgAgRuleFromProto(protoRule *netguardpb.IEAgAgRule) models.IEAgAgR
 	case netguardpb.RuleAction_DROP:
 		action = models.ActionDrop
 	default:
-		log.Printf("⚠️  WARNING: Unknown protobuf Action %d, defaulting to ACCEPT", protoRule.Action)
 		action = models.ActionAccept
 	}
 
@@ -2036,18 +2007,13 @@ func convertHostFromProto(protoHost *netguardpb.Host) models.Host {
 
 	// Convert IP list if present
 	if len(protoHost.GetIpList()) > 0 {
-		log.Printf("🔍 K8S_CLIENT_CONVERTER_DEBUG: convertHostFromProto - Converting %d IP items for host %s/%s",
-			len(protoHost.GetIpList()), protoHost.GetSelfRef().GetNamespace(), protoHost.GetSelfRef().GetName())
 		result.IpList = make([]models.IPItem, len(protoHost.GetIpList()))
 		for i, ipItem := range protoHost.GetIpList() {
-			log.Printf("🔍 K8S_CLIENT_CONVERTER_DEBUG: convertHostFromProto - IP[%d] = %s", i, ipItem.GetIp())
 			result.IpList[i] = models.IPItem{
 				IP: ipItem.GetIp(),
 			}
 		}
 	} else {
-		log.Printf("❌ K8S_CLIENT_CONVERTER_DEBUG: convertHostFromProto - No IP list in protobuf for host %s/%s",
-			protoHost.GetSelfRef().GetNamespace(), protoHost.GetSelfRef().GetName())
 	}
 
 	return result

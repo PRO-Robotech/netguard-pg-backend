@@ -177,12 +177,7 @@ func TestAddressGroupPortMappingConverter_FromDomain(t *testing.T) {
 					},
 				},
 				AccessPorts: map[models.ServiceRef]models.ServicePorts{
-					{
-						ResourceIdentifier: models.ResourceIdentifier{
-							Name:      "test-service",
-							Namespace: "default",
-						},
-					}: {
+					models.NewServiceRef("test-service", models.WithNamespace("default")): {
 						Ports: models.ProtocolPorts{
 							models.TCP: []models.PortRange{
 								{Start: 80, End: 80},

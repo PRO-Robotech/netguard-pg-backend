@@ -2,7 +2,6 @@ package mem
 
 import (
 	"context"
-	"log"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -411,17 +410,10 @@ func (r *reader) GetAddressGroupBindingByID(ctx context.Context, id models.Resou
 	}
 
 	requestedKey := id.Key()
-	log.Printf("🔍 DEBUG GetAddressGroupBindingByID: Looking for key='%s' (name='%s', namespace='%s')", requestedKey, id.Name, id.Namespace)
-	log.Printf("🔍 DEBUG GetAddressGroupBindingByID: Available keys in storage:")
-	for k, binding := range bindings {
-		log.Printf("  - stored key='%s' → binding name='%s', namespace='%s' (binding.Key()='%s')", k, binding.Name, binding.Namespace, binding.Key())
-	}
 
 	if binding, ok := bindings[requestedKey]; ok {
-		log.Printf("✅ DEBUG GetAddressGroupBindingByID: Found binding for key='%s'", requestedKey)
 		return &binding, nil
 	}
-	log.Printf("❌ DEBUG GetAddressGroupBindingByID: NOT FOUND for key='%s'", requestedKey)
 	return nil, ports.ErrNotFound
 }
 
@@ -568,11 +560,7 @@ func (r *reader) ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAg
 			return nil
 		}
 	}
-	// log.Printf("🔍 LISTING %d IEAgAgRules from memory", len(rules))
 	for _, rule := range rules {
-		// log.Printf("🔍 LISTING IEAgAgRule[%s] %s: Transport='%s', Traffic='%s', Action='%s', AddressGroupLocal.Name='%s', AddressGroup.Name='%s'",
-		// 	i, rule.Key(), rule.Transport, rule.Traffic, rule.Action,
-		// 	rule.AddressGroupLocal.Name, rule.AddressGroup.Name)
 		if err := consume(rule); err != nil {
 			return err
 		}
@@ -581,27 +569,20 @@ func (r *reader) ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAg
 }
 
 func (r *reader) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
-	log.Printf("GetIEAgAgRuleByID: looking for ns=%q name=%q key=%s", id.Namespace, id.Name, id.Key())
 
 	var rules map[string]models.IEAgAgRule
 
 	// Use data from writer if available
 	if r.writer != nil && r.writer.ieAgAgRules != nil {
 		rules = r.writer.ieAgAgRules
-		log.Printf("GetIEAgAgRuleByID: using writer data")
 	} else {
 		rules = r.registry.db.GetIEAgAgRules()
-		log.Printf("GetIEAgAgRuleByID: using registry db data")
 	}
 
 	if rule, ok := rules[id.Key()]; ok {
-		log.Printf("🔍 FOUND IEAgAgRule %s: Transport='%s', Traffic='%s', Action='%s', AddressGroupLocal.Name='%s', AddressGroup.Name='%s'",
-			id.Key(), rule.Transport, rule.Traffic, rule.Action,
-			rule.AddressGroupLocal.Name, rule.AddressGroup.Name)
 		return &rule, nil
 	}
 
-	log.Printf("❌ NOT FOUND IEAgAgRule %s in memory", id.Key())
 	return nil, ports.ErrNotFound
 }
 
@@ -652,33 +633,22 @@ func (r *reader) ListNetworks(ctx context.Context, consume func(models.Network) 
 }
 
 func (r *reader) GetNetworkByID(ctx context.Context, id models.ResourceIdentifier) (*models.Network, error) {
-	log.Printf("GetNetworkByID: looking for ns=%q name=%q key=%s", id.Namespace, id.Name, id.Key())
 
 	var networks map[string]models.Network
 
 	// Use data from writer if available
 	if r.writer != nil && r.writer.networks != nil {
 		networks = r.writer.networks
-		log.Printf("GetNetworkByID: using writer data")
 	} else {
 		networks = r.registry.db.GetNetworks()
-		log.Printf("GetNetworkByID: using registry db data")
 	}
 
 	if network, ok := networks[id.Key()]; ok {
-		log.Printf("🔍 GetNetworkByID: Network[%s] has %d conditions, IsBound=%t", id.Key(), len(network.Meta.Conditions), network.IsBound)
 		if network.BindingRef != nil {
-			log.Printf("  🔍 GetNetworkByID: network[%s].BindingRef=%s", id.Key(), network.BindingRef.Name)
 		} else {
-			log.Printf("  🔍 GetNetworkByID: network[%s].BindingRef=nil", id.Key())
 		}
 		if network.AddressGroupRef != nil {
-			log.Printf("  🔍 GetNetworkByID: network[%s].AddressGroupRef=%s", id.Key(), network.AddressGroupRef.Name)
 		} else {
-			log.Printf("  🔍 GetNetworkByID: network[%s].AddressGroupRef=nil", id.Key())
-		}
-		for i, cond := range network.Meta.Conditions {
-			log.Printf("  🔍 GetNetworkByID: network[%s].condition[%d] Type=%s Status=%s", id.Key(), i, cond.Type, cond.Status)
 		}
 		return &network, nil
 	}
@@ -688,28 +658,23 @@ func (r *reader) GetNetworkByID(ctx context.Context, id models.ResourceIdentifie
 
 // GetNetworkByCIDR gets a network by CIDR (for uniqueness validation)
 func (r *reader) GetNetworkByCIDR(ctx context.Context, cidr string) (*models.Network, error) {
-	log.Printf("GetNetworkByCIDR: looking for CIDR=%q", cidr)
 
 	var networks map[string]models.Network
 
 	// Use data from writer if available
 	if r.writer != nil && r.writer.networks != nil {
 		networks = r.writer.networks
-		log.Printf("GetNetworkByCIDR: using writer data")
 	} else {
 		networks = r.registry.db.GetNetworks()
-		log.Printf("GetNetworkByCIDR: using registry db data")
 	}
 
 	// Search through all networks to find matching CIDR
-	for key, network := range networks {
+	for _, network := range networks {
 		if network.CIDR == cidr {
-			log.Printf("🔍 GetNetworkByCIDR: Found Network with CIDR %s: %s", cidr, key)
 			return &network, nil
 		}
 	}
 
-	log.Printf("GetNetworkByCIDR: No network found with CIDR=%q", cidr)
 	return nil, ports.ErrNotFound
 }
 
@@ -760,24 +725,17 @@ func (r *reader) ListNetworkBindings(ctx context.Context, consume func(models.Ne
 }
 
 func (r *reader) GetNetworkBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.NetworkBinding, error) {
-	log.Printf("GetNetworkBindingByID: looking for ns=%q name=%q key=%s", id.Namespace, id.Name, id.Key())
 
 	var bindings map[string]models.NetworkBinding
 
 	// Use data from writer if available
 	if r.writer != nil && r.writer.networkBindings != nil {
 		bindings = r.writer.networkBindings
-		log.Printf("GetNetworkBindingByID: using writer data")
 	} else {
 		bindings = r.registry.db.GetNetworkBindings()
-		log.Printf("GetNetworkBindingByID: using registry db data")
 	}
 
 	if binding, ok := bindings[id.Key()]; ok {
-		log.Printf("🔍 GetNetworkBindingByID: NetworkBinding[%s] has %d conditions", id.Key(), len(binding.Meta.Conditions))
-		for i, cond := range binding.Meta.Conditions {
-			log.Printf("  🔍 GetNetworkBindingByID: binding[%s].condition[%d] Type=%s Status=%s", id.Key(), i, cond.Type, cond.Status)
-		}
 		return &binding, nil
 	}
 

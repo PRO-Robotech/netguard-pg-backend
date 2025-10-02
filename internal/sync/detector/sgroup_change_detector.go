@@ -3,7 +3,6 @@ package detector
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -77,7 +76,6 @@ func (d *SGROUPChangeDetector) Start(ctx context.Context) error {
 		return fmt.Errorf("SGROUP change detector is already started")
 	}
 
-	log.Printf("🔧 DEBUG: SGROUPChangeDetector.Start - Starting detector")
 
 	d.started = true
 
@@ -97,7 +95,6 @@ func (d *SGROUPChangeDetector) Stop() error {
 		return nil
 	}
 
-	log.Printf("🔧 DEBUG: SGROUPChangeDetector.Stop - Stopping detector")
 
 	d.started = false
 	d.cancel()
@@ -119,8 +116,6 @@ func (d *SGROUPChangeDetector) Subscribe(handler ChangeHandler) error {
 	handlerID := fmt.Sprintf("handler-%d", d.nextHandlerID)
 	d.handlers[handlerID] = handler
 
-	log.Printf("🔧 DEBUG: SGROUPChangeDetector.Subscribe - Registered handler %s, total handlers: %d",
-		handlerID, len(d.handlers))
 
 	return nil
 }
@@ -138,8 +133,6 @@ func (d *SGROUPChangeDetector) Unsubscribe(handler ChangeHandler) error {
 	// In a production system, you might want to use handler IDs or references
 	for id := range d.handlers {
 		delete(d.handlers, id)
-		log.Printf("🔧 DEBUG: SGROUPChangeDetector.Unsubscribe - Removed handler %s, remaining: %d",
-			id, len(d.handlers))
 		break
 	}
 
@@ -150,7 +143,6 @@ func (d *SGROUPChangeDetector) Unsubscribe(handler ChangeHandler) error {
 func (d *SGROUPChangeDetector) monitorChanges() {
 	defer d.wg.Done()
 
-	log.Printf("🔧 DEBUG: SGROUPChangeDetector.monitorChanges - Starting monitoring loop")
 
 	retryCount := 0
 	maxRetries := d.config.MaxRetries
@@ -158,7 +150,6 @@ func (d *SGROUPChangeDetector) monitorChanges() {
 	for {
 		select {
 		case <-d.ctx.Done():
-			log.Printf("🔧 DEBUG: SGROUPChangeDetector.monitorChanges - Context cancelled, exiting")
 			return
 		default:
 		}
@@ -166,23 +157,17 @@ func (d *SGROUPChangeDetector) monitorChanges() {
 		err := d.connectToStream()
 		if err != nil {
 			retryCount++
-			log.Printf("❌ ERROR: SGROUPChangeDetector.monitorChanges - Connection failed (attempt %d): %v",
-				retryCount, err)
 
 			// Check if we've exceeded max retries
 			if maxRetries > 0 && retryCount >= maxRetries {
-				log.Printf("❌ ERROR: SGROUPChangeDetector.monitorChanges - Max retries (%d) exceeded, stopping",
-					maxRetries)
 				return
 			}
 
 			// Wait before retrying
 			select {
 			case <-time.After(d.config.ReconnectInterval):
-				log.Printf("🔧 DEBUG: SGROUPChangeDetector.monitorChanges - Retrying connection")
 				continue
 			case <-d.ctx.Done():
-				log.Printf("🔧 DEBUG: SGROUPChangeDetector.monitorChanges - Context cancelled during retry wait")
 				return
 			}
 		}
@@ -194,37 +179,30 @@ func (d *SGROUPChangeDetector) monitorChanges() {
 
 // connectToStream connects to SGROUP stream and processes updates
 func (d *SGROUPChangeDetector) connectToStream() error {
-	log.Printf("🔧 DEBUG: SGROUPChangeDetector.connectToStream - Connecting to SGROUP stream")
 
 	timestamps, err := d.client.GetStatuses(d.ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get statuses stream: %w", err)
 	}
 
-	log.Printf("🔧 DEBUG: SGROUPChangeDetector.connectToStream - Successfully connected to stream")
 
 	// Process timestamps from the stream
 	for {
 		select {
 		case <-d.ctx.Done():
-			log.Printf("🔧 DEBUG: SGROUPChangeDetector.connectToStream - Context cancelled")
 			return nil
 		case timestamp, ok := <-timestamps:
 			if !ok {
-				log.Printf("⚠️  WARNING: SGROUPChangeDetector.connectToStream - Stream closed by server")
 				return fmt.Errorf("stream closed")
 			}
 
 			if timestamp != nil {
-				log.Printf("🔧 DEBUG: SGROUPChangeDetector.connectToStream - Received timestamp: %v",
-					timestamp.AsTime())
 
 				// Check if this is a new update
 				if d.isNewUpdate(timestamp) {
 					d.lastUpdate = timestamp
 					err := d.notifyHandlers(timestamp)
 					if err != nil {
-						log.Printf("⚠️  WARNING: SGROUPChangeDetector.connectToStream - Error notifying handlers: %v", err)
 					}
 				}
 			}
@@ -254,7 +232,6 @@ func (d *SGROUPChangeDetector) notifyHandlers(timestamp *timestamppb.Timestamp) 
 	d.handlersLock.RUnlock()
 
 	if len(handlers) == 0 {
-		log.Printf("🔧 DEBUG: SGROUPChangeDetector.notifyHandlers - No handlers registered")
 		return nil
 	}
 
@@ -266,17 +243,13 @@ func (d *SGROUPChangeDetector) notifyHandlers(timestamp *timestamppb.Timestamp) 
 		},
 	}
 
-	log.Printf("🔧 DEBUG: SGROUPChangeDetector.notifyHandlers - Notifying %d handlers", len(handlers))
 
 	var errors []error
 	for handlerID, handler := range handlers {
 		err := handler.OnChange(d.ctx, event)
 		if err != nil {
-			log.Printf("❌ ERROR: SGROUPChangeDetector.notifyHandlers - Handler %s failed: %v",
-				handlerID, err)
 			errors = append(errors, fmt.Errorf("handler %s: %w", handlerID, err))
 		} else {
-			log.Printf("✅ DEBUG: SGROUPChangeDetector.notifyHandlers - Handler %s succeeded", handlerID)
 		}
 	}
 

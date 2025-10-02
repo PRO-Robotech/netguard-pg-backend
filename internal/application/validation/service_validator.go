@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	"netguard-pg-backend/internal/domain/models"
+	"netguard-pg-backend/internal/domain/ports"
 
 	"github.com/pkg/errors"
 )
@@ -25,6 +26,23 @@ func (v *ServiceValidator) ValidateReferences(ctx context.Context, service model
 		if err := agValidator.ValidateExists(ctx, models.ResourceIdentifier{Name: agRef.Name, Namespace: agRef.Namespace}); err != nil {
 			return errors.Wrapf(err, "invalid address group reference in service %s", service.Key())
 		}
+	}
+
+	return nil
+}
+
+// ValidateNoDuplicateAddressGroups checks that Service.Spec.AddressGroups contains no duplicate AddressGroups
+func (v *ServiceValidator) ValidateNoDuplicateAddressGroups(addressGroups []models.AddressGroupRef) error {
+	seen := make(map[string]bool)
+
+	for _, ag := range addressGroups {
+		// Create unique key: namespace/name
+		key := fmt.Sprintf("%s/%s", ag.Namespace, ag.Name)
+
+		if seen[key] {
+			return fmt.Errorf("duplicate AddressGroup in spec.addressGroups: %s", key)
+		}
+		seen[key] = true
 	}
 
 	return nil
@@ -81,11 +99,14 @@ func (v *ServiceValidator) ValidateNoDuplicatePorts(ingressPorts []models.Ingres
 	return nil
 }
 
-// ValidateForPostCommit validates a service after it has been committed to database
-// This skips duplicate checking since the entity already exists in the database
-func (v *ServiceValidator) ValidateForPostCommit(ctx context.Context, service models.Service) error {
-	// PHASE 1: Skip duplicate entity check (entity is already committed)
-	// This method is called AFTER the entity is saved to database, so existence is expected
+// ValidateWithoutDuplicateCheck validates service without checking for duplicate entity
+// Used in two scenarios:
+// 1. SyncServices - BEFORE commit to catch validation errors early
+// 2. ConditionManager - AFTER commit to set status conditions
+func (v *ServiceValidator) ValidateWithoutDuplicateCheck(ctx context.Context, service models.Service) error {
+	// PHASE 1: Skip duplicate entity check
+	// For SyncServices: entity may not exist yet or may be updating
+	// For ConditionManager: entity already committed to database
 
 	// PHASE 2: Validate references (existing validation)
 	if err := v.ValidateReferences(ctx, service); err != nil {
@@ -97,12 +118,18 @@ func (v *ServiceValidator) ValidateForPostCommit(ctx context.Context, service mo
 		return err
 	}
 
-	// PHASE 4: Validate port conflicts with other services (existing validation)
+	// PHASE 4: Validate port conflicts with other services (CRITICAL)
 	if err := v.CheckPortOverlaps(ctx, service); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// ValidateForPostCommit is deprecated, use ValidateWithoutDuplicateCheck instead
+// Kept for backward compatibility
+func (v *ServiceValidator) ValidateForPostCommit(ctx context.Context, service models.Service) error {
+	return v.ValidateWithoutDuplicateCheck(ctx, service)
 }
 
 // CheckPortOverlaps проверяет перекрытие портов между сервисом и существующими сервисами в AddressGroup
@@ -183,17 +210,22 @@ func (v *ServiceValidator) ValidateForCreation(ctx context.Context, service mode
 		return err // Return the detailed EntityAlreadyExistsError with logging and context
 	}
 
-	// PHASE 2: Validate references (existing validation)
+	// PHASE 2.5: Validate no duplicate AddressGroups
+	if err := v.ValidateNoDuplicateAddressGroups(service.AddressGroups); err != nil {
+		return err
+	}
+
+	// PHASE 3: Validate references
 	if err := v.ValidateReferences(ctx, service); err != nil {
 		return err
 	}
 
-	// PHASE 3: Validate internal port consistency (existing validation)
+	// PHASE 4: Validate internal port consistency (existing validation)
 	if err := v.ValidateNoDuplicatePorts(service.IngressPorts); err != nil {
 		return err
 	}
 
-	// PHASE 4: Validate port conflicts with other services (existing validation)
+	// PHASE 5: Validate port conflicts with other services (existing validation)
 	if err := v.CheckPortOverlaps(ctx, service); err != nil {
 		return err
 	}
@@ -246,6 +278,11 @@ func (v *ServiceValidator) CheckBindingsPortOverlaps(ctx context.Context, servic
 
 // ValidateForUpdate валидирует сервис перед обновлением
 func (v *ServiceValidator) ValidateForUpdate(ctx context.Context, oldService, newService models.Service) error {
+	// Validate no duplicate AddressGroups in updated spec
+	if err := v.ValidateNoDuplicateAddressGroups(newService.AddressGroups); err != nil {
+		return err
+	}
+
 	// 🎯 SERVICE BUSINESS RULE: Services CAN modify ports and description when Ready=True
 	// This matches k8s-controller service_webhook.go behavior - NO Ready=True spec blocking
 	// Only AddressGroupBinding, ServiceAlias, RuleS2S have spec immutability when Ready=True
@@ -285,7 +322,7 @@ func (v *ServiceValidator) ValidateForUpdate(ctx context.Context, oldService, ne
 
 // CheckDependencies checks if there are dependencies before deleting a service
 func (v *ServiceValidator) CheckDependencies(ctx context.Context, id models.ResourceIdentifier) error {
-	// Check ServiceAliases referencing the service to be deleted
+	// PHASE 1: Check ServiceAliases referencing the service to be deleted
 	hasAliases := false
 	err := v.reader.ListServiceAliases(ctx, func(alias models.ServiceAlias) error {
 		if alias.ServiceRefKey() == id.Key() {
@@ -302,21 +339,19 @@ func (v *ServiceValidator) CheckDependencies(ctx context.Context, id models.Reso
 		return NewDependencyExistsError("service", id.Key(), "service_alias")
 	}
 
-	// Check AddressGroupBindings referencing the service to be deleted
-	hasBindings := false
-	err = v.reader.ListAddressGroupBindings(ctx, func(binding models.AddressGroupBinding) error {
-		if binding.ServiceRefKey() == id.Key() {
-			hasBindings = true
-		}
-		return nil
-	}, nil)
-
+	// PHASE 2: Check if service has any associated AddressGroups (from spec or bindings)
+	service, err := v.reader.GetServiceByID(ctx, id)
 	if err != nil {
-		return errors.Wrap(err, "failed to check address group bindings")
+		if errors.Is(err, ports.ErrNotFound) {
+			// Service doesn't exist, nothing to check
+			return nil
+		}
+		return errors.Wrap(err, "failed to get service for dependency check")
 	}
 
-	if hasBindings {
-		return NewDependencyExistsError("service", id.Key(), "address_group_binding")
+	// If xAggregatedAddressGroups is not empty, cannot delete
+	if len(service.AggregatedAddressGroups) > 0 {
+		return NewDependencyExistsError("service", id.Key(), "address_groups")
 	}
 
 	return nil

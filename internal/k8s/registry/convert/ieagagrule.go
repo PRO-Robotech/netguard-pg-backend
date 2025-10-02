@@ -3,7 +3,6 @@ package convert
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -147,7 +146,6 @@ func (c *IEAgAgRuleConverter) FromDomain(ctx context.Context, domainObj *models.
 						var from, to int32
 						_, err := fmt.Sscanf(portStr, "%d-%d", &from, &to)
 						if err != nil {
-							log.Printf("⚠️  WARNING: Failed to parse port range %s: %v", portStr, err)
 							continue
 						}
 						k8sPortSpec.PortRange = &netguardv1beta1.PortRange{
@@ -159,7 +157,6 @@ func (c *IEAgAgRuleConverter) FromDomain(ctx context.Context, domainObj *models.
 						var port int32
 						_, err := fmt.Sscanf(portStr, "%d", &port)
 						if err != nil {
-							log.Printf("⚠️  WARNING: Failed to parse port %s: %v", portStr, err)
 							continue
 						}
 						k8sPortSpec.Port = port
@@ -222,16 +219,12 @@ func (c *IEAgAgRuleConverter) convertTransportFromDomain(domainTransport models.
 	case models.UDP:
 		return netguardv1beta1.ProtocolUDP, nil
 	case "": // Handle empty transport - default to TCP
-		log.Printf("⚠️  WARNING: IEAgAgRule has empty Transport field, defaulting to TCP")
 		return netguardv1beta1.ProtocolTCP, nil
 	case "Networks_NetIP_TCP": // Handle old protobuf enum name
-		log.Printf("⚠️  WARNING: IEAgAgRule has old protobuf enum name 'Networks_NetIP_TCP', converting to TCP")
 		return netguardv1beta1.ProtocolTCP, nil
 	case "Networks_NetIP_UDP": // Handle old protobuf enum name
-		log.Printf("⚠️  WARNING: IEAgAgRule has old protobuf enum name 'Networks_NetIP_UDP', converting to UDP")
 		return netguardv1beta1.ProtocolUDP, nil
 	default:
-		log.Printf("❌ ERROR: convertTransportFromDomain - unknown transport protocol: '%s' (length: %d)", domainTransport, len(string(domainTransport)))
 		return "", fmt.Errorf("unknown transport protocol: %s", domainTransport)
 	}
 }
@@ -256,16 +249,12 @@ func (c *IEAgAgRuleConverter) convertTrafficFromDomain(domainTraffic models.Traf
 	case models.EGRESS:
 		return netguardv1beta1.EGRESS, nil
 	case "": // Handle empty traffic - default to Ingress
-		log.Printf("⚠️  WARNING: IEAgAgRule has empty Traffic field, defaulting to Ingress")
 		return netguardv1beta1.INGRESS, nil
 	case "Traffic_Ingress": // Handle old protobuf enum name
-		log.Printf("⚠️  WARNING: IEAgAgRule has old protobuf enum name 'Traffic_Ingress', converting to Ingress")
 		return netguardv1beta1.INGRESS, nil
 	case "Traffic_Egress": // Handle old protobuf enum name
-		log.Printf("⚠️  WARNING: IEAgAgRule has old protobuf enum name 'Traffic_Egress', converting to Egress")
 		return netguardv1beta1.EGRESS, nil
 	default:
-		log.Printf("❌ ERROR: convertTrafficFromDomain - unknown traffic direction: '%s' (length: %d)", domainTraffic, len(string(domainTraffic)))
 		return "", fmt.Errorf("unknown traffic direction: %s", domainTraffic)
 	}
 }
@@ -290,16 +279,12 @@ func (c *IEAgAgRuleConverter) convertActionFromDomain(domainAction models.RuleAc
 	case models.ActionDrop:
 		return netguardv1beta1.ActionDrop, nil
 	case "": // Handle empty action - default to ACCEPT
-		log.Printf("⚠️  WARNING: IEAgAgRule has empty Action field, defaulting to ACCEPT")
 		return netguardv1beta1.ActionAccept, nil
 	case "RuleAction_ACCEPT": // Handle old protobuf enum name
-		log.Printf("⚠️  WARNING: IEAgAgRule has old protobuf enum name 'RuleAction_ACCEPT', converting to ACCEPT")
 		return netguardv1beta1.ActionAccept, nil
 	case "RuleAction_DROP": // Handle old protobuf enum name
-		log.Printf("⚠️  WARNING: IEAgAgRule has old protobuf enum name 'RuleAction_DROP', converting to DROP")
 		return netguardv1beta1.ActionDrop, nil
 	default:
-		log.Printf("❌ ERROR: convertActionFromDomain - unknown action: '%s' (length: %d)", domainAction, len(string(domainAction)))
 		return "", fmt.Errorf("unknown action: %s", domainAction)
 	}
 }
