@@ -3,6 +3,7 @@ package host_binding
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -85,15 +86,10 @@ func NewHostBindingStorage(backendClient client.BackendClient) *HostBindingStora
 		backendClient: backendClient,
 	}
 
-	// TODO: Set up custom create logic for host binding and SGroups registration
-	// This will be implemented when we add hook support to BaseStorage
-
 	return storage
 }
 
-// handleHostBindingCreate implements custom logic when a HostBinding is created
 func (s *HostBindingStorage) handleHostBindingCreate(ctx context.Context, obj *netguardv1beta1.HostBinding, domainObj *models.HostBinding) error {
-	// Update Host status to reflect the binding
 	if err := s.updateHostBindingStatus(ctx, domainObj, true); err != nil {
 		return fmt.Errorf("failed to update host status on binding create: %w", err)
 	}
@@ -101,9 +97,7 @@ func (s *HostBindingStorage) handleHostBindingCreate(ctx context.Context, obj *n
 	return nil
 }
 
-// handleHostBindingUpdate implements custom logic when a HostBinding is updated
 func (s *HostBindingStorage) handleHostBindingUpdate(ctx context.Context, obj, oldObj *netguardv1beta1.HostBinding, domainObj *models.HostBinding) error {
-	// Update Host status to reflect any changes in the binding
 	if err := s.updateHostBindingStatus(ctx, domainObj, true); err != nil {
 		return fmt.Errorf("failed to update host status on binding update: %w", err)
 	}
@@ -111,9 +105,7 @@ func (s *HostBindingStorage) handleHostBindingUpdate(ctx context.Context, obj, o
 	return nil
 }
 
-// handleHostBindingDelete implements custom logic when a HostBinding is deleted
 func (s *HostBindingStorage) handleHostBindingDelete(ctx context.Context, obj *netguardv1beta1.HostBinding, domainObj *models.HostBinding) error {
-	// Clear Host status to reflect the unbinding (isBound=false, clear refs)
 	if err := s.updateHostBindingStatus(ctx, domainObj, false); err != nil {
 		return fmt.Errorf("failed to clear host status on binding delete: %w", err)
 	}
@@ -126,10 +118,80 @@ func (s *HostBindingStorage) GetSingularName() string {
 	return "hostbinding"
 }
 
+// ConvertToTable implements minimal table output so kubectl can display resources.
+func (s *HostBindingStorage) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
+	table := &metav1.Table{
+		ColumnDefinitions: []metav1.TableColumnDefinition{
+			{Name: "Name", Type: "string", Format: "name"},
+			{Name: "Host", Type: "string"},
+			{Name: "AddressGroup", Type: "string"},
+			{Name: "Age", Type: "string"},
+		},
+	}
+
+	addRow := func(binding *netguardv1beta1.HostBinding) {
+		row := metav1.TableRow{
+			Object: runtime.RawExtension{Object: binding},
+			Cells: []interface{}{
+				binding.Name,
+				binding.Spec.HostRef.Name,
+				binding.Spec.AddressGroupRef.Name,
+				translateTimestampSince(binding.CreationTimestamp),
+			},
+		}
+		table.Rows = append(table.Rows, row)
+	}
+
+	switch v := object.(type) {
+	case *netguardv1beta1.HostBinding:
+		addRow(v)
+	case *netguardv1beta1.HostBindingList:
+		for i := range v.Items {
+			addRow(&v.Items[i])
+		}
+	default:
+		return nil, fmt.Errorf("unexpected object type %T", object)
+	}
+	return table, nil
+}
+
 // DeleteCollection implements rest.CollectionDeleter
 func (s *HostBindingStorage) DeleteCollection(ctx context.Context, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions, listOptions *internalversion.ListOptions) (runtime.Object, error) {
-	// TODO: Implement collection deletion when needed
-	return &netguardv1beta1.HostBindingList{}, nil
+	obj, err := s.List(ctx, listOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	bindingList, ok := obj.(*netguardv1beta1.HostBindingList)
+	if !ok {
+		return nil, fmt.Errorf("unexpected object type from List: %T", obj)
+	}
+
+	deletedItems := &netguardv1beta1.HostBindingList{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "HostBindingList",
+			APIVersion: netguardv1beta1.SchemeGroupVersion.String(),
+		},
+	}
+
+	for i := range bindingList.Items {
+		binding := &bindingList.Items[i]
+
+		if deleteValidation != nil {
+			if err := deleteValidation(ctx, binding); err != nil {
+				return nil, err
+			}
+		}
+
+		_, _, err := s.Delete(ctx, binding.Name, deleteValidation, options)
+		if err != nil {
+			return nil, fmt.Errorf("failed to delete host binding %s: %w", binding.Name, err)
+		}
+
+		deletedItems.Items = append(deletedItems.Items, *binding)
+	}
+
+	return deletedItems, nil
 }
 
 // updateHostBindingStatus updates the Host resource status based on HostBinding changes
@@ -182,6 +244,30 @@ func (s *HostBindingStorage) updateHostBindingStatus(ctx context.Context, hostBi
 // Kind implements rest.KindProvider
 func (s *HostBindingStorage) Kind() string {
 	return "HostBinding"
+}
+
+// translateTimestampSince returns the elapsed time since timestamp in human-readable form.
+func translateTimestampSince(ts metav1.Time) string {
+	if ts.IsZero() {
+		return "<unknown>"
+	}
+	return durationShortHumanDuration(time.Since(ts.Time))
+}
+
+// durationShortHumanDuration is a copy of kubectl printing helper (short).
+func durationShortHumanDuration(d time.Duration) string {
+	if seconds := int(d.Seconds()); seconds < 90 {
+		return fmt.Sprintf("%ds", seconds)
+	}
+	if minutes := int(d.Minutes()); minutes < 90 {
+		return fmt.Sprintf("%dm", minutes)
+	}
+	hours := int(d.Round(time.Hour).Hours())
+	if hours < 48 {
+		return fmt.Sprintf("%dh", hours)
+	}
+	days := hours / 24
+	return fmt.Sprintf("%dd", days)
 }
 
 // Ensure HostBindingStorage implements the required interfaces

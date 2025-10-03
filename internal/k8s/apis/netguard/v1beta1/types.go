@@ -699,8 +699,6 @@ type NetworkStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 }
 
-// +kubebuilder:object:root=true
-// +kubebuilder:subresource:status
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -713,7 +711,6 @@ type Network struct {
 	Status NetworkStatus `json:"status,omitempty"`
 }
 
-// +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // NetworkList contains a list of Network
@@ -741,8 +738,6 @@ type NetworkBindingStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 }
 
-// +kubebuilder:object:root=true
-// +kubebuilder:subresource:status
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -756,7 +751,6 @@ type NetworkBinding struct {
 	NetworkItem NetworkItem          `json:"network,omitempty"`
 }
 
-// +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // NetworkBindingList contains a list of NetworkBinding
@@ -810,8 +804,6 @@ type IPItem struct {
 	IP string `json:"ip"`
 }
 
-// +kubebuilder:object:root=true
-// +kubebuilder:subresource:status
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -828,7 +820,6 @@ type Host struct {
 	IPList []IPItem `json:"xIPList"`
 }
 
-// +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // HostList contains a list of Host
@@ -860,8 +851,6 @@ type HostBindingStatus struct {
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
-// +kubebuilder:object:root=true
-// +kubebuilder:subresource:status
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -874,7 +863,6 @@ type HostBinding struct {
 	Status HostBindingStatus `json:"status,omitempty"`
 }
 
-// +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // HostBindingList contains a list of HostBinding

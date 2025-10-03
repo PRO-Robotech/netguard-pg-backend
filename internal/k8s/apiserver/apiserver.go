@@ -5,6 +5,8 @@ import (
 	"net"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	netutils "k8s.io/utils/net"
 
 	"k8s.io/apiserver/pkg/registry/rest"
@@ -29,13 +31,12 @@ import (
 	svcstorage "netguard-pg-backend/internal/k8s/registry/service"
 	aliasstorage "netguard-pg-backend/internal/k8s/registry/servicealias"
 
-	openapi "k8s.io/apiserver/pkg/endpoints/openapi"
-	compatibility "k8s.io/apiserver/pkg/util/compatibility"
+	"k8s.io/apiserver/pkg/endpoints/openapi"
+	"k8s.io/apiserver/pkg/util/compatibility"
 )
 
 // ExtraConfig holds custom apiserver config
 type ExtraConfig struct {
-	// Place you custom config here.
 }
 
 // Config defines the config for the apiserver
@@ -66,16 +67,12 @@ func (cfg *Config) Complete() CompletedConfig {
 		cfg.ExtraConfig,
 	}
 
-	// Provide an explicit external address to bypass implicit derivation that
-	// expects the secure listener to be already in place during .Complete().
 	hostPort := "localhost:8443"
 	c.GenericConfig.ExternalAddress = hostPort
 
 	if c.GenericConfig.EffectiveVersion == nil {
 		c.GenericConfig.EffectiveVersion = compatibility.DefaultBuildEffectiveVersion()
 	}
-
-	// Config's OpenAPI will be set during server construction; nothing to do here.
 
 	return CompletedConfig{&c}
 }
@@ -99,17 +96,48 @@ func (s *NetguardServer) Run(stopCh <-chan struct{}) error {
 	return s.GenericAPIServer.PrepareRun().Run(stopCh)
 }
 
-// NewServer builds and returns a ready-to-run aggregated API server instance.
-// It mirrors the construction flow used in Kubernetes sample-apiserver, but
-// disables embedded etcd because an aggregated server stores no state locally.
+type negotiatedSerializerWithoutProtobuf struct {
+	wrapped runtime.NegotiatedSerializer
+}
+
+func (n *negotiatedSerializerWithoutProtobuf) SupportedMediaTypes() []runtime.SerializerInfo {
+	original := n.wrapped.SupportedMediaTypes()
+	filtered := make([]runtime.SerializerInfo, 0, len(original))
+
+	for _, info := range original {
+		// Skip protobuf serializer
+		if info.MediaType == runtime.ContentTypeProtobuf {
+			klog.V(4).Infof("Filtering out protobuf serializer from supported media types")
+			continue
+		}
+		filtered = append(filtered, info)
+	}
+
+	return filtered
+}
+
+func (n *negotiatedSerializerWithoutProtobuf) EncoderForVersion(encoder runtime.Encoder, gv runtime.GroupVersioner) runtime.Encoder {
+	return n.wrapped.EncoderForVersion(encoder, gv)
+}
+
+func (n *negotiatedSerializerWithoutProtobuf) DecoderToVersion(decoder runtime.Decoder, gv runtime.GroupVersioner) runtime.Decoder {
+	return n.wrapped.DecoderToVersion(decoder, gv)
+}
+
+func NewNegotiatedSerializerWithoutProtobuf(serializer runtime.NegotiatedSerializer) runtime.NegotiatedSerializer {
+	return &negotiatedSerializerWithoutProtobuf{wrapped: serializer}
+}
+
 func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServer, error) {
-	// Generate self-signed certs for localhost if the user didn't provide any.
 	if err := opts.SecureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, []net.IP{netutils.ParseIPSloppy("127.0.0.1")}); err != nil {
 		return nil, fmt.Errorf("self-signed certs: %w", err)
 	}
 
-	// Build the generic apiserver config and apply all selected options.
-	genericCfg := server.NewRecommendedConfig(scheme.Codecs)
+	// Create standard CodecFactory
+	standardCodecs := serializer.NewCodecFactory(scheme.Scheme)
+
+	// Build the generic apiserver config
+	genericCfg := server.NewRecommendedConfig(standardCodecs)
 	if err := opts.ApplyTo(genericCfg); err != nil {
 		return nil, fmt.Errorf("apply options: %w", err)
 	}
@@ -152,13 +180,13 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 		return nil, fmt.Errorf("init backend client: %w", err)
 	}
 
-	// TODO: add graceful shutdown hook; for now rely on process exit
-
 	// ------------------------------------------------------------------
 	// Register API group "netguard.sgroups.io/v1beta1" with real storage.
 	// ------------------------------------------------------------------
 
-	apiGroupInfo := server.NewDefaultAPIGroupInfo(netguardv1beta1.GroupName, scheme.Scheme, metav1.ParameterCodec, scheme.Codecs)
+	// Use standard codecs for APIGroupInfo
+	apiGroupInfo := server.NewDefaultAPIGroupInfo(netguardv1beta1.GroupName, scheme.Scheme, metav1.ParameterCodec, standardCodecs)
+	apiGroupInfo.NegotiatedSerializer = NewNegotiatedSerializerWithoutProtobuf(apiGroupInfo.NegotiatedSerializer)
 
 	// Shared storage instances - using old BackendClient approach for now
 	agStore := agstorage.NewAddressGroupStorage(bClient)
@@ -193,7 +221,6 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 		"hosts":                       hostStore,
 		"hostbindings":                hostBindingStore,
 
-		// Status subresources для всех основных ресурсов
 		"addressgroups/status":               agstorage.NewStatusREST(agStore),
 		"services/status":                    svcstorage.NewStatusREST(svcStore),
 		"servicealiases/status":              aliasstorage.NewStatusREST(aliasStore),
@@ -202,12 +229,7 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 		"addressgroupportmappings/status":    portmappingstorage.NewStatusREST(pmStore),
 		"rules2s/status":                     rules2sstorage.NewStatusREST(rules2sStore),
 		"ieagagrules/status":                 ieagagstorage.NewStatusREST(ieagagStore),
-		"networks/status":                    networkstorage.NewStatusREST(networkStore),
-		"networkbindings/status":             networkbindingstorage.NewStatusREST(networkBindingStore),
-		"hosts/status":                       hoststorage.NewStatusREST(hostStore),
-		"hostbindings/status":                hostbindingstorage.NewStatusREST(hostBindingStore),
 
-		// Дополнительные subresources
 		"services/addressgroups":               svcstorage.NewAddressGroupsREST(bClient),
 		"services/rules2sdstownref":            svcstorage.NewRuleS2SDstOwnRefREST(bClient),
 		"addressgroupportmappings/accessports": portmappingstorage.NewAccessPortsREST(bClient),
