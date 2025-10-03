@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -114,14 +115,111 @@ func (s *HostStorage) GetSingularName() string {
 	return "host"
 }
 
+// ConvertToTable implements minimal table output so kubectl can display resources.
+func (s *HostStorage) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
+	table := &metav1.Table{
+		ColumnDefinitions: []metav1.TableColumnDefinition{
+			{Name: "Name", Type: "string", Format: "name"},
+			{Name: "UUID", Type: "string"},
+			{Name: "Bound", Type: "boolean"},
+			{Name: "AddressGroup", Type: "string"},
+			{Name: "Age", Type: "string"},
+		},
+	}
+
+	addRow := func(host *netguardv1beta1.Host) {
+		row := metav1.TableRow{
+			Object: runtime.RawExtension{Object: host},
+			Cells: []interface{}{
+				host.Name,
+				host.Spec.UUID,
+				host.Status.IsBound,
+				host.Status.AddressGroupName,
+				translateTimestampSince(host.CreationTimestamp),
+			},
+		}
+		table.Rows = append(table.Rows, row)
+	}
+
+	switch v := object.(type) {
+	case *netguardv1beta1.Host:
+		addRow(v)
+	case *netguardv1beta1.HostList:
+		for i := range v.Items {
+			addRow(&v.Items[i])
+		}
+	default:
+		return nil, fmt.Errorf("unexpected object type %T", object)
+	}
+	return table, nil
+}
+
 // DeleteCollection implements rest.CollectionDeleter
 func (s *HostStorage) DeleteCollection(ctx context.Context, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions, listOptions *internalversion.ListOptions) (runtime.Object, error) {
-	return &netguardv1beta1.HostList{}, nil
+	obj, err := s.List(ctx, listOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	hostList, ok := obj.(*netguardv1beta1.HostList)
+	if !ok {
+		return nil, fmt.Errorf("unexpected object type from List: %T", obj)
+	}
+
+	deletedItems := &netguardv1beta1.HostList{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "HostList",
+			APIVersion: netguardv1beta1.SchemeGroupVersion.String(),
+		},
+	}
+
+	for i := range hostList.Items {
+		host := &hostList.Items[i]
+
+		if deleteValidation != nil {
+			if err := deleteValidation(ctx, host); err != nil {
+				return nil, err
+			}
+		}
+
+		_, _, err := s.Delete(ctx, host.Name, deleteValidation, options)
+		if err != nil {
+			return nil, fmt.Errorf("failed to delete host %s: %w", host.Name, err)
+		}
+
+		deletedItems.Items = append(deletedItems.Items, *host)
+	}
+
+	return deletedItems, nil
 }
 
 // Kind implements rest.KindProvider
 func (s *HostStorage) Kind() string {
 	return "Host"
+}
+
+// translateTimestampSince returns the elapsed time since timestamp in human-readable form.
+func translateTimestampSince(ts metav1.Time) string {
+	if ts.IsZero() {
+		return "<unknown>"
+	}
+	return durationShortHumanDuration(time.Since(ts.Time))
+}
+
+// durationShortHumanDuration is a copy of kubectl printing helper (short).
+func durationShortHumanDuration(d time.Duration) string {
+	if seconds := int(d.Seconds()); seconds < 90 {
+		return fmt.Sprintf("%ds", seconds)
+	}
+	if minutes := int(d.Minutes()); minutes < 90 {
+		return fmt.Sprintf("%dm", minutes)
+	}
+	hours := int(d.Round(time.Hour).Hours())
+	if hours < 48 {
+		return fmt.Sprintf("%dh", hours)
+	}
+	days := hours / 24
+	return fmt.Sprintf("%dd", days)
 }
 
 // Ensure HostStorage implements the required interfaces
