@@ -1,5 +1,5 @@
 -- +goose Up
-
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION rebuild_address_group_networks(ag_namespace TEXT, ag_name TEXT)
 RETURNS JSONB AS $$
 DECLARE
@@ -21,7 +21,9 @@ BEGIN
     RETURN networks_json;
 END;
 $$ LANGUAGE plpgsql;
+-- +goose StatementEnd
 
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION sync_address_group_networks_on_binding_change()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -56,12 +58,14 @@ BEGIN
     RETURN COALESCE(NEW, OLD);
 END;
 $$ LANGUAGE plpgsql;
+-- +goose StatementEnd
 
 CREATE TRIGGER trg_sync_address_group_networks
     AFTER INSERT OR UPDATE OR DELETE ON network_bindings
     FOR EACH ROW
     EXECUTE FUNCTION sync_address_group_networks_on_binding_change();
 
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION sync_address_group_networks_on_network_change()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -85,6 +89,7 @@ BEGIN
     RETURN COALESCE(NEW, OLD);
 END;
 $$ LANGUAGE plpgsql;
+-- +goose StatementEnd
 
 CREATE TRIGGER trg_sync_address_group_networks_on_network
     AFTER INSERT OR UPDATE OR DELETE ON networks
@@ -95,7 +100,7 @@ UPDATE address_groups ag
 SET networks = rebuild_address_group_networks(ag.namespace, ag.name);
 
 -- +goose Down
-
+-- +goose StatementBegin
 -- Drop triggers
 DROP TRIGGER IF EXISTS trg_sync_address_group_networks ON network_bindings;
 DROP TRIGGER IF EXISTS trg_sync_address_group_networks_on_network ON networks;
@@ -104,3 +109,4 @@ DROP TRIGGER IF EXISTS trg_sync_address_group_networks_on_network ON networks;
 DROP FUNCTION IF EXISTS sync_address_group_networks_on_binding_change();
 DROP FUNCTION IF EXISTS sync_address_group_networks_on_network_change();
 DROP FUNCTION IF EXISTS rebuild_address_group_networks(TEXT, TEXT);
+-- +goose StatementEnd

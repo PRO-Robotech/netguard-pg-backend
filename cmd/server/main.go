@@ -226,6 +226,12 @@ func setupSyncManager(ctx context.Context, cfg *config.Config) interfaces.SyncMa
 		return nil
 	}
 
+	// Register Service syncer
+	serviceSyncer := syncers.NewServiceSyncer(sgroupsClient, logger)
+	if err := syncManager.RegisterSyncer(types.SyncSubjectTypeServices, serviceSyncer); err != nil {
+		return nil
+	}
+
 	// Start sync manager
 	if err := syncManager.Start(ctx); err != nil {
 		return nil

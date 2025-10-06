@@ -23,11 +23,8 @@ type addressGroupRefJSON struct {
 	Namespace  string `json:"namespace"`
 }
 
-// SyncServices implements hybrid sync strategy for services
 func (w *Writer) SyncServices(ctx context.Context, services []models.Service, scope ports.Scope, opts ...ports.Option) error {
-	// Extract sync operation from options (like address_group.go)
-	// This was MISSING and caused PATCH operations to not update resource content!
-	syncOp := models.SyncOpUpsert // Default operation
+	syncOp := models.SyncOpUpsert
 	isConditionOnly := false
 
 	for _, opt := range opts {
@@ -57,8 +54,6 @@ func (w *Writer) SyncServices(ctx context.Context, services []models.Service, sc
 		}
 	}
 
-	// Handle operations based on sync operation type
-	// This was COMPLETELY MISSING and is why PATCH operations didn't work!
 	switch syncOp {
 	case models.SyncOpDelete:
 		// For DELETE operations, delete the specific services
@@ -88,6 +83,11 @@ func (w *Writer) SyncServices(ctx context.Context, services []models.Service, sc
 
 			if err := w.upsertService(ctx, services[i]); err != nil {
 				return errors.Wrapf(err, "failed to upsert service %s/%s", services[i].Namespace, services[i].Name)
+			}
+
+			_, err := w.tx.Exec(ctx, "SELECT update_aggregated_ags_for_service($1, $2)", services[i].Namespace, services[i].Name)
+			if err != nil {
+				return errors.Wrapf(err, "failed to update aggregated address groups for service %s/%s", services[i].Namespace, services[i].Name)
 			}
 		}
 	default:
@@ -143,7 +143,6 @@ func (w *Writer) upsertService(ctx context.Context, service models.Service) erro
 	existingQuery := `SELECT resource_version FROM services WHERE namespace = $1 AND name = $2`
 	err = w.tx.QueryRow(ctx, existingQuery, service.Namespace, service.Name).Scan(&existingResourceVersion)
 
-	// Note: sql.ErrNoRows is expected for new services, not an actual error
 	if err != nil {
 		if err != sql.ErrNoRows && err.Error() != "no rows in result set" {
 			return errors.Wrapf(err, "failed to check existing service %s/%s", service.Namespace, service.Name)
@@ -312,11 +311,8 @@ func (w *Writer) deleteServicesByIdentifiers(ctx context.Context, identifiers []
 	return nil
 }
 
-// SyncServiceAliases implements hybrid sync strategy for service aliases
 func (w *Writer) SyncServiceAliases(ctx context.Context, aliases []models.ServiceAlias, scope ports.Scope, opts ...ports.Option) error {
-	// Extract sync operation from options (like services and address_group)
-	// This was MISSING and caused DELETE operations to be treated as UPSERT!
-	syncOp := models.SyncOpUpsert // Default operation
+	syncOp := models.SyncOpUpsert
 	isConditionOnly := false
 
 	for _, opt := range opts {
@@ -346,8 +342,6 @@ func (w *Writer) SyncServiceAliases(ctx context.Context, aliases []models.Servic
 		}
 	}
 
-	// Handle operations based on sync operation type
-	// This was COMPLETELY MISSING and is why DELETE operations were treated as UPSERT!
 	switch syncOp {
 	case models.SyncOpDelete:
 		// For DELETE operations, delete the specific service aliases
