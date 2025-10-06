@@ -1,4 +1,4 @@
-name: docker-multiarch-push
+name: docker-build-and-push
 on:
   push:
     branches:
@@ -8,7 +8,127 @@ on:
       - 'v[0-9]+.[0-9]+.[0-9]+rc[0-9]+'
 
 jobs:
-  build:
+  docker-build-amd64:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: benjlevesque/short-sha@v3.0
+        id: short-sha
+        with:
+          length: 8
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.CUSTOM_DOCKERHUB_USERNAME }}
+          password: ${{ secrets.CUSTOM_DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create sanitized branch name
+        id: sanitize
+        run: echo "branch=$(echo ${GITHUB_REF_NAME} | sed 's/\//-/g')" >> $GITHUB_OUTPUT
+
+      - name: Build and push goose
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.goose
+          push: true
+          tags: ${{ secrets.CUSTOM_DOCKERHUB_USERNAME }}/sgroups.k8s.netguard-goose:amd64-${{ steps.sanitize.outputs.branch }}-${{ steps.short-sha.outputs.sha }}
+          platforms: linux/amd64
+
+      - name: Build and push apiserver
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.apiserver
+          push: true
+          tags: ${{ secrets.CUSTOM_DOCKERHUB_USERNAME }}/sgroups.k8s.netguard-apiserver:amd64-${{ steps.sanitize.outputs.branch }}-${{ steps.short-sha.outputs.sha }}
+          platforms: linux/amd64
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.backend
+          push: true
+          tags: ${{ secrets.CUSTOM_DOCKERHUB_USERNAME }}/sgroups.k8s.netguard-backend:amd64-${{ steps.sanitize.outputs.branch }}-${{ steps.short-sha.outputs.sha }}
+          platforms: linux/amd64
+
+      - name: Build and push webhook
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.webhook
+          push: true
+          tags: ${{ secrets.CUSTOM_DOCKERHUB_USERNAME }}/sgroups.k8s.netguard-webhook:amd64-${{ steps.sanitize.outputs.branch }}-${{ steps.short-sha.outputs.sha }}
+          platforms: linux/amd64
+
+  docker-build-arm64:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: benjlevesque/short-sha@v3.0
+        id: short-sha
+        with:
+          length: 8
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.CUSTOM_DOCKERHUB_USERNAME }}
+          password: ${{ secrets.CUSTOM_DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create sanitized branch name
+        id: sanitize
+        run: echo "branch=$(echo ${GITHUB_REF_NAME} | sed 's/\//-/g')" >> $GITHUB_OUTPUT
+
+      - name: Build and push goose
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.goose
+          push: true
+          tags: ${{ secrets.CUSTOM_DOCKERHUB_USERNAME }}/sgroups.k8s.netguard-goose:arm64-${{ steps.sanitize.outputs.branch }}-${{ steps.short-sha.outputs.sha }}
+          platforms: linux/arm64
+
+      - name: Build and push apiserver
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.apiserver
+          push: true
+          tags: ${{ secrets.CUSTOM_DOCKERHUB_USERNAME }}/sgroups.k8s.netguard-apiserver:arm64-${{ steps.sanitize.outputs.branch }}-${{ steps.short-sha.outputs.sha }}
+          platforms: linux/arm64
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.backend
+          push: true
+          tags: ${{ secrets.CUSTOM_DOCKERHUB_USERNAME }}/sgroups.k8s.netguard-backend:arm64-${{ steps.sanitize.outputs.branch }}-${{ steps.short-sha.outputs.sha }}
+          platforms: linux/arm64
+
+      - name: Build and push webhook
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.webhook
+          push: true
+          tags: ${{ secrets.CUSTOM_DOCKERHUB_USERNAME }}/sgroups.k8s.netguard-webhook:arm64-${{ steps.sanitize.outputs.branch }}-${{ steps.short-sha.outputs.sha }}
+          platforms: linux/arm64
+
+  docker-multiarch-push:
     runs-on: self-hosted
     needs:
       - docker-build-arm64
