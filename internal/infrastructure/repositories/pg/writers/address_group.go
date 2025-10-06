@@ -88,27 +88,51 @@ func (w *Writer) upsertAddressGroup(ctx context.Context, ag models.AddressGroup)
 		return errors.Wrap(err, "failed to marshal conditions")
 	}
 
-	// Marshal Networks field (critical fix for Networks field persistence)
+	// First, check if address group exists and get existing resource version + Hosts field
+	// (Networks are managed by DB triggers, so we don't fetch them here)
+	var existingResourceVersion sql.NullInt64
+	var existingHosts []byte
+	existingQuery := `SELECT resource_version, hosts FROM address_groups WHERE namespace = $1 AND name = $2`
+	err = w.tx.QueryRow(ctx, existingQuery, ag.Namespace, ag.Name).Scan(&existingResourceVersion, &existingHosts)
+	if err != nil && err != sql.ErrNoRows {
+		klog.V(4).InfoS("Failed to get existing AddressGroup Hosts field", "namespace", ag.Namespace, "name", ag.Name, "error", err.Error())
+	}
+
+	// Marshal Networks field - NO preserve logic, managed by DB triggers
+	// Networks are now automatically managed by PostgreSQL triggers when NetworkBindings change
 	networksJSON, err := json.Marshal(ag.Networks)
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal networks")
 	}
 
-	// Marshal Hosts field (NEW: hosts belonging to this address group)
-	// Ensure nil slice becomes empty array in JSON, not null
+	// Marshal Hosts field with preserve logic
+	var hostsJSON []byte
 	hosts := ag.Hosts
 	if hosts == nil {
 		hosts = []netguardv1beta1.ObjectReference{}
 	}
-	hostsJSON, err := json.Marshal(hosts)
-	if err != nil {
-		return errors.Wrap(err, "failed to marshal hosts")
+
+	// Decode existing Hosts JSON to check if it has actual data
+	var existingHostsList []netguardv1beta1.ObjectReference
+	if len(existingHosts) > 0 {
+		// Ignore unmarshal errors - if it fails, existingHostsList stays empty
+		_ = json.Unmarshal(existingHosts, &existingHostsList)
 	}
 
-	// First, check if address group exists and get existing resource version
-	var existingResourceVersion sql.NullInt64
-	existingQuery := `SELECT resource_version FROM address_groups WHERE namespace = $1 AND name = $2`
-	_ = w.tx.QueryRow(ctx, existingQuery, ag.Namespace, ag.Name).Scan(&existingResourceVersion)
+	// Preserve only if incoming is empty AND existing has actual host items (not null/empty array)
+	if len(hosts) == 0 && len(existingHostsList) > 0 {
+		// Preserve existing Hosts - they contain real data
+		hostsJSON = existingHosts
+		klog.V(4).InfoS("Preserved existing Hosts during AddressGroup update",
+			"namespace", ag.Namespace, "name", ag.Name,
+			"preservedCount", len(existingHostsList))
+	} else {
+		// Use incoming Hosts (could be empty or populated)
+		hostsJSON, err = json.Marshal(hosts)
+		if err != nil {
+			return errors.Wrap(err, "failed to marshal hosts")
+		}
+	}
 
 	var resourceVersion int64
 	if existingResourceVersion.Valid {

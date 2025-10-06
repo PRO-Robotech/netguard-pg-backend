@@ -148,14 +148,15 @@ func (ag *AddressGroup) ToSGroupsProto() (interface{}, error) {
 		defaultAction = pb.SecGroup_ACCEPT
 	}
 
-	// Convert Networks to network names for SecGroup
 	var networkNames []string
 	for _, network := range ag.Networks {
-		// Use network.Name as is (already contains namespace)
-		networkNames = append(networkNames, network.Name)
+		networkName := network.Name
+		if network.Namespace != "" {
+			networkName = fmt.Sprintf("%s/%s", network.Namespace, network.Name)
+		}
+		networkNames = append(networkNames, networkName)
 	}
 
-	// Use AddressGroupName if set, otherwise compute from namespace/name
 	protoName := ag.AddressGroupName
 	if protoName == "" {
 		if ag.Namespace != "" {
@@ -165,7 +166,6 @@ func (ag *AddressGroup) ToSGroupsProto() (interface{}, error) {
 		}
 	}
 
-	// Convert to single sgroups protobuf element (batch aggregation will be handled by syncer)
 	protoGroup := &pb.SecGroup{
 		Name:          protoName,
 		Networks:      networkNames,
@@ -174,8 +174,6 @@ func (ag *AddressGroup) ToSGroupsProto() (interface{}, error) {
 		Logs:          ag.Logs,
 	}
 
-	// Return single group element (not wrapped in SyncSecurityGroups)
-	// Batch aggregation will be handled by AddressGroupSyncer.SyncBatch()
 	return protoGroup, nil
 }
 
