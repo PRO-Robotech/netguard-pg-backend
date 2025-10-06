@@ -3,6 +3,7 @@ package apiserver
 import (
 	"fmt"
 	"net"
+	"net/http"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -140,6 +141,13 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 	genericCfg := server.NewRecommendedConfig(standardCodecs)
 	if err := opts.ApplyTo(genericCfg); err != nil {
 		return nil, fmt.Errorf("apply options: %w", err)
+	}
+
+	// Configure BuildHandlerChainFunc to add our PATCH middleware
+	genericCfg.BuildHandlerChainFunc = func(apiHandler http.Handler, c *server.Config) http.Handler {
+		handler := server.DefaultBuildHandlerChain(apiHandler, c)
+		handler = WithPatchBodyExtractor(handler)
+		return handler
 	}
 
 	// Real OpenAPI configs using generated definitions with enum support

@@ -771,7 +771,7 @@ package pg
 //// ListIEAgAgRules lists IEAgAgRules
 //func (r *reader) ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAgRule) error, scope ports.Scope) error {
 //	query := `
-//		SELECT name, namespace, transport, traffic, 
+//		SELECT name, namespace, transport, traffic,
 //			   address_group_local_name, address_group_local_namespace,
 //			   address_group_name, address_group_namespace,
 //			   ports, action, logs, priority
@@ -872,7 +872,7 @@ package pg
 //// GetIEAgAgRuleByID gets an IEAgAgRule by ID
 //func (r *reader) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
 //	query := `
-//		SELECT name, namespace, transport, traffic, 
+//		SELECT name, namespace, transport, traffic,
 //			   address_group_local_name, address_group_local_namespace,
 //			   address_group_name, address_group_namespace,
 //			   ports, action, logs, priority

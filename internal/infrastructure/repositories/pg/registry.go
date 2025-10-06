@@ -78,7 +78,6 @@ func NewRegistryFromPG(ctx context.Context, dbURL url.URL) (ports.Registry, erro
 		"lock_timeout":                        "30000",  // 30 second lock timeout (reduced contention)
 	}
 
-
 	pool, err := pgxpool.NewWithConfig(ctx, conf)
 	if err != nil {
 		return nil, errors.WithMessage(err, "NewRegistryFromPG create pool")
@@ -89,7 +88,6 @@ func NewRegistryFromPG(ctx context.Context, dbURL url.URL) (ports.Registry, erro
 		pool.Close()
 		return nil, errors.WithMessage(err, "NewRegistryFromPG ping")
 	}
-
 
 	ret := &Registry{
 		subject: &simpleSubject{

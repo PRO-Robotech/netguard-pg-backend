@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
+
+	"k8s.io/apiserver/pkg/registry/rest"
 
 	"netguard-pg-backend/internal/domain/models"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
@@ -108,3 +111,49 @@ func durationShortHumanDuration(d time.Duration) string {
 	days := hours / 24
 	return fmt.Sprintf("%dd", days)
 }
+
+// DeleteCollection implements rest.CollectionDeleter
+func (s *RuleS2SStorage) DeleteCollection(ctx context.Context, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions, listOptions *internalversion.ListOptions) (runtime.Object, error) {
+	obj, err := s.List(ctx, listOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	list, ok := obj.(*netguardv1beta1.RuleS2SList)
+	if !ok {
+		return nil, fmt.Errorf("unexpected object type from List: %T", obj)
+	}
+
+	deletedItems := &netguardv1beta1.RuleS2SList{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "RuleS2SList",
+			APIVersion: netguardv1beta1.SchemeGroupVersion.String(),
+		},
+	}
+
+	for i := range list.Items {
+		item := &list.Items[i]
+
+		if deleteValidation != nil {
+			if err := deleteValidation(ctx, item); err != nil {
+				return nil, err
+			}
+		}
+
+		_, _, err := s.Delete(ctx, item.Name, deleteValidation, options)
+		if err != nil {
+			return nil, fmt.Errorf("failed to delete rules2s %s: %w", item.Name, err)
+		}
+
+		deletedItems.Items = append(deletedItems.Items, *item)
+	}
+
+	return deletedItems, nil
+}
+
+// Kind implements rest.KindProvider
+func (s *RuleS2SStorage) Kind() string {
+	return "RuleS2S"
+}
+
+var _ rest.CollectionDeleter = &RuleS2SStorage{}

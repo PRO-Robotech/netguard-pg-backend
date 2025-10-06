@@ -18,9 +18,9 @@ func TestServiceConverter_AddressGroups_ToDomain(t *testing.T) {
 	converter := NewServiceConverter()
 
 	testCases := []struct {
-		name     string
-		input    *netguardv1beta1.Service
-		check    func(t *testing.T, result *models.Service)
+		name  string
+		input *netguardv1beta1.Service
+		check func(t *testing.T, result *models.Service)
 	}{
 		{
 			name: "single AddressGroup in spec",
@@ -212,7 +212,7 @@ func TestServiceConverter_AggregatedAddressGroups_ToDomain(t *testing.T) {
 					Name:      "svc-3",
 					Namespace: "default",
 				},
-				Spec: netguardv1beta1.ServiceSpec{},
+				Spec:                    netguardv1beta1.ServiceSpec{},
 				AggregatedAddressGroups: []netguardv1beta1.AddressGroupReference{},
 			},
 			check: func(t *testing.T, result *models.Service) {
@@ -477,9 +477,9 @@ func TestServiceConverter_RoundTrip_WithAddressGroups(t *testing.T) {
 	converter := NewServiceConverter()
 
 	testCases := []struct {
-		name                         string
-		k8s                          *netguardv1beta1.Service
-		expectedAggregatedCount      int // Expected count after round-trip with defensive logic
+		name                    string
+		k8s                     *netguardv1beta1.Service
+		expectedAggregatedCount int // Expected count after round-trip with defensive logic
 	}{
 		{
 			name: "spec AddressGroups only",

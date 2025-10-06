@@ -163,8 +163,8 @@ func CheckPortOverlaps(service models.Service, portMapping models.AddressGroupPo
 		for protocol, serviceRanges := range servicePorts {
 			existingRanges := existingServicePorts.Ports[protocol]
 			if len(existingRanges) == 0 {
-			continue
-		}
+				continue
+			}
 			// Combine all ranges for this protocol and check for overlaps
 			allRanges := make([]models.PortRange, 0, len(serviceRanges)+len(existingRanges))
 			allRanges = append(allRanges, serviceRanges...)

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	"k8s.io/klog/v2"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -113,7 +114,7 @@ func (w *Writer) upsertAddressGroup(ctx context.Context, ag models.AddressGroup)
 	if existingResourceVersion.Valid {
 		// UPDATE existing K8s metadata
 		metadataQuery := `
-			UPDATE k8s_metadata 
+			UPDATE k8s_metadata
 			SET labels = $1, annotations = $2, conditions = $3, updated_at = NOW()
 			WHERE resource_version = $4
 			RETURNING resource_version`
@@ -201,6 +202,23 @@ func (w *Writer) deleteAddressGroupsByIdentifiers(ctx context.Context, identifie
 		argIndex += 2
 	}
 
+	// First, mark objects as being deleted in k8s_metadata to prevent re-creation by ListWatch
+	markDeleteQuery := `
+		UPDATE k8s_metadata m
+		SET deletion_timestamp = NOW()
+		FROM address_groups ag
+		WHERE ag.resource_version = m.resource_version
+		  AND (%s)
+		  AND m.deletion_timestamp IS NULL`
+
+	markQuery := fmt.Sprintf(markDeleteQuery, strings.Join(conditions, " OR "))
+	_, err := w.tx.Exec(ctx, markQuery, args...)
+	if err != nil {
+		// Log but don't fail - deletion_timestamp is optional for now
+		klog.V(4).InfoS("Failed to mark address groups as deleting in k8s_metadata", "error", err.Error())
+	}
+
+	// Then delete from address_groups table
 	query := fmt.Sprintf(`
 		DELETE FROM address_groups WHERE %s`,
 		strings.Join(conditions, " OR "))
@@ -278,7 +296,7 @@ func (w *Writer) upsertAddressGroupBinding(ctx context.Context, binding models.A
 	var resourceVersion int64
 	if existingResourceVersion.Valid {
 		metadataQuery := `
-			UPDATE k8s_metadata 
+			UPDATE k8s_metadata
 			SET labels = $1, annotations = $2, conditions = $3, updated_at = NOW()
 			WHERE resource_version = $4
 			RETURNING resource_version`
@@ -362,6 +380,23 @@ func (w *Writer) deleteAddressGroupBindingsByIdentifiers(ctx context.Context, id
 		argIndex += 2
 	}
 
+	// First, mark objects as being deleted in k8s_metadata to prevent re-creation by ListWatch
+	markDeleteQuery := `
+		UPDATE k8s_metadata m
+		SET deletion_timestamp = NOW()
+		FROM address_group_bindings agb
+		WHERE agb.resource_version = m.resource_version
+		  AND (%s)
+		  AND m.deletion_timestamp IS NULL`
+
+	markQuery := fmt.Sprintf(markDeleteQuery, strings.Join(conditions, " OR "))
+	_, err := w.tx.Exec(ctx, markQuery, args...)
+	if err != nil {
+		// Log but don't fail - deletion_timestamp is optional for now
+		klog.V(4).InfoS("Failed to mark address group bindings as deleting in k8s_metadata", "error", err.Error())
+	}
+
+	// Then delete from address_group_bindings table
 	query := fmt.Sprintf(`
 		DELETE FROM address_group_bindings WHERE %s`,
 		strings.Join(conditions, " OR "))
@@ -424,7 +459,7 @@ func (w *Writer) upsertAddressGroupPortMapping(ctx context.Context, mapping mode
 	if existingResourceVersion.Valid {
 		// UPDATE existing K8s metadata
 		metadataQuery := `
-			UPDATE k8s_metadata 
+			UPDATE k8s_metadata
 			SET labels = $1, annotations = $2, conditions = $3, updated_at = NOW()
 			WHERE resource_version = $4
 			RETURNING resource_version`
@@ -502,6 +537,23 @@ func (w *Writer) deleteAddressGroupPortMappingsByIdentifiers(ctx context.Context
 		argIndex += 2
 	}
 
+	// First, mark objects as being deleted in k8s_metadata to prevent re-creation by ListWatch
+	markDeleteQuery := `
+		UPDATE k8s_metadata m
+		SET deletion_timestamp = NOW()
+		FROM address_group_port_mappings agpm
+		WHERE agpm.resource_version = m.resource_version
+		  AND (%s)
+		  AND m.deletion_timestamp IS NULL`
+
+	markQuery := fmt.Sprintf(markDeleteQuery, strings.Join(conditions, " OR "))
+	_, err := w.tx.Exec(ctx, markQuery, args...)
+	if err != nil {
+		// Log but don't fail - deletion_timestamp is optional for now
+		klog.V(4).InfoS("Failed to mark address group port mappings as deleting in k8s_metadata", "error", err.Error())
+	}
+
+	// Then delete from address_group_port_mappings table
 	query := fmt.Sprintf(`
 		DELETE FROM address_group_port_mappings WHERE %s`,
 		strings.Join(conditions, " OR "))
@@ -557,7 +609,7 @@ func (w *Writer) upsertAddressGroupBindingPolicy(ctx context.Context, policy mod
 	if existingResourceVersion.Valid {
 		// UPDATE existing K8s metadata
 		metadataQuery := `
-			UPDATE k8s_metadata 
+			UPDATE k8s_metadata
 			SET labels = $1, annotations = $2, conditions = $3, updated_at = NOW()
 			WHERE resource_version = $4
 			RETURNING resource_version`
@@ -659,6 +711,23 @@ func (w *Writer) DeleteAddressGroupBindingPoliciesByIDs(ctx context.Context, ids
 		argIndex += 2
 	}
 
+	// First, mark objects as being deleted in k8s_metadata to prevent re-creation by ListWatch
+	markDeleteQuery := `
+		UPDATE k8s_metadata m
+		SET deletion_timestamp = NOW()
+		FROM address_group_binding_policies agbp
+		WHERE agbp.resource_version = m.resource_version
+		  AND (%s)
+		  AND m.deletion_timestamp IS NULL`
+
+	markQuery := fmt.Sprintf(markDeleteQuery, strings.Join(conditions, " OR "))
+	_, err := w.tx.Exec(ctx, markQuery, args...)
+	if err != nil {
+		// Log but don't fail - deletion_timestamp is optional for now
+		klog.V(4).InfoS("Failed to mark address group binding policies as deleting in k8s_metadata", "error", err.Error())
+	}
+
+	// Then delete from address_group_binding_policies table
 	query := fmt.Sprintf(`
 		DELETE FROM address_group_binding_policies WHERE %s`,
 		strings.Join(conditions, " OR "))

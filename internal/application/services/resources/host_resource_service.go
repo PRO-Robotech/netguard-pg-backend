@@ -316,95 +316,38 @@ func (s *HostResourceService) ListHosts(ctx context.Context, scope ports.Scope) 
 
 // SyncHosts synchronizes multiple hosts with the specified operation
 func (s *HostResourceService) SyncHosts(ctx context.Context, hosts []models.Host, scope ports.Scope, syncOp models.SyncOp) error {
-	switch syncOp {
-	case models.SyncOpFullSync:
-		return s.fullSyncHosts(ctx, hosts, scope)
-	case models.SyncOpUpsert:
-		return s.upsertHosts(ctx, hosts)
-	case models.SyncOpDelete:
-		return s.deleteHosts(ctx, hosts)
-	default:
-		return fmt.Errorf("unsupported sync operation: %v", syncOp)
-	}
-}
-
-// fullSyncHosts performs a full synchronization of hosts
-func (s *HostResourceService) fullSyncHosts(ctx context.Context, hosts []models.Host, scope ports.Scope) error {
-
-	// Get current hosts from registry
-	existingHosts, err := s.ListHosts(ctx, scope)
+	// Get writer from registry
+	writer, err := s.repo.Writer(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get existing hosts: %w", err)
+		return fmt.Errorf("failed to get writer: %w", err)
 	}
-
-	// Create maps for efficient lookup
-	incomingHosts := make(map[string]models.Host)
-	for _, host := range hosts {
-		incomingHosts[host.Key()] = host
-	}
-
-	existingHostsMap := make(map[string]models.Host)
-	for _, host := range existingHosts {
-		existingHostsMap[host.Key()] = host
-	}
-
-	// Process incoming hosts (create or update)
-	for _, host := range hosts {
-		if _, exists := existingHostsMap[host.Key()]; exists {
-			if err := s.UpdateHost(ctx, &host); err != nil {
-				return fmt.Errorf("failed to update host %s: %w", host.Key(), err)
-			}
-		} else {
-			if err := s.CreateHost(ctx, &host); err != nil {
-				return fmt.Errorf("failed to create host %s: %w", host.Key(), err)
-			}
+	defer func() {
+		if err != nil {
+			writer.Abort()
 		}
+	}()
+
+	// Call writer.SyncHosts directly with the hosts and syncOp
+	if err = writer.SyncHosts(ctx, hosts, scope, ports.WithSyncOp(syncOp)); err != nil {
+		return fmt.Errorf("failed to sync hosts: %w", err)
 	}
 
-	// Delete hosts that are no longer in the incoming set
-	for _, existingHost := range existingHosts {
-		if _, stillExists := incomingHosts[existingHost.Key()]; !stillExists {
-			if err := s.DeleteHost(ctx, existingHost.SelfRef.ResourceIdentifier); err != nil {
-				return fmt.Errorf("failed to delete host %s: %w", existingHost.Key(), err)
-			}
-		}
+	// Commit transaction
+	if err = writer.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	return nil
-}
+	// Handle external sync for each host if needed (skip for DELETE operations)
+	if syncOp != models.SyncOpDelete && s.syncManager != nil {
+		for i := range hosts {
+			syncErr := s.syncHostWithExternal(ctx, &hosts[i], types.SyncOperationUpsert)
 
-// upsertHosts creates or updates multiple hosts
-func (s *HostResourceService) upsertHosts(ctx context.Context, hosts []models.Host) error {
-
-	for _, host := range hosts {
-		// Check if host already exists
-		existing, err := s.getHostByID(ctx, host.Key())
-		if err != nil && !errors.Is(err, ports.ErrNotFound) {
-			return fmt.Errorf("failed to check existing host %s: %w", host.Key(), err)
-		}
-
-		if existing != nil {
-			// Update existing host
-			if err := s.UpdateHost(ctx, &host); err != nil {
-				return fmt.Errorf("failed to update host %s: %w", host.Key(), err)
+			// Process conditions after sync
+			if s.conditionManager != nil {
+				if err := s.conditionManager.ProcessHostConditions(ctx, &hosts[i], syncErr); err != nil {
+					// Don't fail the operation if condition processing fails
+				}
 			}
-		} else {
-			// Create new host
-			if err := s.CreateHost(ctx, &host); err != nil {
-				return fmt.Errorf("failed to create host %s: %w", host.Key(), err)
-			}
-		}
-	}
-
-	return nil
-}
-
-// deleteHosts deletes multiple hosts
-func (s *HostResourceService) deleteHosts(ctx context.Context, hosts []models.Host) error {
-
-	for _, host := range hosts {
-		if err := s.DeleteHost(ctx, host.SelfRef.ResourceIdentifier); err != nil {
-			return fmt.Errorf("failed to delete host %s: %w", host.Key(), err)
 		}
 	}
 

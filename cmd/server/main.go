@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"log"
 	"flag"
+	"log"
 	"net"
 	"net/http"
 	"os"

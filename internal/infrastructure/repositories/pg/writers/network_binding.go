@@ -2,12 +2,13 @@ package writers
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
+	"k8s.io/klog/v2"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -15,25 +16,47 @@ import (
 
 // SyncNetworkBindings syncs network bindings to PostgreSQL with K8s metadata support
 func (w *Writer) SyncNetworkBindings(ctx context.Context, networkBindings []models.NetworkBinding, scope ports.Scope, options ...ports.Option) error {
-	// Handle scoped sync - delete existing resources in scope first
-	if !scope.IsEmpty() {
+	// Extract sync operation from options
+	syncOp := models.SyncOpUpsert // Default operation
+	for _, opt := range options {
+		if syncOption, ok := opt.(ports.SyncOption); ok {
+			syncOp = syncOption.Operation
+			break
+		}
+	}
+
+	// Handle scoped sync - delete existing resources in scope first (for non-DELETE operations)
+	if !scope.IsEmpty() && syncOp != models.SyncOpDelete {
 		if err := w.deleteNetworkBindingsInScope(ctx, scope); err != nil {
 			return errors.Wrap(err, "failed to delete network bindings in scope")
 		}
 	}
 
-	// Upsert all provided network bindings
-	for i := range networkBindings {
-		// 🔧 CRITICAL FIX: Initialize metadata fields (UID, Generation, ObservedGeneration)
-		// This is what Memory backend does via ensureMetaFill() -> TouchOnCreate()
-		// Without this, PATCH operations fail because objInfo.UpdatedObject() needs UID
-		// IMPORTANT: Use index-based loop to modify original, not copy!
-		if networkBindings[i].Meta.UID == "" {
-			networkBindings[i].Meta.TouchOnCreate()
+	// Handle operations based on sync operation
+	switch syncOp {
+	case models.SyncOpDelete:
+		// For DELETE operations, delete the specific bindings
+		var identifiers []models.ResourceIdentifier
+		for _, binding := range networkBindings {
+			identifiers = append(identifiers, models.ResourceIdentifier{
+				Namespace: binding.Namespace,
+				Name:      binding.Name,
+			})
 		}
+		if err := w.DeleteNetworkBindingsByIDs(ctx, identifiers); err != nil {
+			return errors.Wrap(err, "failed to delete network bindings")
+		}
+	case models.SyncOpUpsert, models.SyncOpFullSync:
+		// For UPSERT/FULLSYNC operations, upsert all provided network bindings
+		for i := range networkBindings {
+			// Initialize metadata fields if not set
+			if networkBindings[i].Meta.UID == "" {
+				networkBindings[i].Meta.TouchOnCreate()
+			}
 
-		if err := w.upsertNetworkBinding(ctx, networkBindings[i]); err != nil {
-			return errors.Wrapf(err, "failed to upsert network binding %s/%s", networkBindings[i].Namespace, networkBindings[i].Name)
+			if err := w.upsertNetworkBinding(ctx, &networkBindings[i]); err != nil {
+				return errors.Wrapf(err, "failed to upsert network binding %s/%s", networkBindings[i].Namespace, networkBindings[i].Name)
+			}
 		}
 	}
 
@@ -41,7 +64,7 @@ func (w *Writer) SyncNetworkBindings(ctx context.Context, networkBindings []mode
 }
 
 // upsertNetworkBinding inserts or updates a network binding with full K8s metadata support
-func (w *Writer) upsertNetworkBinding(ctx context.Context, binding models.NetworkBinding) error {
+func (w *Writer) upsertNetworkBinding(ctx context.Context, binding *models.NetworkBinding) error {
 	// Marshal K8s metadata
 	labelsJSON, annotationsJSON, err := w.marshalLabelsAnnotations(binding.Meta.Labels, binding.Meta.Annotations)
 	if err != nil {
@@ -53,36 +76,22 @@ func (w *Writer) upsertNetworkBinding(ctx context.Context, binding models.Networ
 		return errors.Wrap(err, "failed to marshal conditions")
 	}
 
-	// First, check if network binding exists and get existing resource version
-	var existingResourceVersion sql.NullInt64
-	existingQuery := `SELECT resource_version FROM network_bindings WHERE namespace = $1 AND name = $2`
-	_ = w.tx.QueryRow(ctx, existingQuery, binding.Namespace, binding.Name).Scan(&existingResourceVersion)
-
+	// ALWAYS INSERT new K8s metadata (to get new ResourceVersion)
+	// PostgreSQL BIGSERIAL primary key only increments on INSERT, not UPDATE
 	var resourceVersion int64
-	if existingResourceVersion.Valid {
-		// UPDATE existing K8s metadata
-		metadataQuery := `
-			UPDATE k8s_metadata 
-			SET labels = $1, annotations = $2, conditions = $3, updated_at = NOW()
-			WHERE resource_version = $4
-			RETURNING resource_version`
-		err = w.tx.QueryRow(ctx, metadataQuery, labelsJSON, annotationsJSON, conditionsJSON, existingResourceVersion.Int64).Scan(&resourceVersion)
-		if err != nil {
-			return errors.Wrapf(err, "failed to update K8s metadata for network binding %s/%s", binding.Namespace, binding.Name)
-		}
-	} else {
-		// INSERT new K8s metadata
-		metadataQuery := `
-			INSERT INTO k8s_metadata (labels, annotations, finalizers, conditions)
-			VALUES ($1, $2, '{}', $3)
-			RETURNING resource_version`
-		err = w.tx.QueryRow(ctx, metadataQuery, labelsJSON, annotationsJSON, conditionsJSON).Scan(&resourceVersion)
-		if err != nil {
-			return errors.Wrapf(err, "failed to create K8s metadata for network binding %s/%s", binding.Namespace, binding.Name)
-		}
+	metadataQuery := `
+		INSERT INTO k8s_metadata (labels, annotations, finalizers, conditions)
+		VALUES ($1, $2, '{}', $3)
+		RETURNING resource_version`
+	err = w.tx.QueryRow(ctx, metadataQuery, labelsJSON, annotationsJSON, conditionsJSON).Scan(&resourceVersion)
+	if err != nil {
+		return errors.Wrapf(err, "failed to insert K8s metadata for network binding %s/%s", binding.Namespace, binding.Name)
 	}
 
-	// Then, upsert the network binding using the resource version
+	// Update domain model with new ResourceVersion from DB
+	binding.Meta.TouchOnWrite(strconv.FormatInt(resourceVersion, 10))
+
+	// Then, upsert the network binding using the NEW resource version
 	bindingQuery := `
 		INSERT INTO network_bindings (namespace, name, network_namespace, network_name, address_group_namespace, address_group_name, resource_version)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -146,6 +155,23 @@ func (w *Writer) DeleteNetworkBindingsByIDs(ctx context.Context, ids []models.Re
 		argIndex += 2
 	}
 
+	// First, mark objects as being deleted in k8s_metadata to prevent re-creation by ListWatch
+	markDeleteQuery := `
+		UPDATE k8s_metadata m
+		SET deletion_timestamp = NOW()
+		FROM network_bindings nb
+		WHERE nb.resource_version = m.resource_version
+		  AND (%s)
+		  AND m.deletion_timestamp IS NULL`
+
+	markQuery := fmt.Sprintf(markDeleteQuery, strings.Join(conditions, " OR "))
+	_, err := w.tx.Exec(ctx, markQuery, args...)
+	if err != nil {
+		// Log but don't fail - deletion_timestamp is optional for now
+		klog.V(4).InfoS("Failed to mark network bindings as deleting in k8s_metadata", "error", err.Error())
+	}
+
+	// Then delete from network_bindings table
 	query := fmt.Sprintf(`
 		DELETE FROM network_bindings WHERE %s`,
 		strings.Join(conditions, " OR "))

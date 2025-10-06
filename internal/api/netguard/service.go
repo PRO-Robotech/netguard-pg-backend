@@ -56,7 +56,6 @@ func (s *NetguardServiceServer) Sync(ctx context.Context, req *netguardpb.SyncRe
 			services = append(services, convertedService)
 		}
 
-
 		// Синхронизируем сервисы с указанной операцией
 		err = s.service.Sync(ctx, syncOp, services)
 		if err != nil {
@@ -880,7 +879,6 @@ func convertServiceToPB(svc models.Service) *netguardpb.Service {
 			},
 		})
 	}
-
 
 	// Convert AggregatedAddressGroups from domain to proto
 	if len(svc.AggregatedAddressGroups) > 0 {

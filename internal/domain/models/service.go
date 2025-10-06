@@ -14,7 +14,7 @@ type Service struct {
 	// AggregatedAddressGroups contains all address groups from both spec and bindings
 	AggregatedAddressGroups []AddressGroupReference
 
-	Meta          Meta
+	Meta Meta
 }
 
 // ServiceRef represents a reference to a Service

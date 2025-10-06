@@ -745,72 +745,13 @@ func (f *NetguardFacade) Sync(ctx context.Context, syncOp models.SyncOp, resourc
 	case []models.IEAgAgRule:
 		return f.ruleS2SResourceService.SyncIEAgAgRules(ctx, typedResources, ports.EmptyScope{})
 	case []models.Network:
-		// Handle different sync operations for Networks
-		for _, network := range typedResources {
-			switch syncOp {
-			case models.SyncOpDelete:
-				if err := f.networkResourceService.DeleteNetwork(ctx, network.SelfRef.ResourceIdentifier); err != nil {
-					return errors.Wrapf(err, "failed to delete network %s", network.Key())
-				}
-			case models.SyncOpUpsert, models.SyncOpFullSync:
-				if err := f.networkResourceService.CreateNetwork(ctx, &network); err != nil {
-					return errors.Wrapf(err, "failed to create network %s", network.Key())
-				}
-			default:
-				return errors.New(fmt.Sprintf("unsupported sync operation for Network: %v", syncOp))
-			}
-		}
-		return nil
+		return f.networkResourceService.SyncNetworks(ctx, typedResources, ports.EmptyScope{}, syncOp)
 	case []models.NetworkBinding:
-
-		// Handle different sync operations for NetworkBindings
-		for _, binding := range typedResources {
-			switch syncOp {
-			case models.SyncOpDelete:
-				if err := f.networkBindingResourceService.DeleteNetworkBinding(ctx, binding.SelfRef.ResourceIdentifier); err != nil {
-					return errors.Wrapf(err, "failed to delete network binding %s", binding.Key())
-				}
-			case models.SyncOpUpsert, models.SyncOpFullSync:
-				if err := f.networkBindingResourceService.CreateNetworkBinding(ctx, &binding); err != nil {
-					return errors.Wrapf(err, "failed to create network binding %s", binding.Key())
-				}
-			default:
-				return errors.New(fmt.Sprintf("unsupported sync operation for NetworkBinding: %v", syncOp))
-			}
-		}
-		return nil
+		return f.networkBindingResourceService.SyncNetworkBindings(ctx, typedResources, ports.EmptyScope{}, syncOp)
 	case []models.Host:
-		for _, host := range typedResources {
-			switch syncOp {
-			case models.SyncOpDelete:
-				if err := f.hostResourceService.DeleteHost(ctx, host.SelfRef.ResourceIdentifier); err != nil {
-					return errors.Wrapf(err, "failed to delete host %s", host.Key())
-				}
-			case models.SyncOpUpsert, models.SyncOpFullSync:
-				if err := f.hostResourceService.CreateHost(ctx, &host); err != nil {
-					return errors.Wrapf(err, "failed to create host %s", host.Key())
-				}
-			default:
-				return errors.New(fmt.Sprintf("unsupported sync operation for Host: %v", syncOp))
-			}
-		}
-		return nil
+		return f.hostResourceService.SyncHosts(ctx, typedResources, ports.EmptyScope{}, syncOp)
 	case []models.HostBinding:
-		for _, hostBinding := range typedResources {
-			switch syncOp {
-			case models.SyncOpDelete:
-				if err := f.hostBindingResourceService.DeleteHostBinding(ctx, hostBinding.SelfRef.ResourceIdentifier); err != nil {
-					return errors.Wrapf(err, "failed to delete host binding %s", hostBinding.Key())
-				}
-			case models.SyncOpUpsert, models.SyncOpFullSync:
-				if err := f.hostBindingResourceService.CreateHostBinding(ctx, &hostBinding); err != nil {
-					return errors.Wrapf(err, "failed to create host binding %s", hostBinding.Key())
-				}
-			default:
-				return errors.New(fmt.Sprintf("unsupported sync operation for HostBinding: %v", syncOp))
-			}
-		}
-		return nil
+		return f.hostBindingResourceService.SyncHostBindings(ctx, typedResources, ports.EmptyScope{}, syncOp)
 	default:
 		return errors.New(fmt.Sprintf("unsupported resource type: %T", resources))
 	}

@@ -728,7 +728,6 @@ func (s *AddressGroupResourceService) UpdateAddressGroupBinding(ctx context.Cont
 		}
 	}
 
-
 	if s.ruleS2SRegenerator != nil {
 		bindingID := models.ResourceIdentifier{Name: binding.Name, Namespace: binding.Namespace}
 		if err := s.ruleS2SRegenerator.RegenerateIEAgAgRulesForAddressGroupBinding(ctx, bindingID); err != nil {
@@ -1603,7 +1602,6 @@ func (s *AddressGroupResourceService) RegeneratePortMappingsForService(ctx conte
 		return nil
 	}
 
-
 	// Regenerate each affected AddressGroupPortMapping
 	for agKey, addressGroupRef := range addressGroupsToRegenerate {
 
@@ -2091,7 +2089,6 @@ func (s *AddressGroupResourceService) generateCompleteAddressGroupPortMapping(ct
 		return nil, errors.Wrapf(err, "failed to list services for AddressGroup %s", addressGroupRef.Key())
 	}
 
-
 	// Process all collected services
 	for _, service := range servicesToProcess {
 		// Add service ports to the mapping
@@ -2203,7 +2200,6 @@ func (s *AddressGroupResourceService) synchronizeServiceAddressGroups(ctx contex
 		}
 		return errors.Wrapf(err, "failed to get service %s for AddressGroups sync", serviceID.Key())
 	}
-
 
 	var writer ports.Writer
 	if registryWithConditions, ok := s.registry.(interface {
@@ -2547,7 +2543,6 @@ func (s *AddressGroupResourceService) syncHostChangesWithSGroup(ctx context.Cont
 	if len(addedHosts) == 0 && len(removedHosts) == 0 {
 		return nil
 	}
-
 
 	reader, err := s.registry.Reader(ctx)
 	if err != nil {

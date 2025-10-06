@@ -251,7 +251,6 @@ func (s *NetworkBindingResourceService) DeleteNetworkBinding(ctx context.Context
 		return nil
 	}
 
-
 	// Convert ObjectReference to ResourceIdentifier
 	networkRef := models.ResourceIdentifier{Name: existing.NetworkRef.Name, Namespace: existing.Namespace}
 	addressGroupRef := models.ResourceIdentifier{Name: existing.AddressGroupRef.Name, Namespace: existing.Namespace}
@@ -328,6 +327,42 @@ func (s *NetworkBindingResourceService) ListNetworkBindings(ctx context.Context,
 	}
 
 	return bindings, nil
+}
+
+// SyncNetworkBindings synchronizes multiple network bindings with the specified operation
+func (s *NetworkBindingResourceService) SyncNetworkBindings(ctx context.Context, bindings []models.NetworkBinding, scope ports.Scope, syncOp models.SyncOp) error {
+	// Get writer from registry
+	writer, err := s.repo.Writer(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get writer: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	// Call writer.SyncNetworkBindings directly with the bindings and syncOp
+	if err = writer.SyncNetworkBindings(ctx, bindings, scope, ports.WithSyncOp(syncOp)); err != nil {
+		return fmt.Errorf("failed to sync network bindings: %w", err)
+	}
+
+	// Commit transaction
+	if err = writer.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	// Process conditions for each binding if needed (skip for DELETE operations)
+	if syncOp != models.SyncOpDelete && s.conditionManager != nil {
+		for i := range bindings {
+			if err := s.conditionManager.ProcessNetworkBindingConditions(ctx, &bindings[i]); err != nil {
+				klog.Errorf("Failed to process network binding conditions for %s/%s: %v",
+					bindings[i].Namespace, bindings[i].Name, err)
+			}
+		}
+	}
+
+	return nil
 }
 
 // Helper methods
@@ -577,7 +612,6 @@ func (s *NetworkBindingResourceService) forceSyncAddressGroupWithSGroups(ctx con
 	if err != nil {
 		return fmt.Errorf("failed to get fresh AddressGroup %s: %w", addressGroupRef.Key(), err)
 	}
-
 
 	// Force sync with sgroups using SyncEntityForced (bypasses debouncing)
 	if s.syncManager != nil {

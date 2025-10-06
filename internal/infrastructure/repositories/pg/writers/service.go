@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	"k8s.io/klog/v2"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -38,8 +39,7 @@ func (w *Writer) SyncServices(ctx context.Context, services []models.Service, sc
 		}
 	}
 
-	// CRITICAL: For condition-only operations, only update k8s_metadata conditions
-	// Don't touch the main services table - just update conditions in the existing metadata
+	// For condition-only operations, only update k8s_metadata conditions
 	if isConditionOnly {
 		for _, service := range services {
 			if err := w.updateServiceConditionsOnly(ctx, service); err != nil {
@@ -284,6 +284,23 @@ func (w *Writer) deleteServicesByIdentifiers(ctx context.Context, identifiers []
 		argIndex += 2
 	}
 
+	// First, mark objects as being deleted in k8s_metadata to prevent re-creation by ListWatch
+	markDeleteQuery := `
+		UPDATE k8s_metadata m
+		SET deletion_timestamp = NOW()
+		FROM services s
+		WHERE s.resource_version = m.resource_version
+		  AND (%s)
+		  AND m.deletion_timestamp IS NULL`
+
+	markQuery := fmt.Sprintf(markDeleteQuery, strings.Join(conditions, " OR "))
+	_, err := w.tx.Exec(ctx, markQuery, args...)
+	if err != nil {
+		// Log but don't fail - deletion_timestamp is optional for now
+		klog.V(4).InfoS("Failed to mark services as deleting in k8s_metadata", "error", err.Error())
+	}
+
+	// Then delete from services table
 	query := fmt.Sprintf(`
 		DELETE FROM services WHERE %s`,
 		strings.Join(conditions, " OR "))
@@ -311,8 +328,7 @@ func (w *Writer) SyncServiceAliases(ctx context.Context, aliases []models.Servic
 		}
 	}
 
-	// CRITICAL: For condition-only operations, only update k8s_metadata conditions
-	// Don't touch the main service_alias table - just update conditions in the existing metadata
+	// For condition-only operations, only update k8s_metadata conditions
 	if isConditionOnly {
 		for _, alias := range aliases {
 			if err := w.updateServiceAliasConditionsOnly(ctx, alias); err != nil {
@@ -345,10 +361,7 @@ func (w *Writer) SyncServiceAliases(ctx context.Context, aliases []models.Servic
 	case models.SyncOpUpsert, models.SyncOpFullSync:
 		// For UPSERT/FULLSYNC operations, upsert all provided service aliases
 		for i := range aliases {
-			// Initialize metadata fields (UID, Generation, ObservedGeneration)
-			// This is what Memory backend does via ensureMetaFill() -> TouchOnCreate()
-			// Without this, PATCH operations fail because objInfo.UpdatedObject() needs UID
-			// IMPORTANT: Use index-based loop to modify original, not copy!
+			// Initialize metadata fields if not set
 			if aliases[i].Meta.UID == "" {
 				aliases[i].Meta.TouchOnCreate()
 			}
@@ -452,6 +465,23 @@ func (w *Writer) deleteServiceAliasesByIdentifiers(ctx context.Context, identifi
 		argIndex += 2
 	}
 
+	// First, mark objects as being deleted in k8s_metadata to prevent re-creation by ListWatch
+	markDeleteQuery := `
+		UPDATE k8s_metadata m
+		SET deletion_timestamp = NOW()
+		FROM service_aliases sa
+		WHERE sa.resource_version = m.resource_version
+		  AND (%s)
+		  AND m.deletion_timestamp IS NULL`
+
+	markQuery := fmt.Sprintf(markDeleteQuery, strings.Join(conditions, " OR "))
+	_, err := w.tx.Exec(ctx, markQuery, args...)
+	if err != nil {
+		// Log but don't fail - deletion_timestamp is optional for now
+		klog.V(4).InfoS("Failed to mark service aliases as deleting in k8s_metadata", "error", err.Error())
+	}
+
+	// Then delete from service_aliases table
 	query := fmt.Sprintf(`
 		DELETE FROM service_aliases WHERE %s`,
 		strings.Join(conditions, " OR "))
@@ -480,6 +510,23 @@ func (w *Writer) DeleteServiceAliasesByIDs(ctx context.Context, ids []models.Res
 		argIndex += 2
 	}
 
+	// First, mark objects as being deleted in k8s_metadata to prevent re-creation by ListWatch
+	markDeleteQuery := `
+		UPDATE k8s_metadata m
+		SET deletion_timestamp = NOW()
+		FROM service_aliases sa
+		WHERE sa.resource_version = m.resource_version
+		  AND (%s)
+		  AND m.deletion_timestamp IS NULL`
+
+	markQuery := fmt.Sprintf(markDeleteQuery, strings.Join(conditions, " OR "))
+	_, err := w.tx.Exec(ctx, markQuery, args...)
+	if err != nil {
+		// Log but don't fail - deletion_timestamp is optional for now
+		klog.V(4).InfoS("Failed to mark service aliases as deleting in k8s_metadata", "error", err.Error())
+	}
+
+	// Then delete from service_aliases table
 	query := fmt.Sprintf(`
 		DELETE FROM service_aliases WHERE %s`,
 		strings.Join(conditions, " OR "))

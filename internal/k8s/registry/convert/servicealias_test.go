@@ -34,12 +34,12 @@ func TestServiceAliasConverter_ToDomain(t *testing.T) {
 				},
 				Spec: netguardv1beta1.ServiceAliasSpec{
 					ServiceRef: netguardv1beta1.NamespacedObjectReference{
-					ObjectReference: netguardv1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind: "Service",
-						Name: "test-service",
+						ObjectReference: netguardv1beta1.ObjectReference{
+							APIVersion: "netguard.sgroups.io/v1beta1",
+							Kind:       "Service",
+							Name:       "test-service",
+						},
 					},
-				},
 				},
 				Status: netguardv1beta1.ServiceAliasStatus{
 					Conditions: []metav1.Condition{
@@ -93,12 +93,12 @@ func TestServiceAliasConverter_ToDomain(t *testing.T) {
 				},
 				Spec: netguardv1beta1.ServiceAliasSpec{
 					ServiceRef: netguardv1beta1.NamespacedObjectReference{
-					ObjectReference: netguardv1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind: "Service",
-						Name: "full-service",
+						ObjectReference: netguardv1beta1.ObjectReference{
+							APIVersion: "netguard.sgroups.io/v1beta1",
+							Kind:       "Service",
+							Name:       "full-service",
+						},
 					},
-				},
 				},
 				Status: netguardv1beta1.ServiceAliasStatus{
 					ObservedGeneration: 3,

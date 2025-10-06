@@ -17,7 +17,7 @@ import (
 // ListHostBindings lists host bindings with K8s metadata support
 func (r *Reader) ListHostBindings(ctx context.Context, consume func(models.HostBinding) error, scope ports.Scope) error {
 	query := `
-		SELECT hb.namespace, hb.name, 
+		SELECT hb.namespace, hb.name,
 		       hb.host_namespace, hb.host_name,
 		       hb.address_group_namespace, hb.address_group_name,
 		       m.resource_version, m.labels, m.annotations, m.conditions,
@@ -25,10 +25,15 @@ func (r *Reader) ListHostBindings(ctx context.Context, consume func(models.HostB
 		FROM host_bindings hb
 		INNER JOIN k8s_metadata m ON hb.resource_version = m.resource_version`
 
-	// Apply scope filtering
+	// Apply scope filtering and deletion_timestamp filter
 	whereClause, args := utils.BuildScopeFilter(scope, "hb")
+
+	// Always filter out objects being deleted
+	deletionFilter := "m.deletion_timestamp IS NULL"
 	if whereClause != "" {
-		query += " WHERE " + whereClause
+		query += " WHERE " + whereClause + " AND " + deletionFilter
+	} else {
+		query += " WHERE " + deletionFilter
 	}
 
 	query += " ORDER BY hb.namespace, hb.name"
@@ -56,7 +61,7 @@ func (r *Reader) ListHostBindings(ctx context.Context, consume func(models.HostB
 // GetHostBindingByID gets a host binding by ID
 func (r *Reader) GetHostBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.HostBinding, error) {
 	query := `
-		SELECT hb.namespace, hb.name, 
+		SELECT hb.namespace, hb.name,
 		       hb.host_namespace, hb.host_name,
 		       hb.address_group_namespace, hb.address_group_name,
 		       m.resource_version, m.labels, m.annotations, m.conditions,

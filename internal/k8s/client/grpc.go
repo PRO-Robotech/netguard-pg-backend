@@ -357,7 +357,6 @@ func (c *GRPCBackendClient) DeleteAddressGroupBinding(ctx context.Context, id mo
 		return fmt.Errorf("failed to get full binding for delete: %w", err)
 	}
 
-
 	// Now send the FULL object for deletion (like pre-refactoring)
 	return c.syncAddressGroupBinding(ctx, models.SyncOpDelete, []*models.AddressGroupBinding{fullBinding})
 }
@@ -568,7 +567,6 @@ func (c *GRPCBackendClient) DeleteRuleS2S(ctx context.Context, id models.Resourc
 		return fmt.Errorf("failed to get full rule for delete: %w", err)
 	}
 
-
 	// Now send the FULL object for deletion (like pre-refactoring)
 	return c.syncRuleS2S(ctx, models.SyncOpDelete, []*models.RuleS2S{fullRule})
 }
@@ -674,7 +672,6 @@ func (c *GRPCBackendClient) DeleteServiceAlias(ctx context.Context, id models.Re
 	if err != nil {
 		return fmt.Errorf("failed to get full alias for delete: %w", err)
 	}
-
 
 	// Now send the FULL object for deletion (like pre-refactoring)
 	return c.syncServiceAlias(ctx, models.SyncOpDelete, []*models.ServiceAlias{fullAlias})

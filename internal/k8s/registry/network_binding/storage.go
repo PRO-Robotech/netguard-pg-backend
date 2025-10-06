@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
@@ -42,6 +43,7 @@ type NetworkBindingStorage struct {
 
 // Compile-time interface assertions
 var _ rest.TableConvertor = &NetworkBindingStorage{}
+var _ rest.CollectionDeleter = &NetworkBindingStorage{}
 
 // NewNetworkBindingStorage creates a new NetworkBindingStorage using BaseStorage with NetguardService
 func NewNetworkBindingStorage(netguardService *services.NetguardFacade) *NetworkBindingStorage {
@@ -161,4 +163,48 @@ func networkBindingDurationShortHumanDuration(d time.Duration) string {
 		return fmt.Sprintf("%dh", int(d.Hours()))
 	}
 	return fmt.Sprintf("%dd", int(d.Hours()/24))
+}
+
+// DeleteCollection implements rest.CollectionDeleter
+func (s *NetworkBindingStorage) DeleteCollection(ctx context.Context, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions, listOptions *internalversion.ListOptions) (runtime.Object, error) {
+	obj, err := s.List(ctx, listOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	bindingList, ok := obj.(*netguardv1beta1.NetworkBindingList)
+	if !ok {
+		return nil, fmt.Errorf("unexpected object type from List: %T", obj)
+	}
+
+	deletedItems := &netguardv1beta1.NetworkBindingList{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "NetworkBindingList",
+			APIVersion: netguardv1beta1.SchemeGroupVersion.String(),
+		},
+	}
+
+	for i := range bindingList.Items {
+		binding := &bindingList.Items[i]
+
+		if deleteValidation != nil {
+			if err := deleteValidation(ctx, binding); err != nil {
+				return nil, err
+			}
+		}
+
+		_, _, err := s.Delete(ctx, binding.Name, deleteValidation, options)
+		if err != nil {
+			return nil, fmt.Errorf("failed to delete network binding %s: %w", binding.Name, err)
+		}
+
+		deletedItems.Items = append(deletedItems.Items, *binding)
+	}
+
+	return deletedItems, nil
+}
+
+// Kind implements rest.KindProvider
+func (s *NetworkBindingStorage) Kind() string {
+	return "NetworkBinding"
 }

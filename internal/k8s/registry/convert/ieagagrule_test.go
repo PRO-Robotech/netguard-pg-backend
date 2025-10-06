@@ -36,15 +36,15 @@ func TestIEAgAgRuleConverter_ToDomain(t *testing.T) {
 					Transport: netguardv1beta1.ProtocolTCP,
 					Traffic:   netguardv1beta1.INGRESS,
 					AddressGroupLocal: netguardv1beta1.NamespacedObjectReference{
-					ObjectReference: netguardv1beta1.ObjectReference{
-						Name: "local-ag",
+						ObjectReference: netguardv1beta1.ObjectReference{
+							Name: "local-ag",
+						},
 					},
-				},
 					AddressGroup: netguardv1beta1.NamespacedObjectReference{
-					ObjectReference: netguardv1beta1.ObjectReference{
-						Name: "remote-ag",
+						ObjectReference: netguardv1beta1.ObjectReference{
+							Name: "remote-ag",
+						},
 					},
-				},
 					Action: netguardv1beta1.ActionAccept,
 				},
 			},
@@ -89,15 +89,15 @@ func TestIEAgAgRuleConverter_ToDomain(t *testing.T) {
 					Transport: netguardv1beta1.ProtocolUDP,
 					Traffic:   netguardv1beta1.EGRESS,
 					AddressGroupLocal: netguardv1beta1.NamespacedObjectReference{
-					ObjectReference: netguardv1beta1.ObjectReference{
-						Name: "local-ag",
+						ObjectReference: netguardv1beta1.ObjectReference{
+							Name: "local-ag",
+						},
 					},
-				},
 					AddressGroup: netguardv1beta1.NamespacedObjectReference{
-					ObjectReference: netguardv1beta1.ObjectReference{
-						Name: "remote-ag",
+						ObjectReference: netguardv1beta1.ObjectReference{
+							Name: "remote-ag",
+						},
 					},
-				},
 					Ports: []netguardv1beta1.PortSpec{
 						{
 							Port: 80,
@@ -155,15 +155,15 @@ func TestIEAgAgRuleConverter_ToDomain(t *testing.T) {
 					Transport: netguardv1beta1.ProtocolTCP,
 					Traffic:   netguardv1beta1.INGRESS,
 					AddressGroupLocal: netguardv1beta1.NamespacedObjectReference{
-					ObjectReference: netguardv1beta1.ObjectReference{
-						Name: "local-ag",
+						ObjectReference: netguardv1beta1.ObjectReference{
+							Name: "local-ag",
+						},
 					},
-				},
 					AddressGroup: netguardv1beta1.NamespacedObjectReference{
-					ObjectReference: netguardv1beta1.ObjectReference{
-						Name: "remote-ag",
+						ObjectReference: netguardv1beta1.ObjectReference{
+							Name: "remote-ag",
+						},
 					},
-				},
 					Ports: []netguardv1beta1.PortSpec{
 						{
 							PortRange: &netguardv1beta1.PortRange{
@@ -234,15 +234,15 @@ func TestIEAgAgRuleConverter_ToDomain(t *testing.T) {
 					Transport: netguardv1beta1.ProtocolTCP,
 					Traffic:   netguardv1beta1.INGRESS,
 					AddressGroupLocal: netguardv1beta1.NamespacedObjectReference{
-					ObjectReference: netguardv1beta1.ObjectReference{
-						Name: "local-ag",
+						ObjectReference: netguardv1beta1.ObjectReference{
+							Name: "local-ag",
+						},
 					},
-				},
 					AddressGroup: netguardv1beta1.NamespacedObjectReference{
-					ObjectReference: netguardv1beta1.ObjectReference{
-						Name: "remote-ag",
+						ObjectReference: netguardv1beta1.ObjectReference{
+							Name: "remote-ag",
+						},
 					},
-				},
 					Action:   netguardv1beta1.ActionAccept,
 					Priority: 200,
 				},
@@ -317,15 +317,15 @@ func TestIEAgAgRuleConverter_ToDomain(t *testing.T) {
 					Transport: "INVALID",
 					Traffic:   netguardv1beta1.INGRESS,
 					AddressGroupLocal: netguardv1beta1.NamespacedObjectReference{
-					ObjectReference: netguardv1beta1.ObjectReference{
-						Name: "local-ag",
+						ObjectReference: netguardv1beta1.ObjectReference{
+							Name: "local-ag",
+						},
 					},
-				},
 					AddressGroup: netguardv1beta1.NamespacedObjectReference{
-					ObjectReference: netguardv1beta1.ObjectReference{
-						Name: "remote-ag",
+						ObjectReference: netguardv1beta1.ObjectReference{
+							Name: "remote-ag",
+						},
 					},
-				},
 					Action: netguardv1beta1.ActionAccept,
 				},
 			},
@@ -343,15 +343,15 @@ func TestIEAgAgRuleConverter_ToDomain(t *testing.T) {
 					Transport: netguardv1beta1.ProtocolTCP,
 					Traffic:   "INVALID",
 					AddressGroupLocal: netguardv1beta1.NamespacedObjectReference{
-					ObjectReference: netguardv1beta1.ObjectReference{
-						Name: "local-ag",
+						ObjectReference: netguardv1beta1.ObjectReference{
+							Name: "local-ag",
+						},
 					},
-				},
 					AddressGroup: netguardv1beta1.NamespacedObjectReference{
-					ObjectReference: netguardv1beta1.ObjectReference{
-						Name: "remote-ag",
+						ObjectReference: netguardv1beta1.ObjectReference{
+							Name: "remote-ag",
+						},
 					},
-				},
 					Action: netguardv1beta1.ActionAccept,
 				},
 			},
@@ -542,15 +542,15 @@ func TestIEAgAgRuleConverter_RoundTrip(t *testing.T) {
 					Transport: netguardv1beta1.ProtocolTCP,
 					Traffic:   netguardv1beta1.INGRESS,
 					AddressGroupLocal: netguardv1beta1.NamespacedObjectReference{
-					ObjectReference: netguardv1beta1.ObjectReference{
-						Name: "local-ag",
+						ObjectReference: netguardv1beta1.ObjectReference{
+							Name: "local-ag",
+						},
 					},
-				},
 					AddressGroup: netguardv1beta1.NamespacedObjectReference{
-					ObjectReference: netguardv1beta1.ObjectReference{
-						Name: "remote-ag",
+						ObjectReference: netguardv1beta1.ObjectReference{
+							Name: "remote-ag",
+						},
 					},
-				},
 					Action: netguardv1beta1.ActionAccept,
 				},
 			},
@@ -566,15 +566,15 @@ func TestIEAgAgRuleConverter_RoundTrip(t *testing.T) {
 					Transport: netguardv1beta1.ProtocolUDP,
 					Traffic:   netguardv1beta1.EGRESS,
 					AddressGroupLocal: netguardv1beta1.NamespacedObjectReference{
-					ObjectReference: netguardv1beta1.ObjectReference{
-						Name: "local-ag",
+						ObjectReference: netguardv1beta1.ObjectReference{
+							Name: "local-ag",
+						},
 					},
-				},
 					AddressGroup: netguardv1beta1.NamespacedObjectReference{
-					ObjectReference: netguardv1beta1.ObjectReference{
-						Name: "remote-ag",
+						ObjectReference: netguardv1beta1.ObjectReference{
+							Name: "remote-ag",
+						},
 					},
-				},
 					Ports: []netguardv1beta1.PortSpec{
 						{Port: 80},
 						{PortRange: &netguardv1beta1.PortRange{From: 8000, To: 8999}},
@@ -662,15 +662,15 @@ func TestIEAgAgRuleConverter_EnumConversions(t *testing.T) {
 					Transport: tc.k8sTransport,
 					Traffic:   tc.k8sTraffic,
 					AddressGroupLocal: netguardv1beta1.NamespacedObjectReference{
-					ObjectReference: netguardv1beta1.ObjectReference{
-						Name: "local-ag",
+						ObjectReference: netguardv1beta1.ObjectReference{
+							Name: "local-ag",
+						},
 					},
-				},
 					AddressGroup: netguardv1beta1.NamespacedObjectReference{
-					ObjectReference: netguardv1beta1.ObjectReference{
-						Name: "remote-ag",
+						ObjectReference: netguardv1beta1.ObjectReference{
+							Name: "remote-ag",
+						},
 					},
-				},
 					Action: tc.k8sAction,
 				},
 			}

@@ -362,7 +362,6 @@ func (s *ServiceResourceService) SyncServices(ctx context.Context, services []mo
 		}
 	}()
 
-
 	if err = s.syncServices(ctx, writer, services, syncOp); err != nil {
 		return errors.Wrap(err, "failed to sync services")
 	}
@@ -520,7 +519,6 @@ func (s *ServiceResourceService) DeleteServicesByIDs(ctx context.Context, ids []
 			return errors.Wrapf(err, "cannot delete Service %s", id.Key())
 		}
 	}
-
 
 	// 3. For each service to be deleted, regenerate port mappings for its AddressGroups
 	for _, id := range ids {
@@ -773,7 +771,6 @@ func (s *ServiceResourceService) DeleteServiceAliasesByIDs(ctx context.Context, 
 		}
 	}
 
-
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get writer")
@@ -799,7 +796,6 @@ func (s *ServiceResourceService) DeleteServiceAliasesByIDs(ctx context.Context, 
 
 // syncServices handles the actual synchronization logic
 func (s *ServiceResourceService) syncServices(ctx context.Context, writer ports.Writer, services []models.Service, syncOp models.SyncOp) error {
-
 
 	// This will delegate to writer which handles the actual persistence
 	// Use passed syncOp to handle services operations correctly
@@ -950,7 +946,6 @@ func (s *ServiceResourceService) reprocessDependentResourceConditions(ctx contex
 	}
 	defer reader.Close()
 
-
 	// Find ServiceAliases that reference this service
 	var dependentServiceAliases []models.ServiceAlias
 	err = reader.ListServiceAliases(ctx, func(alias models.ServiceAlias) error {
@@ -974,7 +969,6 @@ func (s *ServiceResourceService) reprocessDependentResourceConditions(ctx contex
 	if err != nil {
 		return errors.Wrap(err, "failed to find dependent AddressGroupBindings")
 	}
-
 
 	// Re-process conditions for ServiceAliases - this will detect broken references
 	if s.conditionManager != nil {

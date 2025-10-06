@@ -2,12 +2,13 @@ package writers
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
+	"k8s.io/klog/v2"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -30,25 +31,50 @@ func (e *UUIDAlreadyExistsError) Unwrap() error {
 
 // SyncHosts syncs hosts to PostgreSQL with K8s metadata support
 func (w *Writer) SyncHosts(ctx context.Context, hosts []models.Host, scope ports.Scope, options ...ports.Option) error {
-	// Handle scoped sync - delete existing resources in scope first
-	if !scope.IsEmpty() {
+	// Extract sync operation from options
+	syncOp := models.SyncOpUpsert // Default operation
+	for _, opt := range options {
+		if syncOption, ok := opt.(ports.SyncOption); ok {
+			syncOp = syncOption.Operation
+			break
+		}
+	}
+
+	// Handle scoped sync - delete existing resources in scope first (for non-DELETE operations)
+	if !scope.IsEmpty() && syncOp != models.SyncOpDelete {
 		if err := w.deleteHostsInScope(ctx, scope); err != nil {
 			return errors.Wrap(err, "failed to delete hosts in scope")
 		}
 	}
 
-	// Upsert each host
-	for _, host := range hosts {
-		if err := w.upsertHost(ctx, host); err != nil {
-			// Check for UUID uniqueness violation
-			if isUniqueViolation(err, "hosts_uuid_key") {
-				return &UUIDAlreadyExistsError{
-					UUID:     host.UUID,
-					HostName: fmt.Sprintf("%s/%s", host.Namespace, host.Name),
-					Err:      err,
+	// Handle operations based on sync operation
+	switch syncOp {
+	case models.SyncOpDelete:
+		// For DELETE operations, delete the specific hosts
+		var identifiers []models.ResourceIdentifier
+		for _, host := range hosts {
+			identifiers = append(identifiers, models.ResourceIdentifier{
+				Namespace: host.Namespace,
+				Name:      host.Name,
+			})
+		}
+		if err := w.DeleteHostsByIDs(ctx, identifiers); err != nil {
+			return errors.Wrap(err, "failed to delete hosts")
+		}
+	case models.SyncOpUpsert, models.SyncOpFullSync:
+		// For UPSERT/FULLSYNC operations, upsert all provided hosts
+		for i := range hosts {
+			if err := w.upsertHost(ctx, &hosts[i]); err != nil {
+				// Check for UUID uniqueness violation
+				if isUniqueViolation(err, "hosts_uuid_key") {
+					return &UUIDAlreadyExistsError{
+						UUID:     hosts[i].UUID,
+						HostName: fmt.Sprintf("%s/%s", hosts[i].Namespace, hosts[i].Name),
+						Err:      err,
+					}
 				}
+				return errors.Wrapf(err, "failed to upsert host %s/%s", hosts[i].Namespace, hosts[i].Name)
 			}
-			return errors.Wrapf(err, "failed to upsert host %s/%s", host.Namespace, host.Name)
 		}
 	}
 
@@ -56,7 +82,7 @@ func (w *Writer) SyncHosts(ctx context.Context, hosts []models.Host, scope ports
 }
 
 // upsertHost inserts or updates a host with K8s metadata
-func (w *Writer) upsertHost(ctx context.Context, host models.Host) error {
+func (w *Writer) upsertHost(ctx context.Context, host *models.Host) error {
 	// Marshal K8s metadata
 	labelsJSON, annotationsJSON, err := w.marshalLabelsAnnotations(host.Meta.Labels, host.Meta.Annotations)
 	if err != nil {
@@ -77,34 +103,20 @@ func (w *Writer) upsertHost(ctx context.Context, host models.Host) error {
 		}
 	}
 
-	// First, check if host exists and get existing resource version
-	var existingResourceVersion sql.NullInt64
-	existingQuery := `SELECT resource_version FROM hosts WHERE namespace = $1 AND name = $2`
-	_ = w.tx.QueryRow(ctx, existingQuery, host.Namespace, host.Name).Scan(&existingResourceVersion)
-
+	// ALWAYS INSERT new K8s metadata (to get new ResourceVersion)
+	// PostgreSQL BIGSERIAL primary key only increments on INSERT, not UPDATE
 	var resourceVersion int64
-	if existingResourceVersion.Valid {
-		// UPDATE existing K8s metadata
-		metadataQuery := `
-			UPDATE k8s_metadata 
-			SET labels = $1, annotations = $2, conditions = $3, updated_at = NOW()
-			WHERE resource_version = $4
-			RETURNING resource_version`
-		err = w.tx.QueryRow(ctx, metadataQuery, labelsJSON, annotationsJSON, conditionsJSON, existingResourceVersion.Int64).Scan(&resourceVersion)
-		if err != nil {
-			return errors.Wrapf(err, "failed to update K8s metadata for host %s/%s", host.Namespace, host.Name)
-		}
-	} else {
-		// INSERT new K8s metadata
-		metadataQuery := `
-			INSERT INTO k8s_metadata (labels, annotations, conditions)
-			VALUES ($1, $2, $3)
-			RETURNING resource_version`
-		err = w.tx.QueryRow(ctx, metadataQuery, labelsJSON, annotationsJSON, conditionsJSON).Scan(&resourceVersion)
-		if err != nil {
-			return errors.Wrapf(err, "failed to insert K8s metadata for host %s/%s", host.Namespace, host.Name)
-		}
+	metadataQuery := `
+		INSERT INTO k8s_metadata (labels, annotations, conditions)
+		VALUES ($1, $2, $3)
+		RETURNING resource_version`
+	err = w.tx.QueryRow(ctx, metadataQuery, labelsJSON, annotationsJSON, conditionsJSON).Scan(&resourceVersion)
+	if err != nil {
+		return errors.Wrapf(err, "failed to insert K8s metadata for host %s/%s", host.Namespace, host.Name)
 	}
+
+	// Update domain model with new ResourceVersion from DB
+	host.Meta.TouchOnWrite(strconv.FormatInt(resourceVersion, 10))
 
 	// Prepare nullable status fields
 	var hostNameSync, addressGroupName *string
@@ -130,7 +142,7 @@ func (w *Writer) upsertHost(ctx context.Context, host models.Host) error {
 		addressGroupRefName = &host.AddressGroupRef.Name
 	}
 
-	// UPSERT host record
+	// UPSERT host record with NEW resource version
 	hostQuery := `
 		INSERT INTO hosts (
 			namespace, name, uuid,
@@ -216,8 +228,25 @@ func (w *Writer) DeleteHostsByIDs(ctx context.Context, ids []models.ResourceIden
 		argIndex += 2
 	}
 
+	// First, mark objects as being deleted in k8s_metadata to prevent re-creation by ListWatch
+	markDeleteQuery := `
+		UPDATE k8s_metadata m
+		SET deletion_timestamp = NOW()
+		FROM hosts h
+		WHERE h.resource_version = m.resource_version
+		  AND (h.namespace, h.name) IN (%s)
+		  AND m.deletion_timestamp IS NULL`
+
+	markQuery := fmt.Sprintf(markDeleteQuery, strings.Join(values, ","))
+	_, err := w.tx.Exec(ctx, markQuery, args...)
+	if err != nil {
+		// Log but don't fail - deletion_timestamp is optional for now
+		klog.V(4).InfoS("Failed to mark hosts as deleting in k8s_metadata", "error", err.Error())
+	}
+
+	// Then delete from hosts table
 	query := fmt.Sprintf(`DELETE FROM hosts WHERE (namespace, name) IN (%s)`, strings.Join(values, ","))
-	_, err := w.tx.Exec(ctx, query, args...)
+	_, err = w.tx.Exec(ctx, query, args...)
 	if err != nil {
 		return errors.Wrap(err, "failed to delete hosts by IDs")
 	}

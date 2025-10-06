@@ -2,10 +2,13 @@ package pg
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"sync/atomic"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/pkg/errors"
+	"k8s.io/klog/v2"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -166,4 +169,75 @@ func (w *writer) SyncHostBindings(ctx context.Context, hostBindings []models.Hos
 
 func (w *writer) DeleteHostBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
 	return w.modularWriter.DeleteHostBindingsByIDs(ctx, ids)
+}
+
+// MarkAsDeleting sets deletion_timestamp for a resource in k8s_metadata
+// This prevents the resource from being re-created by backend ListWatch during deletion
+func (w *writer) MarkAsDeleting(resourceVersion string) error {
+	query := `
+		UPDATE k8s_metadata
+		SET deletion_timestamp = NOW()
+		WHERE resource_version = $1 AND deletion_timestamp IS NULL`
+
+	_, err := w.tx.Exec(w.ctx, query, resourceVersion)
+	return err
+}
+
+// MarkAsDeletingByName sets deletion_timestamp for a resource by namespace/name
+// This is called when Kubernetes sets DeletionTimestamp on an object
+func (w *writer) MarkAsDeletingByName(namespace, name, kind string) error {
+	query := `
+		UPDATE k8s_metadata
+		SET deletion_timestamp = NOW()
+		WHERE namespace = $1 AND name = $2 AND kind = $3 AND deletion_timestamp IS NULL`
+
+	result, err := w.tx.Exec(w.ctx, query, namespace, name, kind)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected := result.RowsAffected()
+	if rowsAffected > 0 {
+		klog.InfoS("✅ Marked resource as deleting by name",
+			"namespace", namespace,
+			"name", name,
+			"kind", kind,
+			"rowsAffected", rowsAffected)
+	}
+
+	return nil
+}
+
+// MarkAsDeletingBatch sets deletion_timestamp for multiple resources by resourceVersion
+// This is used by DeleteCollection to mark all resources before deletion
+func (w *writer) MarkAsDeletingBatch(resourceVersions []string) error {
+	if len(resourceVersions) == 0 {
+		return nil
+	}
+
+	// Build placeholders for IN clause
+	placeholders := make([]string, len(resourceVersions))
+	args := make([]interface{}, len(resourceVersions))
+	for i, rv := range resourceVersions {
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+		args[i] = rv
+	}
+
+	query := fmt.Sprintf(`
+		UPDATE k8s_metadata
+		SET deletion_timestamp = NOW()
+		WHERE resource_version IN (%s) AND deletion_timestamp IS NULL`,
+		strings.Join(placeholders, ", "))
+
+	result, err := w.tx.Exec(w.ctx, query, args...)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected := result.RowsAffected()
+	klog.InfoS("✅ Marked resources as deleting in batch",
+		"count", len(resourceVersions),
+		"rowsAffected", rowsAffected)
+
+	return nil
 }
