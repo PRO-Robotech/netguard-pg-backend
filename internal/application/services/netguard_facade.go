@@ -728,7 +728,6 @@ func (f *NetguardFacade) Sync(ctx context.Context, syncOp models.SyncOp, resourc
 	// Delegate to appropriate resource service based on resource type with proper syncOp
 	switch typedResources := resources.(type) {
 	case []models.Service:
-
 		return f.serviceResourceService.SyncServices(ctx, typedResources, ports.EmptyScope{}, syncOp)
 	case []models.AddressGroup:
 		return f.addressGroupResourceService.SyncAddressGroups(ctx, typedResources, ports.EmptyScope{}, syncOp)

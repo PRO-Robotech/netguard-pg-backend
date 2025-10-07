@@ -121,7 +121,7 @@ func main() {
 
 	// Setup gRPC server
 	grpcServer := grpc.NewServer()
-	netguardServer := netguard.NewNetguardServiceServer(netguardFacade)
+	netguardServer := netguard.NewServiceServer(netguardFacade)
 	netguardpb.RegisterNetguardServiceServer(grpcServer, netguardServer)
 
 	// Register gRPC health check service
