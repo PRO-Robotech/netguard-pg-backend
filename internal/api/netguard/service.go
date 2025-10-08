@@ -9,6 +9,7 @@ import (
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
 
 	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // ServiceServer implements the NetguardService gRPC interface
@@ -97,4 +98,15 @@ func (s *ServiceServer) ListHostBindings(ctx context.Context, req *netguardpb.Li
 
 func (s *ServiceServer) GetHost(ctx context.Context, req *netguardpb.GetHostReq) (*netguardpb.GetHostResp, error) {
 	return s.hostHandler.GetHost(ctx, req)
+}
+
+func (s *ServiceServer) SyncStatus(ctx context.Context, _ *emptypb.Empty) (*netguardpb.SyncStatusResp, error) {
+	status, err := s.service.GetSyncStatus(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &netguardpb.SyncStatusResp{
+		UpdatedAt: timestamppb.New(status.UpdatedAt),
+	}, nil
 }
