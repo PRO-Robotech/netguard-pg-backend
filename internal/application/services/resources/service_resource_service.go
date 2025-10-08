@@ -153,7 +153,6 @@ func (s *ServiceResourceService) CreateService(ctx context.Context, service mode
 		}
 	}()
 
-	// Sync service (this will create it)
 	if err = s.syncServices(ctx, writer, []models.Service{service}, models.SyncOpUpsert); err != nil {
 		return errors.Wrap(err, "failed to create service")
 	}

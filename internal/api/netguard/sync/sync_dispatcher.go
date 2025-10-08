@@ -33,7 +33,6 @@ func (d *Dispatcher) Sync(ctx context.Context, req *netguardpb.SyncReq) (*emptyp
 	return &emptypb.Empty{}, nil
 }
 
-// convertSyncOp converts protobuf SyncOp to domain model
 func (d *Dispatcher) convertSyncOp(op netguardpb.SyncOp) models.SyncOp {
 	switch op {
 	case netguardpb.SyncOp_Upsert:

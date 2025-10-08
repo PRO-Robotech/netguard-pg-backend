@@ -83,8 +83,16 @@ func (s *ServiceServer) GetNetwork(ctx context.Context, req *netguardpb.GetNetwo
 	return s.networkHandler.GetNetwork(ctx, req)
 }
 
+func (s *ServiceServer) ListNetworkBindings(ctx context.Context, req *netguardpb.ListNetworkBindingsReq) (*netguardpb.ListNetworkBindingsResp, error) {
+	return s.networkHandler.ListNetworkBindings(ctx, req)
+}
+
 func (s *ServiceServer) ListHosts(ctx context.Context, req *netguardpb.ListHostsReq) (*netguardpb.ListHostsResp, error) {
 	return s.hostHandler.ListHosts(ctx, req)
+}
+
+func (s *ServiceServer) ListHostBindings(ctx context.Context, req *netguardpb.ListHostBindingsReq) (*netguardpb.ListHostBindingsResp, error) {
+	return s.hostHandler.ListHostBindings(ctx, req)
 }
 
 func (s *ServiceServer) GetHost(ctx context.Context, req *netguardpb.GetHostReq) (*netguardpb.GetHostResp, error) {

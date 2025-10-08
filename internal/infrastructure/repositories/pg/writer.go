@@ -64,14 +64,10 @@ func (w *writer) Abort() {
 	}
 }
 
-// GetTx returns the underlying transaction (used by ReaderFromWriter)
 func (w *writer) GetTx() pgx.Tx {
 	return w.tx
 }
 
-// Implemented resource methods - delegated to modular writers
-
-// Service methods - delegated to writers/service.go
 func (w *writer) SyncServices(ctx context.Context, services []models.Service, scope ports.Scope, opts ...ports.Option) error {
 	return w.modularWriter.SyncServices(ctx, services, scope, opts...)
 }
@@ -88,7 +84,6 @@ func (w *writer) DeleteServiceAliasesByIDs(ctx context.Context, ids []models.Res
 	return w.modularWriter.DeleteServiceAliasesByIDs(ctx, ids, opts...)
 }
 
-// AddressGroup methods - delegated to writers/address_group.go
 func (w *writer) SyncAddressGroups(ctx context.Context, addressGroups []models.AddressGroup, scope ports.Scope, opts ...ports.Option) error {
 	return w.modularWriter.SyncAddressGroups(ctx, addressGroups, scope, opts...)
 }
@@ -120,8 +115,6 @@ func (w *writer) DeleteAddressGroupPortMappingsByIDs(ctx context.Context, ids []
 func (w *writer) DeleteAddressGroupBindingPoliciesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
 	return w.modularWriter.DeleteAddressGroupBindingPoliciesByIDs(ctx, ids, opts...)
 }
-
-// Placeholder methods for not-yet-implemented resources
 
 func (w *writer) SyncRuleS2S(ctx context.Context, rules []models.RuleS2S, scope ports.Scope, opts ...ports.Option) error {
 	return w.modularWriter.SyncRuleS2S(ctx, rules, scope, opts...)

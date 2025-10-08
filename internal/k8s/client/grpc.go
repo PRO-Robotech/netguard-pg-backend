@@ -20,7 +20,6 @@ import (
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/klog/v2"
 )
 
 // GRPCBackendClient базовый gRPC клиент
@@ -145,15 +144,6 @@ func (c *GRPCBackendClient) syncService(ctx context.Context, syncOp models.SyncO
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
 
-	// DEBUG: логируем содержимое ingressPorts, чтобы отследить пустые порты
-	for _, s := range services {
-		var parts []string
-		for _, p := range s.IngressPorts {
-			parts = append(parts, fmt.Sprintf("%s:%s", p.Protocol, p.Port))
-		}
-		klog.V(2).Infof("syncService op=%s ns=%q name=%q ports=%v", syncOp.String(), s.Namespace, s.Name, parts)
-	}
-
 	protoServices := make([]*netguardpb.Service, 0, len(services))
 	for _, svc := range services {
 		protoServices = append(protoServices, convertServiceToProto(*svc))
@@ -177,18 +167,14 @@ func (c *GRPCBackendClient) syncService(ctx context.Context, syncOp models.SyncO
 			},
 		},
 	}
-	klog.V(2).Infof("GRPCBackendClient.syncService sending Sync len=%d op=%s", len(services), syncOp.String())
 	_, err := c.client.Sync(ctx, req)
 	if err != nil {
-		klog.V(2).Infof("GRPCBackendClient.syncService error: %v", err)
 		return fmt.Errorf("failed to sync services: %w", err)
 	}
-	klog.V(2).Infof("GRPCBackendClient.syncService OK op=%s", syncOp.String())
 	return nil
 }
 
 func (c *GRPCBackendClient) GetAddressGroup(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroup, error) {
-	klog.V(4).Infof("GRPCBackendClient.GetAddressGroup ns=%q name=%q", id.Namespace, id.Name)
 	if !c.limiter.Allow() {
 		return nil, fmt.Errorf("rate limit exceeded")
 	}
@@ -202,7 +188,6 @@ func (c *GRPCBackendClient) GetAddressGroup(ctx context.Context, id models.Resou
 	}
 	resp, err := c.client.GetAddressGroup(ctx, req)
 	if err != nil {
-		klog.V(2).Infof("GRPC GetAddressGroup returned error: %v", err)
 		return nil, fmt.Errorf("failed to get address group: %w", err)
 	}
 	addressGroup := convertAddressGroupFromProto(resp.AddressGroup)
@@ -351,13 +336,12 @@ func (c *GRPCBackendClient) UpdateAddressGroupBinding(ctx context.Context, bindi
 }
 
 func (c *GRPCBackendClient) DeleteAddressGroupBinding(ctx context.Context, id models.ResourceIdentifier) error {
-	// ✅ FIX: First get the full object like pre-refactoring implementation
+	// Get full object before deletion to ensure all fields are populated
 	fullBinding, err := c.GetAddressGroupBinding(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to get full binding for delete: %w", err)
 	}
 
-	// Now send the FULL object for deletion (like pre-refactoring)
 	return c.syncAddressGroupBinding(ctx, models.SyncOpDelete, []*models.AddressGroupBinding{fullBinding})
 }
 
@@ -561,13 +545,11 @@ func (c *GRPCBackendClient) UpdateRuleS2S(ctx context.Context, rule *models.Rule
 }
 
 func (c *GRPCBackendClient) DeleteRuleS2S(ctx context.Context, id models.ResourceIdentifier) error {
-	// ✅ FIX: First get the full object like pre-refactoring implementation
 	fullRule, err := c.GetRuleS2S(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to get full rule for delete: %w", err)
 	}
 
-	// Now send the FULL object for deletion (like pre-refactoring)
 	return c.syncRuleS2S(ctx, models.SyncOpDelete, []*models.RuleS2S{fullRule})
 }
 
@@ -667,13 +649,11 @@ func (c *GRPCBackendClient) UpdateServiceAlias(ctx context.Context, alias *model
 }
 
 func (c *GRPCBackendClient) DeleteServiceAlias(ctx context.Context, id models.ResourceIdentifier) error {
-	// ✅ FIX: First get the full object like pre-refactoring implementation
 	fullAlias, err := c.GetServiceAlias(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to get full alias for delete: %w", err)
 	}
 
-	// Now send the FULL object for deletion (like pre-refactoring)
 	return c.syncServiceAlias(ctx, models.SyncOpDelete, []*models.ServiceAlias{fullAlias})
 }
 
@@ -706,14 +686,8 @@ func (c *GRPCBackendClient) syncServiceAlias(ctx context.Context, syncOp models.
 			},
 		},
 	}
-	klog.V(2).Infof("GRPCBackendClient.syncServiceAlias sending Sync len=%d op=%s", len(aliases), syncOp.String())
 	_, err := c.client.Sync(ctx, req)
-	if err != nil {
-		klog.V(2).Infof("GRPCBackendClient.syncServiceAlias error: %v", err)
-	} else {
-		klog.V(2).Infof("GRPCBackendClient.syncServiceAlias OK op=%s", syncOp.String())
-	}
-	return nil
+	return err
 }
 
 func (c *GRPCBackendClient) GetAddressGroupBindingPolicy(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
@@ -776,7 +750,7 @@ func (c *GRPCBackendClient) UpdateAddressGroupBindingPolicy(ctx context.Context,
 }
 
 func (c *GRPCBackendClient) DeleteAddressGroupBindingPolicy(ctx context.Context, id models.ResourceIdentifier) error {
-	// ✅ FIX: First get the full object like pre-refactoring implementation
+	// Get full object before deletion to ensure all fields are populated
 	fullPolicy, err := c.GetAddressGroupBindingPolicy(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to get full policy for delete: %w", err)
@@ -904,9 +878,6 @@ func (c *GRPCBackendClient) GetNetwork(ctx context.Context, id models.ResourceId
 		return nil, fmt.Errorf("failed to get network: %w", err)
 	}
 	network := convertNetworkFromProto(resp.Network)
-	if network.BindingRef != nil {
-	} else {
-	}
 	return &network, nil
 }
 
@@ -1263,8 +1234,7 @@ func (c *GRPCBackendClient) Ping(ctx context.Context) error {
 
 // UpdateMeta методы для всех ресурсов
 func (c *GRPCBackendClient) UpdateServiceMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
-	// TODO: Реализовать когда backend добавит UpdateMeta endpoints
-	// На данный момент используем обычный Update через GetService + UpdateService
+	// Uses standard update flow (Get + Update) until backend provides dedicated UpdateMeta endpoint
 	service, err := c.GetService(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to get service for meta update: %w", err)
@@ -1356,8 +1326,6 @@ func (c *GRPCBackendClient) UpdateNetworkBindingMeta(ctx context.Context, id mod
 
 // Helper методы для subresources (оптимизированные запросы)
 func (c *GRPCBackendClient) ListAddressGroupsForService(ctx context.Context, serviceID models.ResourceIdentifier) ([]models.AddressGroup, error) {
-	klog.V(4).Infof("GRPCBackendClient.ListAddressGroupsForService serviceID=%s/%s", serviceID.Namespace, serviceID.Name)
-
 	// Получаем все bindings, которые ссылаются на этот Service
 	scope := ports.NewResourceIdentifierScope(serviceID)
 	bindings, err := c.ListAddressGroupBindings(ctx, scope)
@@ -1382,20 +1350,15 @@ func (c *GRPCBackendClient) ListAddressGroupsForService(ctx context.Context, ser
 	for _, agID := range addressGroupIDs {
 		ag, err := c.GetAddressGroup(ctx, agID)
 		if err != nil {
-			klog.V(2).Infof("Failed to get address group %s/%s: %v", agID.Namespace, agID.Name, err)
 			continue // Пропускаем недоступные, но продолжаем
 		}
 		addressGroups = append(addressGroups, *ag)
 	}
 
-	klog.V(4).Infof("GRPCBackendClient.ListAddressGroupsForService found %d address groups for service %s/%s",
-		len(addressGroups), serviceID.Namespace, serviceID.Name)
 	return addressGroups, nil
 }
 
 func (c *GRPCBackendClient) ListRuleS2SDstOwnRef(ctx context.Context, serviceID models.ResourceIdentifier) ([]models.RuleS2S, error) {
-	klog.V(4).Infof("GRPCBackendClient.ListRuleS2SDstOwnRef serviceID=%s/%s", serviceID.Namespace, serviceID.Name)
-
 	// Получаем все RuleS2S правила
 	allRules, err := c.ListRuleS2S(ctx, nil)
 	if err != nil {
@@ -1413,14 +1376,10 @@ func (c *GRPCBackendClient) ListRuleS2SDstOwnRef(ctx context.Context, serviceID 
 		}
 	}
 
-	klog.V(4).Infof("GRPCBackendClient.ListRuleS2SDstOwnRef found %d cross-namespace rules for service %s/%s",
-		len(crossNamespaceRules), serviceID.Namespace, serviceID.Name)
 	return crossNamespaceRules, nil
 }
 
 func (c *GRPCBackendClient) ListAccessPorts(ctx context.Context, mappingID models.ResourceIdentifier) ([]models.ServicePortsRef, error) {
-	klog.V(4).Infof("GRPCBackendClient.ListAccessPorts mappingID=%s/%s", mappingID.Namespace, mappingID.Name)
-
 	// Получаем AddressGroupPortMapping
 	mapping, err := c.GetAddressGroupPortMapping(ctx, mappingID)
 	if err != nil {
@@ -1437,8 +1396,6 @@ func (c *GRPCBackendClient) ListAccessPorts(ctx context.Context, mappingID model
 		servicePortsRefs = append(servicePortsRefs, servicePortsRef)
 	}
 
-	klog.V(4).Infof("GRPCBackendClient.ListAccessPorts found %d service ports refs for mapping %s/%s",
-		len(servicePortsRefs), mappingID.Namespace, mappingID.Name)
 	return servicePortsRefs, nil
 }
 
@@ -1658,8 +1615,7 @@ func (c *GRPCBackendClient) syncHostBinding(ctx context.Context, syncOp models.S
 }
 
 func (c *GRPCBackendClient) UpdateHostMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
-	// TODO: Реализовать когда backend добавит UpdateMeta endpoints
-	// На данный момент используем обычный Update через GetHost + UpdateHost
+	// Uses standard update flow (Get + Update) until backend provides dedicated UpdateMeta endpoint
 	host, err := c.GetHost(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to get host for meta update: %w", err)
