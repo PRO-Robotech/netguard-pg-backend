@@ -56,6 +56,8 @@ func (a *HostConverterAdapter) ToList(ctx context.Context, domainObjs []*models.
 // HostStorage implements REST storage for Host resources using BaseStorage
 type HostStorage struct {
 	*base.BaseStorage[*netguardv1beta1.Host, *models.Host]
+	backendClient client.BackendClient // Direct access to backend for sync operations
+	converter     *HostConverterAdapter
 }
 
 // NewHostStorage creates a new HostStorage using BaseStorage
@@ -80,33 +82,59 @@ func NewHostStorage(backendClient client.BackendClient) *HostStorage {
 	)
 
 	storage := &HostStorage{
-		BaseStorage: baseStorage,
+		BaseStorage:   baseStorage,
+		backendClient: backendClient,
+		converter:     converter,
 	}
 
 	return storage
 }
 
-// handleHostCreate implements custom logic when a Host is created
-func (s *HostStorage) handleHostCreate(ctx context.Context, obj *netguardv1beta1.Host, domainObj *models.Host) error {
+func (s *HostStorage) Delete(ctx context.Context, name string, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions) (runtime.Object, bool, error) {
+	obj, err := s.Get(ctx, name, &metav1.GetOptions{})
+	if err != nil {
+		return nil, false, err
+	}
 
-	// Initialize Host as unbound initially
+	host, ok := obj.(*netguardv1beta1.Host)
+	if !ok {
+		return s.BaseStorage.Delete(ctx, name, deleteValidation, options)
+	}
+
+	domainObj, err := s.converter.ToDomain(ctx, host)
+	if err != nil {
+		return s.BaseStorage.Delete(ctx, name, deleteValidation, options)
+	}
+
+	deleted, async, err := s.BaseStorage.Delete(ctx, name, deleteValidation, options)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if err := s.handleHostDelete(ctx, host, domainObj); err != nil {
+		return deleted, async, nil
+	}
+
+	return deleted, async, nil
+}
+
+func (s *HostStorage) handleHostCreate(ctx context.Context, obj *netguardv1beta1.Host, domainObj *models.Host) error {
 	obj.Status.IsBound = false
 	obj.Status.BindingRef = nil
 	obj.Status.AddressGroupRef = nil
 	obj.Status.AddressGroupName = ""
-
 	return nil
 }
 
-// handleHostUpdate implements custom logic when a Host is updated
 func (s *HostStorage) handleHostUpdate(ctx context.Context, obj, oldObj *netguardv1beta1.Host, domainObj *models.Host) error {
-
 	return nil
 }
 
-// handleHostDelete implements custom logic when a Host is deleted
 func (s *HostStorage) handleHostDelete(ctx context.Context, obj *netguardv1beta1.Host, domainObj *models.Host) error {
-
+	hosts := []models.Host{*domainObj}
+	if err := s.backendClient.Sync(ctx, models.SyncOpDelete, hosts); err != nil {
+		return fmt.Errorf("failed to sync host deletion to SGROUP: %w", err)
+	}
 	return nil
 }
 

@@ -113,6 +113,15 @@ func (r *Reader) scanAddressGroup(rows pgx.Rows) (models.AddressGroup, error) {
 		if err := json.Unmarshal(networksJSON, &addressGroup.Networks); err != nil {
 			return addressGroup, errors.Wrap(err, "failed to unmarshal networks")
 		}
+		// Ensure Kind and ApiVersion are set for all NetworkItems
+		for i := range addressGroup.Networks {
+			if addressGroup.Networks[i].Kind == "" {
+				addressGroup.Networks[i].Kind = "Network"
+			}
+			if addressGroup.Networks[i].ApiVersion == "" {
+				addressGroup.Networks[i].ApiVersion = "netguard.sgroups.io/v1beta1"
+			}
+		}
 	}
 
 	if len(hostsJSON) > 0 {
@@ -178,6 +187,15 @@ func (r *Reader) scanAddressGroupRow(row pgx.Row) (*models.AddressGroup, error) 
 	if len(networksJSON) > 0 {
 		if err := json.Unmarshal(networksJSON, &addressGroup.Networks); err != nil {
 			return nil, errors.Wrap(err, "failed to unmarshal networks")
+		}
+		// Ensure Kind and ApiVersion are set for all NetworkItems
+		for i := range addressGroup.Networks {
+			if addressGroup.Networks[i].Kind == "" {
+				addressGroup.Networks[i].Kind = "Network"
+			}
+			if addressGroup.Networks[i].ApiVersion == "" {
+				addressGroup.Networks[i].ApiVersion = "netguard.sgroups.io/v1beta1"
+			}
 		}
 	}
 

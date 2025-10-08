@@ -103,11 +103,13 @@ func (s *HostBindingResourceService) CreateHostBinding(ctx context.Context, host
 	}
 
 	if err := s.hostResourceService.UpdateHostBinding(ctx, hostRef, bindingID, addressGroupRef); err != nil {
+		return fmt.Errorf("failed to update host binding status: %w", err)
 	}
 
 	// Process conditions after binding operations
 	if s.conditionManager != nil {
 		if err := s.conditionManager.ProcessHostBindingConditions(ctx, hostBinding, nil); err != nil {
+			// Don't fail the operation if condition processing fails
 		}
 	}
 

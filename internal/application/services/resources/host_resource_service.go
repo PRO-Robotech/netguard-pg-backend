@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/klog/v2"
+
 	"netguard-pg-backend/internal/application/utils"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -89,18 +91,13 @@ func (s *HostResourceService) CreateHost(ctx context.Context, host *models.Host)
 	// Process conditions after sync (so sync result can be included in conditions)
 	if s.conditionManager != nil {
 		if err := s.conditionManager.ProcessHostConditions(ctx, host, syncErr); err != nil {
-		}
-
-		// Update the host status with conditions in the database
-		if updateErr := s.updateHostStatus(ctx, host); updateErr != nil {
+			klog.Errorf("Failed to process host conditions for %s/%s: %v",
+				host.Namespace, host.Name, err)
+			// Don't fail the operation if condition processing fails
 		}
 	}
 
-	if syncErr != nil {
-		return fmt.Errorf("host created but SGROUP sync failed: %w", syncErr)
-	}
-
-	return nil
+	return syncErr
 }
 
 // UpdateHost updates an existing Host
@@ -132,24 +129,17 @@ func (s *HostResourceService) UpdateHost(ctx context.Context, host *models.Host)
 
 	// Sync with external systems
 	syncErr := s.syncHostWithExternal(ctx, host, types.SyncOperationUpsert)
-	if syncErr != nil {
-		// Continue with condition processing even if sync fails
-	} else {
-	}
 
 	// Process conditions after sync
 	if s.conditionManager != nil {
 		if err := s.conditionManager.ProcessHostConditions(ctx, host, syncErr); err != nil {
-		}
-
-		if updateErr := s.updateHostStatus(ctx, host); updateErr != nil {
+			klog.Errorf("Failed to process host conditions for %s/%s: %v",
+				host.Namespace, host.Name, err)
+			// Don't fail the operation if condition processing fails
 		}
 	}
 
-	if syncErr != nil {
-	}
-
-	return nil
+	return syncErr
 }
 
 // DeleteHost deletes a Host by resource identifier with cascading deletion of HostBinding
@@ -275,16 +265,13 @@ func (s *HostResourceService) DeleteHost(ctx context.Context, id models.Resource
 				Name:      addressGroupToSync.Name,
 				Namespace: addressGroupToSync.Namespace,
 			}); err == nil && updatedAG != nil {
-				if syncErr := s.syncManager.SyncEntityForced(ctx, updatedAG, types.SyncOperationUpsert); syncErr != nil {
-				}
+				_ = s.syncManager.SyncEntityForced(ctx, updatedAG, types.SyncOperationUpsert)
 			}
 			reader.Close()
 		}
 	}
 
-	err = s.syncHostWithExternal(ctx, existing, types.SyncOperationDelete)
-	if err != nil {
-	}
+	_ = s.syncHostWithExternal(ctx, existing, types.SyncOperationDelete)
 	return nil
 }
 
@@ -337,15 +324,16 @@ func (s *HostResourceService) SyncHosts(ctx context.Context, hosts []models.Host
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	// Handle external sync for each host if needed (skip for DELETE operations)
-	if syncOp != models.SyncOpDelete && s.syncManager != nil {
-		for i := range hosts {
-			syncErr := s.syncHostWithExternal(ctx, &hosts[i], types.SyncOperationUpsert)
-
-			// Process conditions after sync
-			if s.conditionManager != nil {
-				if err := s.conditionManager.ProcessHostConditions(ctx, &hosts[i], syncErr); err != nil {
-					// Don't fail the operation if condition processing fails
+	if s.syncManager != nil {
+		if syncOp == models.SyncOpDelete {
+			for i := range hosts {
+				_ = s.syncHostWithExternal(ctx, &hosts[i], types.SyncOperationDelete)
+			}
+		} else {
+			for i := range hosts {
+				syncErr := s.syncHostWithExternal(ctx, &hosts[i], types.SyncOperationUpsert)
+				if s.conditionManager != nil {
+					_ = s.conditionManager.ProcessHostConditions(ctx, &hosts[i], syncErr)
 				}
 			}
 		}
@@ -467,12 +455,10 @@ func (s *HostResourceService) syncHostWithExternal(ctx context.Context, host *mo
 
 	if err != nil {
 		s.syncTracker.RecordFailure(syncKey, err)
-		utils.SetSyncFailedCondition(host, err)
 		return fmt.Errorf("failed to sync with external system: %w", err)
 	}
 
 	s.syncTracker.RecordSuccess(syncKey)
-	utils.SetSyncSuccessCondition(host)
 	return nil
 }
 
@@ -531,9 +517,6 @@ func (s *HostResourceService) UpdateHostBinding(ctx context.Context, hostID mode
 
 	// Update metadata
 	host.GetMeta().TouchOnWrite(fmt.Sprintf("%d", time.Now().UnixNano()))
-
-	// Set success condition
-	utils.SetSyncSuccessCondition(host)
 
 	// Sync the updated host
 	hosts := []models.Host{*host}

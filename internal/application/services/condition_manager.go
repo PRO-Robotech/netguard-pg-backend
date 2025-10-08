@@ -712,6 +712,101 @@ func (cm *ConditionManager) ProcessNetworkBindingConditions(ctx context.Context,
 	return nil
 }
 
+func (cm *ConditionManager) ProcessHostConditions(ctx context.Context, host *models.Host, syncResult error) error {
+	host.Meta.ClearErrorCondition()
+	host.Meta.TouchOnWrite("v1")
+
+	reader, err := cm.registry.Reader(ctx)
+	if err != nil {
+		klog.Errorf("ConditionManager: Failed to get reader for %s/%s: %v", host.Namespace, host.Name, err)
+		host.Meta.SetErrorCondition(models.ReasonBackendError, fmt.Sprintf("Failed to get reader for validation: %v", err))
+		host.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Backend validation unavailable")
+		return nil
+	}
+	defer reader.Close()
+
+	if syncResult != nil {
+		klog.Errorf("ConditionManager: sgroups sync failed for %s/%s: %v", host.Namespace, host.Name, syncResult)
+		host.Meta.SetSyncedCondition(metav1.ConditionFalse, models.ReasonSyncFailed, fmt.Sprintf("Failed to sync with sgroups: %v", syncResult))
+		host.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Host sync with external source failed")
+		host.Meta.SetValidatedCondition(metav1.ConditionFalse, models.ReasonValidating, "Validation skipped due to sync failure")
+		return nil
+	}
+
+	host.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Host committed to backend and synced with sgroups successfully")
+	host.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "Host passed validation")
+	host.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Host is ready for use")
+
+	if err := cm.saveHostConditions(ctx, host); err != nil {
+		klog.Errorf("ConditionManager: Failed to save conditions for host %s/%s: %v", host.Namespace, host.Name, err)
+		return nil
+	}
+
+	return nil
+}
+
+// ProcessHostBindingConditions формирует условия для HostBinding ПОСЛЕ успешного commit
+func (cm *ConditionManager) ProcessHostBindingConditions(ctx context.Context, binding *models.HostBinding, syncResult error) error {
+	binding.Meta.ClearErrorCondition()
+	binding.Meta.TouchOnWrite("v1")
+
+	reader, err := cm.registry.Reader(ctx)
+	if err != nil {
+		klog.Errorf("ConditionManager: Failed to get reader for %s/%s: %v", binding.Namespace, binding.Name, err)
+		binding.Meta.SetErrorCondition(models.ReasonBackendError, fmt.Sprintf("Failed to get reader for validation: %v", err))
+		binding.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Backend validation unavailable")
+		return nil
+	}
+	defer reader.Close()
+
+	// syncResult is ignored for HostBinding as it doesn't sync with external systems
+	binding.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "HostBinding committed to backend successfully")
+
+	// Проверяем Host
+	hostID := models.ResourceIdentifier{Name: binding.HostRef.Name, Namespace: binding.Namespace}
+	_, err = reader.GetHostByID(ctx, hostID)
+	if err == ports.ErrNotFound {
+		klog.Errorf("ConditionManager: Host %s not found for %s/%s", hostID.Key(), binding.Namespace, binding.Name)
+		binding.Meta.SetErrorCondition(models.ReasonDependencyError, fmt.Sprintf("Host %s not found", hostID.Key()))
+		binding.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Referenced Host not found")
+		binding.Meta.SetValidatedCondition(metav1.ConditionFalse, models.ReasonValidationFailed, "Host validation failed")
+		return nil
+	} else if err != nil {
+		klog.Errorf("ConditionManager: Failed to check Host %s for %s/%s: %v", hostID.Key(), binding.Namespace, binding.Name, err)
+		binding.Meta.SetErrorCondition(models.ReasonDependencyError, fmt.Sprintf("Failed to check Host %s: %v", hostID.Key(), err))
+		binding.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Host validation failed")
+		binding.Meta.SetValidatedCondition(metav1.ConditionFalse, models.ReasonValidationFailed, "Host validation failed")
+		return nil
+	}
+
+	// Проверяем AddressGroup
+	addressGroupID := models.ResourceIdentifier{Name: binding.AddressGroupRef.Name, Namespace: binding.Namespace}
+	_, err = reader.GetAddressGroupByID(ctx, addressGroupID)
+	if err == ports.ErrNotFound {
+		klog.Errorf("ConditionManager: AddressGroup %s not found for %s/%s", addressGroupID.Key(), binding.Namespace, binding.Name)
+		binding.Meta.SetErrorCondition(models.ReasonDependencyError, fmt.Sprintf("AddressGroup %s not found", addressGroupID.Key()))
+		binding.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Referenced AddressGroup not found")
+		binding.Meta.SetValidatedCondition(metav1.ConditionFalse, models.ReasonValidationFailed, "AddressGroup validation failed")
+		return nil
+	} else if err != nil {
+		klog.Errorf("ConditionManager: Failed to check AddressGroup %s for %s/%s: %v", addressGroupID.Key(), binding.Namespace, binding.Name, err)
+		binding.Meta.SetErrorCondition(models.ReasonDependencyError, fmt.Sprintf("Failed to check AddressGroup %s: %v", addressGroupID.Key(), err))
+		binding.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "AddressGroup validation failed")
+		binding.Meta.SetValidatedCondition(metav1.ConditionFalse, models.ReasonValidationFailed, "AddressGroup validation failed")
+		return nil
+	}
+
+	binding.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "HostBinding passed validation")
+	binding.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "HostBinding is ready for use")
+
+	if err := cm.saveHostBindingConditions(ctx, binding); err != nil {
+		klog.Errorf("ConditionManager: Failed to save conditions for host binding %s/%s: %v", binding.Namespace, binding.Name, err)
+		return nil
+	}
+
+	return nil
+}
+
 func (cm *ConditionManager) validateServicesHaveAddressGroups(ctx context.Context, reader ports.Reader, rule *models.RuleS2S, localServiceID, targetServiceID models.ResourceIdentifier) error {
 	localService, err := reader.GetServiceByID(ctx, localServiceID)
 	if err != nil {
@@ -837,6 +932,18 @@ func (cm *ConditionManager) SetDefaultConditions(resource interface{}) {
 		r.Meta.SetValidatedCondition(metav1.ConditionUnknown, models.ReasonPending, "Validation pending")
 		r.Meta.SetSyncedCondition(metav1.ConditionUnknown, models.ReasonPending, "Synchronization pending")
 		r.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonPending, "NetworkBinding is being processed")
+
+	case *models.Host:
+		r.Meta.TouchOnCreate()
+		r.Meta.SetValidatedCondition(metav1.ConditionUnknown, models.ReasonPending, "Validation pending")
+		r.Meta.SetSyncedCondition(metav1.ConditionUnknown, models.ReasonPending, "Synchronization pending")
+		r.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonPending, "Host is being processed")
+
+	case *models.HostBinding:
+		r.Meta.TouchOnCreate()
+		r.Meta.SetValidatedCondition(metav1.ConditionUnknown, models.ReasonPending, "Validation pending")
+		r.Meta.SetSyncedCondition(metav1.ConditionUnknown, models.ReasonPending, "Synchronization pending")
+		r.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonPending, "HostBinding is being processed")
 	}
 }
 
@@ -856,6 +963,48 @@ func (cm *ConditionManager) saveNetworkConditions(ctx context.Context, network *
 	if err := writer.Commit(); err != nil {
 		writer.Abort()
 		return fmt.Errorf("failed to commit network conditions: %w", err)
+	}
+
+	return nil
+}
+
+func (cm *ConditionManager) saveHostConditions(ctx context.Context, host *models.Host) error {
+	writer, err := cm.registry.Writer(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get writer for saving host conditions: %w", err)
+	}
+
+	scope := ports.NewResourceIdentifierScope(host.ResourceIdentifier)
+
+	if err := writer.SyncHosts(ctx, []models.Host{*host}, scope, ports.ConditionOnlyOperation{}); err != nil {
+		writer.Abort()
+		return fmt.Errorf("failed to sync host with conditions: %w", err)
+	}
+
+	if err := writer.Commit(); err != nil {
+		writer.Abort()
+		return fmt.Errorf("failed to commit host conditions: %w", err)
+	}
+
+	return nil
+}
+
+func (cm *ConditionManager) saveHostBindingConditions(ctx context.Context, binding *models.HostBinding) error {
+	writer, err := cm.registry.Writer(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get writer for saving host binding conditions: %w", err)
+	}
+
+	scope := ports.NewResourceIdentifierScope(binding.ResourceIdentifier)
+
+	if err := writer.SyncHostBindings(ctx, []models.HostBinding{*binding}, scope, ports.ConditionOnlyOperation{}); err != nil {
+		writer.Abort()
+		return fmt.Errorf("failed to sync host binding with conditions: %w", err)
+	}
+
+	if err := writer.Commit(); err != nil {
+		writer.Abort()
+		return fmt.Errorf("failed to commit host binding conditions: %w", err)
 	}
 
 	return nil

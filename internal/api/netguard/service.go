@@ -52,12 +52,44 @@ func (s *ServiceServer) GetService(ctx context.Context, req *netguardpb.GetServi
 	return s.serviceHandler.GetService(ctx, req)
 }
 
+func (s *ServiceServer) ListServiceAliases(ctx context.Context, req *netguardpb.ListServiceAliasesReq) (*netguardpb.ListServiceAliasesResp, error) {
+	return s.serviceHandler.ListServiceAliases(ctx, req)
+}
+
+func (s *ServiceServer) GetServiceAlias(ctx context.Context, req *netguardpb.GetServiceAliasReq) (*netguardpb.GetServiceAliasResp, error) {
+	return s.serviceHandler.GetServiceAlias(ctx, req)
+}
+
 func (s *ServiceServer) ListAddressGroups(ctx context.Context, req *netguardpb.ListAddressGroupsReq) (*netguardpb.ListAddressGroupsResp, error) {
 	return s.addressGroupHandler.ListAddressGroups(ctx, req)
 }
 
 func (s *ServiceServer) GetAddressGroup(ctx context.Context, req *netguardpb.GetAddressGroupReq) (*netguardpb.GetAddressGroupResp, error) {
 	return s.addressGroupHandler.GetAddressGroup(ctx, req)
+}
+
+func (s *ServiceServer) ListAddressGroupBindings(ctx context.Context, req *netguardpb.ListAddressGroupBindingsReq) (*netguardpb.ListAddressGroupBindingsResp, error) {
+	return s.addressGroupHandler.ListAddressGroupBindings(ctx, req)
+}
+
+func (s *ServiceServer) GetAddressGroupBinding(ctx context.Context, req *netguardpb.GetAddressGroupBindingReq) (*netguardpb.GetAddressGroupBindingResp, error) {
+	return s.addressGroupHandler.GetAddressGroupBinding(ctx, req)
+}
+
+func (s *ServiceServer) ListAddressGroupPortMappings(ctx context.Context, req *netguardpb.ListAddressGroupPortMappingsReq) (*netguardpb.ListAddressGroupPortMappingsResp, error) {
+	return s.addressGroupHandler.ListAddressGroupPortMappings(ctx, req)
+}
+
+func (s *ServiceServer) GetAddressGroupPortMapping(ctx context.Context, req *netguardpb.GetAddressGroupPortMappingReq) (*netguardpb.GetAddressGroupPortMappingResp, error) {
+	return s.addressGroupHandler.GetAddressGroupPortMapping(ctx, req)
+}
+
+func (s *ServiceServer) ListAddressGroupBindingPolicies(ctx context.Context, req *netguardpb.ListAddressGroupBindingPoliciesReq) (*netguardpb.ListAddressGroupBindingPoliciesResp, error) {
+	return s.addressGroupHandler.ListAddressGroupBindingPolicies(ctx, req)
+}
+
+func (s *ServiceServer) GetAddressGroupBindingPolicy(ctx context.Context, req *netguardpb.GetAddressGroupBindingPolicyReq) (*netguardpb.GetAddressGroupBindingPolicyResp, error) {
+	return s.addressGroupHandler.GetAddressGroupBindingPolicy(ctx, req)
 }
 
 func (s *ServiceServer) ListRuleS2S(ctx context.Context, req *netguardpb.ListRuleS2SReq) (*netguardpb.ListRuleS2SResp, error) {
@@ -88,6 +120,10 @@ func (s *ServiceServer) ListNetworkBindings(ctx context.Context, req *netguardpb
 	return s.networkHandler.ListNetworkBindings(ctx, req)
 }
 
+func (s *ServiceServer) GetNetworkBinding(ctx context.Context, req *netguardpb.GetNetworkBindingReq) (*netguardpb.GetNetworkBindingResp, error) {
+	return s.networkHandler.GetNetworkBinding(ctx, req)
+}
+
 func (s *ServiceServer) ListHosts(ctx context.Context, req *netguardpb.ListHostsReq) (*netguardpb.ListHostsResp, error) {
 	return s.hostHandler.ListHosts(ctx, req)
 }
@@ -98,6 +134,10 @@ func (s *ServiceServer) ListHostBindings(ctx context.Context, req *netguardpb.Li
 
 func (s *ServiceServer) GetHost(ctx context.Context, req *netguardpb.GetHostReq) (*netguardpb.GetHostResp, error) {
 	return s.hostHandler.GetHost(ctx, req)
+}
+
+func (s *ServiceServer) GetHostBinding(ctx context.Context, req *netguardpb.GetHostBindingReq) (*netguardpb.GetHostBindingResp, error) {
+	return s.hostHandler.GetHostBinding(ctx, req)
 }
 
 func (s *ServiceServer) SyncStatus(ctx context.Context, _ *emptypb.Empty) (*netguardpb.SyncStatusResp, error) {
