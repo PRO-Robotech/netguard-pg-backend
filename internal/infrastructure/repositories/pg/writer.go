@@ -2,6 +2,8 @@ package pg
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"sync/atomic"
 
 	"github.com/jackc/pgx/v5"
@@ -19,9 +21,9 @@ type writer struct {
 	registry      *Registry
 	tx            pgx.Tx
 	ctx           context.Context
-	modularWriter *writers.Writer    // Delegate to modular writer
-	affectedRows  *int64             // Track affected rows (sgroups pattern)
-	txHolder      *atm.Value[pgx.Tx] // Atomic transaction holder (sgroups pattern)
+	modularWriter *writers.Writer
+	affectedRows  *int64
+	txHolder      *atm.Value[pgx.Tx]
 }
 
 // Close closes the writer
@@ -29,7 +31,6 @@ func (w *writer) Close() error {
 	return nil // Transaction lifecycle managed by Commit/Abort
 }
 
-// Commit commits the transaction with sgroups-style affected rows tracking
 func (w *writer) Commit() error {
 	if w.txHolder == nil {
 		return errors.New("writer closed")
@@ -38,10 +39,7 @@ func (w *writer) Commit() error {
 	var err error = errors.New("writer closed")
 
 	w.txHolder.Clear(func(tx pgx.Tx) {
-		// Track affected rows like sgroups
 		if n := atomic.AddInt64(w.affectedRows, 0); n > 0 {
-			// TODO: Add sync status update when implemented
-			// For now, just commit the transaction
 		}
 
 		if err = tx.Commit(w.ctx); err != nil {
@@ -61,14 +59,10 @@ func (w *writer) Abort() {
 	}
 }
 
-// GetTx returns the underlying transaction (used by ReaderFromWriter)
 func (w *writer) GetTx() pgx.Tx {
 	return w.tx
 }
 
-// Implemented resource methods - delegated to modular writers
-
-// Service methods - delegated to writers/service.go
 func (w *writer) SyncServices(ctx context.Context, services []models.Service, scope ports.Scope, opts ...ports.Option) error {
 	return w.modularWriter.SyncServices(ctx, services, scope, opts...)
 }
@@ -85,7 +79,6 @@ func (w *writer) DeleteServiceAliasesByIDs(ctx context.Context, ids []models.Res
 	return w.modularWriter.DeleteServiceAliasesByIDs(ctx, ids, opts...)
 }
 
-// AddressGroup methods - delegated to writers/address_group.go
 func (w *writer) SyncAddressGroups(ctx context.Context, addressGroups []models.AddressGroup, scope ports.Scope, opts ...ports.Option) error {
 	return w.modularWriter.SyncAddressGroups(ctx, addressGroups, scope, opts...)
 }
@@ -117,8 +110,6 @@ func (w *writer) DeleteAddressGroupPortMappingsByIDs(ctx context.Context, ids []
 func (w *writer) DeleteAddressGroupBindingPoliciesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
 	return w.modularWriter.DeleteAddressGroupBindingPoliciesByIDs(ctx, ids, opts...)
 }
-
-// Placeholder methods for not-yet-implemented resources
 
 func (w *writer) SyncRuleS2S(ctx context.Context, rules []models.RuleS2S, scope ports.Scope, opts ...ports.Option) error {
 	return w.modularWriter.SyncRuleS2S(ctx, rules, scope, opts...)
@@ -166,4 +157,53 @@ func (w *writer) SyncHostBindings(ctx context.Context, hostBindings []models.Hos
 
 func (w *writer) DeleteHostBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
 	return w.modularWriter.DeleteHostBindingsByIDs(ctx, ids)
+}
+
+// MarkAsDeleting sets deletion_timestamp for a resource in k8s_metadata
+// This prevents the resource from being re-created by backend ListWatch during deletion
+func (w *writer) MarkAsDeleting(resourceVersion string) error {
+	query := `
+		UPDATE k8s_metadata
+		SET deletion_timestamp = NOW()
+		WHERE resource_version = $1 AND deletion_timestamp IS NULL`
+
+	_, err := w.tx.Exec(w.ctx, query, resourceVersion)
+	return err
+}
+
+// MarkAsDeletingByName sets deletion_timestamp for a resource by namespace/name
+// This is called when Kubernetes sets DeletionTimestamp on an object
+func (w *writer) MarkAsDeletingByName(namespace, name, kind string) error {
+	query := `
+		UPDATE k8s_metadata
+		SET deletion_timestamp = NOW()
+		WHERE namespace = $1 AND name = $2 AND kind = $3 AND deletion_timestamp IS NULL`
+
+	_, err := w.tx.Exec(w.ctx, query, namespace, name, kind)
+	return err
+}
+
+// MarkAsDeletingBatch sets deletion_timestamp for multiple resources by resourceVersion
+// This is used by DeleteCollection to mark all resources before deletion
+func (w *writer) MarkAsDeletingBatch(resourceVersions []string) error {
+	if len(resourceVersions) == 0 {
+		return nil
+	}
+
+	// Build placeholders for IN clause
+	placeholders := make([]string, len(resourceVersions))
+	args := make([]interface{}, len(resourceVersions))
+	for i, rv := range resourceVersions {
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+		args[i] = rv
+	}
+
+	query := fmt.Sprintf(`
+		UPDATE k8s_metadata
+		SET deletion_timestamp = NOW()
+		WHERE resource_version IN (%s) AND deletion_timestamp IS NULL`,
+		strings.Join(placeholders, ", "))
+
+	_, err := w.tx.Exec(w.ctx, query, args...)
+	return err
 }

@@ -10,8 +10,11 @@ const (
 	// SyncOperationFullSync - full synchronization (delete + insert + update)
 	SyncOperationFullSync SyncOperation = "FullSync"
 
-	// SyncOperationUpsert - insert and update only
+	// SyncOperationUpsert - insert and update only (for creation operations)
 	SyncOperationUpsert SyncOperation = "Upsert"
+
+	// SyncOperationUpdate - update only (for existing resources)
+	SyncOperationUpdate SyncOperation = "Update"
 
 	// SyncOperationDelete - delete only
 	SyncOperationDelete SyncOperation = "Delete"

@@ -23,10 +23,15 @@ func (r *Reader) ListAddressGroupBindingPolicies(ctx context.Context, consume fu
 		FROM address_group_binding_policies agbp
 		INNER JOIN k8s_metadata m ON agbp.resource_version = m.resource_version`
 
-	// Apply scope filtering
+	// Apply scope filtering and deletion_timestamp filter
 	whereClause, args := utils.BuildScopeFilter(scope, "agbp")
+
+	// Always filter out objects being deleted
+	deletionFilter := "m.deletion_timestamp IS NULL"
 	if whereClause != "" {
-		query += " WHERE " + whereClause
+		query += " WHERE " + whereClause + " AND " + deletionFilter
+	} else {
+		query += " WHERE " + deletionFilter
 	}
 
 	query += " ORDER BY agbp.namespace, agbp.name"

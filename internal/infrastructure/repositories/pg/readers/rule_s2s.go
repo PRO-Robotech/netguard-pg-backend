@@ -24,10 +24,15 @@ func (r *Reader) ListRuleS2S(ctx context.Context, consume func(models.RuleS2S) e
 		FROM rule_s2s rs
 		INNER JOIN k8s_metadata m ON rs.resource_version = m.resource_version`
 
-	// Apply scope filtering
+	// Apply scope filtering and deletion_timestamp filter
 	whereClause, args := utils.BuildScopeFilter(scope, "rs")
+
+	// Always filter out objects being deleted
+	deletionFilter := "m.deletion_timestamp IS NULL"
 	if whereClause != "" {
-		query += " WHERE " + whereClause
+		query += " WHERE " + whereClause + " AND " + deletionFilter
+	} else {
+		query += " WHERE " + deletionFilter
 	}
 
 	query += " ORDER BY rs.namespace, rs.name"

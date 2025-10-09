@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"k8s.io/klog/v2"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -29,8 +30,7 @@ func (w *Writer) SyncRuleS2S(ctx context.Context, rules []models.RuleS2S, scope 
 		}
 	}
 
-	// CRITICAL: For condition-only operations, only update k8s_metadata conditions
-	// Don't touch the main rule_s2s table - just update conditions in the existing metadata
+	// For condition-only operations, only update k8s_metadata conditions
 	if isConditionOnly {
 		for _, rule := range rules {
 			if err := w.updateRuleS2SConditionsOnly(ctx, rule); err != nil {
@@ -63,10 +63,7 @@ func (w *Writer) SyncRuleS2S(ctx context.Context, rules []models.RuleS2S, scope 
 
 	// Upsert all provided rules (for CREATE/UPDATE operations)
 	for i := range rules {
-		// Initialize metadata fields (UID, Generation, ObservedGeneration)
-		// This is what Memory backend does via ensureMetaFill() -> TouchOnCreate()
-		// Without this, PATCH operations fail because objInfo.UpdatedObject() needs UID
-		// IMPORTANT: Use index-based loop to modify original, not copy!
+		// Initialize metadata fields if not set
 		if rules[i].Meta.UID == "" {
 			rules[i].Meta.TouchOnCreate()
 		}
@@ -209,6 +206,23 @@ func (w *Writer) DeleteRuleS2SByIDs(ctx context.Context, ids []models.ResourceId
 		argIndex += 2
 	}
 
+	// First, mark objects as being deleted in k8s_metadata to prevent re-creation by ListWatch
+	markDeleteQuery := `
+		UPDATE k8s_metadata m
+		SET deletion_timestamp = NOW()
+		FROM rule_s2s rs
+		WHERE rs.resource_version = m.resource_version
+		  AND (%s)
+		  AND m.deletion_timestamp IS NULL`
+
+	markQuery := fmt.Sprintf(markDeleteQuery, strings.Join(conditions, " OR "))
+	_, err := w.tx.Exec(ctx, markQuery, args...)
+	if err != nil {
+		// Log but don't fail - deletion_timestamp is optional for now
+		klog.V(4).InfoS("Failed to mark rule s2s as deleting in k8s_metadata", "error", err.Error())
+	}
+
+	// Then delete from rule_s2s table
 	query := fmt.Sprintf(`
 		DELETE FROM rule_s2s WHERE %s`,
 		strings.Join(conditions, " OR "))

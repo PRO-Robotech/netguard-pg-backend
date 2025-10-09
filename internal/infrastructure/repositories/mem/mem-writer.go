@@ -822,7 +822,6 @@ func (w *writer) DeleteAddressGroupBindingsByIDs(ctx context.Context, ids []mode
 		}
 	}
 
-
 	return nil
 }
 

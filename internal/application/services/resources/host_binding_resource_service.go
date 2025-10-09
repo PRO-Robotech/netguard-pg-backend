@@ -103,11 +103,13 @@ func (s *HostBindingResourceService) CreateHostBinding(ctx context.Context, host
 	}
 
 	if err := s.hostResourceService.UpdateHostBinding(ctx, hostRef, bindingID, addressGroupRef); err != nil {
+		return fmt.Errorf("failed to update host binding status: %w", err)
 	}
 
 	// Process conditions after binding operations
 	if s.conditionManager != nil {
 		if err := s.conditionManager.ProcessHostBindingConditions(ctx, hostBinding, nil); err != nil {
+			// Don't fail the operation if condition processing fails
 		}
 	}
 
@@ -225,7 +227,6 @@ func (s *HostBindingResourceService) DeleteHostBinding(ctx context.Context, id m
 		return fmt.Errorf("failed to commit deletion transaction: %w", err)
 	}
 
-
 	hostID := models.ResourceIdentifier{
 		Namespace: existingBinding.HostRef.Namespace,
 		Name:      existingBinding.HostRef.Name,
@@ -340,42 +341,33 @@ func (s *HostBindingResourceService) ListHostBindings(ctx context.Context, scope
 
 // SyncHostBindings synchronizes multiple host bindings with the specified operation
 func (s *HostBindingResourceService) SyncHostBindings(ctx context.Context, hostBindings []models.HostBinding, scope ports.Scope, syncOp models.SyncOp) error {
-
-	switch syncOp {
-	case models.SyncOpFullSync:
-		return s.fullSyncHostBindings(ctx, hostBindings, scope)
-	case models.SyncOpUpsert:
-		return s.upsertHostBindings(ctx, hostBindings)
-	case models.SyncOpDelete:
-		return s.deleteHostBindings(ctx, hostBindings)
-	default:
-		return fmt.Errorf("unsupported sync operation: %v", syncOp)
+	// Get writer from registry
+	writer, err := s.repo.Writer(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get writer: %w", err)
 	}
-}
-
-// fullSyncHostBindings performs a full synchronization of host bindings
-func (s *HostBindingResourceService) fullSyncHostBindings(ctx context.Context, hostBindings []models.HostBinding, scope ports.Scope) error {
-
-	return s.upsertHostBindings(ctx, hostBindings)
-}
-
-// upsertHostBindings creates or updates multiple host bindings
-func (s *HostBindingResourceService) upsertHostBindings(ctx context.Context, hostBindings []models.HostBinding) error {
-
-	for _, hostBinding := range hostBindings {
-		if err := s.CreateHostBinding(ctx, &hostBinding); err != nil {
-			return fmt.Errorf("failed to create host binding %s: %w", hostBinding.Key(), err)
+	defer func() {
+		if err != nil {
+			writer.Abort()
 		}
+	}()
+
+	// Call writer.SyncHostBindings directly with the bindings and syncOp
+	if err = writer.SyncHostBindings(ctx, hostBindings, scope, ports.WithSyncOp(syncOp)); err != nil {
+		return fmt.Errorf("failed to sync host bindings: %w", err)
 	}
 
-	return nil
-}
+	// Commit transaction
+	if err = writer.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
 
-// deleteHostBindings deletes multiple host bindings
-func (s *HostBindingResourceService) deleteHostBindings(ctx context.Context, hostBindings []models.HostBinding) error {
-	for _, hostBinding := range hostBindings {
-		if err := s.DeleteHostBinding(ctx, hostBinding.SelfRef.ResourceIdentifier); err != nil {
-			return fmt.Errorf("failed to delete host binding %s: %w", hostBinding.Key(), err)
+	// Process conditions for each binding if needed (skip for DELETE operations)
+	if syncOp != models.SyncOpDelete && s.conditionManager != nil {
+		for i := range hostBindings {
+			if err := s.conditionManager.ProcessHostBindingConditions(ctx, &hostBindings[i], nil); err != nil {
+				// Don't fail the operation if condition processing fails
+			}
 		}
 	}
 
@@ -441,9 +433,6 @@ func (s *HostBindingResourceService) SyncStatusUpdate(ctx context.Context, resou
 	if resourceType != "HostBinding" {
 		return nil
 	}
-
-
-	// TODO: Implement sync status update when interface is clarified
 
 	return nil
 }

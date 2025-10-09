@@ -50,41 +50,31 @@ func NewNetworkBindingResourceService(
 
 // CreateNetworkBinding creates a new NetworkBinding with business logic validation
 func (s *NetworkBindingResourceService) CreateNetworkBinding(ctx context.Context, binding *models.NetworkBinding) error {
-	// Convert ObjectReference to ResourceIdentifier for validation
 	networkRef := models.ResourceIdentifier{Name: binding.NetworkRef.Name, Namespace: binding.Namespace}
 	addressGroupRef := models.ResourceIdentifier{Name: binding.AddressGroupRef.Name, Namespace: binding.Namespace}
 
-	// Initialize metadata
 	binding.GetMeta().TouchOnCreate()
-
-	// No finalizers needed - we'll force sync immediately after AddressGroup Networks update
-
-	// Create the network binding
 	writer, err := s.repo.Writer(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get writer: %w", err)
 	}
 	defer writer.Abort()
 
-	// Get reader from writer to ensure same session/transaction visibility
 	reader, err := s.repo.ReaderFromWriter(ctx, writer)
 	if err != nil {
 		return fmt.Errorf("failed to get reader from writer: %w", err)
 	}
 	defer reader.Close()
 
-	// Validate that the referenced Network exists and is not already bound
 	bindingID := models.ResourceIdentifier{Name: binding.Name, Namespace: binding.Namespace}
 	if err := s.networkResourceService.ValidateNetworkBindingWithReader(ctx, reader, networkRef, bindingID); err != nil {
 		return fmt.Errorf("network validation failed: %w", err)
 	}
 
-	// Validate that the referenced AddressGroup exists
 	if err := s.validateAddressGroupWithReader(ctx, reader, addressGroupRef); err != nil {
 		return fmt.Errorf("address group validation failed: %w", err)
 	}
 
-	// Check if NetworkBinding already exists
 	existing, err := s.getNetworkBindingByIDWithReader(ctx, reader, binding.Key())
 	if err != nil && !errors.Is(err, ports.ErrNotFound) {
 		return fmt.Errorf("failed to check existing network binding: %w", err)
@@ -93,7 +83,6 @@ func (s *NetworkBindingResourceService) CreateNetworkBinding(ctx context.Context
 		return fmt.Errorf("network binding already exists: %s", binding.Key())
 	}
 
-	// Convert to slice for sync
 	bindings := []models.NetworkBinding{*binding}
 	if err := writer.SyncNetworkBindings(ctx, bindings, ports.EmptyScope{}, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
 		return fmt.Errorf("failed to sync network bindings: %w", err)
@@ -103,7 +92,6 @@ func (s *NetworkBindingResourceService) CreateNetworkBinding(ctx context.Context
 		return fmt.Errorf("failed to commit network binding creation: %w", err)
 	}
 
-	// Process conditions after successful commit
 	if s.conditionManager != nil {
 		if err := s.conditionManager.ProcessNetworkBindingConditions(ctx, binding); err != nil {
 			klog.Errorf("Failed to process network binding conditions for %s/%s: %v",
@@ -118,22 +106,17 @@ func (s *NetworkBindingResourceService) CreateNetworkBinding(ctx context.Context
 		}
 	}
 
-	// Update the Network to mark it as bound
 	if err := s.networkResourceService.UpdateNetworkBinding(ctx, networkRef, bindingID, addressGroupRef); err != nil {
 		return fmt.Errorf("failed to update network binding: %w", err)
 	}
 
-	// Update AddressGroup.Networks.Items to include the Network
 	if err := s.updateAddressGroupNetworks(ctx, addressGroupRef, networkRef, binding, true); err != nil {
 		return fmt.Errorf("failed to update address group networks: %w", err)
 	}
 
-	// FORCE SYNC: Immediately sync AddressGroup with sgroups after Networks update
 	if err := s.forceSyncAddressGroupWithSGroups(ctx, addressGroupRef); err != nil {
-		// Don't fail the operation - AddressGroup was updated successfully in database
 	}
 
-	// Sync with external systems
 	return s.syncNetworkBindingWithExternal(ctx, binding, "create")
 }
 
@@ -148,53 +131,41 @@ func (s *NetworkBindingResourceService) UpdateNetworkBinding(ctx context.Context
 		return fmt.Errorf("network binding not found: %s", binding.Key())
 	}
 
-	// Convert ObjectReference to ResourceIdentifier for validation
 	networkRef := models.ResourceIdentifier{Name: binding.NetworkRef.Name, Namespace: binding.Namespace}
 	addressGroupRef := models.ResourceIdentifier{Name: binding.AddressGroupRef.Name, Namespace: binding.Namespace}
-
-	// Validate that the referenced Network exists
 	if err := s.validateNetwork(ctx, networkRef); err != nil {
 		return fmt.Errorf("network validation failed: %w", err)
 	}
 
-	// Validate that the referenced AddressGroup exists
 	if err := s.validateAddressGroup(ctx, addressGroupRef); err != nil {
 		return fmt.Errorf("address group validation failed: %w", err)
 	}
 
-	// Check if Network or AddressGroup references have changed
 	if existing.NetworkRef.Name != binding.NetworkRef.Name || existing.AddressGroupRef.Name != binding.AddressGroupRef.Name {
-		// Convert existing ObjectReference to ResourceIdentifier
 		existingNetworkRef := models.ResourceIdentifier{Name: existing.NetworkRef.Name, Namespace: existing.Namespace}
 		existingAddressGroupRef := models.ResourceIdentifier{Name: existing.AddressGroupRef.Name, Namespace: existing.Namespace}
 
-		// Remove binding from old Network
 		if err := s.networkResourceService.RemoveNetworkBinding(ctx, existingNetworkRef); err != nil {
 			return fmt.Errorf("failed to remove old network binding: %w", err)
 		}
 
-		// Remove Network from old AddressGroup
 		if err := s.updateAddressGroupNetworks(ctx, existingAddressGroupRef, existingNetworkRef, existing, false); err != nil {
 			return fmt.Errorf("failed to remove network from old address group: %w", err)
 		}
 
-		// Validate that the new Network is not already bound
 		bindingID := models.ResourceIdentifier{Name: binding.Name, Namespace: binding.Namespace}
 		if err := s.networkResourceService.ValidateNetworkBinding(ctx, networkRef, bindingID); err != nil {
 			return fmt.Errorf("new network validation failed: %w", err)
 		}
 
-		// Update the new Network to mark it as bound
 		if err := s.networkResourceService.UpdateNetworkBinding(ctx, networkRef, bindingID, addressGroupRef); err != nil {
 			return fmt.Errorf("failed to update new network binding: %w", err)
 		}
 
-		// Add Network to new AddressGroup
 		if err := s.updateAddressGroupNetworks(ctx, addressGroupRef, networkRef, binding, true); err != nil {
 			return fmt.Errorf("failed to add network to new address group: %w", err)
 		}
 
-		// FORCE SYNC: Immediately sync new AddressGroup with sgroups after Networks update
 		if err := s.forceSyncAddressGroupWithSGroups(ctx, addressGroupRef); err != nil {
 		}
 	}
@@ -250,7 +221,6 @@ func (s *NetworkBindingResourceService) DeleteNetworkBinding(ctx context.Context
 		// Network binding doesn't exist - delete is idempotent, so this is success
 		return nil
 	}
-
 
 	// Convert ObjectReference to ResourceIdentifier
 	networkRef := models.ResourceIdentifier{Name: existing.NetworkRef.Name, Namespace: existing.Namespace}
@@ -330,6 +300,75 @@ func (s *NetworkBindingResourceService) ListNetworkBindings(ctx context.Context,
 	return bindings, nil
 }
 
+// SyncNetworkBindings synchronizes multiple network bindings with the specified operation
+func (s *NetworkBindingResourceService) SyncNetworkBindings(ctx context.Context, bindings []models.NetworkBinding, scope ports.Scope, syncOp models.SyncOp) error {
+	// Get writer from registry
+	writer, err := s.repo.Writer(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get writer: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	// Call writer.SyncNetworkBindings directly with the bindings and syncOp
+	if err = writer.SyncNetworkBindings(ctx, bindings, scope, ports.WithSyncOp(syncOp)); err != nil {
+		return fmt.Errorf("failed to sync network bindings: %w", err)
+	}
+
+	// Commit transaction
+	if err = writer.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	for i := range bindings {
+		binding := &bindings[i]
+
+		networkRef := models.ResourceIdentifier{Name: binding.NetworkRef.Name, Namespace: binding.Namespace}
+		addressGroupRef := models.ResourceIdentifier{Name: binding.AddressGroupRef.Name, Namespace: binding.Namespace}
+
+		if syncOp == models.SyncOpDelete {
+			if err := s.networkResourceService.RemoveNetworkBinding(ctx, networkRef); err != nil {
+				klog.Errorf("Failed to remove Network binding for %s: %v", networkRef.Key(), err)
+			}
+
+			if err := s.forceSyncAddressGroupWithSGroups(ctx, addressGroupRef); err != nil {
+				klog.Errorf("Failed to sync AddressGroup %s after deletion: %v", addressGroupRef.Key(), err)
+			}
+
+			continue
+		}
+
+		if err := s.forceSyncNetworkWithSGroups(ctx, networkRef); err != nil {
+			klog.Errorf("Failed to sync Network %s with SGROUP: %v", networkRef.Key(), err)
+		}
+
+		if err := s.networkResourceService.UpdateNetworkBinding(ctx, networkRef, binding.ResourceIdentifier, addressGroupRef); err != nil {
+			klog.Errorf("Failed to update Network binding info for %s: %v", networkRef.Key(), err)
+		}
+
+		if err := s.forceSyncAddressGroupWithSGroups(ctx, addressGroupRef); err != nil {
+			klog.Errorf("Failed to sync AddressGroup %s with SGROUP: %v", addressGroupRef.Key(), err)
+		}
+
+		if s.conditionManager != nil {
+			if err := s.conditionManager.ProcessNetworkBindingConditions(ctx, binding); err != nil {
+				klog.Errorf("Failed to process network binding conditions for %s/%s: %v",
+					binding.Namespace, binding.Name, err)
+			} else {
+				if err := s.saveNetworkBindingConditions(ctx, binding); err != nil {
+					klog.Errorf("Failed to save network binding conditions for %s/%s: %v",
+						binding.Namespace, binding.Name, err)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 // Helper methods
 
 func (s *NetworkBindingResourceService) getNetworkBindingByID(ctx context.Context, id string) (*models.NetworkBinding, error) {
@@ -405,8 +444,6 @@ func (s *NetworkBindingResourceService) getNetworkBindingByIDWithReader(ctx cont
 	return reader.GetNetworkBindingByID(ctx, resourceID)
 }
 
-// getFreshAddressGroupFromDatabase reads the latest AddressGroup data from database
-// This ensures sgroups synchronization uses the most up-to-date Networks field
 func (s *NetworkBindingResourceService) getFreshAddressGroupFromDatabase(ctx context.Context, addressGroupRef models.ResourceIdentifier) (*models.AddressGroup, error) {
 	reader, err := s.repo.Reader(ctx)
 	if err != nil {
@@ -425,7 +462,6 @@ func (s *NetworkBindingResourceService) getFreshAddressGroupFromDatabase(ctx con
 	return addressGroup, nil
 }
 
-// updateAddressGroupNetworks updates the Networks.Items field in AddressGroup
 func (s *NetworkBindingResourceService) updateAddressGroupNetworks(ctx context.Context, addressGroupRef, networkRef models.ResourceIdentifier, binding *models.NetworkBinding, add bool) error {
 	reader, err := s.repo.Reader(ctx)
 	if err != nil {
@@ -455,9 +491,6 @@ func (s *NetworkBindingResourceService) updateAddressGroupNetworks(ctx context.C
 	networkName := fmt.Sprintf("%s/%s", network.Namespace, network.Name)
 
 	if add {
-		// Add network to AddressGroup.Networks.Items
-
-		// Check if network already exists
 		networkExists := false
 		for _, existingNetwork := range addressGroup.Networks {
 			if existingNetwork.Name == networkName {
@@ -532,8 +565,6 @@ func (s *NetworkBindingResourceService) syncNetworkBindingWithExternal(ctx conte
 	}
 
 	s.syncTracker.RecordSuccess(syncKey)
-	// Skip condition setting for delete operations to avoid trying to save conditions
-	// for a resource that has already been deleted from the database
 	if operation != "delete" {
 		utils.SetSyncSuccessCondition(binding)
 	} else {
@@ -553,7 +584,7 @@ func (s *NetworkBindingResourceService) saveNetworkBindingConditions(ctx context
 		}
 	}()
 
-	scope := ports.NewResourceIdentifierScope(binding.ResourceIdentifier)
+	scope := ports.EmptyScope{}
 
 	// Sync the NetworkBinding with updated conditions
 	if err := writer.SyncNetworkBindings(ctx, []models.NetworkBinding{*binding}, scope); err != nil {
@@ -564,29 +595,39 @@ func (s *NetworkBindingResourceService) saveNetworkBindingConditions(ctx context
 		return fmt.Errorf("failed to commit NetworkBinding conditions: %w", err)
 	}
 
-	klog.Infof("💾 NetworkBindingResourceService: Successfully saved conditions for NetworkBinding %s/%s", binding.Namespace, binding.Name)
 	return nil
 }
 
-// forceSyncAddressGroupWithSGroups forces immediate sync of AddressGroup with sgroups
-// This bypasses debouncing using SyncEntityForced and ensures fresh database data is used
-func (s *NetworkBindingResourceService) forceSyncAddressGroupWithSGroups(ctx context.Context, addressGroupRef models.ResourceIdentifier) error {
-
-	// Get fresh AddressGroup data from database
-	freshAddressGroup, err := s.getFreshAddressGroupFromDatabase(ctx, addressGroupRef)
+func (s *NetworkBindingResourceService) forceSyncNetworkWithSGroups(ctx context.Context, networkRef models.ResourceIdentifier) error {
+	reader, err := s.repo.Reader(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get fresh AddressGroup %s: %w", addressGroupRef.Key(), err)
+		return fmt.Errorf("failed to get reader: %w", err)
 	}
 
+	freshNetwork, err := reader.GetNetworkByID(ctx, networkRef)
+	if err != nil {
+		return fmt.Errorf("failed to get Network %s: %w", networkRef.Key(), err)
+	}
 
-	// Force sync with sgroups using SyncEntityForced (bypasses debouncing)
 	if s.syncManager != nil {
-
-		if err := s.syncManager.SyncEntityForced(ctx, freshAddressGroup, types.SyncOperationUpsert); err != nil {
-			return fmt.Errorf("failed to force sync AddressGroup %s with sgroups: %w", addressGroupRef.Key(), err)
+		if err := s.syncManager.SyncEntityForced(ctx, freshNetwork, types.SyncOperationUpsert); err != nil {
+			return fmt.Errorf("failed to sync Network %s with sgroups: %w", networkRef.Key(), err)
 		}
+	}
 
-	} else {
+	return nil
+}
+
+func (s *NetworkBindingResourceService) forceSyncAddressGroupWithSGroups(ctx context.Context, addressGroupRef models.ResourceIdentifier) error {
+	freshAddressGroup, err := s.getFreshAddressGroupFromDatabase(ctx, addressGroupRef)
+	if err != nil {
+		return fmt.Errorf("failed to get AddressGroup %s: %w", addressGroupRef.Key(), err)
+	}
+
+	if s.syncManager != nil {
+		if err := s.syncManager.SyncEntityForced(ctx, freshAddressGroup, types.SyncOperationUpsert); err != nil {
+			return fmt.Errorf("failed to sync AddressGroup %s with sgroups: %w", addressGroupRef.Key(), err)
+		}
 	}
 
 	return nil

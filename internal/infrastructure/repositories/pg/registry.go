@@ -58,26 +58,17 @@ func NewRegistryFromPG(ctx context.Context, dbURL url.URL) (ports.Registry, erro
 		return nil, errors.WithMessage(err, "NewRegistryFromPG parse config")
 	}
 
-	// 🎯 TIMEOUT_FIX: Optimize connection pool for high concurrency and condition operations
-	// Increase connection limits for heavy reactive flows and concurrent condition processing
-	conf.MaxConns = 50                        // Increased from default ~4 to handle concurrent condition operations
-	conf.MinConns = 5                         // Keep minimum connections warm
-	conf.MaxConnLifetime = 2 * time.Hour      // Longer lifetime to reduce connection churn
-	conf.MaxConnIdleTime = 15 * time.Minute   // Reasonable idle time
-	conf.HealthCheckPeriod = 30 * time.Second // Regular health checks
-
-	// 🔧 OPTIMIZED_FIX: Aggressive timeout settings for better concurrent performance
+	conf.MaxConns = 50                               // Increased from default ~4 to handle concurrent condition operations
+	conf.MinConns = 5                                // Keep minimum connections warm
+	conf.MaxConnLifetime = 2 * time.Hour             // Longer lifetime to reduce connection churn
+	conf.MaxConnIdleTime = 15 * time.Minute          // Reasonable idle time
+	conf.HealthCheckPeriod = 30 * time.Second        // Regular health checks
 	conf.ConnConfig.ConnectTimeout = 5 * time.Second // Faster connection timeout
-
-	// 🎯 BUSINESS_FLOW_FIX: Adjusted PostgreSQL timeouts for complex business flows
-	// Previous: 10s statement, 15s idle transaction - TOO AGGRESSIVE for RuleS2S complex flows
-	// New: Balanced approach - prevent hung connections while allowing complex business logic
 	conf.ConnConfig.RuntimeParams = map[string]string{
 		"statement_timeout":                   "60000",  // 60 second statement timeout (complex queries)
 		"idle_in_transaction_session_timeout": "120000", // 2 minute idle transaction timeout (business flows)
 		"lock_timeout":                        "30000",  // 30 second lock timeout (reduced contention)
 	}
-
 
 	pool, err := pgxpool.NewWithConfig(ctx, conf)
 	if err != nil {
@@ -89,7 +80,6 @@ func NewRegistryFromPG(ctx context.Context, dbURL url.URL) (ports.Registry, erro
 		pool.Close()
 		return nil, errors.WithMessage(err, "NewRegistryFromPG ping")
 	}
-
 
 	ret := &Registry{
 		subject: &simpleSubject{
@@ -158,9 +148,6 @@ func (r *Registry) Writer(ctx context.Context) (ports.Writer, error) {
 	}, nil
 }
 
-// 🔧 PRODUCTION FIX: WriterForConditions creates a writer with ReadCommitted isolation
-// This allows condition sync operations to see data committed by other transactions
-// avoiding UID conflicts where ConditionManager can't find the service that was just created
 func (r *Registry) WriterForConditions(ctx context.Context) (ports.Writer, error) {
 	r.mu.RLock()
 	pool := r.pool
@@ -170,8 +157,6 @@ func (r *Registry) WriterForConditions(ctx context.Context) (ports.Writer, error
 		return nil, errors.New("registry pool is nil")
 	}
 
-	// 🚨 CRITICAL: Use ReadCommitted instead of RepeatableRead
-	// This allows seeing committed data from other transactions
 	txOpts := pgx.TxOptions{
 		IsoLevel:   pgx.ReadCommitted, // Can see committed data from other transactions
 		AccessMode: pgx.ReadWrite,
@@ -192,8 +177,6 @@ func (r *Registry) WriterForConditions(ctx context.Context) (ports.Writer, error
 	}, nil
 }
 
-// 🔧 SERIALIZATION_FIX: WriterForDeletes creates a writer with ReadCommitted isolation for delete operations
-// This reduces serialization conflict sensitivity during concurrent DELETE operations
 func (r *Registry) WriterForDeletes(ctx context.Context) (ports.Writer, error) {
 	r.mu.RLock()
 	pool := r.pool
@@ -203,8 +186,6 @@ func (r *Registry) WriterForDeletes(ctx context.Context) (ports.Writer, error) {
 		return nil, errors.New("registry pool is nil")
 	}
 
-	// 🚨 CRITICAL: Use ReadCommitted instead of RepeatableRead for delete operations
-	// This allows seeing committed data from other transactions and reduces serialization conflicts
 	txOpts := pgx.TxOptions{
 		IsoLevel:   pgx.ReadCommitted, // Less sensitive to concurrent access
 		AccessMode: pgx.ReadWrite,
@@ -240,9 +221,6 @@ func (r *Registry) Reader(ctx context.Context) (ports.Reader, error) {
 	return reader, nil
 }
 
-// 🔧 CROSS-RULES2S FIX: ReaderWithReadCommitted creates a reader with ReadCommitted isolation
-// This allows Cross-RuleS2S aggregation to see data committed by other transactions immediately,
-// fixing the timing bug where deleted AddressGroupBindings were still visible in new readers
 func (r *Registry) ReaderWithReadCommitted(ctx context.Context) (ports.Reader, error) {
 	r.mu.RLock()
 	pool := r.pool
@@ -252,9 +230,6 @@ func (r *Registry) ReaderWithReadCommitted(ctx context.Context) (ports.Reader, e
 		return nil, errors.New("registry pool is nil")
 	}
 
-	// 🚨 CRITICAL: Use ReadCommitted isolation to see recently committed data
-	// This fixes the Cross-RuleS2S aggregation bug where populateServiceAddressGroups
-	// couldn't see deleted AddressGroupBindings due to connection pool timing issues
 	txOpts := pgx.TxOptions{
 		IsoLevel:   pgx.ReadCommitted, // Can see committed data from other transactions immediately
 		AccessMode: pgx.ReadOnly,      // Read-only for performance
@@ -313,6 +288,11 @@ type simpleWriter struct {
 	tx            pgx.Tx
 	ctx           context.Context
 	modularWriter *writers.Writer
+}
+
+// GetTx implements PostgreSQLWriter interface
+func (w *simpleWriter) GetTx() pgx.Tx {
+	return w.tx
 }
 
 // Implement required Writer interface methods

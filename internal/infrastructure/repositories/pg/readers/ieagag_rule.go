@@ -27,10 +27,15 @@ func (r *Reader) ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAg
 		FROM ie_ag_ag_rules ier
 		INNER JOIN k8s_metadata m ON ier.resource_version = m.resource_version`
 
-	// Apply scope filtering
+	// Apply scope filtering and deletion_timestamp filter
 	whereClause, args := utils.BuildScopeFilter(scope, "ier")
+
+	// Always filter out objects being deleted
+	deletionFilter := "m.deletion_timestamp IS NULL"
 	if whereClause != "" {
-		query += " WHERE " + whereClause
+		query += " WHERE " + whereClause + " AND " + deletionFilter
+	} else {
+		query += " WHERE " + deletionFilter
 	}
 
 	query += " ORDER BY ier.namespace, ier.name"

@@ -22,10 +22,15 @@ func (r *Reader) ListServiceAliases(ctx context.Context, consume func(models.Ser
 		FROM service_aliases sa
 		INNER JOIN k8s_metadata m ON sa.resource_version = m.resource_version`
 
-	// Apply scope filtering
+	// Apply scope filtering and deletion_timestamp filter
 	whereClause, args := utils.BuildScopeFilter(scope, "sa")
+
+	// Always filter out objects being deleted
+	deletionFilter := "m.deletion_timestamp IS NULL"
 	if whereClause != "" {
-		query += " WHERE " + whereClause
+		query += " WHERE " + whereClause + " AND " + deletionFilter
+	} else {
+		query += " WHERE " + deletionFilter
 	}
 
 	query += " ORDER BY sa.namespace, sa.name"

@@ -2,12 +2,13 @@ package writers
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
+	"k8s.io/klog/v2"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -47,13 +48,13 @@ func (w *Writer) SyncHostBindings(ctx context.Context, hostBindings []models.Hos
 		}
 	case models.SyncOpUpsert, models.SyncOpFullSync:
 		// For UPSERT/FULLSYNC operations, upsert all provided bindings
-		for _, hostBinding := range hostBindings {
-			if err := w.upsertHostBinding(ctx, hostBinding); err != nil {
+		for i := range hostBindings {
+			if err := w.upsertHostBinding(ctx, &hostBindings[i]); err != nil {
 				// Check for unique constraint violation (one binding per host)
 				if isUniqueViolation(err, "host_bindings_host_namespace_host_name_key") {
-					return errors.Errorf("host %s/%s is already bound to another address group", hostBinding.HostRef.Namespace, hostBinding.HostRef.Name)
+					return errors.Errorf("host %s/%s is already bound to another address group", hostBindings[i].HostRef.Namespace, hostBindings[i].HostRef.Name)
 				}
-				return errors.Wrapf(err, "failed to upsert host binding %s/%s", hostBinding.Namespace, hostBinding.Name)
+				return errors.Wrapf(err, "failed to upsert host binding %s/%s", hostBindings[i].Namespace, hostBindings[i].Name)
 			}
 		}
 	default:
@@ -64,7 +65,7 @@ func (w *Writer) SyncHostBindings(ctx context.Context, hostBindings []models.Hos
 }
 
 // upsertHostBinding inserts or updates a host binding with K8s metadata
-func (w *Writer) upsertHostBinding(ctx context.Context, hostBinding models.HostBinding) error {
+func (w *Writer) upsertHostBinding(ctx context.Context, hostBinding *models.HostBinding) error {
 	// Marshal K8s metadata
 	labelsJSON, annotationsJSON, err := w.marshalLabelsAnnotations(hostBinding.Meta.Labels, hostBinding.Meta.Annotations)
 	if err != nil {
@@ -76,36 +77,22 @@ func (w *Writer) upsertHostBinding(ctx context.Context, hostBinding models.HostB
 		return errors.Wrap(err, "failed to marshal conditions")
 	}
 
-	// First, check if host binding exists and get existing resource version
-	var existingResourceVersion sql.NullInt64
-	existingQuery := `SELECT resource_version FROM host_bindings WHERE namespace = $1 AND name = $2`
-	_ = w.tx.QueryRow(ctx, existingQuery, hostBinding.Namespace, hostBinding.Name).Scan(&existingResourceVersion)
-
+	// ALWAYS INSERT new K8s metadata (to get new ResourceVersion)
+	// PostgreSQL BIGSERIAL primary key only increments on INSERT, not UPDATE
 	var resourceVersion int64
-	if existingResourceVersion.Valid {
-		// UPDATE existing K8s metadata
-		metadataQuery := `
-			UPDATE k8s_metadata 
-			SET labels = $1, annotations = $2, conditions = $3, updated_at = NOW()
-			WHERE resource_version = $4
-			RETURNING resource_version`
-		err = w.tx.QueryRow(ctx, metadataQuery, labelsJSON, annotationsJSON, conditionsJSON, existingResourceVersion.Int64).Scan(&resourceVersion)
-		if err != nil {
-			return errors.Wrapf(err, "failed to update K8s metadata for host binding %s/%s", hostBinding.Namespace, hostBinding.Name)
-		}
-	} else {
-		// INSERT new K8s metadata
-		metadataQuery := `
-			INSERT INTO k8s_metadata (labels, annotations, conditions)
-			VALUES ($1, $2, $3)
-			RETURNING resource_version`
-		err = w.tx.QueryRow(ctx, metadataQuery, labelsJSON, annotationsJSON, conditionsJSON).Scan(&resourceVersion)
-		if err != nil {
-			return errors.Wrapf(err, "failed to insert K8s metadata for host binding %s/%s", hostBinding.Namespace, hostBinding.Name)
-		}
+	metadataQuery := `
+		INSERT INTO k8s_metadata (labels, annotations, conditions)
+		VALUES ($1, $2, $3)
+		RETURNING resource_version`
+	err = w.tx.QueryRow(ctx, metadataQuery, labelsJSON, annotationsJSON, conditionsJSON).Scan(&resourceVersion)
+	if err != nil {
+		return errors.Wrapf(err, "failed to insert K8s metadata for host binding %s/%s", hostBinding.Namespace, hostBinding.Name)
 	}
 
-	// UPSERT host binding record
+	// Update domain model with new ResourceVersion from DB
+	hostBinding.Meta.TouchOnWrite(strconv.FormatInt(resourceVersion, 10))
+
+	// UPSERT host binding record with NEW resource version
 	hostBindingQuery := `
 		INSERT INTO host_bindings (
 			namespace, name,
@@ -182,8 +169,25 @@ func (w *Writer) DeleteHostBindingsByIDs(ctx context.Context, ids []models.Resou
 		argIndex += 2
 	}
 
+	// First, mark objects as being deleted in k8s_metadata to prevent re-creation by ListWatch
+	markDeleteQuery := `
+		UPDATE k8s_metadata m
+		SET deletion_timestamp = NOW()
+		FROM host_bindings hb
+		WHERE hb.resource_version = m.resource_version
+		  AND (hb.namespace, hb.name) IN (%s)
+		  AND m.deletion_timestamp IS NULL`
+
+	markQuery := fmt.Sprintf(markDeleteQuery, strings.Join(values, ","))
+	_, err := w.tx.Exec(ctx, markQuery, args...)
+	if err != nil {
+		// Log but don't fail - deletion_timestamp is optional for now
+		klog.V(4).InfoS("Failed to mark host bindings as deleting in k8s_metadata", "error", err.Error())
+	}
+
+	// Then delete from host_bindings table
 	query := fmt.Sprintf(`DELETE FROM host_bindings WHERE (namespace, name) IN (%s)`, strings.Join(values, ","))
-	_, err := w.tx.Exec(ctx, query, args...)
+	_, err = w.tx.Exec(ctx, query, args...)
 	if err != nil {
 		return errors.Wrap(err, "failed to delete host bindings by IDs")
 	}

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"k8s.io/klog/v2"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -16,16 +17,19 @@ import (
 
 // SyncIEAgAgRules syncs IEAgAgRule resources to PostgreSQL with K8s metadata support
 func (w *Writer) SyncIEAgAgRules(ctx context.Context, rules []models.IEAgAgRule, scope ports.Scope, options ...ports.Option) error {
-	// Handle ConditionOnlyOperation like service.go
+	// Extract sync operation and other options
+	syncOp := models.SyncOpUpsert // Default operation
 	var isConditionOnly bool
 	for _, opt := range options {
+		if syncOption, ok := opt.(ports.SyncOption); ok {
+			syncOp = syncOption.Operation
+		}
 		if _, ok := opt.(ports.ConditionOnlyOperation); ok {
 			isConditionOnly = true
 		}
 	}
 
-	// CRITICAL: For condition-only operations, only update k8s_metadata conditions
-	// Don't touch the main ieagag_rules table - just update conditions in the existing metadata
+	// For condition-only operations, only update k8s_metadata conditions
 	if isConditionOnly {
 		for _, rule := range rules {
 			if err := w.updateIEAgAgRuleConditionsOnly(ctx, rule); err != nil {
@@ -35,25 +39,38 @@ func (w *Writer) SyncIEAgAgRules(ctx context.Context, rules []models.IEAgAgRule,
 		return nil
 	}
 
-	// Handle scoped sync - delete existing resources in scope first
-	if !scope.IsEmpty() {
+	// Handle scoped sync - delete existing resources in scope first (for non-DELETE operations)
+	if !scope.IsEmpty() && syncOp != models.SyncOpDelete {
 		if err := w.deleteIEAgAgRulesInScope(ctx, scope); err != nil {
 			return errors.Wrap(err, "failed to delete ieagag rules in scope")
 		}
 	}
 
-	// Upsert all provided rules
-	for i := range rules {
-		// Initialize metadata fields (UID, Generation, ObservedGeneration)
-		// This is what Memory backend does via ensureMetaFill() -> TouchOnCreate()
-		// Without this, PATCH operations fail because objInfo.UpdatedObject() needs UID
-		// IMPORTANT: Use index-based loop to modify original, not copy!
-		if rules[i].Meta.UID == "" {
-			rules[i].Meta.TouchOnCreate()
+	// Handle operations based on sync operation
+	switch syncOp {
+	case models.SyncOpDelete:
+		// For DELETE operations, delete the specific rules
+		var identifiers []models.ResourceIdentifier
+		for _, rule := range rules {
+			identifiers = append(identifiers, models.ResourceIdentifier{
+				Namespace: rule.Namespace,
+				Name:      rule.Name,
+			})
 		}
+		if err := w.DeleteIEAgAgRulesByIDs(ctx, identifiers); err != nil {
+			return errors.Wrap(err, "failed to delete ieagag rules")
+		}
+	case models.SyncOpUpsert, models.SyncOpFullSync:
+		// For UPSERT/FULLSYNC operations, upsert all provided rules
+		for i := range rules {
+			// Initialize metadata fields if not set
+			if rules[i].Meta.UID == "" {
+				rules[i].Meta.TouchOnCreate()
+			}
 
-		if err := w.upsertIEAgAgRule(ctx, rules[i]); err != nil {
-			return errors.Wrapf(err, "failed to upsert ieagag rule %s/%s", rules[i].Namespace, rules[i].Name)
+			if err := w.upsertIEAgAgRule(ctx, rules[i]); err != nil {
+				return errors.Wrapf(err, "failed to upsert ieagag rule %s/%s", rules[i].Namespace, rules[i].Name)
+			}
 		}
 	}
 
@@ -222,6 +239,23 @@ func (w *Writer) DeleteIEAgAgRulesByIDs(ctx context.Context, ids []models.Resour
 		argIndex += 2
 	}
 
+	// First, mark objects as being deleted in k8s_metadata to prevent re-creation by ListWatch
+	markDeleteQuery := `
+		UPDATE k8s_metadata m
+		SET deletion_timestamp = NOW()
+		FROM ie_ag_ag_rules ier
+		WHERE ier.resource_version = m.resource_version
+		  AND (%s)
+		  AND m.deletion_timestamp IS NULL`
+
+	markQuery := fmt.Sprintf(markDeleteQuery, strings.Join(conditions, " OR "))
+	_, err := w.tx.Exec(ctx, markQuery, args...)
+	if err != nil {
+		// Log but don't fail - deletion_timestamp is optional for now
+		klog.V(4).InfoS("Failed to mark ieagag rules as deleting in k8s_metadata", "error", err.Error())
+	}
+
+	// Then delete from ie_ag_ag_rules table
 	query := fmt.Sprintf(`
 		DELETE FROM ie_ag_ag_rules WHERE %s`,
 		strings.Join(conditions, " OR "))

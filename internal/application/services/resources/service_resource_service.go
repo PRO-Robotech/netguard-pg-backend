@@ -4,10 +4,16 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
+	"time"
 
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
+	"netguard-pg-backend/internal/application/utils"
 	"netguard-pg-backend/internal/application/validation"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -37,6 +43,8 @@ type ServiceResourceService struct {
 	conditionManager       ServiceConditionManagerInterface
 	portMappingRegenerator AddressGroupPortMappingRegenerator // Optional - for port mapping updates
 	ruleS2SRegenerator     RuleS2SRegenerator                 // Optional - for IEAgAg rule updates
+	syncTracker            *utils.SyncTracker
+	retryConfig            utils.RetryConfig
 }
 
 // NewServiceResourceService creates a new ServiceResourceService
@@ -51,6 +59,8 @@ func NewServiceResourceService(
 		conditionManager:       conditionManager,
 		portMappingRegenerator: nil, // Will be set later via SetPortMappingRegenerator
 		ruleS2SRegenerator:     nil, // Will be set later via SetRuleS2SRegenerator
+		syncTracker:            utils.NewSyncTracker(1 * time.Second),
+		retryConfig:            utils.DefaultRetryConfig(),
 	}
 }
 
@@ -143,26 +153,42 @@ func (s *ServiceResourceService) CreateService(ctx context.Context, service mode
 		}
 	}()
 
-	// Sync service (this will create it)
 	if err = s.syncServices(ctx, writer, []models.Service{service}, models.SyncOpUpsert); err != nil {
 		return errors.Wrap(err, "failed to create service")
 	}
 
+	readerFromWriter, err := s.registry.ReaderFromWriter(ctx, writer)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader from writer for service re-read")
+	}
+	defer readerFromWriter.Close()
+
+	createdService, err := readerFromWriter.GetServiceByID(ctx, service.ResourceIdentifier)
+	if err != nil {
+		return errors.Wrapf(err, "failed to re-read service %s after creation", service.Key())
+	}
+
+	if err = s.syncServiceWithExternal(ctx, createdService, types.SyncOperationUpsert, false); err != nil {
+		// Sync failed - abort transaction and return error
+		return fmt.Errorf("SGROUP sync failed, transaction aborted: %w", err)
+	}
+
+	// Commit only after successful SGROUP sync
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit transaction")
 	}
 
-	// Process conditions after successful commit
+	// Process conditions after successful commit (use createdService with correct AggregatedAddressGroups)
 	if s.conditionManager != nil {
-		if err := s.conditionManager.ProcessServiceConditions(ctx, &service); err != nil {
+		if err := s.conditionManager.ProcessServiceConditions(ctx, createdService); err != nil {
 			klog.Errorf("Failed to process service conditions for %s/%s: %v",
-				service.Namespace, service.Name, err)
+				createdService.Namespace, createdService.Name, err)
 			// Don't fail the operation if condition processing fails
 		}
 	}
 
-	// Sync port mappings for AddressGroups in spec
-	if err := s.syncPortMappingsForServiceSpecAGs(ctx, &service); err != nil {
+	// Sync port mappings for AddressGroups in spec (use createdService)
+	if err := s.syncPortMappingsForServiceSpecAGs(ctx, createdService); err != nil {
 		return errors.Wrap(err, "failed to sync port mappings after service creation")
 	}
 
@@ -210,15 +236,32 @@ func (s *ServiceResourceService) UpdateService(ctx context.Context, service mode
 		return errors.Wrap(err, "failed to update service")
 	}
 
+	readerFromWriter, err := s.registry.ReaderFromWriter(ctx, writer)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader from writer for service re-read")
+	}
+	defer readerFromWriter.Close()
+
+	updatedService, err := readerFromWriter.GetServiceByID(ctx, service.ResourceIdentifier)
+	if err != nil {
+		return errors.Wrapf(err, "failed to re-read service %s after update", service.Key())
+	}
+
+	if err = s.syncServiceWithExternal(ctx, updatedService, types.SyncOperationUpsert, false); err != nil {
+		// Sync failed - abort transaction and return error
+		return fmt.Errorf("SGROUP sync failed, transaction aborted: %w", err)
+	}
+
+	// Commit only after successful SGROUP sync
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit transaction")
 	}
 
-	// Process conditions after successful commit
+	// Process conditions after successful commit (use updatedService with correct AggregatedAddressGroups)
 	if s.conditionManager != nil {
-		if err := s.conditionManager.ProcessServiceConditions(ctx, &service); err != nil {
+		if err := s.conditionManager.ProcessServiceConditions(ctx, updatedService); err != nil {
 			klog.Errorf("Failed to process service conditions for %s/%s: %v",
-				service.Namespace, service.Name, err)
+				updatedService.Namespace, updatedService.Name, err)
 			// Don't fail the operation if condition processing fails
 		}
 	}
@@ -227,31 +270,29 @@ func (s *ServiceResourceService) UpdateService(ctx context.Context, service mode
 	if portsChanged {
 
 		if s.portMappingRegenerator != nil {
-			serviceID := models.ResourceIdentifier{Name: service.Name, Namespace: service.Namespace}
+			serviceID := models.ResourceIdentifier{Name: updatedService.Name, Namespace: updatedService.Namespace}
 			if err := s.portMappingRegenerator.RegeneratePortMappingsForService(ctx, serviceID); err != nil {
 				klog.Errorf("Failed to regenerate AddressGroupPortMappings for service %s: %v",
-					service.Key(), err)
+					updatedService.Key(), err)
 				// Don't fail the operation if port mapping regeneration fails
 				// The service update succeeded, and mappings can be manually regenerated
 			} else {
 			}
 		} else {
-			klog.Warningf("⚠️ UpdateService: Service %s ports changed but no port mapping regenerator available", service.Key())
+			klog.Warningf("⚠️ UpdateService: Service %s ports changed but no port mapping regenerator available", updatedService.Key())
 		}
 
-		// ✅ FIXED: IEAgAg rule regeneration now works correctly after fixing transaction abort bug
-
 		if s.ruleS2SRegenerator != nil {
-			serviceID := models.ResourceIdentifier{Name: service.Name, Namespace: service.Namespace}
+			serviceID := models.ResourceIdentifier{Name: updatedService.Name, Namespace: updatedService.Namespace}
 			if err := s.ruleS2SRegenerator.RegenerateIEAgAgRulesForService(ctx, serviceID); err != nil {
 				klog.Errorf("Failed to regenerate IEAgAg rules for service %s: %v",
-					service.Key(), err)
+					updatedService.Key(), err)
 				// Don't fail the operation if IEAgAg rule regeneration fails
 				// The service update succeeded, and rules can be manually regenerated
 			} else {
 			}
 		} else {
-			klog.Warningf("⚠️ UpdateService: Service %s ports changed but no RuleS2S regenerator available", service.Key())
+			klog.Warningf("⚠️ UpdateService: Service %s ports changed but no RuleS2S regenerator available", updatedService.Key())
 		}
 	}
 
@@ -260,8 +301,8 @@ func (s *ServiceResourceService) UpdateService(ctx context.Context, service mode
 	portsChanged = !reflect.DeepEqual(existingService.IngressPorts, service.IngressPorts)
 
 	if addressGroupsChanged || portsChanged {
-		// Sync port mappings for current AddressGroups
-		if err := s.syncPortMappingsForServiceSpecAGs(ctx, &service); err != nil {
+		// Sync port mappings for current AddressGroups (use updatedService)
+		if err := s.syncPortMappingsForServiceSpecAGs(ctx, updatedService); err != nil {
 			return errors.Wrap(err, "failed to sync port mappings after service update")
 		}
 
@@ -362,13 +403,10 @@ func (s *ServiceResourceService) SyncServices(ctx context.Context, services []mo
 		}
 	}()
 
-
 	if err = s.syncServices(ctx, writer, services, syncOp); err != nil {
 		return errors.Wrap(err, "failed to sync services")
 	}
 
-	// CRITICAL: Validate services BEFORE commit to catch port conflicts early
-	// This prevents invalid Services from being persisted to the database
 	if syncOp != models.SyncOpDelete {
 		reader, readerErr := s.registry.Reader(ctx)
 		if readerErr != nil {
@@ -404,48 +442,63 @@ func (s *ServiceResourceService) SyncServices(ctx context.Context, services []mo
 		}
 	}
 
-	// CRITICAL: Validate services BEFORE commit to catch port conflicts early
-	// This prevents invalid Services from being persisted to the database
-	if syncOp != models.SyncOpDelete {
-		reader, readerErr := s.registry.Reader(ctx)
-		if readerErr != nil {
+	readerFromWriter, readerErr := s.registry.ReaderFromWriter(ctx, writer)
+	if readerErr != nil {
+		writer.Abort()
+		return errors.Wrap(readerErr, "failed to get reader from writer for services re-read")
+	}
+	defer readerFromWriter.Close()
+
+	var updatedServices []models.Service
+	for _, service := range services {
+		updatedService, getErr := readerFromWriter.GetServiceByID(ctx, service.ResourceIdentifier)
+		if getErr != nil {
+			if errors.Is(getErr, ports.ErrNotFound) && syncOp == models.SyncOpDelete {
+				updatedServices = append(updatedServices, service)
+				continue
+			}
 			writer.Abort()
-			return errors.Wrap(readerErr, "failed to get reader for pre-commit validation")
+			return errors.Wrapf(getErr, "failed to re-read service %s after sync", service.Key())
 		}
-		defer reader.Close()
+		updatedServices = append(updatedServices, *updatedService)
+	}
 
-		validator := validation.NewDependencyValidator(reader)
-		serviceValidator := validator.GetServiceValidator()
+	if s.syncManager != nil {
+		for i := range updatedServices {
+			var operation types.SyncOperation
+			if syncOp == models.SyncOpDelete {
+				operation = types.SyncOperationDelete
+			} else {
+				operation = types.SyncOperationUpsert
+			}
 
-		for _, service := range services {
-			if err := serviceValidator.ValidateWithoutDuplicateCheck(ctx, service); err != nil {
-				writer.Abort()
-				return errors.Wrapf(err, "pre-commit validation failed for service %s", service.Key())
+			// Sync without retry (transactional sync)
+			if err = s.syncServiceWithExternal(ctx, &updatedServices[i], operation, false); err != nil {
+				// Sync failed - abort transaction and return error
+				return fmt.Errorf("SGROUP sync failed for service %s, transaction aborted: %w", updatedServices[i].Key(), err)
 			}
 		}
 	}
 
+	// Commit only after all successful SGROUP syncs
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit transaction")
 	}
 
 	// Always regenerate dependent resources for services with dependencies, but skip condition processing for DELETE
 	if syncOp != models.SyncOpDelete {
-		// Process conditions after successful commit for each service (only for non-DELETE operations)
+		// Process conditions after successful commit (use updatedServices with correct AggregatedAddressGroups)
 		if s.conditionManager != nil {
-			for i := range services {
-				if err := s.conditionManager.ProcessServiceConditions(ctx, &services[i]); err != nil {
+			for i := range updatedServices {
+				if err := s.conditionManager.ProcessServiceConditions(ctx, &updatedServices[i]); err != nil {
 					klog.Errorf("Failed to process service conditions for %s/%s: %v",
-						services[i].Namespace, services[i].Name, err)
+						updatedServices[i].Namespace, updatedServices[i].Name, err)
 					// Don't fail the operation if condition processing fails
 				}
 			}
 		}
-	} else {
 	}
 
-	// ALWAYS regenerate port mappings and rules for services with dependencies (even for DELETE)
-	// For DELETE operations, we need to remove/recalculate dependent resources to clean up stale references
 	if s.portMappingRegenerator != nil && len(servicesWithPortChanges) > 0 {
 
 		for _, serviceID := range servicesWithPortChanges {
@@ -471,8 +524,6 @@ func (s *ServiceResourceService) SyncServices(ctx context.Context, services []mo
 		}
 	}
 
-	// ALWAYS regenerate IEAgAg rules for services with dependencies (even for DELETE)
-	// For DELETE operations, this will remove/recalculate rules that reference the deleted service
 	if s.ruleS2SRegenerator != nil && len(servicesWithPortChanges) > 0 {
 
 		for _, serviceID := range servicesWithPortChanges {
@@ -521,8 +572,8 @@ func (s *ServiceResourceService) DeleteServicesByIDs(ctx context.Context, ids []
 		}
 	}
 
-
-	// 3. For each service to be deleted, regenerate port mappings for its AddressGroups
+	// 3. For each service to be deleted, get it for external sync and regenerate port mappings
+	var servicesToDelete []models.Service
 	for _, id := range ids {
 		service, err := reader.GetServiceByID(ctx, id)
 		if err != nil {
@@ -531,6 +582,8 @@ func (s *ServiceResourceService) DeleteServicesByIDs(ctx context.Context, ids []
 			}
 			return errors.Wrapf(err, "failed to get service %s before deletion", id.Key())
 		}
+
+		servicesToDelete = append(servicesToDelete, *service)
 
 		// Regenerate port mappings for all AddressGroups to remove this service
 		if err := s.syncPortMappingsForServiceSpecAGs(ctx, service); err != nil {
@@ -551,6 +604,15 @@ func (s *ServiceResourceService) DeleteServicesByIDs(ctx context.Context, ids []
 
 	if err = writer.DeleteServicesByIDs(ctx, ids); err != nil {
 		return errors.Wrap(err, "failed to delete services")
+	}
+
+	if s.syncManager != nil {
+		for _, service := range servicesToDelete {
+			if err = s.syncServiceWithExternal(ctx, &service, types.SyncOperationDelete, false); err != nil {
+				// Sync failed - abort transaction and return error
+				return fmt.Errorf("SGROUP deletion sync failed for service %s, transaction aborted: %w", service.Key(), err)
+			}
+		}
 	}
 
 	if err = writer.Commit(); err != nil {
@@ -731,8 +793,6 @@ func (s *ServiceResourceService) SyncServiceAliases(ctx context.Context, aliases
 	} else {
 	}
 
-	// Skip regeneration for DELETE operations to prevent reading deleted ServiceAlias
-	// For DELETE operations, dependent RuleS2S will be updated separately or blocked by admission webhook
 	if syncOp != models.SyncOpDelete {
 		// Regenerate IEAgAg rules for service aliases (only for non-DELETE operations)
 		if s.ruleS2SRegenerator != nil && len(aliases) > 0 {
@@ -773,7 +833,6 @@ func (s *ServiceResourceService) DeleteServiceAliasesByIDs(ctx context.Context, 
 		}
 	}
 
-
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get writer")
@@ -799,30 +858,8 @@ func (s *ServiceResourceService) DeleteServiceAliasesByIDs(ctx context.Context, 
 
 // syncServices handles the actual synchronization logic
 func (s *ServiceResourceService) syncServices(ctx context.Context, writer ports.Writer, services []models.Service, syncOp models.SyncOp) error {
-
-
-	// This will delegate to writer which handles the actual persistence
-	// Use passed syncOp to handle services operations correctly
 	if err := writer.SyncServices(ctx, services, ports.EmptyScope{}, ports.WithSyncOp(syncOp)); err != nil {
 		return errors.Wrap(err, "failed to sync services in storage")
-	}
-
-	// Handle sgroups synchronization if configured
-	if s.syncManager != nil {
-		for _, service := range services {
-			if syncableEntity, ok := interface{}(service).(interfaces.SyncableEntity); ok {
-				operation := types.SyncOperationUpsert
-				if syncOp == models.SyncOpDelete {
-					operation = types.SyncOperationDelete
-				}
-
-				if err := s.syncManager.SyncEntity(ctx, syncableEntity, operation); err != nil {
-					// Don't fail the whole operation if sgroups sync fails
-				}
-			} else {
-				// Skip sync if service doesn't implement SyncableEntity interface
-			}
-		}
 	}
 
 	return nil
@@ -836,6 +873,96 @@ func (s *ServiceResourceService) syncServiceAliases(ctx context.Context, writer 
 		return errors.Wrap(err, "failed to sync service aliases in storage")
 	}
 
+	return nil
+}
+
+// isTransientError determines if an error is transient (network/timeout) and should be retried
+// Returns false for validation/business logic errors that should fail immediately
+func isTransientError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Check if it's a gRPC error with a specific code
+	if st, ok := status.FromError(err); ok {
+		switch st.Code() {
+		// Transient errors - retry these
+		case codes.Unavailable, codes.DeadlineExceeded, codes.ResourceExhausted, codes.Aborted:
+			return true
+		// Permanent errors - don't retry these
+		case codes.InvalidArgument, codes.AlreadyExists, codes.FailedPrecondition,
+			codes.NotFound, codes.PermissionDenied, codes.Unauthenticated:
+			return false
+		}
+	}
+
+	// Fallback: check error message for common transient error patterns
+	errMsg := strings.ToLower(err.Error())
+	return strings.Contains(errMsg, "connection") ||
+		strings.Contains(errMsg, "timeout") ||
+		strings.Contains(errMsg, "unavailable") ||
+		strings.Contains(errMsg, "deadline")
+}
+
+// syncServiceWithExternal syncs a Service with external systems
+// If allowRetry is false, only attempts sync once (used in transactional operations)
+// If allowRetry is true, retries only on transient errors (network/timeout issues)
+func (s *ServiceResourceService) syncServiceWithExternal(ctx context.Context, service *models.Service, operation types.SyncOperation, allowRetry bool) error {
+	syncKey := fmt.Sprintf("%s-%s", operation, service.Key())
+
+	// Check debouncing only if retry is allowed (post-commit operations)
+	if allowRetry && !s.syncTracker.ShouldSync(syncKey) {
+		return nil // Skip sync due to debouncing
+	}
+
+	// Execute sync - with or without retry based on allowRetry flag
+	var err error
+	if allowRetry {
+		// Post-commit sync: use retry with transient error detection
+		err = utils.ExecuteWithRetry(ctx, s.retryConfig, func() error {
+			// Sync Service with SGROUP
+			if s.syncManager != nil {
+				if syncErr := s.syncManager.SyncEntity(ctx, service, operation); syncErr != nil {
+					// ExecuteWithRetry will check IsRetryableError automatically
+					// If error is not retryable (validation, etc.), it will fail immediately
+					return syncErr
+				}
+			}
+			return nil
+		})
+	} else {
+		// Pre-commit sync: single attempt, no retry
+		if s.syncManager != nil {
+			err = s.syncManager.SyncEntity(ctx, service, operation)
+		}
+	}
+
+	if err != nil {
+		if allowRetry {
+			s.syncTracker.RecordFailure(syncKey, err)
+		}
+		// Set sync failed condition directly on Meta
+		service.Meta.SetCondition(metav1.Condition{
+			Type:               "Ready",
+			Status:             metav1.ConditionFalse,
+			Reason:             "SyncFailed",
+			Message:            fmt.Sprintf("Failed to sync with external system: %v", err),
+			LastTransitionTime: metav1.Now(),
+		})
+		return fmt.Errorf("failed to sync with external system: %w", err)
+	}
+
+	if allowRetry {
+		s.syncTracker.RecordSuccess(syncKey)
+	}
+	// Set sync success condition directly on Meta
+	service.Meta.SetCondition(metav1.Condition{
+		Type:               "Ready",
+		Status:             metav1.ConditionTrue,
+		Reason:             "SyncSucceeded",
+		Message:            "Successfully synced with external system",
+		LastTransitionTime: metav1.Now(),
+	})
 	return nil
 }
 
@@ -950,7 +1077,6 @@ func (s *ServiceResourceService) reprocessDependentResourceConditions(ctx contex
 	}
 	defer reader.Close()
 
-
 	// Find ServiceAliases that reference this service
 	var dependentServiceAliases []models.ServiceAlias
 	err = reader.ListServiceAliases(ctx, func(alias models.ServiceAlias) error {
@@ -974,7 +1100,6 @@ func (s *ServiceResourceService) reprocessDependentResourceConditions(ctx contex
 	if err != nil {
 		return errors.Wrap(err, "failed to find dependent AddressGroupBindings")
 	}
-
 
 	// Re-process conditions for ServiceAliases - this will detect broken references
 	if s.conditionManager != nil {

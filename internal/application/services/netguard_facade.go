@@ -10,7 +10,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"netguard-pg-backend/internal/application/services/resources"
-	"netguard-pg-backend/internal/application/utils"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/sync/interfaces"
@@ -39,12 +38,8 @@ type NetguardFacade struct {
 	conditionManager *ConditionManager
 	syncManager      interfaces.SyncManager
 
-	// 🎯 SEQUENTIAL_PROCESSING: Mutex to serialize RuleS2S operations and prevent PostgreSQL contention
-	// This eliminates database serialization conflicts during complex Cross-RuleS2S aggregation flows
 	ruleS2SMutex sync.Mutex
 }
-
-// ConditionManager is imported from condition_manager.go - no redeclaration needed
 
 // NewNetguardFacade creates a new NetguardFacade with all resource services
 func NewNetguardFacade(
@@ -61,23 +56,18 @@ func NewNetguardFacade(
 	ruleConditionAdapter := &ruleConditionManager{conditionManager}
 
 	validationService := resources.NewValidationService(registry, syncManager)
-
-	// Create host resource services with condition managers (needed first for AddressGroupResourceService)
 	hostResourceService := resources.NewHostResourceService(registry, syncManager, hostConditionAdapter)
-
-	// Create resource services with condition managers
 	serviceResourceService := resources.NewServiceResourceService(registry, syncManager, serviceConditionAdapter)
-	addressGroupResourceService := resources.NewAddressGroupResourceService(registry, syncManager, addressGroupConditionAdapter, validationService, hostResourceService)
-
-	// Create network resource services with condition managers
+	addressGroupResourceService := resources.NewAddressGroupResourceService(registry, syncManager,
+		addressGroupConditionAdapter, validationService, hostResourceService)
 	networkResourceService := resources.NewNetworkResourceService(registry, syncManager, networkConditionAdapter)
-	networkBindingResourceService := resources.NewNetworkBindingResourceService(registry, networkResourceService, syncManager, networkBindingConditionAdapter)
-	hostBindingResourceService := resources.NewHostBindingResourceService(registry, hostResourceService, addressGroupResourceService, syncManager, hostBindingConditionAdapter)
+	networkBindingResourceService := resources.NewNetworkBindingResourceService(registry, networkResourceService,
+		syncManager, networkBindingConditionAdapter)
+	hostBindingResourceService := resources.NewHostBindingResourceService(registry, hostResourceService,
+		addressGroupResourceService, syncManager, hostBindingConditionAdapter)
 
-	// Create RuleS2S service with condition manager
 	ruleS2SResourceService := resources.NewRuleS2SResourceService(registry, syncManager, ruleConditionAdapter)
 
-	// Initialize NetguardFacade first to get access to the sequential mutex
 	facade := &NetguardFacade{
 		serviceResourceService:        serviceResourceService,
 		addressGroupResourceService:   addressGroupResourceService,
@@ -92,33 +82,16 @@ func NewNetguardFacade(
 		syncManager:                   syncManager,
 	}
 
-	// Inject the RuleS2S service into ConditionManager for IEAgAg generation and cleanup
 	if conditionManager != nil {
 		conditionManager.SetIEAgAgRuleManager(ruleS2SResourceService)
 		conditionManager.SetRuleS2SService(ruleS2SResourceService)
-
-		// 🚀 EXTERNAL_SYNC_FIX: Inject SyncManager for AddressGroup external sync
 		conditionManager.SetSyncManager(syncManager)
-		klog.Infof("🚀 EXTERNAL_SYNC_FIX: Injected SyncManager into ConditionManager for AddressGroup sync")
-
-		// 🔒 SEQUENTIAL_PROCESSING: Share the sequential mutex with ConditionManager
-		// This extends deadlock prevention to condition batching operations
 		conditionManager.SetSequentialMutex(&facade.ruleS2SMutex)
-		klog.Infof("🔒 DEADLOCK_FIX: Injected sequential processing mutex into ConditionManager")
 	}
 
-	// Wire up service dependencies to avoid circular imports
-	// ServiceResourceService needs AddressGroupResourceService for port mapping regeneration
 	serviceResourceService.SetPortMappingRegenerator(addressGroupResourceService)
-
-	// CRITICAL: Wire up RuleS2SRegenerator dependencies for reactive IEAgAg rule updates
-	// ServiceResourceService needs RuleS2SResourceService to regenerate IEAgAg rules when Service/ServiceAlias changes
 	serviceResourceService.SetRuleS2SRegenerator(ruleS2SResourceService)
-
-	// AddressGroupResourceService needs RuleS2SResourceService to regenerate IEAgAg rules when AddressGroupBinding changes
 	addressGroupResourceService.SetRuleS2SRegenerator(ruleS2SResourceService)
-
-	klog.Infof("🔗 NetguardFacade: Successfully wired dependency injections - Service ↔ RuleS2S, AddressGroup ↔ RuleS2S")
 
 	return facade
 }
@@ -271,13 +244,11 @@ func (f *NetguardFacade) DeleteAddressGroupBindingsByIDs(ctx context.Context, id
 	f.ruleS2SMutex.Lock()
 	defer f.ruleS2SMutex.Unlock()
 
-	klog.V(2).Infof("🔒 SEQUENTIAL_PROCESSING: Starting DeleteAddressGroupBindingsByIDs for %d bindings (serialized to prevent concurrent reactive cleanup)", len(ids))
 	err := f.addressGroupResourceService.DeleteAddressGroupBindingsByIDs(ctx, ids)
 	if err != nil {
-		klog.Errorf("❌ SEQUENTIAL_PROCESSING: DeleteAddressGroupBindingsByIDs failed for %d bindings: %v", len(ids), err)
-	} else {
-		klog.V(2).Infof("✅ SEQUENTIAL_PROCESSING: DeleteAddressGroupBindingsByIDs completed for %d bindings", len(ids))
+		klog.Errorf("DeleteAddressGroupBindingsByIDs failed for %d bindings: %v", len(ids), err)
 	}
+
 	return err
 }
 
@@ -373,64 +344,47 @@ func (f *NetguardFacade) GetRuleS2SByIDs(ctx context.Context, ids []models.Resou
 }
 
 func (f *NetguardFacade) CreateRuleS2S(ctx context.Context, rule models.RuleS2S) error {
-	// 🎯 SEQUENTIAL_PROCESSING: Serialize RuleS2S operations to prevent PostgreSQL contention
-	// This ensures only one RuleS2S processes at a time, eliminating database conflicts during
-	// complex Cross-RuleS2S aggregation and IEAgAgRule generation flows
 	f.ruleS2SMutex.Lock()
 	defer f.ruleS2SMutex.Unlock()
 
-	klog.V(2).Infof("🔒 SEQUENTIAL_PROCESSING: Starting CreateRuleS2S for %s/%s (serialized)", rule.Namespace, rule.Name)
 	err := f.ruleS2SResourceService.CreateRuleS2S(ctx, rule)
 	if err != nil {
-		klog.V(2).Infof("❌ SEQUENTIAL_PROCESSING: CreateRuleS2S failed for %s/%s: %v", rule.Namespace, rule.Name, err)
-	} else {
-		klog.V(2).Infof("✅ SEQUENTIAL_PROCESSING: CreateRuleS2S completed for %s/%s", rule.Namespace, rule.Name)
+		klog.V(2).Infof("CreateRuleS2S failed for %s/%s: %v", rule.Namespace, rule.Name, err)
 	}
+
 	return err
 }
 
 func (f *NetguardFacade) UpdateRuleS2S(ctx context.Context, rule models.RuleS2S) error {
-	// 🎯 SEQUENTIAL_PROCESSING: Serialize RuleS2S operations to prevent PostgreSQL contention
 	f.ruleS2SMutex.Lock()
 	defer f.ruleS2SMutex.Unlock()
-
-	klog.V(2).Infof("🔒 SEQUENTIAL_PROCESSING: Starting UpdateRuleS2S for %s/%s (serialized)", rule.Namespace, rule.Name)
 	err := f.ruleS2SResourceService.UpdateRuleS2S(ctx, rule)
 	if err != nil {
-		klog.V(2).Infof("❌ SEQUENTIAL_PROCESSING: UpdateRuleS2S failed for %s/%s: %v", rule.Namespace, rule.Name, err)
-	} else {
-		klog.V(2).Infof("✅ SEQUENTIAL_PROCESSING: UpdateRuleS2S completed for %s/%s", rule.Namespace, rule.Name)
+		klog.V(2).Infof("UpdateRuleS2S failed for %s/%s: %v", rule.Namespace, rule.Name, err)
 	}
+
 	return err
 }
 
 func (f *NetguardFacade) SyncRuleS2S(ctx context.Context, rules []models.RuleS2S, scope ports.Scope) error {
-	// 🎯 SEQUENTIAL_PROCESSING: Serialize RuleS2S operations to prevent PostgreSQL contention
-	// This is the CRITICAL method - bulk RuleS2S sync operations trigger the most database conflicts
 	f.ruleS2SMutex.Lock()
 	defer f.ruleS2SMutex.Unlock()
 
-	klog.V(2).Infof("🔒 SEQUENTIAL_PROCESSING: Starting SyncRuleS2S for %d rules (serialized)", len(rules))
 	err := f.ruleS2SResourceService.SyncRuleS2S(ctx, rules, scope, models.SyncOpUpsert)
 	if err != nil {
-		klog.V(2).Infof("❌ SEQUENTIAL_PROCESSING: SyncRuleS2S failed for %d rules: %v", len(rules), err)
-	} else {
-		klog.V(2).Infof("✅ SEQUENTIAL_PROCESSING: SyncRuleS2S completed for %d rules", len(rules))
+		klog.V(2).Infof("SyncRuleS2S failed for %d rules: %v", len(rules), err)
 	}
 	return err
 }
 
 func (f *NetguardFacade) DeleteRuleS2SByIDs(ctx context.Context, ids []models.ResourceIdentifier) error {
-	// 🎯 SEQUENTIAL_PROCESSING: Serialize RuleS2S operations to prevent PostgreSQL contention
+	// Serialize RuleS2S operations to prevent PostgreSQL contention
 	f.ruleS2SMutex.Lock()
 	defer f.ruleS2SMutex.Unlock()
 
-	klog.V(2).Infof("🔒 SEQUENTIAL_PROCESSING: Starting DeleteRuleS2SByIDs for %d rules (serialized)", len(ids))
 	err := f.ruleS2SResourceService.DeleteRuleS2SByIDs(ctx, ids)
 	if err != nil {
-		klog.V(2).Infof("❌ SEQUENTIAL_PROCESSING: DeleteRuleS2SByIDs failed for %d rules: %v", len(ids), err)
-	} else {
-		klog.V(2).Infof("✅ SEQUENTIAL_PROCESSING: DeleteRuleS2SByIDs completed for %d rules", len(ids))
+		klog.V(2).Infof("DeleteRuleS2SByIDs failed for %d rules: %v", len(ids), err)
 	}
 	return err
 }
@@ -456,12 +410,9 @@ func (f *NetguardFacade) DeleteIEAgAgRulesByIDs(ctx context.Context, ids []model
 	f.ruleS2SMutex.Lock()
 	defer f.ruleS2SMutex.Unlock()
 
-	klog.V(2).Infof("🔒 SEQUENTIAL_PROCESSING: Starting DeleteIEAgAgRulesByIDs for %d rules (serialized)", len(ids))
 	err := f.ruleS2SResourceService.DeleteIEAgAgRulesByIDs(ctx, ids)
 	if err != nil {
-		klog.Errorf("❌ SEQUENTIAL_PROCESSING: DeleteIEAgAgRulesByIDs failed for %d rules: %v", len(ids), err)
-	} else {
-		klog.V(2).Infof("✅ SEQUENTIAL_PROCESSING: DeleteIEAgAgRulesByIDs completed for %d rules", len(ids))
+		klog.Errorf("DeleteIEAgAgRulesByIDs failed for %d rules: %v", len(ids), err)
 	}
 	return err
 }
@@ -578,7 +529,7 @@ func (f *NetguardFacade) DeleteNetworkBinding(ctx context.Context, id models.Res
 }
 
 // =============================================================================
-// Host Operations - Direct Registry Access (TODO: Create HostResourceService)
+// Host Operations - Direct Registry Access
 // =============================================================================
 
 func (f *NetguardFacade) GetHosts(ctx context.Context, scope ports.Scope) ([]models.Host, error) {
@@ -728,7 +679,6 @@ func (f *NetguardFacade) Sync(ctx context.Context, syncOp models.SyncOp, resourc
 	// Delegate to appropriate resource service based on resource type with proper syncOp
 	switch typedResources := resources.(type) {
 	case []models.Service:
-
 		return f.serviceResourceService.SyncServices(ctx, typedResources, ports.EmptyScope{}, syncOp)
 	case []models.AddressGroup:
 		return f.addressGroupResourceService.SyncAddressGroups(ctx, typedResources, ports.EmptyScope{}, syncOp)
@@ -745,72 +695,13 @@ func (f *NetguardFacade) Sync(ctx context.Context, syncOp models.SyncOp, resourc
 	case []models.IEAgAgRule:
 		return f.ruleS2SResourceService.SyncIEAgAgRules(ctx, typedResources, ports.EmptyScope{})
 	case []models.Network:
-		// Handle different sync operations for Networks
-		for _, network := range typedResources {
-			switch syncOp {
-			case models.SyncOpDelete:
-				if err := f.networkResourceService.DeleteNetwork(ctx, network.SelfRef.ResourceIdentifier); err != nil {
-					return errors.Wrapf(err, "failed to delete network %s", network.Key())
-				}
-			case models.SyncOpUpsert, models.SyncOpFullSync:
-				if err := f.networkResourceService.CreateNetwork(ctx, &network); err != nil {
-					return errors.Wrapf(err, "failed to create network %s", network.Key())
-				}
-			default:
-				return errors.New(fmt.Sprintf("unsupported sync operation for Network: %v", syncOp))
-			}
-		}
-		return nil
+		return f.networkResourceService.SyncNetworks(ctx, typedResources, ports.EmptyScope{}, syncOp)
 	case []models.NetworkBinding:
-
-		// Handle different sync operations for NetworkBindings
-		for _, binding := range typedResources {
-			switch syncOp {
-			case models.SyncOpDelete:
-				if err := f.networkBindingResourceService.DeleteNetworkBinding(ctx, binding.SelfRef.ResourceIdentifier); err != nil {
-					return errors.Wrapf(err, "failed to delete network binding %s", binding.Key())
-				}
-			case models.SyncOpUpsert, models.SyncOpFullSync:
-				if err := f.networkBindingResourceService.CreateNetworkBinding(ctx, &binding); err != nil {
-					return errors.Wrapf(err, "failed to create network binding %s", binding.Key())
-				}
-			default:
-				return errors.New(fmt.Sprintf("unsupported sync operation for NetworkBinding: %v", syncOp))
-			}
-		}
-		return nil
+		return f.networkBindingResourceService.SyncNetworkBindings(ctx, typedResources, ports.EmptyScope{}, syncOp)
 	case []models.Host:
-		for _, host := range typedResources {
-			switch syncOp {
-			case models.SyncOpDelete:
-				if err := f.hostResourceService.DeleteHost(ctx, host.SelfRef.ResourceIdentifier); err != nil {
-					return errors.Wrapf(err, "failed to delete host %s", host.Key())
-				}
-			case models.SyncOpUpsert, models.SyncOpFullSync:
-				if err := f.hostResourceService.CreateHost(ctx, &host); err != nil {
-					return errors.Wrapf(err, "failed to create host %s", host.Key())
-				}
-			default:
-				return errors.New(fmt.Sprintf("unsupported sync operation for Host: %v", syncOp))
-			}
-		}
-		return nil
+		return f.hostResourceService.SyncHosts(ctx, typedResources, ports.EmptyScope{}, syncOp)
 	case []models.HostBinding:
-		for _, hostBinding := range typedResources {
-			switch syncOp {
-			case models.SyncOpDelete:
-				if err := f.hostBindingResourceService.DeleteHostBinding(ctx, hostBinding.SelfRef.ResourceIdentifier); err != nil {
-					return errors.Wrapf(err, "failed to delete host binding %s", hostBinding.Key())
-				}
-			case models.SyncOpUpsert, models.SyncOpFullSync:
-				if err := f.hostBindingResourceService.CreateHostBinding(ctx, &hostBinding); err != nil {
-					return errors.Wrapf(err, "failed to create host binding %s", hostBinding.Key())
-				}
-			default:
-				return errors.New(fmt.Sprintf("unsupported sync operation for HostBinding: %v", syncOp))
-			}
-		}
-		return nil
+		return f.hostBindingResourceService.SyncHostBindings(ctx, typedResources, ports.EmptyScope{}, syncOp)
 	default:
 		return errors.New(fmt.Sprintf("unsupported resource type: %T", resources))
 	}
@@ -949,15 +840,7 @@ type hostConditionManagerAdapter struct {
 }
 
 func (a *hostConditionManagerAdapter) ProcessHostConditions(ctx context.Context, host *models.Host, syncResult error) error {
-	if syncResult != nil {
-		// Set failed condition if sync failed
-		utils.SetSyncFailedCondition(host, syncResult)
-	} else {
-		// Set success condition if sync succeeded
-		utils.SetSyncSuccessCondition(host)
-	}
-
-	return nil
+	return a.conditionManager.ProcessHostConditions(ctx, host, syncResult)
 }
 
 // hostBindingConditionManagerAdapter adapts the existing ConditionManager to the interface expected by HostBindingResourceService
@@ -966,9 +849,7 @@ type hostBindingConditionManagerAdapter struct {
 }
 
 func (a *hostBindingConditionManagerAdapter) ProcessHostBindingConditions(ctx context.Context, hostBinding *models.HostBinding, syncResult error) error {
-	// For now, just return nil as host binding conditions are not yet implemented
-	// This can be extended when host binding condition processing is needed
-	return nil
+	return a.conditionManager.ProcessHostBindingConditions(ctx, hostBinding, syncResult)
 }
 
 // ruleConditionManager adapts the existing ConditionManager to the interface expected by RuleS2SResourceService
@@ -1024,8 +905,6 @@ func (f *NetguardFacade) processAddressGroupPortMappingConditionsAfterBinding(ct
 
 	// Process conditions for the mapping
 	if f.conditionManager != nil {
-		klog.Infof("🔄 NetguardFacade: Processing conditions for AddressGroupPortMapping %s/%s after binding operation",
-			mapping.Namespace, mapping.Name)
 		if err := f.conditionManager.ProcessAddressGroupPortMappingConditions(ctx, mapping); err != nil {
 			klog.Errorf("Failed to process AddressGroupPortMapping conditions for %s/%s: %v",
 				mapping.Namespace, mapping.Name, err)

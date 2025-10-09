@@ -8,15 +8,9 @@ import (
 	"netguard-pg-backend/internal/domain/ports"
 
 	"github.com/pkg/errors"
-	"k8s.io/klog/v2"
 )
 
-// CreateNewPortMapping creates a new port mapping for an address group and service
 func CreateNewPortMapping(addressGroupID models.ResourceIdentifier, service models.Service) *models.AddressGroupPortMapping {
-	klog.Infof("🔧 CreateNewPortMapping: creating port mapping for address group %s and service %s", addressGroupID.Key(), service.Key())
-	klog.Infof("🔧 Service has %d ingress ports", len(service.IngressPorts))
-
-	// Create a new port mapping with the same ID as the address group
 	portMapping := &models.AddressGroupPortMapping{
 		SelfRef: models.SelfRef{
 			ResourceIdentifier: addressGroupID,
@@ -24,26 +18,17 @@ func CreateNewPortMapping(addressGroupID models.ResourceIdentifier, service mode
 		AccessPorts: make(map[models.ServiceRef]models.ServicePorts),
 	}
 
-	// Add the service ports to the mapping
 	servicePorts := models.ServicePorts{
 		Ports: make(models.ProtocolPorts),
 	}
 
-	// Convert service ingress ports to port ranges
-	for i, ingressPort := range service.IngressPorts {
-		klog.Infof("🔧 Processing port %d: Protocol=%s, Port=%s", i, ingressPort.Protocol, ingressPort.Port)
-
+	for _, ingressPort := range service.IngressPorts {
 		portRanges, err := ParsePortRanges(ingressPort.Port)
 		if err != nil {
-			klog.Errorf("❌ Failed to parse port %s: %v", ingressPort.Port, err)
 			continue
 		}
 
-		klog.Infof("🔧 Parsed %d port ranges for port %s", len(portRanges), ingressPort.Port)
-
-		// Add port ranges to the appropriate protocol
-		for j, portRange := range portRanges {
-			klog.Infof("🔧 Adding port range %d: %d-%d for protocol %s", j, portRange.Start, portRange.End, ingressPort.Protocol)
+		for _, portRange := range portRanges {
 			servicePorts.Ports[ingressPort.Protocol] = append(
 				servicePorts.Ports[ingressPort.Protocol],
 				portRange,
@@ -51,17 +36,8 @@ func CreateNewPortMapping(addressGroupID models.ResourceIdentifier, service mode
 		}
 	}
 
-	// Add the service ports to the mapping
 	serviceRef := models.NewServiceRef(service.Name, models.WithNamespace(service.Namespace))
 	portMapping.AccessPorts[serviceRef] = servicePorts
-
-	klog.Infof("🔧 Final port mapping has %d service entries", len(portMapping.AccessPorts))
-	for serviceRef, servicePorts := range portMapping.AccessPorts {
-		klog.Infof("🔧 Service %s has %d protocols", models.ServiceRefKey(serviceRef), len(servicePorts.Ports))
-		for protocol, ranges := range servicePorts.Ports {
-			klog.Infof("🔧 Protocol %s has %d port ranges", protocol, len(ranges))
-		}
-	}
 
 	return portMapping
 }
@@ -72,37 +48,23 @@ func UpdatePortMapping(
 	serviceRef models.ServiceRef,
 	service models.Service,
 ) *models.AddressGroupPortMapping {
-	klog.Infof("🔧 UpdatePortMapping: updating port mapping for address group %s and service %s", existingMapping.Key(), service.Key())
-	klog.Infof("🔧 Service has %d ingress ports", len(service.IngressPorts))
-
-	// Create a copy of the existing mapping
 	updatedMapping := existingMapping
 
-	// Create service ports if they don't exist
 	if updatedMapping.AccessPorts == nil {
 		updatedMapping.AccessPorts = make(map[models.ServiceRef]models.ServicePorts)
 	}
 
-	// Create or update the service ports
 	servicePorts := models.ServicePorts{
 		Ports: make(models.ProtocolPorts),
 	}
 
-	// Convert service ingress ports to port ranges
-	for i, ingressPort := range service.IngressPorts {
-		klog.Infof("🔧 Processing port %d: Protocol=%s, Port=%s", i, ingressPort.Protocol, ingressPort.Port)
-
+	for _, ingressPort := range service.IngressPorts {
 		portRanges, err := ParsePortRanges(ingressPort.Port)
 		if err != nil {
-			klog.Errorf("❌ Failed to parse port %s: %v", ingressPort.Port, err)
 			continue
 		}
 
-		klog.Infof("🔧 Parsed %d port ranges for port %s", len(portRanges), ingressPort.Port)
-
-		// Add port ranges to the appropriate protocol
-		for j, portRange := range portRanges {
-			klog.Infof("🔧 Adding port range %d: %d-%d for protocol %s", j, portRange.Start, portRange.End, ingressPort.Protocol)
+		for _, portRange := range portRanges {
 			servicePorts.Ports[ingressPort.Protocol] = append(
 				servicePorts.Ports[ingressPort.Protocol],
 				portRange,
@@ -110,17 +72,7 @@ func UpdatePortMapping(
 		}
 	}
 
-	// Update the service ports in the mapping
-	// Use the service's ResourceIdentifier to ensure the namespace is preserved
 	updatedMapping.AccessPorts[models.NewServiceRef(service.Name, models.WithNamespace(service.Namespace))] = servicePorts
-
-	klog.Infof("🔧 Updated port mapping has %d service entries", len(updatedMapping.AccessPorts))
-	for serviceRef, servicePorts := range updatedMapping.AccessPorts {
-		klog.Infof("🔧 Service %s has %d protocols", models.ServiceRefKey(serviceRef), len(servicePorts.Ports))
-		for protocol, ranges := range servicePorts.Ports {
-			klog.Infof("🔧 Protocol %s has %d port ranges", protocol, len(ranges))
-		}
-	}
 
 	return &updatedMapping
 }
@@ -136,7 +88,6 @@ func CheckPortOverlaps(service models.Service, portMapping models.AddressGroupPo
 			return fmt.Errorf("invalid port in service %s: %w", service.Key(), err)
 		}
 
-		// ✨ OPTIMIZATION: Use optimized overlap checking within current port set
 		if err := CheckPortRangeOverlapsOptimized(portRanges, string(ingressPort.Protocol)); err != nil {
 			return fmt.Errorf("port conflict detected within port specification: %s port %s - %v",
 				ingressPort.Protocol, ingressPort.Port, err)
@@ -145,34 +96,29 @@ func CheckPortOverlaps(service models.Service, portMapping models.AddressGroupPo
 		servicePorts[ingressPort.Protocol] = append(servicePorts[ingressPort.Protocol], portRanges...)
 	}
 
-	// ✨ OPTIMIZATION: Use optimized overlap checking within same protocol for service
 	for protocol, ranges := range servicePorts {
 		if err := CheckPortRangeOverlapsOptimized(ranges, string(protocol)); err != nil {
 			return fmt.Errorf("port conflict detected within service %s: %v", service.Key(), err)
 		}
 	}
 
-	// Check for overlaps with existing services in the port mapping
 	for existingServiceRef, existingServicePorts := range portMapping.AccessPorts {
 		// Skip the current service
 		if models.ServiceRefKey(existingServiceRef) == service.Key() {
 			continue
 		}
 
-		// ✨ OPTIMIZATION: Check each protocol using optimized algorithm
 		for protocol, serviceRanges := range servicePorts {
 			existingRanges := existingServicePorts.Ports[protocol]
 			if len(existingRanges) == 0 {
-			continue
-		}
-			// Combine all ranges for this protocol and check for overlaps
+				continue
+			}
+
 			allRanges := make([]models.PortRange, 0, len(serviceRanges)+len(existingRanges))
 			allRanges = append(allRanges, serviceRanges...)
 			allRanges = append(allRanges, existingRanges...)
 
-			// Use optimized overlap detection - if there are overlaps, identify which services
 			if err := CheckPortRangeOverlapsOptimized(allRanges, string(protocol)); err != nil {
-				// Enhanced error reporting: identify which specific services have conflicts
 				for _, serviceRange := range serviceRanges {
 					for _, existingRange := range existingRanges {
 						if DoPortRangesOverlap(serviceRange, existingRange) {
@@ -204,8 +150,6 @@ func (v *AddressGroupBindingValidator) ValidateReferences(ctx context.Context, b
 	serviceValidator := NewServiceValidator(v.reader)
 	addressGroupValidator := NewAddressGroupValidator(v.reader)
 
-	// Create ResourceIdentifier from ObjectReference
-	// 🔧 CRITICAL FIX: Use ServiceRef.Namespace instead of binding.Namespace for cross-namespace support
 	serviceID := models.NewResourceIdentifier(binding.ServiceRef.Name, models.WithNamespace(binding.ServiceRef.Namespace))
 	if err := serviceValidator.ValidateExists(ctx, serviceID); err != nil {
 		return errors.Wrapf(err, "invalid service reference in address group binding %s", binding.Key())
@@ -217,11 +161,29 @@ func (v *AddressGroupBindingValidator) ValidateReferences(ctx context.Context, b
 		return errors.Wrapf(err, "invalid address group reference in address group binding %s", binding.Key())
 	}
 
-	// 🔧 REMOVED: Cross-namespace binding restriction - this is now handled by AddressGroupBindingPolicy validation
-	// Cross-namespace bindings are allowed when there's a proper AddressGroupBindingPolicy in place
-	// The policy validation is performed later in ValidateForCreation/ValidateForUpdate methods
-	// No need to fetch service just for namespace validation since we support cross-namespace bindings
-	// REBUILD FORCE: 2025-08-18 08:07
+	return nil
+}
+
+// ValidateNoConflictWithServiceSpec checks that the AddressGroup being bound
+// is NOT already present in Service.spec.addressGroups
+func (v *AddressGroupBindingValidator) ValidateNoConflictWithServiceSpec(ctx context.Context, binding models.AddressGroupBinding) error {
+	serviceID := models.NewResourceIdentifier(binding.ServiceRef.Name, models.WithNamespace(binding.ServiceRef.Namespace))
+	service, err := v.reader.GetServiceByID(ctx, serviceID)
+	if err != nil {
+		if errors.Is(err, ports.ErrNotFound) {
+			// Service doesn't exist - reference validation will catch this
+			return nil
+		}
+		return errors.Wrap(err, "failed to get service for AddressGroup conflict check")
+	}
+
+	agKey := fmt.Sprintf("%s/%s", binding.AddressGroupRef.Namespace, binding.AddressGroupRef.Name)
+	for _, specAG := range service.AddressGroups {
+		specAGKey := fmt.Sprintf("%s/%s", specAG.Namespace, specAG.Name)
+		if agKey == specAGKey {
+			return fmt.Errorf("AddressGroup conflict: AddressGroup %s is already present in Service %s spec.addressGroups and cannot be bound via AddressGroupBinding", agKey, service.Key())
+		}
+	}
 
 	return nil
 }
@@ -267,8 +229,6 @@ func (v *AddressGroupBindingValidator) ValidateNoDuplicateBindings(ctx context.C
 // This method is used during CREATE operations via webhook and should avoid backend service lookups
 // to prevent circular dependency issues during resource creation
 func (v *AddressGroupBindingValidator) ValidateForCreation(ctx context.Context, binding *models.AddressGroupBinding) error {
-	// PHASE 1: Check for duplicate entity (CRITICAL FIX for overwrite issue)
-	// This prevents creation of entities with the same namespace/name combination
 	keyExtractor := func(entity interface{}) string {
 		if agb, ok := entity.(*models.AddressGroupBinding); ok {
 			return agb.Key()
@@ -279,9 +239,6 @@ func (v *AddressGroupBindingValidator) ValidateForCreation(ctx context.Context, 
 	if err := v.BaseValidator.ValidateEntityDoesNotExistForCreation(ctx, binding.ResourceIdentifier, keyExtractor); err != nil {
 		return err // Return the detailed EntityAlreadyExistsError with logging and context
 	}
-
-	// PHASE 2: Basic field validation (existing validation)
-	klog.Infof("🔍 BACKEND ValidateForCreation: binding %s - performing basic field validation", binding.Key())
 
 	if binding.ServiceRef.Name == "" {
 		return fmt.Errorf("serviceRef.name is required in binding %s", binding.Key())
@@ -296,63 +253,36 @@ func (v *AddressGroupBindingValidator) ValidateForCreation(ctx context.Context, 
 		return fmt.Errorf("namespace is required in binding %s", binding.Key())
 	}
 
-	// If AddressGroup namespace is not specified, assume it's in the same namespace as the binding
-	if binding.AddressGroupRef.Namespace == "" {
-		klog.Infof("AddressGroupRef.Namespace not specified for binding %s, using binding namespace %s",
-			binding.Key(), binding.Namespace)
-	}
-
-	// Basic duplicate binding validation that doesn't require service lookups
-	// This will validate against existing bindings but won't validate if the service exists
 	if err := v.ValidateNoDuplicateBindings(ctx, *binding); err != nil {
-		klog.Errorf("Duplicate binding validation failed for %s: %v", binding.Key(), err)
 		return err
 	}
 
-	// 🔧 FIX: For AddressGroupBinding CREATE during admission webhook,
-	// we CAN and SHOULD perform port conflict validation because:
-	// 1. The referenced service must already exist
-	// 2. The referenced AddressGroup must already exist
-	// 3. We need to prevent port conflicts BEFORE binding creation
-	klog.Infof("🔧 FIX: ValidateForCreation binding %s - performing port conflict validation", binding.Key())
+	if err := v.ValidateNoConflictWithServiceSpec(ctx, *binding); err != nil {
+		return err
+	}
 
-	// Validate that the service and AddressGroup exist and check for port conflicts
 	if err := v.ValidateReferences(ctx, *binding); err != nil {
-		klog.Errorf("🔧 FIX: Reference validation failed for binding %s: %v", binding.Key(), err)
 		return err
 	}
 
-	// Get service and existing port mapping to check for port conflicts
-	// 🔧 CRITICAL FIX: Use ServiceRef.Namespace instead of binding.Namespace for cross-namespace support
 	serviceID := models.NewResourceIdentifier(binding.ServiceRef.Name, models.WithNamespace(binding.ServiceRef.Namespace))
 	service, err := v.reader.GetServiceByID(ctx, serviceID)
 	if err != nil {
-		klog.Errorf("🔧 FIX: Failed to get service for port conflict validation in binding %s: %v", binding.Key(), err)
 		return fmt.Errorf("failed to get service for port conflict validation: %v", err)
 	}
 
-	// Get AddressGroup to check namespace for cross-namespace policy validation
 	agID := models.NewResourceIdentifier(binding.AddressGroupRef.Name, models.WithNamespace(binding.AddressGroupRef.Namespace))
 	addressGroup, err := v.reader.GetAddressGroupByID(ctx, agID)
 	if err != nil {
-		klog.Errorf("🔧 FIX: Failed to get address group for namespace validation in binding %s: %v", binding.Key(), err)
 		return fmt.Errorf("failed to get address group for namespace validation: %v", err)
 	}
 	if addressGroup == nil {
-		klog.Errorf("🔧 FIX: Address group not found or is nil for binding %s", binding.Key())
 		return fmt.Errorf("address group not found or is nil for binding %s", binding.Key())
 	}
 
-	// 🔧 FIX: Add cross-namespace policy validation to ValidateForCreation
-	// If AddressGroup is in a different namespace than Binding/Service, check for policy
 	if addressGroup.Namespace != binding.Namespace {
-		klog.Infof("🔧 FIX: Cross-namespace binding detected - AddressGroup %s in namespace %s, binding %s in namespace %s",
-			addressGroup.Name, addressGroup.Namespace, binding.Name, binding.Namespace)
-
-		// Check for AddressGroupBindingPolicy in AddressGroup's namespace
 		policyFound := false
 
-		// Create scope for AddressGroup's namespace
 		namespaceScope := ports.ResourceIdentifierScope{
 			Identifiers: []models.ResourceIdentifier{
 				{Namespace: addressGroup.Namespace},
@@ -360,59 +290,41 @@ func (v *AddressGroupBindingValidator) ValidateForCreation(ctx context.Context, 
 		}
 
 		err := v.reader.ListAddressGroupBindingPolicies(ctx, func(policy models.AddressGroupBindingPolicy) error {
-			// Check that policy references the required AddressGroup and Service
 			if policy.AddressGroupRefKey() == binding.AddressGroupRefKey() &&
 				policy.ServiceRefKey() == binding.ServiceRefKey() {
 				policyFound = true
-				klog.Infof("🔧 FIX: Found required policy %s in namespace %s for cross-namespace binding %s",
-					policy.Name, policy.Namespace, binding.Key())
-				return fmt.Errorf("policy found") // Use error to break the loop
+				return fmt.Errorf("policy found")
 			}
 			return nil
 		}, namespaceScope)
 
-		// Ignore "policy found" error as it's not a real error
 		if err != nil && err.Error() != "policy found" {
-			klog.Errorf("🔧 FIX: Failed to check for binding policies: %v", err)
 			return fmt.Errorf("failed to check for binding policies: %v", err)
 		}
 
 		if !policyFound {
-			klog.Errorf("🔧 FIX: Cross-namespace binding blocked - no policy found")
 			return fmt.Errorf("cross-namespace binding not allowed: no AddressGroupBindingPolicy found in namespace %s that references both AddressGroup %s and Service %s",
 				addressGroup.Namespace, binding.AddressGroupRef.Name, binding.ServiceRef.Name)
 		}
-
-		klog.Infof("✅ Cross-namespace binding policy validation passed for binding %s", binding.Key())
 	}
 
-	// Check if there's an existing port mapping and validate port conflicts
 	portMapping, err := v.reader.GetAddressGroupPortMappingByID(ctx, agID)
 	if err == nil && portMapping != nil {
-		// Port mapping exists - check for port overlaps with this new service
 		if err := CheckPortOverlaps(*service, *portMapping); err != nil {
-			klog.Errorf("🔧 FIX: Port conflict detected for binding %s: %v", binding.Key(), err)
 			return fmt.Errorf("port conflict detected: %v", err)
 		}
 	}
 
-	klog.Infof("✅ ValidateForCreation completed for binding %s - all validation passed including cross-namespace policy and port conflicts", binding.Key())
 	return nil
 }
 
 // ValidateForPostCommit validates an address group binding after it has been committed to database
 // This skips duplicate checking since the entity already exists in the database
 func (v *AddressGroupBindingValidator) ValidateForPostCommit(ctx context.Context, binding *models.AddressGroupBinding) error {
-	// PHASE 1: Skip duplicate entity check (entity is already committed)
-	// This method is called AFTER the entity is saved to database, so existence is expected
-
-	// PHASE 2: Validate references (existing validation)
 	if err := v.ValidateReferences(ctx, *binding); err != nil {
 		return err
 	}
 
-	// PHASE 3: Check for cross-namespace policy requirement (existing validation)
-	// Get address group to determine namespace
 	addressGroupRef := models.ResourceIdentifier{Name: binding.AddressGroupRef.Name, Namespace: binding.AddressGroupRef.Namespace}
 	addressGroup, err := v.reader.GetAddressGroupByID(ctx, addressGroupRef)
 	if err != nil {
@@ -422,12 +334,7 @@ func (v *AddressGroupBindingValidator) ValidateForPostCommit(ctx context.Context
 		return fmt.Errorf("address group not found: %s", addressGroupRef.Key())
 	}
 
-	// Check if cross-namespace validation is needed
 	if addressGroup.Namespace != binding.ServiceRef.Namespace {
-		klog.Infof("🔧 Cross-namespace binding detected in post-commit validation: AddressGroup=%s, Service=%s",
-			addressGroup.Namespace, binding.ServiceRef.Namespace)
-
-		// Check for required policy
 		policyFound := false
 		namespaceScope := ports.ResourceIdentifierScope{
 			Identifiers: []models.ResourceIdentifier{
@@ -452,21 +359,15 @@ func (v *AddressGroupBindingValidator) ValidateForPostCommit(ctx context.Context
 		}
 	}
 
-	// PHASE 4: Check for business logic duplicates
 	if err := v.ValidateNoDuplicateBindings(ctx, *binding); err != nil {
 		return err
 	}
 
-	klog.Infof("✅ ValidateForPostCommit completed for binding %s", binding.Key())
 	return nil
 }
 
 // ValidateForUpdate validates an address group binding before update
 func (v *AddressGroupBindingValidator) ValidateForUpdate(ctx context.Context, oldBinding models.AddressGroupBinding, newBinding *models.AddressGroupBinding) error {
-	// 🚀 PHASE 1 & 2: Ready Condition Framework + Object Reference Immutability
-	// Ported from k8s-controller addressgroupbinding_webhook.go pattern
-
-	// Advanced object reference validation - validate multiple references at once
 	referenceComparisons := []ObjectReferenceComparison{
 		{
 			OldRef:    &NamespacedObjectReferenceAdapter{Ref: oldBinding.ServiceRef},
@@ -608,9 +509,5 @@ func (v *AddressGroupBindingValidator) ValidateForUpdate(ctx context.Context, ol
 
 // CheckDependencies checks if there are dependencies before deleting an address group binding
 func (v *AddressGroupBindingValidator) CheckDependencies(ctx context.Context, id models.ResourceIdentifier) error {
-	// AddressGroupBinding is a relationship entity - nothing should depend on it directly
-	// It can be safely deleted as it doesn't have dependents
-
-	// Log the dependency check for consistency with other validators
 	return nil
 }

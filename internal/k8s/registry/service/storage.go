@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/klog/v2"
 
@@ -19,7 +19,6 @@ import (
 	"netguard-pg-backend/internal/k8s/client"
 	"netguard-pg-backend/internal/k8s/registry/base"
 	"netguard-pg-backend/internal/k8s/registry/convert"
-	"netguard-pg-backend/internal/k8s/registry/utils"
 	"netguard-pg-backend/internal/k8s/registry/validation"
 )
 
@@ -28,94 +27,37 @@ type ServiceStorage struct {
 	*base.BaseStorage[*netguardv1beta1.Service, *models.Service]
 }
 
-// Patch adds logging to track PATCH requests at ServiceStorage level
+// Patch delegates to BaseStorage
 func (s *ServiceStorage) Patch(ctx context.Context, name string, patchType types.PatchType, data []byte, options *metav1.PatchOptions, subresources ...string) (runtime.Object, error) {
-	klog.InfoS("🔥🔥🔥 ServiceStorage.Patch CALLED - HIGHER LEVEL PATCH ENTRY POINT",
+	klog.V(4).InfoS("ServiceStorage.Patch called",
 		"name", name,
 		"patchType", string(patchType),
 		"subresources", subresources)
 
-	// Delegate to BaseStorage
 	return s.BaseStorage.Patch(ctx, name, patchType, data, options, subresources...)
 }
 
-// Get adds logging to compare with Patch flow
+// Get delegates to BaseStorage
 func (s *ServiceStorage) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
-	namespace := utils.NamespaceFrom(ctx)
-	klog.InfoS("🔍🔍🔍 ServiceStorage.Get CALLED - DETAILED ANALYSIS",
-		"name", name,
-		"namespace", namespace,
-		"options", fmt.Sprintf("%+v", options),
-		"call_source", "Could be external kubectl OR internal objInfo circular call")
-
-	// Check if this might be the problematic objInfo internal call
-	if requestInfo, ok := request.RequestInfoFrom(ctx); ok {
-		klog.InfoS("🔍 ServiceStorage.Get - REQUEST CONTEXT ANALYSIS",
-			"verb", requestInfo.Verb,
-			"resource", requestInfo.Resource,
-			"name", requestInfo.Name,
-			"namespace", requestInfo.Namespace,
-			"apiGroup", requestInfo.APIGroup,
-			"apiVersion", requestInfo.APIVersion,
-			"isResourceRequest", requestInfo.IsResourceRequest)
-	}
-
-	// Check user context to distinguish internal vs external calls
-	if userInfo, ok := request.UserFrom(ctx); ok {
-		klog.InfoS("🔍 ServiceStorage.Get - USER CONTEXT",
-			"username", userInfo.GetName(),
-			"uid", userInfo.GetUID(),
-			"groups", userInfo.GetGroups(),
-			"note", "If this fails, compare with successful objInfo context")
-	}
-
-	// Delegate to BaseStorage with enhanced error tracking
 	result, err := s.BaseStorage.Get(ctx, name, options)
-
 	if err != nil {
-		klog.InfoS("❌ ServiceStorage.Get FAILED - CRITICAL ERROR ANALYSIS",
-			"name", name,
-			"namespace", namespace,
-			"error", err.Error(),
-			"errorType", fmt.Sprintf("%T", err),
-			"theory", "This might be the objInfo internal GET failure!")
-	} else {
-		klog.InfoS("✅ ServiceStorage.Get SUCCESS",
-			"name", name,
-			"namespace", namespace,
-			"note", "GET worked fine - check if this was objInfo or external call")
+		klog.V(4).InfoS("ServiceStorage.Get failed", "name", name, "error", err.Error())
 	}
-
 	return result, err
 }
 
-// Update adds logging to track UPDATE calls during PATCH operations
+// Update delegates to BaseStorage
 func (s *ServiceStorage) Update(ctx context.Context, name string, objInfo rest.UpdatedObjectInfo, createValidation rest.ValidateObjectFunc, updateValidation rest.ValidateObjectUpdateFunc, forceAllowCreate bool, options *metav1.UpdateOptions) (runtime.Object, bool, error) {
-	klog.InfoS("🔄🔄🔄 ServiceStorage.Update CALLED - PATCH MIGHT USE THIS",
-		"name", name,
-		"forceAllowCreate", forceAllowCreate)
-
-	// Delegate to BaseStorage with comprehensive error handling
 	result, created, err := s.BaseStorage.Update(ctx, name, objInfo, createValidation, updateValidation, forceAllowCreate, options)
-
 	if err != nil {
-		klog.InfoS("❌ ServiceStorage.Update FAILED",
-			"name", name,
-			"error", err.Error(),
-			"errorType", fmt.Sprintf("%T", err),
-			"created", created)
-		return nil, created, err
+		klog.V(4).InfoS("ServiceStorage.Update failed", "name", name, "error", err.Error())
 	}
-
-	klog.InfoS("✅ ServiceStorage.Update SUCCESS",
-		"name", name,
-		"created", created)
-
-	return result, created, nil
+	return result, created, err
 }
 
 // Compile-time interface assertions
 var _ rest.TableConvertor = &ServiceStorage{}
+var _ rest.CollectionDeleter = &ServiceStorage{}
 
 // NewServiceStorage creates a new ServiceStorage using BaseStorage with direct client (like AddressGroup)
 func NewServiceStorage(backendClient client.BackendClient) *ServiceStorage {
@@ -141,13 +83,6 @@ func NewServiceStorage(backendClient client.BackendClient) *ServiceStorage {
 	storage := &ServiceStorage{
 		BaseStorage: baseStorage,
 	}
-
-	// DEBUG: Check interface assertions at runtime
-	klog.InfoS("🔧 INTERFACE DEBUG: Checking ServiceStorage interface assertions",
-		"implements_rest.Storage", func() bool { _, ok := interface{}(storage).(rest.Storage); return ok }(),
-		"implements_rest.Patcher", func() bool { _, ok := interface{}(storage).(rest.Patcher); return ok }(),
-		"implements_rest.Getter", func() bool { _, ok := interface{}(storage).(rest.Getter); return ok }(),
-		"baseStorage_implements_rest.Patcher", func() bool { _, ok := interface{}(baseStorage).(rest.Patcher); return ok }())
 
 	return storage
 }
@@ -176,14 +111,6 @@ func NewServiceStorageWithClient(backendClient client.BackendClient) *ServiceSto
 	storage := &ServiceStorage{
 		BaseStorage: baseStorage,
 	}
-
-	// DEBUG: Check interface assertions for OLD method (the one actually used)
-	klog.InfoS("🔧 OLD METHOD INTERFACE DEBUG: Checking ServiceStorage interface assertions",
-		"method", "NewServiceStorageWithClient",
-		"implements_rest.Storage", func() bool { _, ok := interface{}(storage).(rest.Storage); return ok }(),
-		"implements_rest.Patcher", func() bool { _, ok := interface{}(storage).(rest.Patcher); return ok }(),
-		"implements_rest.Getter", func() bool { _, ok := interface{}(storage).(rest.Getter); return ok }(),
-		"baseStorage_implements_rest.Patcher", func() bool { _, ok := interface{}(baseStorage).(rest.Patcher); return ok }())
 
 	return storage
 }
@@ -249,4 +176,48 @@ func durationShortHumanDuration(d time.Duration) string {
 	}
 	days := hours / 24
 	return fmt.Sprintf("%dd", days)
+}
+
+// DeleteCollection implements rest.CollectionDeleter
+func (s *ServiceStorage) DeleteCollection(ctx context.Context, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions, listOptions *internalversion.ListOptions) (runtime.Object, error) {
+	obj, err := s.List(ctx, listOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	list, ok := obj.(*netguardv1beta1.ServiceList)
+	if !ok {
+		return nil, fmt.Errorf("unexpected object type from List: %T", obj)
+	}
+
+	deletedItems := &netguardv1beta1.ServiceList{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ServiceList",
+			APIVersion: netguardv1beta1.SchemeGroupVersion.String(),
+		},
+	}
+
+	for i := range list.Items {
+		item := &list.Items[i]
+
+		if deleteValidation != nil {
+			if err := deleteValidation(ctx, item); err != nil {
+				return nil, err
+			}
+		}
+
+		_, _, err := s.Delete(ctx, item.Name, deleteValidation, options)
+		if err != nil {
+			return nil, fmt.Errorf("failed to delete service %s: %w", item.Name, err)
+		}
+
+		deletedItems.Items = append(deletedItems.Items, *item)
+	}
+
+	return deletedItems, nil
+}
+
+// Kind implements rest.KindProvider
+func (s *ServiceStorage) Kind() string {
+	return "Service"
 }

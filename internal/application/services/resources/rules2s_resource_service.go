@@ -363,7 +363,6 @@ func (s *RuleS2SResourceService) DeleteRuleS2SByIDs(ctx context.Context, ids []m
 		}
 	}
 
-
 	// 🎯 CRITICAL FIX: Capture IEAgAgRules that are referenced by RuleS2S being deleted BEFORE deletion
 	var referencedIEAgAgRules []models.ResourceIdentifier
 	for _, id := range ids {
@@ -1235,7 +1234,6 @@ func (s *RuleS2SResourceService) RegenerateIEAgAgRulesForAddressGroupBinding(ctx
 		return nil
 	}
 
-
 	// Regenerate IEAgAg rules for affected RuleS2S
 	return s.regenerateIEAgAgRulesForRuleS2SList(ctx, affectedRules)
 }
@@ -1606,7 +1604,7 @@ func (s *RuleS2SResourceService) generateAggregatedIEAgAgRules(ctx context.Conte
 					processedCombinations[combinationKey] = true
 
 					// CLOUD-187: Pass protocol parameter to filter ports by TCP/UDP
-				contributingRules, err := s.findContributingRuleS2S(ctx, &currentRule, localService, targetService, excludeMap, protocol)
+					contributingRules, err := s.findContributingRuleS2S(ctx, &currentRule, localService, targetService, excludeMap, protocol)
 					if err != nil {
 						continue
 					}
@@ -2201,7 +2199,6 @@ func (s *RuleS2SResourceService) triggerPostCreationIEAgAgRuleGeneration(ctx con
 	if err != nil {
 		return nil
 	}
-
 
 	// Check if both services have AddressGroups - if yes, we should have generated IEAgAgRules
 	if len(localService.AddressGroups) > 0 && len(targetService.AddressGroups) > 0 {

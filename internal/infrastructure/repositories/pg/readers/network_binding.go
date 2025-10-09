@@ -25,10 +25,15 @@ func (r *Reader) ListNetworkBindings(ctx context.Context, consume func(models.Ne
 		FROM network_bindings nb
 		INNER JOIN k8s_metadata m ON nb.resource_version = m.resource_version`
 
-	// Apply scope filtering
+	// Apply scope filtering and deletion_timestamp filter
 	whereClause, args := utils.BuildScopeFilter(scope, "nb")
+
+	// Always filter out objects being deleted
+	deletionFilter := "m.deletion_timestamp IS NULL"
 	if whereClause != "" {
-		query += " WHERE " + whereClause
+		query += " WHERE " + whereClause + " AND " + deletionFilter
+	} else {
+		query += " WHERE " + deletionFilter
 	}
 
 	query += " ORDER BY nb.namespace, nb.name"

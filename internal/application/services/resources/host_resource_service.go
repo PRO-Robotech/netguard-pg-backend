@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/klog/v2"
+
 	"netguard-pg-backend/internal/application/utils"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -89,18 +91,13 @@ func (s *HostResourceService) CreateHost(ctx context.Context, host *models.Host)
 	// Process conditions after sync (so sync result can be included in conditions)
 	if s.conditionManager != nil {
 		if err := s.conditionManager.ProcessHostConditions(ctx, host, syncErr); err != nil {
-		}
-
-		// Update the host status with conditions in the database
-		if updateErr := s.updateHostStatus(ctx, host); updateErr != nil {
+			klog.Errorf("Failed to process host conditions for %s/%s: %v",
+				host.Namespace, host.Name, err)
+			// Don't fail the operation if condition processing fails
 		}
 	}
 
-	if syncErr != nil {
-		return fmt.Errorf("host created but SGROUP sync failed: %w", syncErr)
-	}
-
-	return nil
+	return syncErr
 }
 
 // UpdateHost updates an existing Host
@@ -132,24 +129,17 @@ func (s *HostResourceService) UpdateHost(ctx context.Context, host *models.Host)
 
 	// Sync with external systems
 	syncErr := s.syncHostWithExternal(ctx, host, types.SyncOperationUpsert)
-	if syncErr != nil {
-		// Continue with condition processing even if sync fails
-	} else {
-	}
 
 	// Process conditions after sync
 	if s.conditionManager != nil {
 		if err := s.conditionManager.ProcessHostConditions(ctx, host, syncErr); err != nil {
-		}
-
-		if updateErr := s.updateHostStatus(ctx, host); updateErr != nil {
+			klog.Errorf("Failed to process host conditions for %s/%s: %v",
+				host.Namespace, host.Name, err)
+			// Don't fail the operation if condition processing fails
 		}
 	}
 
-	if syncErr != nil {
-	}
-
-	return nil
+	return syncErr
 }
 
 // DeleteHost deletes a Host by resource identifier with cascading deletion of HostBinding
@@ -253,11 +243,6 @@ func (s *HostResourceService) DeleteHost(ctx context.Context, id models.Resource
 		if ag, err := reader.GetAddressGroupByID(ctx, agID); err == nil && ag != nil {
 			addressGroupToSync = ag
 		}
-
-		hostBindingID := models.NewResourceIdentifier(hostBindingToDelete.Name, models.WithNamespace(hostBindingToDelete.Namespace))
-		if err := writer.DeleteHostBindingsByIDs(ctx, []models.ResourceIdentifier{hostBindingID}); err != nil {
-			return fmt.Errorf("failed to delete host binding %s: %w", hostBindingToDelete.Key(), err)
-		}
 	}
 
 	if err := writer.DeleteHostsByIDs(ctx, []models.ResourceIdentifier{id}); err != nil {
@@ -275,16 +260,13 @@ func (s *HostResourceService) DeleteHost(ctx context.Context, id models.Resource
 				Name:      addressGroupToSync.Name,
 				Namespace: addressGroupToSync.Namespace,
 			}); err == nil && updatedAG != nil {
-				if syncErr := s.syncManager.SyncEntityForced(ctx, updatedAG, types.SyncOperationUpsert); syncErr != nil {
-				}
+				_ = s.syncManager.SyncEntityForced(ctx, updatedAG, types.SyncOperationUpsert)
 			}
 			reader.Close()
 		}
 	}
 
-	err = s.syncHostWithExternal(ctx, existing, types.SyncOperationDelete)
-	if err != nil {
-	}
+	_ = s.syncHostWithExternal(ctx, existing, types.SyncOperationDelete)
 	return nil
 }
 
@@ -316,95 +298,39 @@ func (s *HostResourceService) ListHosts(ctx context.Context, scope ports.Scope) 
 
 // SyncHosts synchronizes multiple hosts with the specified operation
 func (s *HostResourceService) SyncHosts(ctx context.Context, hosts []models.Host, scope ports.Scope, syncOp models.SyncOp) error {
-	switch syncOp {
-	case models.SyncOpFullSync:
-		return s.fullSyncHosts(ctx, hosts, scope)
-	case models.SyncOpUpsert:
-		return s.upsertHosts(ctx, hosts)
-	case models.SyncOpDelete:
-		return s.deleteHosts(ctx, hosts)
-	default:
-		return fmt.Errorf("unsupported sync operation: %v", syncOp)
-	}
-}
-
-// fullSyncHosts performs a full synchronization of hosts
-func (s *HostResourceService) fullSyncHosts(ctx context.Context, hosts []models.Host, scope ports.Scope) error {
-
-	// Get current hosts from registry
-	existingHosts, err := s.ListHosts(ctx, scope)
+	// Get writer from registry
+	writer, err := s.repo.Writer(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get existing hosts: %w", err)
+		return fmt.Errorf("failed to get writer: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	// Call writer.SyncHosts directly with the hosts and syncOp
+	if err = writer.SyncHosts(ctx, hosts, scope, ports.WithSyncOp(syncOp)); err != nil {
+		return fmt.Errorf("failed to sync hosts: %w", err)
 	}
 
-	// Create maps for efficient lookup
-	incomingHosts := make(map[string]models.Host)
-	for _, host := range hosts {
-		incomingHosts[host.Key()] = host
+	// Commit transaction
+	if err = writer.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	existingHostsMap := make(map[string]models.Host)
-	for _, host := range existingHosts {
-		existingHostsMap[host.Key()] = host
-	}
-
-	// Process incoming hosts (create or update)
-	for _, host := range hosts {
-		if _, exists := existingHostsMap[host.Key()]; exists {
-			if err := s.UpdateHost(ctx, &host); err != nil {
-				return fmt.Errorf("failed to update host %s: %w", host.Key(), err)
+	if s.syncManager != nil {
+		if syncOp == models.SyncOpDelete {
+			for i := range hosts {
+				_ = s.syncHostWithExternal(ctx, &hosts[i], types.SyncOperationDelete)
 			}
 		} else {
-			if err := s.CreateHost(ctx, &host); err != nil {
-				return fmt.Errorf("failed to create host %s: %w", host.Key(), err)
+			for i := range hosts {
+				syncErr := s.syncHostWithExternal(ctx, &hosts[i], types.SyncOperationUpsert)
+				if s.conditionManager != nil {
+					_ = s.conditionManager.ProcessHostConditions(ctx, &hosts[i], syncErr)
+				}
 			}
-		}
-	}
-
-	// Delete hosts that are no longer in the incoming set
-	for _, existingHost := range existingHosts {
-		if _, stillExists := incomingHosts[existingHost.Key()]; !stillExists {
-			if err := s.DeleteHost(ctx, existingHost.SelfRef.ResourceIdentifier); err != nil {
-				return fmt.Errorf("failed to delete host %s: %w", existingHost.Key(), err)
-			}
-		}
-	}
-
-	return nil
-}
-
-// upsertHosts creates or updates multiple hosts
-func (s *HostResourceService) upsertHosts(ctx context.Context, hosts []models.Host) error {
-
-	for _, host := range hosts {
-		// Check if host already exists
-		existing, err := s.getHostByID(ctx, host.Key())
-		if err != nil && !errors.Is(err, ports.ErrNotFound) {
-			return fmt.Errorf("failed to check existing host %s: %w", host.Key(), err)
-		}
-
-		if existing != nil {
-			// Update existing host
-			if err := s.UpdateHost(ctx, &host); err != nil {
-				return fmt.Errorf("failed to update host %s: %w", host.Key(), err)
-			}
-		} else {
-			// Create new host
-			if err := s.CreateHost(ctx, &host); err != nil {
-				return fmt.Errorf("failed to create host %s: %w", host.Key(), err)
-			}
-		}
-	}
-
-	return nil
-}
-
-// deleteHosts deletes multiple hosts
-func (s *HostResourceService) deleteHosts(ctx context.Context, hosts []models.Host) error {
-
-	for _, host := range hosts {
-		if err := s.DeleteHost(ctx, host.SelfRef.ResourceIdentifier); err != nil {
-			return fmt.Errorf("failed to delete host %s: %w", host.Key(), err)
 		}
 	}
 
@@ -478,10 +404,6 @@ func (s *HostResourceService) findHostBindingByHostID(ctx context.Context, hostI
 	return foundBinding, nil
 }
 
-// HostBinding is a NetGuard-only resource, no external sync needed
-// syncHostBindingWithExternal is removed - HostBinding doesn't sync with external systems
-
-// getHostByID retrieves a host by its key using Reader pattern
 func (s *HostResourceService) getHostByID(ctx context.Context, id string) (*models.Host, error) {
 	reader, err := s.repo.Reader(ctx)
 	if err != nil {
@@ -489,7 +411,6 @@ func (s *HostResourceService) getHostByID(ctx context.Context, id string) (*mode
 	}
 	defer reader.Close()
 
-	// Parse namespace/name from id (format: "namespace/name")
 	parts := strings.Split(id, "/")
 	var resourceID models.ResourceIdentifier
 	if len(parts) == 2 {
@@ -524,12 +445,10 @@ func (s *HostResourceService) syncHostWithExternal(ctx context.Context, host *mo
 
 	if err != nil {
 		s.syncTracker.RecordFailure(syncKey, err)
-		utils.SetSyncFailedCondition(host, err)
 		return fmt.Errorf("failed to sync with external system: %w", err)
 	}
 
 	s.syncTracker.RecordSuccess(syncKey)
-	utils.SetSyncSuccessCondition(host)
 	return nil
 }
 
@@ -557,10 +476,7 @@ func (s *HostResourceService) UpdateHostBinding(ctx context.Context, hostID mode
 		return fmt.Errorf("host not found: %s", hostID.Key())
 	}
 
-	// Check if this is a binding operation (not unbinding)
 	isBinding := bindingID.Name != "" && addressGroupID.Name != ""
-
-	// CRITICAL: Only allow binding if host is ready (synchronized with SGROUP)
 	if isBinding && !utils.IsReadyConditionTrue(host) {
 		return fmt.Errorf("host %s is not ready for binding - must be synchronized with SGROUP first (Ready condition must be True)", hostID.Key())
 	}
@@ -588,9 +504,6 @@ func (s *HostResourceService) UpdateHostBinding(ctx context.Context, hostID mode
 
 	// Update metadata
 	host.GetMeta().TouchOnWrite(fmt.Sprintf("%d", time.Now().UnixNano()))
-
-	// Set success condition
-	utils.SetSyncSuccessCondition(host)
 
 	// Sync the updated host
 	hosts := []models.Host{*host}
@@ -719,15 +632,12 @@ func (s *HostResourceService) updateHostBindingStatusForHost(ctx context.Context
 // updateHostStatus updates only the host status/conditions in the database without triggering sync
 func (s *HostResourceService) updateHostStatus(ctx context.Context, host *models.Host) error {
 	host.GetMeta().TouchOnWrite(fmt.Sprintf("%d", time.Now().UnixNano()))
-
-	// Update only the status in the database
 	writer, err := s.repo.Writer(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get writer: %w", err)
 	}
 	defer writer.Abort()
 
-	// Convert to slice for sync - this only updates status, no external sync
 	hosts := []models.Host{*host}
 	if err := writer.SyncHosts(ctx, hosts, ports.EmptyScope{}, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
 		return fmt.Errorf("failed to sync host status: %w", err)

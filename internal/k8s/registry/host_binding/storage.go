@@ -57,7 +57,8 @@ func (a *HostBindingConverterAdapter) ToList(ctx context.Context, domainObjs []*
 // HostBindingStorage implements REST storage for HostBinding resources using BaseStorage
 type HostBindingStorage struct {
 	*base.BaseStorage[*netguardv1beta1.HostBinding, *models.HostBinding]
-	backendClient client.BackendClient // Direct access to backend for Host operations
+	backendClient client.BackendClient         // Direct access to backend for Host operations
+	converter     *HostBindingConverterAdapter // Converter for domain/k8s conversions
 }
 
 // NewHostBindingStorage creates a new HostBindingStorage using BaseStorage
@@ -84,9 +85,88 @@ func NewHostBindingStorage(backendClient client.BackendClient) *HostBindingStora
 	storage := &HostBindingStorage{
 		BaseStorage:   baseStorage,
 		backendClient: backendClient,
+		converter:     converter,
 	}
 
 	return storage
+}
+
+func (s *HostBindingStorage) Create(ctx context.Context, obj runtime.Object, createValidation rest.ValidateObjectFunc, options *metav1.CreateOptions) (runtime.Object, error) {
+	created, err := s.BaseStorage.Create(ctx, obj, createValidation, options)
+	if err != nil {
+		return nil, err
+	}
+
+	hostBinding, ok := created.(*netguardv1beta1.HostBinding)
+	if !ok {
+		return created, nil
+	}
+
+	domainObj, err := s.converter.ToDomain(ctx, hostBinding)
+	if err != nil {
+		return created, nil
+	}
+
+	if err := s.handleHostBindingCreate(ctx, hostBinding, domainObj); err != nil {
+		return created, nil
+	}
+
+	return created, nil
+}
+
+func (s *HostBindingStorage) Update(ctx context.Context, name string, objInfo rest.UpdatedObjectInfo, createValidation rest.ValidateObjectFunc, updateValidation rest.ValidateObjectUpdateFunc, forceAllowCreate bool, options *metav1.UpdateOptions) (runtime.Object, bool, error) {
+	updated, created, err := s.BaseStorage.Update(ctx, name, objInfo, createValidation, updateValidation, forceAllowCreate, options)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if created {
+		return updated, created, nil
+	}
+
+	hostBinding, ok := updated.(*netguardv1beta1.HostBinding)
+	if !ok {
+		return updated, created, nil
+	}
+
+	domainObj, err := s.converter.ToDomain(ctx, hostBinding)
+	if err != nil {
+		return updated, created, nil
+	}
+
+	if err := s.handleHostBindingUpdate(ctx, hostBinding, nil, domainObj); err != nil {
+		return updated, created, nil
+	}
+
+	return updated, created, nil
+}
+
+func (s *HostBindingStorage) Delete(ctx context.Context, name string, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions) (runtime.Object, bool, error) {
+	obj, err := s.Get(ctx, name, &metav1.GetOptions{})
+	if err != nil {
+		return nil, false, err
+	}
+
+	hostBinding, ok := obj.(*netguardv1beta1.HostBinding)
+	if !ok {
+		return s.BaseStorage.Delete(ctx, name, deleteValidation, options)
+	}
+
+	domainObj, err := s.converter.ToDomain(ctx, hostBinding)
+	if err != nil {
+		return s.BaseStorage.Delete(ctx, name, deleteValidation, options)
+	}
+
+	deleted, async, err := s.BaseStorage.Delete(ctx, name, deleteValidation, options)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if err := s.handleHostBindingDelete(ctx, hostBinding, domainObj); err != nil {
+		return deleted, async, nil
+	}
+
+	return deleted, async, nil
 }
 
 func (s *HostBindingStorage) handleHostBindingCreate(ctx context.Context, obj *netguardv1beta1.HostBinding, domainObj *models.HostBinding) error {
@@ -210,6 +290,9 @@ func (s *HostBindingStorage) updateHostBindingStatus(ctx context.Context, hostBi
 		return fmt.Errorf("failed to get host %s/%s: %w", hostID.Namespace, hostID.Name, err)
 	}
 
+	host.Namespace = hostID.Namespace
+	host.Name = hostID.Name
+
 	// Update Host status based on binding state
 	if isBound {
 		// Set binding information
@@ -272,5 +355,6 @@ func durationShortHumanDuration(d time.Duration) string {
 
 // Ensure HostBindingStorage implements the required interfaces
 var _ rest.StandardStorage = &HostBindingStorage{}
+var _ rest.CollectionDeleter = &HostBindingStorage{}
 var _ rest.KindProvider = &HostBindingStorage{}
 var _ rest.SingularNameProvider = &HostBindingStorage{}

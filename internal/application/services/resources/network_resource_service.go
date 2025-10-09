@@ -171,7 +171,6 @@ func (s *NetworkResourceService) DeleteNetwork(ctx context.Context, id models.Re
 		return nil
 	}
 
-
 	// Check if Network is bound and handle cleanup
 	if existing.IsBound {
 		// Capture AddressGroupRef before clearing it for cleanup
@@ -227,7 +226,6 @@ func (s *NetworkResourceService) DeleteNetwork(ctx context.Context, id models.Re
 	if err := writer.Commit(); err != nil {
 		return fmt.Errorf("failed to commit network deletion: %w", err)
 	}
-
 
 	// Sync deletion with external systems
 	err = s.syncNetworkWithExternal(ctx, existing, types.SyncOperationDelete)
@@ -317,6 +315,47 @@ func (s *NetworkResourceService) ListNetworks(ctx context.Context, scope ports.S
 	}
 
 	return networks, nil
+}
+
+// SyncNetworks synchronizes multiple networks with the specified operation
+func (s *NetworkResourceService) SyncNetworks(ctx context.Context, networks []models.Network, scope ports.Scope, syncOp models.SyncOp) error {
+	// Get writer from registry
+	writer, err := s.repo.Writer(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get writer: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			writer.Abort()
+		}
+	}()
+
+	// Call writer.SyncNetworks directly with the networks and syncOp
+	if err = writer.SyncNetworks(ctx, networks, scope, ports.WithSyncOp(syncOp)); err != nil {
+		return fmt.Errorf("failed to sync networks: %w", err)
+	}
+
+	// Commit transaction
+	if err = writer.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	// Handle external sync for each network if needed (skip for DELETE operations)
+	if syncOp != models.SyncOpDelete && s.syncManager != nil {
+		for i := range networks {
+			syncErr := s.syncNetworkWithExternal(ctx, &networks[i], types.SyncOperationUpsert)
+
+			// Process conditions after sync
+			if s.conditionManager != nil {
+				if err := s.conditionManager.ProcessNetworkConditions(ctx, &networks[i], syncErr); err != nil {
+					klog.Errorf("Failed to process network conditions for %s/%s: %v",
+						networks[i].Namespace, networks[i].Name, err)
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // ValidateNetworkBinding validates that a NetworkBinding can be created for this Network

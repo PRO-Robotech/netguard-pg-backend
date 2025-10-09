@@ -2,13 +2,14 @@ package writers
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pkg/errors"
+	"k8s.io/klog/v2"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -44,25 +45,47 @@ func isUniqueViolation(err error, constraintName string) bool {
 
 // SyncNetworks syncs networks to PostgreSQL with K8s metadata support
 func (w *Writer) SyncNetworks(ctx context.Context, networks []models.Network, scope ports.Scope, options ...ports.Option) error {
-	// Handle scoped sync - delete existing resources in scope first
-	if !scope.IsEmpty() {
+	// Extract sync operation from options
+	syncOp := models.SyncOpUpsert // Default operation
+	for _, opt := range options {
+		if syncOption, ok := opt.(ports.SyncOption); ok {
+			syncOp = syncOption.Operation
+			break
+		}
+	}
+
+	// Handle scoped sync - delete existing resources in scope first (for non-DELETE operations)
+	if !scope.IsEmpty() && syncOp != models.SyncOpDelete {
 		if err := w.deleteNetworksInScope(ctx, scope); err != nil {
 			return errors.Wrap(err, "failed to delete networks in scope")
 		}
 	}
 
-	// Upsert all provided networks
-	for i := range networks {
-		// 🔧 CRITICAL FIX: Initialize metadata fields (UID, Generation, ObservedGeneration)
-		// This is what Memory backend does via ensureMetaFill() -> TouchOnCreate()
-		// Without this, PATCH operations fail because objInfo.UpdatedObject() needs UID
-		// IMPORTANT: Use index-based loop to modify original, not copy!
-		if networks[i].Meta.UID == "" {
-			networks[i].Meta.TouchOnCreate()
+	// Handle operations based on sync operation
+	switch syncOp {
+	case models.SyncOpDelete:
+		// For DELETE operations, delete the specific networks
+		var identifiers []models.ResourceIdentifier
+		for _, network := range networks {
+			identifiers = append(identifiers, models.ResourceIdentifier{
+				Namespace: network.Namespace,
+				Name:      network.Name,
+			})
 		}
+		if err := w.DeleteNetworksByIDs(ctx, identifiers); err != nil {
+			return errors.Wrap(err, "failed to delete networks")
+		}
+	case models.SyncOpUpsert, models.SyncOpFullSync:
+		// For UPSERT/FULLSYNC operations, upsert all provided networks
+		for i := range networks {
+			// Initialize metadata fields if not set
+			if networks[i].Meta.UID == "" {
+				networks[i].Meta.TouchOnCreate()
+			}
 
-		if err := w.upsertNetwork(ctx, networks[i]); err != nil {
-			return errors.Wrapf(err, "failed to upsert network %s/%s", networks[i].Namespace, networks[i].Name)
+			if err := w.upsertNetwork(ctx, &networks[i]); err != nil {
+				return errors.Wrapf(err, "failed to upsert network %s/%s", networks[i].Namespace, networks[i].Name)
+			}
 		}
 	}
 
@@ -70,7 +93,7 @@ func (w *Writer) SyncNetworks(ctx context.Context, networks []models.Network, sc
 }
 
 // upsertNetwork inserts or updates a network with full K8s metadata support
-func (w *Writer) upsertNetwork(ctx context.Context, network models.Network) error {
+func (w *Writer) upsertNetwork(ctx context.Context, network *models.Network) error {
 	// Marshal K8s metadata
 	labelsJSON, annotationsJSON, err := w.marshalLabelsAnnotations(network.Meta.Labels, network.Meta.Annotations)
 	if err != nil {
@@ -82,34 +105,20 @@ func (w *Writer) upsertNetwork(ctx context.Context, network models.Network) erro
 		return errors.Wrap(err, "failed to marshal conditions")
 	}
 
-	// First, check if network exists and get existing resource version
-	var existingResourceVersion sql.NullInt64
-	existingQuery := `SELECT resource_version FROM networks WHERE namespace = $1 AND name = $2`
-	_ = w.tx.QueryRow(ctx, existingQuery, network.Namespace, network.Name).Scan(&existingResourceVersion)
-
+	// ALWAYS INSERT new K8s metadata (to get new ResourceVersion)
+	// PostgreSQL BIGSERIAL primary key only increments on INSERT, not UPDATE
 	var resourceVersion int64
-	if existingResourceVersion.Valid {
-		// UPDATE existing K8s metadata
-		metadataQuery := `
-			UPDATE k8s_metadata 
-			SET labels = $1, annotations = $2, conditions = $3, updated_at = NOW()
-			WHERE resource_version = $4
-			RETURNING resource_version`
-		err = w.tx.QueryRow(ctx, metadataQuery, labelsJSON, annotationsJSON, conditionsJSON, existingResourceVersion.Int64).Scan(&resourceVersion)
-		if err != nil {
-			return errors.Wrapf(err, "failed to update K8s metadata for network %s/%s", network.Namespace, network.Name)
-		}
-	} else {
-		// INSERT new K8s metadata
-		metadataQuery := `
-			INSERT INTO k8s_metadata (labels, annotations, finalizers, conditions)
-			VALUES ($1, $2, '{}', $3)
-			RETURNING resource_version`
-		err = w.tx.QueryRow(ctx, metadataQuery, labelsJSON, annotationsJSON, conditionsJSON).Scan(&resourceVersion)
-		if err != nil {
-			return errors.Wrapf(err, "failed to create K8s metadata for network %s/%s", network.Namespace, network.Name)
-		}
+	metadataQuery := `
+		INSERT INTO k8s_metadata (labels, annotations, finalizers, conditions)
+		VALUES ($1, $2, '{}', $3)
+		RETURNING resource_version`
+	err = w.tx.QueryRow(ctx, metadataQuery, labelsJSON, annotationsJSON, conditionsJSON).Scan(&resourceVersion)
+	if err != nil {
+		return errors.Wrapf(err, "failed to insert K8s metadata for network %s/%s", network.Namespace, network.Name)
 	}
+
+	// Update domain model with new ResourceVersion from DB
+	network.Meta.TouchOnWrite(strconv.FormatInt(resourceVersion, 10))
 
 	// Create network items with single CIDR entry
 	networkItems := []map[string]interface{}{
@@ -131,11 +140,11 @@ func (w *Writer) upsertNetwork(ctx context.Context, network models.Network) erro
 		agRefName = network.AddressGroupRef.Name
 	}
 
-	// Then, upsert the network using the resource version (including new cidr column)
+	// Then, upsert the network using the NEW resource version
 	networkQuery := `
-		INSERT INTO networks (namespace, name, cidr, network_items, is_bound, 
-			binding_ref_namespace, binding_ref_name, 
-			address_group_ref_namespace, address_group_ref_name, 
+		INSERT INTO networks (namespace, name, cidr, network_items, is_bound,
+			binding_ref_namespace, binding_ref_name,
+			address_group_ref_namespace, address_group_ref_name,
 			resource_version)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		ON CONFLICT (namespace, name) DO UPDATE SET
@@ -212,6 +221,23 @@ func (w *Writer) DeleteNetworksByIDs(ctx context.Context, ids []models.ResourceI
 		argIndex += 2
 	}
 
+	// First, mark objects as being deleted in k8s_metadata to prevent re-creation by ListWatch
+	markDeleteQuery := `
+		UPDATE k8s_metadata m
+		SET deletion_timestamp = NOW()
+		FROM networks n
+		WHERE n.resource_version = m.resource_version
+		  AND (%s)
+		  AND m.deletion_timestamp IS NULL`
+
+	markQuery := fmt.Sprintf(markDeleteQuery, strings.Join(conditions, " OR "))
+	_, err := w.tx.Exec(ctx, markQuery, args...)
+	if err != nil {
+		// Log but don't fail - deletion_timestamp is optional for now
+		klog.V(4).InfoS("Failed to mark networks as deleting in k8s_metadata", "error", err.Error())
+	}
+
+	// Then delete from networks table
 	query := fmt.Sprintf(`
 		DELETE FROM networks WHERE %s`,
 		strings.Join(conditions, " OR "))

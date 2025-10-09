@@ -324,6 +324,13 @@ func (c *sgroupsClient) convertSyncRequestToProto(req *types.SyncRequest) (*pb.S
 		} else {
 			return nil, fmt.Errorf("invalid data type for IEAgAgRules subject, expected *pb.SyncIESgSgRules or *models.IEAgAgRule, got %T", req.Data)
 		}
+	case types.SyncSubjectTypeServices:
+		// Support batch SyncServices
+		if services, ok := req.Data.(*pb.SyncServices); ok {
+			pbReq.Subject = &pb.SyncReq_Services{Services: services}
+		} else {
+			return nil, fmt.Errorf("invalid data type for Services subject, expected *pb.SyncServices, got %T", req.Data)
+		}
 	default:
 		return nil, fmt.Errorf("unknown subject type: %s", req.SubjectType)
 	}

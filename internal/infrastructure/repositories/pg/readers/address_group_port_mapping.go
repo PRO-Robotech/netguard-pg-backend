@@ -22,10 +22,15 @@ func (r *Reader) ListAddressGroupPortMappings(ctx context.Context, consume func(
 		FROM address_group_port_mappings agpm
 		INNER JOIN k8s_metadata m ON agpm.resource_version = m.resource_version`
 
-	// Apply scope filtering
+	// Apply scope filtering and deletion_timestamp filter
 	whereClause, args := utils.BuildScopeFilter(scope, "agpm")
+
+	// Always filter out objects being deleted
+	deletionFilter := "m.deletion_timestamp IS NULL"
 	if whereClause != "" {
-		query += " WHERE " + whereClause
+		query += " WHERE " + whereClause + " AND " + deletionFilter
+	} else {
+		query += " WHERE " + deletionFilter
 	}
 
 	query += " ORDER BY agpm.namespace, agpm.name"

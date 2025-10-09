@@ -20,7 +20,7 @@ import (
 func SetupServer(ctx context.Context, grpcAddr string, httpAddr string, service *services.NetguardFacade) (*http.Server, error) {
 	// Create gRPC server
 	grpcServer := grpc.NewServer()
-	netguardServer := netguard.NewNetguardServiceServer(service)
+	netguardServer := netguard.NewServiceServer(service)
 	netguardpb.RegisterNetguardServiceServer(grpcServer, netguardServer)
 
 	gwmux := runtime.NewServeMux(

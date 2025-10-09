@@ -23,10 +23,15 @@ func (r *Reader) ListAddressGroups(ctx context.Context, consume func(models.Addr
 		FROM address_groups ag
 		INNER JOIN k8s_metadata m ON ag.resource_version = m.resource_version`
 
-	// Apply scope filtering
+	// Apply scope filtering and deletion_timestamp filter
 	whereClause, args := utils.BuildScopeFilter(scope, "ag")
+
+	// Always filter out objects being deleted
+	deletionFilter := "m.deletion_timestamp IS NULL"
 	if whereClause != "" {
-		query += " WHERE " + whereClause
+		query += " WHERE " + whereClause + " AND " + deletionFilter
+	} else {
+		query += " WHERE " + deletionFilter
 	}
 
 	query += " ORDER BY ag.namespace, ag.name"
@@ -108,6 +113,15 @@ func (r *Reader) scanAddressGroup(rows pgx.Rows) (models.AddressGroup, error) {
 		if err := json.Unmarshal(networksJSON, &addressGroup.Networks); err != nil {
 			return addressGroup, errors.Wrap(err, "failed to unmarshal networks")
 		}
+		// Ensure Kind and ApiVersion are set for all NetworkItems
+		for i := range addressGroup.Networks {
+			if addressGroup.Networks[i].Kind == "" {
+				addressGroup.Networks[i].Kind = "Network"
+			}
+			if addressGroup.Networks[i].ApiVersion == "" {
+				addressGroup.Networks[i].ApiVersion = "netguard.sgroups.io/v1beta1"
+			}
+		}
 	}
 
 	if len(hostsJSON) > 0 {
@@ -173,6 +187,15 @@ func (r *Reader) scanAddressGroupRow(row pgx.Row) (*models.AddressGroup, error) 
 	if len(networksJSON) > 0 {
 		if err := json.Unmarshal(networksJSON, &addressGroup.Networks); err != nil {
 			return nil, errors.Wrap(err, "failed to unmarshal networks")
+		}
+		// Ensure Kind and ApiVersion are set for all NetworkItems
+		for i := range addressGroup.Networks {
+			if addressGroup.Networks[i].Kind == "" {
+				addressGroup.Networks[i].Kind = "Network"
+			}
+			if addressGroup.Networks[i].ApiVersion == "" {
+				addressGroup.Networks[i].ApiVersion = "netguard.sgroups.io/v1beta1"
+			}
 		}
 	}
 

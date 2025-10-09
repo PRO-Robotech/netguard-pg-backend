@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	"k8s.io/klog/v2"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -22,11 +23,8 @@ type addressGroupRefJSON struct {
 	Namespace  string `json:"namespace"`
 }
 
-// SyncServices implements hybrid sync strategy for services
 func (w *Writer) SyncServices(ctx context.Context, services []models.Service, scope ports.Scope, opts ...ports.Option) error {
-	// Extract sync operation from options (like address_group.go)
-	// This was MISSING and caused PATCH operations to not update resource content!
-	syncOp := models.SyncOpUpsert // Default operation
+	syncOp := models.SyncOpUpsert
 	isConditionOnly := false
 
 	for _, opt := range opts {
@@ -38,8 +36,7 @@ func (w *Writer) SyncServices(ctx context.Context, services []models.Service, sc
 		}
 	}
 
-	// CRITICAL: For condition-only operations, only update k8s_metadata conditions
-	// Don't touch the main services table - just update conditions in the existing metadata
+	// For condition-only operations, only update k8s_metadata conditions
 	if isConditionOnly {
 		for _, service := range services {
 			if err := w.updateServiceConditionsOnly(ctx, service); err != nil {
@@ -57,8 +54,6 @@ func (w *Writer) SyncServices(ctx context.Context, services []models.Service, sc
 		}
 	}
 
-	// Handle operations based on sync operation type
-	// This was COMPLETELY MISSING and is why PATCH operations didn't work!
 	switch syncOp {
 	case models.SyncOpDelete:
 		// For DELETE operations, delete the specific services
@@ -88,6 +83,11 @@ func (w *Writer) SyncServices(ctx context.Context, services []models.Service, sc
 
 			if err := w.upsertService(ctx, services[i]); err != nil {
 				return errors.Wrapf(err, "failed to upsert service %s/%s", services[i].Namespace, services[i].Name)
+			}
+
+			_, err := w.tx.Exec(ctx, "SELECT update_aggregated_ags_for_service($1, $2)", services[i].Namespace, services[i].Name)
+			if err != nil {
+				return errors.Wrapf(err, "failed to update aggregated address groups for service %s/%s", services[i].Namespace, services[i].Name)
 			}
 		}
 	default:
@@ -143,7 +143,6 @@ func (w *Writer) upsertService(ctx context.Context, service models.Service) erro
 	existingQuery := `SELECT resource_version FROM services WHERE namespace = $1 AND name = $2`
 	err = w.tx.QueryRow(ctx, existingQuery, service.Namespace, service.Name).Scan(&existingResourceVersion)
 
-	// Note: sql.ErrNoRows is expected for new services, not an actual error
 	if err != nil {
 		if err != sql.ErrNoRows && err.Error() != "no rows in result set" {
 			return errors.Wrapf(err, "failed to check existing service %s/%s", service.Namespace, service.Name)
@@ -284,6 +283,23 @@ func (w *Writer) deleteServicesByIdentifiers(ctx context.Context, identifiers []
 		argIndex += 2
 	}
 
+	// First, mark objects as being deleted in k8s_metadata to prevent re-creation by ListWatch
+	markDeleteQuery := `
+		UPDATE k8s_metadata m
+		SET deletion_timestamp = NOW()
+		FROM services s
+		WHERE s.resource_version = m.resource_version
+		  AND (%s)
+		  AND m.deletion_timestamp IS NULL`
+
+	markQuery := fmt.Sprintf(markDeleteQuery, strings.Join(conditions, " OR "))
+	_, err := w.tx.Exec(ctx, markQuery, args...)
+	if err != nil {
+		// Log but don't fail - deletion_timestamp is optional for now
+		klog.V(4).InfoS("Failed to mark services as deleting in k8s_metadata", "error", err.Error())
+	}
+
+	// Then delete from services table
 	query := fmt.Sprintf(`
 		DELETE FROM services WHERE %s`,
 		strings.Join(conditions, " OR "))
@@ -295,11 +311,8 @@ func (w *Writer) deleteServicesByIdentifiers(ctx context.Context, identifiers []
 	return nil
 }
 
-// SyncServiceAliases implements hybrid sync strategy for service aliases
 func (w *Writer) SyncServiceAliases(ctx context.Context, aliases []models.ServiceAlias, scope ports.Scope, opts ...ports.Option) error {
-	// Extract sync operation from options (like services and address_group)
-	// This was MISSING and caused DELETE operations to be treated as UPSERT!
-	syncOp := models.SyncOpUpsert // Default operation
+	syncOp := models.SyncOpUpsert
 	isConditionOnly := false
 
 	for _, opt := range opts {
@@ -311,8 +324,7 @@ func (w *Writer) SyncServiceAliases(ctx context.Context, aliases []models.Servic
 		}
 	}
 
-	// CRITICAL: For condition-only operations, only update k8s_metadata conditions
-	// Don't touch the main service_alias table - just update conditions in the existing metadata
+	// For condition-only operations, only update k8s_metadata conditions
 	if isConditionOnly {
 		for _, alias := range aliases {
 			if err := w.updateServiceAliasConditionsOnly(ctx, alias); err != nil {
@@ -330,8 +342,6 @@ func (w *Writer) SyncServiceAliases(ctx context.Context, aliases []models.Servic
 		}
 	}
 
-	// Handle operations based on sync operation type
-	// This was COMPLETELY MISSING and is why DELETE operations were treated as UPSERT!
 	switch syncOp {
 	case models.SyncOpDelete:
 		// For DELETE operations, delete the specific service aliases
@@ -345,10 +355,7 @@ func (w *Writer) SyncServiceAliases(ctx context.Context, aliases []models.Servic
 	case models.SyncOpUpsert, models.SyncOpFullSync:
 		// For UPSERT/FULLSYNC operations, upsert all provided service aliases
 		for i := range aliases {
-			// Initialize metadata fields (UID, Generation, ObservedGeneration)
-			// This is what Memory backend does via ensureMetaFill() -> TouchOnCreate()
-			// Without this, PATCH operations fail because objInfo.UpdatedObject() needs UID
-			// IMPORTANT: Use index-based loop to modify original, not copy!
+			// Initialize metadata fields if not set
 			if aliases[i].Meta.UID == "" {
 				aliases[i].Meta.TouchOnCreate()
 			}
@@ -452,6 +459,23 @@ func (w *Writer) deleteServiceAliasesByIdentifiers(ctx context.Context, identifi
 		argIndex += 2
 	}
 
+	// First, mark objects as being deleted in k8s_metadata to prevent re-creation by ListWatch
+	markDeleteQuery := `
+		UPDATE k8s_metadata m
+		SET deletion_timestamp = NOW()
+		FROM service_aliases sa
+		WHERE sa.resource_version = m.resource_version
+		  AND (%s)
+		  AND m.deletion_timestamp IS NULL`
+
+	markQuery := fmt.Sprintf(markDeleteQuery, strings.Join(conditions, " OR "))
+	_, err := w.tx.Exec(ctx, markQuery, args...)
+	if err != nil {
+		// Log but don't fail - deletion_timestamp is optional for now
+		klog.V(4).InfoS("Failed to mark service aliases as deleting in k8s_metadata", "error", err.Error())
+	}
+
+	// Then delete from service_aliases table
 	query := fmt.Sprintf(`
 		DELETE FROM service_aliases WHERE %s`,
 		strings.Join(conditions, " OR "))
@@ -480,6 +504,23 @@ func (w *Writer) DeleteServiceAliasesByIDs(ctx context.Context, ids []models.Res
 		argIndex += 2
 	}
 
+	// First, mark objects as being deleted in k8s_metadata to prevent re-creation by ListWatch
+	markDeleteQuery := `
+		UPDATE k8s_metadata m
+		SET deletion_timestamp = NOW()
+		FROM service_aliases sa
+		WHERE sa.resource_version = m.resource_version
+		  AND (%s)
+		  AND m.deletion_timestamp IS NULL`
+
+	markQuery := fmt.Sprintf(markDeleteQuery, strings.Join(conditions, " OR "))
+	_, err := w.tx.Exec(ctx, markQuery, args...)
+	if err != nil {
+		// Log but don't fail - deletion_timestamp is optional for now
+		klog.V(4).InfoS("Failed to mark service aliases as deleting in k8s_metadata", "error", err.Error())
+	}
+
+	// Then delete from service_aliases table
 	query := fmt.Sprintf(`
 		DELETE FROM service_aliases WHERE %s`,
 		strings.Join(conditions, " OR "))

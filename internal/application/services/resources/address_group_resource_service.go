@@ -595,7 +595,6 @@ func (s *AddressGroupResourceService) CreateAddressGroupBinding(ctx context.Cont
 		}
 	}()
 
-	// Get reader from writer to ensure same session/transaction visibility
 	reader, err := s.registry.ReaderFromWriter(ctx, writer)
 	if err != nil {
 		return errors.Wrap(err, "failed to get reader from writer")
@@ -651,8 +650,6 @@ func (s *AddressGroupResourceService) CreateAddressGroupBinding(ctx context.Cont
 		} else {
 		}
 	}
-
-	// Regenerate IEAgAg rules that depend on this new AddressGroupBinding
 
 	if s.ruleS2SRegenerator != nil {
 		bindingID := models.ResourceIdentifier{Name: binding.Name, Namespace: binding.Namespace}
@@ -727,7 +724,6 @@ func (s *AddressGroupResourceService) UpdateAddressGroupBinding(ctx context.Cont
 			// Don't fail the operation, but log the issue
 		}
 	}
-
 
 	if s.ruleS2SRegenerator != nil {
 		bindingID := models.ResourceIdentifier{Name: binding.Name, Namespace: binding.Namespace}
@@ -1415,10 +1411,6 @@ func (s *AddressGroupResourceService) SyncAddressGroupPortMappingsWithWriterAndR
 		if err := s.syncAddressGroupPortMappings(ctx, writer, []models.AddressGroupPortMapping{*addressGroupPortMapping}, syncOp); err != nil {
 			return errors.Wrap(err, "failed to sync address group port mapping")
 		}
-
-		// IMPORTANT: Do NOT process conditions here during shared transaction!
-		// Conditions will be processed after the main transaction commits
-		// to avoid transaction conflicts and status overwrites
 	}
 
 	return nil
@@ -1431,13 +1423,10 @@ func (s *AddressGroupResourceService) SyncAddressGroupPortMappings(ctx context.C
 
 // SyncAddressGroupPortMappingsWithSyncOp syncs port mappings with specific sync operation
 func (s *AddressGroupResourceService) SyncAddressGroupPortMappingsWithSyncOp(ctx context.Context, binding models.AddressGroupBinding, syncOp models.SyncOp) error {
-	// For DELETE operations, we need to regenerate the complete mapping after the binding change
-	// For other operations, we can use the optimized single-binding approach
 	if syncOp == models.SyncOpDelete {
 		return s.regenerateCompletePortMappingForAddressGroup(ctx, binding.AddressGroupRef.Name, binding.AddressGroupRef.Namespace)
 	}
 
-	// For non-DELETE operations, use the existing optimized approach
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get writer")
@@ -1456,7 +1445,6 @@ func (s *AddressGroupResourceService) SyncAddressGroupPortMappingsWithSyncOp(ctx
 		return errors.Wrap(err, "failed to commit transaction")
 	}
 
-	// Process conditions AFTER successful commit to avoid transaction conflicts
 	if s.conditionManager != nil {
 		reader, err := s.registry.Reader(ctx)
 		if err != nil {
@@ -1473,17 +1461,14 @@ func (s *AddressGroupResourceService) SyncAddressGroupPortMappingsWithSyncOp(ctx
 
 		addressGroupPortMapping, err := s.generateCompleteAddressGroupPortMapping(ctx, reader, addressGroupRef)
 		if err != nil {
-			// Port conflict detected - this should fail the entire operation
 			return errors.Wrapf(err, "failed to generate port mapping for AddressGroup %s", addressGroupRef.Key())
 		}
 		if addressGroupPortMapping != nil {
-
 			if err := s.conditionManager.ProcessAddressGroupPortMappingConditions(ctx, addressGroupPortMapping); err != nil {
 				klog.Errorf("Failed to process AddressGroupPortMapping conditions for %s/%s: %v",
 					addressGroupPortMapping.Namespace, addressGroupPortMapping.Name, err)
 				// Don't fail the operation if condition processing fails
 			}
-			// Note: ProcessAddressGroupPortMappingConditions handles its own save via saveAddressGroupPortMappingConditions
 		}
 	}
 
@@ -1578,7 +1563,7 @@ func (s *AddressGroupResourceService) RegeneratePortMappingsForService(ctx conte
 			}
 		}
 		return nil
-	}, ports.EmptyScope{}) // EmptyScope = search ALL namespaces
+	}, ports.EmptyScope{})
 
 	if err != nil {
 		return errors.Wrap(err, "failed to list address group bindings")
@@ -1602,7 +1587,6 @@ func (s *AddressGroupResourceService) RegeneratePortMappingsForService(ctx conte
 	if len(addressGroupsToRegenerate) == 0 {
 		return nil
 	}
-
 
 	// Regenerate each affected AddressGroupPortMapping
 	for agKey, addressGroupRef := range addressGroupsToRegenerate {
@@ -1708,11 +1692,6 @@ func (s *AddressGroupResourceService) RegeneratePortMappingsForAddressGroup(ctx 
 	return nil
 }
 
-// =============================================================================
-// Private Helper Methods (extracted from original NetguardService)
-// =============================================================================
-
-// syncAddressGroups handles the actual address group synchronization logic
 func (s *AddressGroupResourceService) syncAddressGroups(ctx context.Context, writer ports.Writer, addressGroups []models.AddressGroup, syncOp models.SyncOp) error {
 
 	// Set AddressGroupName for all address groups before syncing
@@ -1757,30 +1736,20 @@ func (s *AddressGroupResourceService) syncAddressGroups(ctx context.Context, wri
 	// Determine scope
 	var scope ports.Scope
 	if syncOp == models.SyncOpFullSync {
-		// For FullSync operation, use empty scope to delete all address groups, then add only new ones
 		scope = ports.EmptyScope{}
-	} else if len(addressGroups) > 0 {
-		var ids []models.ResourceIdentifier
-		for _, addressGroup := range addressGroups {
-			ids = append(ids, addressGroup.ResourceIdentifier)
-		}
-		scope = ports.NewResourceIdentifierScope(ids...)
 	} else {
 		scope = ports.EmptyScope{}
 	}
 
-	// If this is deletion, use DeleteAddressGroupsByIDs for correct cascading deletion
 	if syncOp == models.SyncOpDelete {
 		// Collect address group IDs
 		var ids []models.ResourceIdentifier
 		for _, addressGroup := range addressGroups {
 			ids = append(ids, addressGroup.ResourceIdentifier)
 		}
-
 		return s.DeleteAddressGroupsByIDs(ctx, ids)
 	}
 
-	// Execute operation with specified option for non-deletion
 	if err := writer.SyncAddressGroups(ctx, addressGroups, scope, ports.WithSyncOp(syncOp)); err != nil {
 		return errors.Wrap(err, "failed to sync address groups")
 	}
@@ -1788,75 +1757,61 @@ func (s *AddressGroupResourceService) syncAddressGroups(ctx context.Context, wri
 	return nil
 }
 
-// syncAddressGroupBindings handles the actual address group binding synchronization logic
 func (s *AddressGroupResourceService) syncAddressGroupBindings(ctx context.Context, writer ports.Writer, bindings []models.AddressGroupBinding, syncOp models.SyncOp) error {
-
-	// For UPSERT/FULLSYNC operations, validate port conflicts BEFORE database sync to prevent invalid bindings
-	// SKIP backend validation for individual CREATE operations to avoid circular dependency
 	if syncOp == models.SyncOpUpsert || syncOp == models.SyncOpFullSync {
-		// Skip backend service lookup validation for CREATE operations (single bindings from K8s API)
-		// This avoids circular dependency where binding CREATE tries to read service from backend
-		// before the service has been persisted to backend database
-		if len(bindings) == 1 {
-		} else {
+		reader, err := s.registry.ReaderFromWriter(ctx, writer)
+		if err != nil {
+			return errors.Wrap(err, "failed to get reader for port conflict validation")
+		}
+		defer reader.Close()
 
-			reader, err := s.registry.ReaderFromWriter(ctx, writer)
-			if err != nil {
-				return errors.Wrap(err, "failed to get reader for port conflict validation")
+		// Validate each binding for port conflicts before allowing database sync
+		for _, binding := range bindings {
+
+			// Get the service that this binding references
+			serviceID := models.ResourceIdentifier{
+				Name:      binding.ServiceRef.Name,
+				Namespace: binding.ServiceRef.Namespace,
 			}
-			defer reader.Close()
+			service, err := reader.GetServiceByID(ctx, serviceID)
+			if err != nil {
+				return errors.Wrapf(err, "cannot validate binding %s: service %s not found", binding.Key(), serviceID.Key())
+			}
 
-			// Validate each binding for port conflicts before allowing database sync
-			for _, binding := range bindings {
+			// Get existing bindings for the same AddressGroup (excluding the current binding)
+			addressGroupRef := models.ResourceIdentifier{
+				Name:      binding.AddressGroupRef.Name,
+				Namespace: binding.AddressGroupRef.Namespace,
+			}
 
-				// Get the service that this binding references
-				serviceID := models.ResourceIdentifier{
-					Name:      binding.ServiceRef.Name,
-					Namespace: binding.ServiceRef.Namespace,
+			var existingBindings []models.AddressGroupBinding
+			err = reader.ListAddressGroupBindings(ctx, func(existingBinding models.AddressGroupBinding) error {
+				if existingBinding.AddressGroupRef.Name == addressGroupRef.Name &&
+					existingBinding.AddressGroupRef.Namespace == addressGroupRef.Namespace &&
+					!(existingBinding.Name == binding.Name && existingBinding.Namespace == binding.Namespace) {
+					existingBindings = append(existingBindings, existingBinding)
 				}
-				service, err := reader.GetServiceByID(ctx, serviceID)
+				return nil
+			}, ports.EmptyScope{})
+
+			if err != nil {
+				return errors.Wrapf(err, "failed to list existing bindings for AddressGroup %s", addressGroupRef.Key())
+			}
+
+			for _, existingBinding := range existingBindings {
+				existingServiceID := models.ResourceIdentifier{
+					Name:      existingBinding.ServiceRef.Name,
+					Namespace: existingBinding.ServiceRef.Namespace,
+				}
+				existingService, err := reader.GetServiceByID(ctx, existingServiceID)
 				if err != nil {
-					return errors.Wrapf(err, "cannot validate binding %s: service %s not found", binding.Key(), serviceID.Key())
+					continue
 				}
 
-				// Get existing bindings for the same AddressGroup (excluding the current binding)
-				addressGroupRef := models.ResourceIdentifier{
-					Name:      binding.AddressGroupRef.Name,
-					Namespace: binding.AddressGroupRef.Namespace,
+				// Check for port conflicts between services
+				if err := s.checkPortConflictsBetweenServices(service, existingService); err != nil {
+					return errors.Wrapf(err, "cannot create binding %s: port conflict with existing binding %s", binding.Key(), existingBinding.Key())
 				}
-
-				var existingBindings []models.AddressGroupBinding
-				err = reader.ListAddressGroupBindings(ctx, func(existingBinding models.AddressGroupBinding) error {
-					// Include bindings that target the same AddressGroup but are different bindings
-					if existingBinding.AddressGroupRef.Name == addressGroupRef.Name &&
-						existingBinding.AddressGroupRef.Namespace == addressGroupRef.Namespace &&
-						!(existingBinding.Name == binding.Name && existingBinding.Namespace == binding.Namespace) {
-						existingBindings = append(existingBindings, existingBinding)
-					}
-					return nil
-				}, ports.EmptyScope{})
-
-				if err != nil {
-					return errors.Wrapf(err, "failed to list existing bindings for AddressGroup %s", addressGroupRef.Key())
-				}
-
-				// Check for port conflicts between the new service and existing bound services
-				for _, existingBinding := range existingBindings {
-					existingServiceID := models.ResourceIdentifier{
-						Name:      existingBinding.ServiceRef.Name,
-						Namespace: existingBinding.ServiceRef.Namespace,
-					}
-					existingService, err := reader.GetServiceByID(ctx, existingServiceID)
-					if err != nil {
-						continue
-					}
-
-					// Check for port conflicts between services
-					if err := s.checkPortConflictsBetweenServices(service, existingService); err != nil {
-						return errors.Wrapf(err, "cannot create binding %s: port conflict with existing binding %s", binding.Key(), existingBinding.Key())
-					}
-				}
-
 			}
 		}
 	}
@@ -2021,7 +1976,6 @@ func (s *AddressGroupResourceService) syncAddressGroupsWithSGroups(ctx context.C
 	}
 }
 
-// generateAddressGroupPortMapping generates port mapping from binding (LEGACY - kept for compatibility)
 func (s *AddressGroupResourceService) generateAddressGroupPortMapping(ctx context.Context, reader ports.Reader, binding models.AddressGroupBinding) *models.AddressGroupPortMapping {
 	// Use the new aggregated version instead
 	addressGroupRef := models.ResourceIdentifier{
@@ -2035,11 +1989,7 @@ func (s *AddressGroupResourceService) generateAddressGroupPortMapping(ctx contex
 	return portMapping
 }
 
-// generateCompleteAddressGroupPortMapping generates port mapping for ALL services bound to an AddressGroup
-// Returns error if port conflicts are detected to prevent binding creation
 func (s *AddressGroupResourceService) generateCompleteAddressGroupPortMapping(ctx context.Context, reader ports.Reader, addressGroupRef models.ResourceIdentifier) (*models.AddressGroupPortMapping, error) {
-
-	// Create the port mapping
 	addressGroupPortMapping := &models.AddressGroupPortMapping{
 		SelfRef: models.SelfRef{
 			ResourceIdentifier: addressGroupRef,
@@ -2047,10 +1997,7 @@ func (s *AddressGroupResourceService) generateCompleteAddressGroupPortMapping(ct
 		AccessPorts: make(map[models.ServiceRef]models.ServicePorts),
 	}
 
-	// Collect services from TWO sources: bindings AND spec.addressGroups
-	servicesToProcess := make(map[string]*models.Service) // Deduplicate by service key
-
-	// SOURCE 1: Find all bindings for this AddressGroup
+	servicesToProcess := make(map[string]*models.Service)
 	var bindings []models.AddressGroupBinding
 	err := reader.ListAddressGroupBindings(ctx, func(binding models.AddressGroupBinding) error {
 		// Check if this binding targets our AddressGroup
@@ -2064,7 +2011,6 @@ func (s *AddressGroupResourceService) generateCompleteAddressGroupPortMapping(ct
 		return nil, errors.Wrapf(err, "failed to list bindings for AddressGroup %s", addressGroupRef.Key())
 	}
 
-	// Collect services from bindings
 	for _, binding := range bindings {
 		service, err := reader.GetServiceByID(ctx, models.ResourceIdentifier{
 			Name:      binding.ServiceRef.Name,
@@ -2076,7 +2022,6 @@ func (s *AddressGroupResourceService) generateCompleteAddressGroupPortMapping(ct
 		servicesToProcess[service.Key()] = service
 	}
 
-	// SOURCE 2: Find all Services with this AddressGroup in spec.addressGroups
 	err = reader.ListServices(ctx, func(service models.Service) error {
 		for _, agRef := range service.AddressGroups {
 			if agRef.Name == addressGroupRef.Name && agRef.Namespace == addressGroupRef.Namespace {
@@ -2090,7 +2035,6 @@ func (s *AddressGroupResourceService) generateCompleteAddressGroupPortMapping(ct
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to list services for AddressGroup %s", addressGroupRef.Key())
 	}
-
 
 	// Process all collected services
 	for _, service := range servicesToProcess {
@@ -2122,7 +2066,6 @@ func (s *AddressGroupResourceService) generateCompleteAddressGroupPortMapping(ct
 		addressGroupPortMapping.AccessPorts[serviceRef] = servicePorts
 	}
 
-	// Validate port mapping for conflicts using ValidationService
 	if s.validationService != nil {
 		mappingValidator := validation.NewAddressGroupPortMappingValidator(reader)
 		if err := mappingValidator.CheckInternalPortOverlaps(*addressGroupPortMapping); err != nil {
@@ -2184,12 +2127,7 @@ func (s *AddressGroupResourceService) FindServicesForAddressGroups(ctx context.C
 	return relatedServices, nil
 }
 
-// synchronizeServiceAddressGroups implements the reference architecture pattern:
-// Updates Service.AddressGroups field directly by reading current bindings and syncing the service
-// This matches the behavior of AddressGroupBinding controller in netguard-k8s-controller
 func (s *AddressGroupResourceService) synchronizeServiceAddressGroups(ctx context.Context, serviceID models.ResourceIdentifier) error {
-
-	// Step 1: Get current service
 	reader, err := s.registry.Reader(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get reader for service sync")
@@ -2203,7 +2141,6 @@ func (s *AddressGroupResourceService) synchronizeServiceAddressGroups(ctx contex
 		}
 		return errors.Wrapf(err, "failed to get service %s for AddressGroups sync", serviceID.Key())
 	}
-
 
 	var writer ports.Writer
 	if registryWithConditions, ok := s.registry.(interface {
@@ -2230,6 +2167,13 @@ func (s *AddressGroupResourceService) synchronizeServiceAddressGroups(ctx contex
 		return errors.Wrapf(err, "failed to sync service %s with updated AddressGroups", serviceID.Key())
 	}
 
+	if s.syncManager != nil {
+		if err := s.syncManager.SyncEntity(ctx, service, types.SyncOperationUpsert); err != nil {
+			writer.Abort()
+			return fmt.Errorf("SGROUP sync failed for service %s after AddressGroup binding update, transaction aborted: %w", serviceID.Key(), err)
+		}
+	}
+
 	if err := writer.Commit(); err != nil {
 		writer.Abort()
 		return errors.Wrapf(err, "failed to commit service %s AddressGroups sync", serviceID.Key())
@@ -2245,7 +2189,6 @@ func (s *AddressGroupResourceService) updateHostBindingStatusForSyncedAddressGro
 	}
 
 	for _, ag := range addressGroups {
-
 		reader, err := s.registry.Reader(ctx)
 		if err != nil {
 			continue
@@ -2547,7 +2490,6 @@ func (s *AddressGroupResourceService) syncHostChangesWithSGroup(ctx context.Cont
 	if len(addedHosts) == 0 && len(removedHosts) == 0 {
 		return nil
 	}
-
 
 	reader, err := s.registry.Reader(ctx)
 	if err != nil {

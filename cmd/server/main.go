@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"log"
 	"flag"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -121,7 +121,7 @@ func main() {
 
 	// Setup gRPC server
 	grpcServer := grpc.NewServer()
-	netguardServer := netguard.NewNetguardServiceServer(netguardFacade)
+	netguardServer := netguard.NewServiceServer(netguardFacade)
 	netguardpb.RegisterNetguardServiceServer(grpcServer, netguardServer)
 
 	// Register gRPC health check service
@@ -223,6 +223,12 @@ func setupSyncManager(ctx context.Context, cfg *config.Config) interfaces.SyncMa
 	// Register IEAgAgRule syncer
 	ieagagRuleSyncer := syncers.NewIEAgAgRuleSyncer(sgroupsClient, logger)
 	if err := syncManager.RegisterSyncer(types.SyncSubjectTypeIEAgAgRules, ieagagRuleSyncer); err != nil {
+		return nil
+	}
+
+	// Register Service syncer
+	serviceSyncer := syncers.NewServiceSyncer(sgroupsClient, logger)
+	if err := syncManager.RegisterSyncer(types.SyncSubjectTypeServices, serviceSyncer); err != nil {
 		return nil
 	}
 

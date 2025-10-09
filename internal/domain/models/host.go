@@ -224,7 +224,6 @@ func (h *Host) ToSGroupsProto() (interface{}, error) {
 		}
 	}
 
-
 	// Convert to sgroups protobuf element
 	protoHost := &pb.Host{
 		Name:   hostName,

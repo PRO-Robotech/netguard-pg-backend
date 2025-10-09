@@ -26,6 +26,7 @@ import (
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
+	"netguard-pg-backend/internal/k8s/middleware"
 	"netguard-pg-backend/internal/k8s/registry/base/fieldmanager"
 	"netguard-pg-backend/internal/k8s/registry/base/patch"
 	"netguard-pg-backend/internal/k8s/registry/utils"
@@ -374,66 +375,12 @@ func (s *BaseStorage[K, D]) Update(ctx context.Context, name string, objInfo res
 		}
 	}
 
-	// 🔍 COMPREHENSIVE CONTEXT DEBUGGING
-	contextNamespace := utils.NamespaceFrom(ctx)
-	klog.InfoS("🔍 CONTEXT DEBUG before objInfo.UpdatedObject()",
-		"resource", s.resourceName,
-		"contextNamespace", contextNamespace,
-		"expectedNamespace", namespace,
-		"objInfoType", objInfoType)
-
-	// Check request info from context
-	if requestInfo, ok := request.RequestInfoFrom(ctx); ok {
-		klog.InfoS("🔍 REQUEST INFO DEBUG",
-			"requestInfo.Namespace", requestInfo.Namespace,
-			"requestInfo.APIGroup", requestInfo.APIGroup,
-			"requestInfo.APIVersion", requestInfo.APIVersion,
-			"requestInfo.Resource", requestInfo.Resource,
-			"requestInfo.Name", requestInfo.Name,
-			"requestInfo.Verb", requestInfo.Verb)
-	} else {
-		klog.InfoS("🔍 REQUEST INFO DEBUG", "requestInfo", "NOT_FOUND")
-	}
-
-	// Check namespace value directly
-	if nsValue := request.NamespaceValue(ctx); nsValue != "" {
-		klog.InfoS("🔍 NAMESPACE VALUE DEBUG", "namespaceValue", nsValue)
-	} else {
-		klog.InfoS("🔍 NAMESPACE VALUE DEBUG", "namespaceValue", "EMPTY")
-	}
-
-	// 🔍 ADVANCED DEBUGGING: Capture ALL context information before objInfo call
-	klog.InfoS("🔍🔍🔍 ADVANCED CONTEXT DEBUGGING before objInfo.UpdatedObject()",
-		"resource", s.resourceName,
-		"currentK8sObj_type", fmt.Sprintf("%T", currentK8sObj),
-		"currentK8sObj_string", fmt.Sprintf("%+v", currentK8sObj))
-
-	// Extract all context information that might affect objInfo
-	if userInfo, ok := request.UserFrom(ctx); ok {
-		klog.InfoS("🔍 USER CONTEXT from objInfo call",
-			"username", userInfo.GetName(),
-			"uid", userInfo.GetUID(),
-			"groups", userInfo.GetGroups(),
-			"extra", fmt.Sprintf("%+v", userInfo.GetExtra()))
-	} else {
-		klog.InfoS("🚨 NO USER CONTEXT found in objInfo call")
-	}
-
-	// 🛠️ PRODUCTION SOLUTION: Bypass objInfo.UpdatedObject() and apply patch manually
+	// 🛠️ PRODUCTION SOLUTION: Detect PATCH and apply manually
 	// This solves the PostgreSQL-specific issue where objInfo internal HTTP GET fails
 
-	// Declare timing variables for potential objInfo call
-	var objInfoStartTime, objInfoEndTime time.Time
-	var objInfoDuration time.Duration
-
-	// Declare the updated object variable
-	var updatedObj runtime.Object
-
-	// 🛠️ ENHANCED PRODUCTION SOLUTION: Extract patch data from objInfo directly
-	// Since Kubernetes bypasses our Patch() method entirely, we need to detect PATCH operations
-	// by checking if objInfo is a defaultUpdatedObjectInfo (which only happens during PATCH)
-
 	objInfoType = fmt.Sprintf("%T", objInfo)
+	var finalK8sObj K
+
 	if objInfoType == "*rest.defaultUpdatedObjectInfo" {
 		// This is definitely a PATCH operation using GET+UPDATE fallback
 		klog.InfoS("🛠️ PATCH OPERATION DETECTED: Attempting to extract patch data from objInfo",
@@ -453,6 +400,7 @@ func (s *BaseStorage[K, D]) Update(ctx context.Context, name string, objInfo res
 				"resource", s.resourceName,
 				"objInfoType", objInfoType)
 			patchData, extractSuccess := extractPatchDataFromObjInfo(objInfo)
+
 			if extractSuccess {
 				klog.InfoS("✅ PATCH DATA EXTRACTED from objInfo using reflection",
 					"resource", s.resourceName,
@@ -466,16 +414,62 @@ func (s *BaseStorage[K, D]) Update(ctx context.Context, name string, objInfo res
 					"resource", s.resourceName,
 					"patchType", string(patchData.PatchType))
 			} else {
-				klog.InfoS("❌ FAILED to extract patch data from objInfo",
-					"resource", s.resourceName,
-					"objInfoType", objInfoType,
-					"fallback", "Will attempt objInfo.UpdatedObject() despite expected failure")
+				// Try to extract from stored context (from Patch() method)
+				if storedPatch, ok := PatchDataFrom(ctx); ok && storedPatch != nil {
+					patchData = storedPatch
+					extractSuccess = true
+					klog.InfoS("✅ Using patch data from Patch() method context",
+						"resource", s.resourceName,
+						"patchType", string(patchData.PatchType))
+				} else {
+					// Try middleware-extracted PATCH body
+					if patchBodyData, ok := middleware.PatchBodyFrom(ctx); ok && patchBodyData != nil {
+						// Determine patch type from Content-Type header
+						patchType := determinePatchType(patchBodyData.ContentType)
+
+						patchData = &PatchData{
+							PatchType: patchType,
+							Data:      patchBodyData.Body,
+							Resource:  s.resourceName,
+							Name:      name,
+							Namespace: namespace,
+						}
+						extractSuccess = true
+
+						klog.InfoS("✅ Using PATCH body from HTTP middleware",
+							"resource", s.resourceName,
+							"patchType", string(patchType),
+							"bodySize", len(patchBodyData.Body),
+							"contentType", patchBodyData.ContentType)
+					} else {
+						// Extraction failed - this shouldn't happen for PATCH requests
+						klog.ErrorS(nil, "❌ PATCH body not found in any source",
+							"resource", s.resourceName,
+							"objInfoType", objInfoType)
+
+						return nil, false, fmt.Errorf(
+							"PATCH operation detected but patch data not available. Resource: %s/%s",
+							namespace, name)
+					}
+				}
+			}
+
+			// At this point, we may or may not have valid patch data
+			if extractSuccess {
+				ctx = WithPatchData(ctx, patchData)
 			}
 		}
 	}
 
 	// Check if we have extracted a patched object directly from objInfo
 	if patchData, hasPatchData := PatchDataFrom(ctx); hasPatchData {
+		// ADD VALIDATION: Ensure patchData is not nil
+		if patchData == nil {
+			klog.InfoS("❌ CRITICAL BUG: PatchData in context is nil",
+				"resource", s.resourceName)
+			return nil, false, fmt.Errorf("internal error: patch data is nil")
+		}
+
 		klog.InfoS("🎉 DIRECT OBJECT USAGE: Using patched object extracted from objInfo",
 			"resource", s.resourceName,
 			"method", "Unsafe pointer access to private 'obj' field",
@@ -488,7 +482,11 @@ func (s *BaseStorage[K, D]) Update(ctx context.Context, name string, objInfo res
 				"extractedType", fmt.Sprintf("%T", patchData.ExtractedObject),
 				"solution", "Perfect bypass - using pre-patched object from objInfo")
 
-			updatedObj = patchData.ExtractedObject
+			var ok bool
+			finalK8sObj, ok = patchData.ExtractedObject.(K)
+			if !ok {
+				return nil, false, fmt.Errorf("expected %T, got %T", s.NewFunc(), patchData.ExtractedObject)
+			}
 
 		} else {
 			// Fallback to manual patch application
@@ -510,125 +508,103 @@ func (s *BaseStorage[K, D]) Update(ctx context.Context, name string, objInfo res
 				"patchType", string(patchData.PatchType),
 				"solution", "Successfully bypassed objInfo.UpdatedObject() issue")
 
-			updatedObj = patchedObj
+			var ok bool
+			finalK8sObj, ok = patchedObj.(K)
+			if !ok {
+				return nil, false, fmt.Errorf("expected %T, got %T", s.NewFunc(), patchedObj)
+			}
 		}
 
 	} else {
-		// Fallback to original objInfo.UpdatedObject() for non-PATCH operations
-		klog.InfoS("🔄 FALLBACK: Using original objInfo.UpdatedObject() for non-PATCH operation",
+		// Non-PATCH Update - use objInfo.UpdatedObject() as usual
+		klog.InfoS("🔄 NON-PATCH UPDATE: Using original objInfo.UpdatedObject()",
 			"resource", s.resourceName,
 			"objInfoType", fmt.Sprintf("%T", objInfo))
 
-		// 🔍 LOG TIMING: Record when we start objInfo.UpdatedObject()
-		objInfoStartTime = time.Now()
-		klog.InfoS("🔍 TIMING: About to call objInfo.UpdatedObject()",
-			"resource", s.resourceName,
-			"timestamp", objInfoStartTime.Format("15:04:05.000000"))
-
-		var err error
-		updatedObj, err = objInfo.UpdatedObject(ctx, currentK8sObj)
-		objInfoEndTime = time.Now()
-		objInfoDuration = objInfoEndTime.Sub(objInfoStartTime)
-
+		updatedObj, err := objInfo.UpdatedObject(ctx, currentK8sObj)
 		if err != nil {
-			klog.InfoS("❌ FAILED to get updated object - DETAILED ERROR ANALYSIS",
+			klog.InfoS("❌ FAILED to get updated object from objInfo",
 				"resource", s.resourceName,
-				"error", err.Error(),
-				"errorType", fmt.Sprintf("%T", err),
-				"objInfoType", fmt.Sprintf("%T", objInfo),
-				"duration", objInfoDuration.String(),
-				"startTime", objInfoStartTime.Format("15:04:05.000000"),
-				"endTime", objInfoEndTime.Format("15:04:05.000000"))
+				"error", err.Error())
+			return nil, false, fmt.Errorf("objInfo.UpdatedObject() failed: %w", err)
+		}
 
-			// 🔍 CIRCULAR CALL DEBUGGING: The objInfo internal GET failed
-			klog.InfoS("🚨 CIRCULAR CALL FAILURE ANALYSIS",
-				"issue", "objInfo.UpdatedObject() makes HTTP GET back to this same API server",
-				"solution_available", "Use manual patch application to bypass this issue",
-				"backend", "PostgreSQL (memory backend works fine)")
+		klog.InfoS("✅ objInfo.UpdatedObject() SUCCESS",
+			"resource", s.resourceName)
 
-			// 🛠️ POSTGRESQL PATCH RECOVERY: Try to recover from this known issue
-			if objInfoType == "*rest.defaultUpdatedObjectInfo" {
-				if requestInfo, ok := request.RequestInfoFrom(ctx); ok && requestInfo.Verb == "patch" {
-					klog.InfoS("🔧 POSTGRESQL PATCH RECOVERY: Attempting to return current object as fallback",
-						"resource", s.resourceName,
-						"reason", "objInfo.UpdatedObject() failed with PostgreSQL but this is a known issue",
-						"recovery", "Returning current object unchanged - PATCH may not be applied")
-
-					// As a temporary recovery, return the current object
-					// This isn't ideal, but it's better than complete failure
-					klog.InfoS("⚠️ WARNING: PATCH operation may not have been applied due to PostgreSQL compatibility issue",
-						"resource", s.resourceName,
-						"recommendation", "Consider using memory backend for PATCH operations")
-
-					updatedObj = currentK8sObj
-				} else {
-					return nil, false, fmt.Errorf("objInfo.UpdatedObject() failed: %w", err)
-				}
-			} else {
-				return nil, false, fmt.Errorf("objInfo.UpdatedObject() failed: %w", err)
-			}
+		var ok bool
+		finalK8sObj, ok = updatedObj.(K)
+		if !ok {
+			return nil, false, fmt.Errorf("expected %T, got %T", s.NewFunc(), updatedObj)
 		}
 	}
 
-	// Log success only for the objInfo path, not for manual patch
-	if _, hasPatchData := PatchDataFrom(ctx); !hasPatchData {
-		klog.InfoS("✅ objInfo.UpdatedObject() SUCCESS - TIMING ANALYSIS",
+	// 🔒 CRITICAL FIX: Prevent updates to objects with DeletionTimestamp set
+	// This prevents ResourceVersion conflicts during namespace deletion
+	accessor, err := meta.Accessor(finalK8sObj)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to get object accessor: %w", err)
+	}
+
+	deletionTimestamp := accessor.GetDeletionTimestamp()
+	if deletionTimestamp != nil && !deletionTimestamp.IsZero() {
+		klog.InfoS("🚫 UPDATE BLOCKED: Object is being deleted, rejecting update to prevent ResourceVersion conflicts",
 			"resource", s.resourceName,
-			"duration", objInfoDuration.String(),
-			"startTime", objInfoStartTime.Format("15:04:05.000000"),
-			"endTime", objInfoEndTime.Format("15:04:05.000000"))
-	}
-	klog.InfoS("✅ Got updated object successfully",
-		"resource", s.resourceName)
+			"name", name,
+			"namespace", namespace,
+			"deletionTimestamp", deletionTimestamp.String())
 
-	updatedK8sObj, ok := updatedObj.(K)
-	if !ok {
-		return nil, false, fmt.Errorf("expected %T, got %T", s.NewFunc(), updatedObj)
+		// Return a Kubernetes conflict error to signal deletion is in progress
+		return nil, false, errors.NewConflict(
+			schema.GroupResource{Group: "netguard.sgroups.io", Resource: s.resourceName},
+			name,
+			fmt.Errorf("object is being deleted, update rejected to prevent deletion conflicts"),
+		)
 	}
 
-	// Validate the updated object
-	if errs := s.validator.ValidateUpdate(ctx, updatedK8sObj, currentK8sObj); len(errs) > 0 {
+	// Validate the updated/patched object
+	if errs := s.validator.ValidateUpdate(ctx, finalK8sObj, currentK8sObj); len(errs) > 0 {
 		return nil, false, errors.NewInvalid(
 			schema.GroupKind{Group: "netguard.sgroups.io", Kind: s.kindName},
-			getObjectName(updatedK8sObj),
+			getObjectName(finalK8sObj),
 			errs,
 		)
 	}
 
 	// Run additional validation if provided
 	if updateValidation != nil {
-		if err := updateValidation(ctx, updatedObj, currentK8sObj); err != nil {
+		if err := updateValidation(ctx, finalK8sObj, currentK8sObj); err != nil {
 			return nil, false, err
 		}
 	}
 
 	// Convert to domain object
-	updatedDomainObj, err := s.converter.ToDomain(ctx, updatedK8sObj)
+	finalDomainObj, err := s.converter.ToDomain(ctx, finalK8sObj)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to convert updated k8s object to domain object: %w", err)
 	}
 
 	// Update in backend
-	finalDomainObj, err := s.updateInBackend(ctx, &updatedDomainObj)
+	updatedDomainObj, err := s.updateInBackend(ctx, &finalDomainObj)
 	if err != nil {
 		return nil, false, err
 	}
 
 	// Convert back to Kubernetes object
-	finalK8sObj, err := s.converter.FromDomain(ctx, *finalDomainObj)
+	resultK8sObj, err := s.converter.FromDomain(ctx, *updatedDomainObj)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to convert updated domain object to k8s object: %w", err)
 	}
 
 	// Broadcast watch event
-	s.broadcastWatchEvent(watch.Modified, finalK8sObj)
+	s.broadcastWatchEvent(watch.Modified, resultK8sObj)
 
 	klog.InfoS("✅ BaseStorage.Update SUCCESS",
 		"resource", s.resourceName,
 		"name", name,
 		"namespace", namespace)
 
-	return finalK8sObj, false, nil
+	return resultK8sObj, false, nil
 }
 
 // Delete deletes a resource
@@ -750,6 +726,87 @@ func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValid
 		"name", name,
 		"namespace", namespace)
 	return k8sObj, true, nil
+}
+
+// DeleteCollection deletes a collection of resources
+// This is called by Kubernetes when deleting a namespace to batch-delete all resources
+func (s *BaseStorage[K, D]) DeleteCollection(ctx context.Context, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions, listOptions *internalversion.ListOptions) (runtime.Object, error) {
+	namespace := utils.NamespaceFrom(ctx)
+
+	klog.InfoS("🗑️🗑️🗑️ DELETE COLLECTION STARTED",
+		"resource", s.resourceName,
+		"namespace", namespace)
+
+	// Get all resources in the namespace
+	listObj, err := s.List(ctx, listOptions)
+	if err != nil {
+		klog.InfoS("❌ DELETE COLLECTION: Failed to list resources",
+			"resource", s.resourceName,
+			"namespace", namespace,
+			"error", err.Error())
+		return nil, err
+	}
+
+	// Extract items from list
+	items, err := meta.ExtractList(listObj)
+	if err != nil {
+		klog.InfoS("❌ DELETE COLLECTION: Failed to extract items from list",
+			"resource", s.resourceName,
+			"namespace", namespace,
+			"error", err.Error())
+		return nil, err
+	}
+
+	klog.InfoS("📋 DELETE COLLECTION: Found resources to delete",
+		"resource", s.resourceName,
+		"namespace", namespace,
+		"count", len(items))
+
+	// Delete each resource
+	// The Delete method will call MarkAsDeleting in backend writers
+	// This prevents backend ListWatch from recreating the resources
+	var deletedCount int
+	for _, item := range items {
+		accessor, err := meta.Accessor(item)
+		if err != nil {
+			klog.InfoS("⚠️ DELETE COLLECTION: Failed to get accessor for item",
+				"resource", s.resourceName,
+				"error", err.Error())
+			continue
+		}
+
+		name := accessor.GetName()
+		klog.V(4).InfoS("🗑️ DELETE COLLECTION: Deleting resource",
+			"resource", s.resourceName,
+			"namespace", namespace,
+			"name", name)
+
+		_, _, err = s.Delete(ctx, name, deleteValidation, options)
+		if err != nil {
+			klog.InfoS("⚠️ DELETE COLLECTION: Failed to delete resource",
+				"resource", s.resourceName,
+				"namespace", namespace,
+				"name", name,
+				"error", err.Error())
+			// Continue deleting other resources even if one fails
+			continue
+		}
+		deletedCount++
+	}
+
+	klog.InfoS("✅ DELETE COLLECTION: Completed",
+		"resource", s.resourceName,
+		"namespace", namespace,
+		"total", len(items),
+		"deleted", deletedCount)
+
+	// Return status object
+	return &metav1.Status{
+		Status: metav1.StatusSuccess,
+		Details: &metav1.StatusDetails{
+			Kind: s.kindName,
+		},
+	}, nil
 }
 
 // Patch applies a patch to a resource
@@ -1686,6 +1743,33 @@ func (s *BaseStorage[K, D]) ApplyServerSide(ctx context.Context, name string, da
 	return s.Patch(ctx, name, types.ApplyPatchType, data, &metav1.PatchOptions{FieldManager: fieldManager, Force: &force})
 }
 
+// deepMerge recursively merges patch into target, handling nested objects properly
+// This is needed for RFC 7396 Merge Patch semantics where nested objects should be merged, not replaced
+func deepMerge(target map[string]interface{}, patch map[string]interface{}) {
+	for key, patchValue := range patch {
+		// If patch value is nil (explicit null in JSON), delete the key from target
+		if patchValue == nil {
+			delete(target, key)
+			continue
+		}
+
+		// If both target and patch values are maps, merge recursively
+		targetValue, targetExists := target[key]
+		if targetExists {
+			if targetMap, targetIsMap := targetValue.(map[string]interface{}); targetIsMap {
+				if patchMap, patchIsMap := patchValue.(map[string]interface{}); patchIsMap {
+					// Both are maps - merge recursively
+					deepMerge(targetMap, patchMap)
+					continue
+				}
+			}
+		}
+
+		// Otherwise, replace the value
+		target[key] = patchValue
+	}
+}
+
 // applyPatchManually applies a patch directly to a Kubernetes object
 // This bypasses the problematic objInfo.UpdatedObject() call that fails with PostgreSQL backend
 func (s *BaseStorage[K, D]) applyPatchManually(ctx context.Context, currentObj K, patchType types.PatchType, patchData []byte) (runtime.Object, error) {
@@ -1742,10 +1826,8 @@ func (s *BaseStorage[K, D]) applyPatchManually(ctx context.Context, currentObj K
 		// Deep copy current object
 		patchedUnstructured = currentUnstructured.DeepCopy()
 
-		// Apply merge patch by merging the patch object into the current object
-		for key, value := range patchObj {
-			patchedUnstructured.Object[key] = value
-		}
+		// Apply merge patch using deep merge to properly handle nested objects
+		deepMerge(patchedUnstructured.Object, patchObj)
 
 	case types.StrategicMergePatchType:
 		// Strategic Merge Patch (Kubernetes native)
@@ -1761,10 +1843,8 @@ func (s *BaseStorage[K, D]) applyPatchManually(ctx context.Context, currentObj K
 		// Deep copy current object
 		patchedUnstructured = currentUnstructured.DeepCopy()
 
-		// Apply strategic merge patch by merging the patch object
-		for key, value := range patchObj {
-			patchedUnstructured.Object[key] = value
-		}
+		// Apply strategic merge patch using deep merge to properly handle nested objects
+		deepMerge(patchedUnstructured.Object, patchObj)
 
 		klog.InfoS("✅ MANUAL PATCH: Strategic merge patch applied successfully",
 			"resource", s.resourceName,
@@ -1785,6 +1865,23 @@ func (s *BaseStorage[K, D]) applyPatchManually(ctx context.Context, currentObj K
 		"patchType", string(patchType))
 
 	return typedObj, nil
+}
+
+// determinePatchType maps Content-Type header to Kubernetes patch type
+func determinePatchType(contentType string) types.PatchType {
+	switch {
+	case strings.Contains(contentType, "application/json-patch+json"):
+		return types.JSONPatchType
+	case strings.Contains(contentType, "application/merge-patch+json"):
+		return types.MergePatchType
+	case strings.Contains(contentType, "application/strategic-merge-patch+json"):
+		return types.StrategicMergePatchType
+	case strings.Contains(contentType, "application/apply-patch+yaml"):
+		return types.ApplyPatchType
+	default:
+		// Default to strategic merge patch
+		return types.StrategicMergePatchType
+	}
 }
 
 // extractPatchDataFromObjInfo uses reflection to extract patch data from rest.defaultUpdatedObjectInfo
@@ -1865,28 +1962,50 @@ func extractPatchDataFromObjInfo(objInfo rest.UpdatedObjectInfo) (*PatchData, bo
 				"fieldType", objField.Type().String(),
 				"canInterface", objField.CanInterface())
 
-			// Try to access private field using unsafe
-			if objField.CanAddr() {
-				// Get the address of the field
-				objFieldPtr := objField.UnsafeAddr()
+			// Use reflect.NewAt to create a pointer to the unexported field
+			// This is the correct way to access unexported fields via unsafe
+			if !objField.CanInterface() && objField.CanAddr() {
+				// Create a new value that wraps the unexported field using unsafe
+				objFieldValue := reflect.NewAt(objField.Type(), unsafe.Pointer(objField.UnsafeAddr())).Elem()
 
-				// Cast to runtime.Object pointer
-				objPtr := (*runtime.Object)(unsafe.Pointer(objFieldPtr))
-				if objPtr != nil && *objPtr != nil {
-					patchedObj = *objPtr
+				klog.InfoS("🔧 UNSAFE ACCESS: Created objFieldValue via reflect.NewAt",
+					"canInterface", objFieldValue.CanInterface(),
+					"isValid", objFieldValue.IsValid(),
+					"kind", objFieldValue.Kind().String())
 
-					klog.InfoS("🎉 SUCCESS: Accessed private 'obj' field using unsafe pointers",
-						"objType", fmt.Sprintf("%T", patchedObj))
+				// Try to get Interface() even if CanInterface() returns false
+				// After reflect.NewAt().Elem(), we should be able to access the value
+				if objFieldValue.IsValid() {
+					// Attempt direct interface conversion
+					// Note: This might panic if truly inaccessible, but we're using unsafe so it should work
+					defer func() {
+						if r := recover(); r != nil {
+							klog.InfoS("⚠️ PANIC during Interface() call",
+								"panic", r)
+						}
+					}()
 
-					// Return PatchData with the extracted object - this is better than raw patch data!
-					return &PatchData{
-						PatchType:       types.JSONPatchType, // Assume JSON patch for logging
-						Data:            []byte("{}"),        // Mock data since we have the object directly
-						Resource:        "services",
-						Name:            "unknown",
-						Namespace:       "unknown",
-						ExtractedObject: patchedObj, // 🎉 The actual patched object!
-					}, true
+					objInterface := objFieldValue.Interface()
+					if obj, ok := objInterface.(runtime.Object); ok && obj != nil {
+						patchedObj = obj
+
+						klog.InfoS("🎉 SUCCESS: Accessed private 'obj' field using unsafe pointers",
+							"objType", fmt.Sprintf("%T", patchedObj))
+
+						// Return PatchData with the extracted object - this is better than raw patch data!
+						return &PatchData{
+							PatchType:       types.JSONPatchType, // Assume JSON patch for logging
+							Data:            []byte("{}"),        // Mock data since we have the object directly
+							Resource:        "services",
+							Name:            "unknown",
+							Namespace:       "unknown",
+							ExtractedObject: patchedObj, // 🎉 The actual patched object!
+						}, true
+					} else {
+						klog.InfoS("❌ Interface conversion failed",
+							"objInterface", fmt.Sprintf("%T", objInterface),
+							"isNil", obj == nil)
+					}
 				}
 			}
 		}
@@ -1898,3 +2017,17 @@ func extractPatchDataFromObjInfo(objInfo rest.UpdatedObjectInfo) (*PatchData, bo
 
 	return nil, false
 }
+
+// Compile-time interface compliance checks
+var (
+	_ rest.Storage           = &BaseStorage[runtime.Object, any]{}
+	_ rest.Scoper            = &BaseStorage[runtime.Object, any]{}
+	_ rest.StandardStorage   = &BaseStorage[runtime.Object, any]{}
+	_ rest.CollectionDeleter = &BaseStorage[runtime.Object, any]{}
+	_ rest.Patcher           = &BaseStorage[runtime.Object, any]{}
+	_ rest.Getter            = &BaseStorage[runtime.Object, any]{}
+	_ rest.Lister            = &BaseStorage[runtime.Object, any]{}
+	_ rest.CreaterUpdater    = &BaseStorage[runtime.Object, any]{}
+	_ rest.GracefulDeleter   = &BaseStorage[runtime.Object, any]{}
+	_ rest.Watcher           = &BaseStorage[runtime.Object, any]{}
+)

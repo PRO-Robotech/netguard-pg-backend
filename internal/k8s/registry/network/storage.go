@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
@@ -42,6 +43,7 @@ type NetworkStorage struct {
 
 // Compile-time interface assertions
 var _ rest.TableConvertor = &NetworkStorage{}
+var _ rest.CollectionDeleter = &NetworkStorage{}
 
 // NewNetworkStorage creates a new NetworkStorage using BaseStorage with NetguardService
 func NewNetworkStorage(netguardService *services.NetguardFacade) *NetworkStorage {
@@ -161,4 +163,48 @@ func networkDurationShortHumanDuration(d time.Duration) string {
 		return fmt.Sprintf("%dh", int(d.Hours()))
 	}
 	return fmt.Sprintf("%dd", int(d.Hours()/24))
+}
+
+// DeleteCollection implements rest.CollectionDeleter
+func (s *NetworkStorage) DeleteCollection(ctx context.Context, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions, listOptions *internalversion.ListOptions) (runtime.Object, error) {
+	obj, err := s.List(ctx, listOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	networkList, ok := obj.(*netguardv1beta1.NetworkList)
+	if !ok {
+		return nil, fmt.Errorf("unexpected object type from List: %T", obj)
+	}
+
+	deletedItems := &netguardv1beta1.NetworkList{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "NetworkList",
+			APIVersion: netguardv1beta1.SchemeGroupVersion.String(),
+		},
+	}
+
+	for i := range networkList.Items {
+		network := &networkList.Items[i]
+
+		if deleteValidation != nil {
+			if err := deleteValidation(ctx, network); err != nil {
+				return nil, err
+			}
+		}
+
+		_, _, err := s.Delete(ctx, network.Name, deleteValidation, options)
+		if err != nil {
+			return nil, fmt.Errorf("failed to delete network %s: %w", network.Name, err)
+		}
+
+		deletedItems.Items = append(deletedItems.Items, *network)
+	}
+
+	return deletedItems, nil
+}
+
+// Kind implements rest.KindProvider
+func (s *NetworkStorage) Kind() string {
+	return "Network"
 }
