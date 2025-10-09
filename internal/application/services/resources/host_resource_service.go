@@ -476,10 +476,7 @@ func (s *HostResourceService) UpdateHostBinding(ctx context.Context, hostID mode
 		return fmt.Errorf("host not found: %s", hostID.Key())
 	}
 
-	// Check if this is a binding operation (not unbinding)
 	isBinding := bindingID.Name != "" && addressGroupID.Name != ""
-
-	// CRITICAL: Only allow binding if host is ready (synchronized with SGROUP)
 	if isBinding && !utils.IsReadyConditionTrue(host) {
 		return fmt.Errorf("host %s is not ready for binding - must be synchronized with SGROUP first (Ready condition must be True)", hostID.Key())
 	}

@@ -34,7 +34,12 @@ BEGIN
 
                 aggregated_hosts_json := aggregated_hosts_json || jsonb_build_array(
                     jsonb_build_object(
-                        'ref', host_ref,
+                        'ref', jsonb_build_object(
+                            'apiVersion', COALESCE(host_ref->>'apiVersion', 'netguard.sgroups.io/v1beta1'),
+                            'kind', COALESCE(host_ref->>'kind', 'Host'),
+                            'namespace', ag_namespace,
+                            'name', host_name_text
+                        ),
                         'uuid', COALESCE(host_record.uuid, ''),
                         'source', 'spec'
                     )
@@ -61,6 +66,7 @@ BEGIN
                 'ref', jsonb_build_object(
                     'apiVersion', 'netguard.sgroups.io/v1beta1',
                     'kind', 'Host',
+                    'namespace', host_record.namespace,
                     'name', host_record.name
                 ),
                 'uuid', host_record.uuid,
