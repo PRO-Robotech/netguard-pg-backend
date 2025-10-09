@@ -293,11 +293,13 @@ func (s *HostBindingStorage) updateHostBindingStatus(ctx context.Context, hostBi
 	host.Namespace = hostID.Namespace
 	host.Name = hostID.Name
 
-	// Update Host status based on binding state
 	if isBound {
-		// Set binding information
 		host.IsBound = true
-		host.AddressGroupName = hostBinding.AddressGroupRef.Name
+		if hostBinding.AddressGroupRef.Namespace != "" {
+			host.AddressGroupName = fmt.Sprintf("%s/%s", hostBinding.AddressGroupRef.Namespace, hostBinding.AddressGroupRef.Name)
+		} else {
+			host.AddressGroupName = hostBinding.AddressGroupRef.Name
+		}
 		host.BindingRef = &netguardv1beta1.ObjectReference{
 			APIVersion: "netguard.sgroups.io/v1beta1",
 			Kind:       "HostBinding",

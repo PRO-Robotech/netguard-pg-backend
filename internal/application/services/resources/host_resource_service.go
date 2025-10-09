@@ -499,7 +499,11 @@ func (s *HostResourceService) UpdateHostBinding(ctx context.Context, hostID mode
 			Name:       addressGroupID.Name,
 		}
 		host.IsBound = true
-		host.AddressGroupName = addressGroupID.Name
+		if addressGroupID.Namespace != "" {
+			host.AddressGroupName = fmt.Sprintf("%s/%s", addressGroupID.Namespace, addressGroupID.Name)
+		} else {
+			host.AddressGroupName = addressGroupID.Name
+		}
 	}
 
 	// Update metadata
@@ -559,7 +563,11 @@ func (s *HostResourceService) UpdateHostBindingStatus(ctx context.Context, oldAG
 	addressGroupName := ""
 	if newAG != nil {
 		namespace = newAG.Namespace
-		addressGroupName = newAG.Name
+		if newAG.Namespace != "" {
+			addressGroupName = fmt.Sprintf("%s/%s", newAG.Namespace, newAG.Name)
+		} else {
+			addressGroupName = newAG.Name
+		}
 	} else if oldAG != nil {
 		namespace = oldAG.Namespace
 	}
