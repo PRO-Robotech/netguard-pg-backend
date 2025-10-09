@@ -158,16 +158,11 @@ func (s *NetworkResourceService) UpdateNetwork(ctx context.Context, network *mod
 
 // DeleteNetwork deletes a Network with cleanup logic
 func (s *NetworkResourceService) DeleteNetwork(ctx context.Context, id models.ResourceIdentifier) error {
-
-	// Check if Network exists
 	existing, err := s.getNetworkByID(ctx, id.Key())
-	if existing != nil {
-	}
 	if err != nil && !errors.Is(err, ports.ErrNotFound) {
 		return fmt.Errorf("failed to get network: %w", err)
 	}
 	if existing == nil || errors.Is(err, ports.ErrNotFound) {
-		// Network doesn't exist - delete is idempotent, so this is success
 		return nil
 	}
 
@@ -227,10 +222,9 @@ func (s *NetworkResourceService) DeleteNetwork(ctx context.Context, id models.Re
 		return fmt.Errorf("failed to commit network deletion: %w", err)
 	}
 
-	// Sync deletion with external systems
-	err = s.syncNetworkWithExternal(ctx, existing, types.SyncOperationDelete)
-	if err != nil {
-		return err
+	if s.syncManager != nil {
+		networks := []models.Network{*existing}
+		_ = s.SyncNetworks(ctx, networks, ports.EmptyScope{}, models.SyncOpDelete)
 	}
 
 	return nil
@@ -247,12 +241,6 @@ func (s *NetworkResourceService) GetNetwork(ctx context.Context, id models.Resou
 	network, err := reader.GetNetworkByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get network: %w", err)
-	}
-
-	if network != nil {
-		if network.BindingRef != nil {
-		} else {
-		}
 	}
 
 	return network, nil
@@ -292,7 +280,6 @@ func (s *NetworkResourceService) UpdateAddressGroup(ctx context.Context, address
 		return fmt.Errorf("failed to commit address group update: %w", err)
 	}
 
-	// REMOVE DUPLICATE SGROUPS SYNC - this will be handled by the calling function
 	return nil
 }
 
@@ -340,16 +327,16 @@ func (s *NetworkResourceService) SyncNetworks(ctx context.Context, networks []mo
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	// Handle external sync for each network if needed (skip for DELETE operations)
-	if syncOp != models.SyncOpDelete && s.syncManager != nil {
-		for i := range networks {
-			syncErr := s.syncNetworkWithExternal(ctx, &networks[i], types.SyncOperationUpsert)
-
-			// Process conditions after sync
-			if s.conditionManager != nil {
-				if err := s.conditionManager.ProcessNetworkConditions(ctx, &networks[i], syncErr); err != nil {
-					klog.Errorf("Failed to process network conditions for %s/%s: %v",
-						networks[i].Namespace, networks[i].Name, err)
+	if s.syncManager != nil {
+		if syncOp == models.SyncOpDelete {
+			for i := range networks {
+				_ = s.syncNetworkWithExternal(ctx, &networks[i], types.SyncOperationDelete)
+			}
+		} else {
+			for i := range networks {
+				syncErr := s.syncNetworkWithExternal(ctx, &networks[i], types.SyncOperationUpsert)
+				if s.conditionManager != nil {
+					_ = s.conditionManager.ProcessNetworkConditions(ctx, &networks[i], syncErr)
 				}
 			}
 		}
@@ -370,11 +357,8 @@ func (s *NetworkResourceService) ValidateNetworkBinding(ctx context.Context, net
 		return fmt.Errorf("network not found: %s", networkID.Key())
 	}
 
-	// Check if Network is already bound to a different binding
 	if network.IsBound {
-		// If bound to the same binding, that's valid
 		if network.BindingRef != nil {
-			// BindingRef.Name now contains only the name part, so compare with binding name
 			expectedName := bindingID.Name
 			actualName := network.BindingRef.Name
 
@@ -470,12 +454,8 @@ func (s *NetworkResourceService) UpdateNetworkBinding(ctx context.Context, netwo
 		return fmt.Errorf("failed to commit network binding: %w", err)
 	}
 
-	// Sync with SGROUP
 	if s.syncManager != nil {
-		if syncErr := s.syncManager.SyncEntity(ctx, network, types.SyncOperationUpsert); syncErr != nil {
-			// Don't fail the operation, sync can be retried later
-		} else {
-		}
+		_ = s.syncManager.SyncEntity(ctx, network, types.SyncOperationUpsert)
 	}
 
 	return nil
@@ -526,12 +506,8 @@ func (s *NetworkResourceService) RemoveNetworkBinding(ctx context.Context, netwo
 		return fmt.Errorf("failed to commit network unbinding: %w", err)
 	}
 
-	// Sync with SGROUP
 	if s.syncManager != nil {
-		if syncErr := s.syncManager.SyncEntity(ctx, network, types.SyncOperationUpsert); syncErr != nil {
-			// Don't fail the operation, sync can be retried later
-		} else {
-		}
+		_ = s.syncManager.SyncEntity(ctx, network, types.SyncOperationUpsert)
 	}
 
 	return nil
@@ -556,10 +532,7 @@ func (s *NetworkResourceService) removeNetworkFromAddressGroup(ctx context.Conte
 		return nil // AddressGroup doesn't exist, nothing to clean up
 	}
 
-	// Generate network name (namespace/name format) to match the pattern used in NetworkBinding
 	networkName := fmt.Sprintf("%s/%s", networkRef.Namespace, networkRef.Name)
-
-	// Remove network from AddressGroup.Networks.Items
 
 	var updatedNetworks []models.NetworkItem
 	found := false
@@ -581,7 +554,6 @@ func (s *NetworkResourceService) removeNetworkFromAddressGroup(ctx context.Conte
 		if err := s.UpdateAddressGroup(ctx, addressGroup); err != nil {
 			return fmt.Errorf("failed to update address group: %w", err)
 		}
-	} else {
 	}
 
 	return nil

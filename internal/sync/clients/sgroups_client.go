@@ -128,13 +128,11 @@ func (c *sgroupsClient) Sync(ctx context.Context, req *types.SyncRequest) error 
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
 
-	// Convert sync request to protobuf format
 	pbReq, err := c.convertSyncRequestToProto(req)
 	if err != nil {
 		return fmt.Errorf("failed to convert sync request to proto: %w", err)
 	}
 
-	// Real GRPC call to sgroups service
 	_, err = c.client.Sync(ctx, pbReq)
 	return err
 }
