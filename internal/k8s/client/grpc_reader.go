@@ -231,6 +231,23 @@ func (r *GRPCReader) GetNetworkByCIDR(ctx context.Context, cidr string) (*models
 	return nil, ports.ErrNotFound
 }
 
+func (r *GRPCReader) GetNetworksOverlappingCIDR(ctx context.Context, cidr string) ([]*models.Network, error) {
+	var overlappingNetworks []*models.Network
+	err := r.ListNetworks(ctx, func(network models.Network) error {
+		if network.CIDR == cidr {
+			networkCopy := network
+			overlappingNetworks = append(overlappingNetworks, &networkCopy)
+		}
+		return nil
+	}, ports.EmptyScope{})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return overlappingNetworks, nil
+}
+
 func (r *GRPCReader) ListHosts(ctx context.Context, consume func(models.Host) error, scope ports.Scope) error {
 	hosts, err := r.grpcClient.ListHosts(ctx, scope)
 	if err != nil {

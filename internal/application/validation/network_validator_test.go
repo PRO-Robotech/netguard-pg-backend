@@ -99,10 +99,19 @@ func TestNetworkValidator_ValidateForCreation(t *testing.T) {
 
 	validator2 := NewNetworkValidator(reader2)
 
-	// Test duplicate network creation
+	// Test duplicate network creation (same name/namespace)
 	err = validator2.ValidateForCreation(ctx, network)
 	if err == nil {
-		t.Error("ValidateForCreation() should fail for duplicate network")
+		t.Error("ValidateForCreation() should fail for duplicate network (same name)")
+	}
+
+	// Test overlapping CIDR (different name but overlapping CIDR)
+	overlappingNetwork := *models.NewNetwork("different-name", "default", "192.168.1.128/25")
+	err = validator2.ValidateForCreation(ctx, overlappingNetwork)
+	if err == nil {
+		t.Error("ValidateForCreation() should fail for overlapping CIDR")
+	} else {
+		t.Logf("Correctly rejected overlapping CIDR: %v", err)
 	}
 }
 

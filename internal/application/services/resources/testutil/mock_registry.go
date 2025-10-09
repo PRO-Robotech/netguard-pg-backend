@@ -10,7 +10,6 @@ import (
 	"netguard-pg-backend/internal/patterns"
 )
 
-// MockRegistry implements a test-friendly in-memory registry
 type MockRegistry struct {
 	mu         sync.RWMutex
 	readers    map[string]*MockReader
@@ -20,7 +19,6 @@ type MockRegistry struct {
 }
 
 func (m *MockRegistry) ReaderWithReadCommitted(ctx context.Context) (ports.Reader, error) {
-	//TODO implement me
 	panic("implement me")
 }
 
@@ -329,6 +327,10 @@ func (r *MockReader) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceId
 
 func (r *MockReader) GetNetworkByCIDR(ctx context.Context, cidr string) (*models.Network, error) {
 	return nil, ports.ErrNotFound
+}
+
+func (r *MockReader) GetNetworksOverlappingCIDR(ctx context.Context, cidr string) ([]*models.Network, error) {
+	return nil, nil
 }
 
 func (r *MockReader) GetSyncStatus(ctx context.Context) (*models.SyncStatus, error) {

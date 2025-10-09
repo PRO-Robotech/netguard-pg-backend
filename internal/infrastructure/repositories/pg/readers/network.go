@@ -247,3 +247,49 @@ func (r *Reader) GetNetworkByCIDR(ctx context.Context, cidr string) (*models.Net
 
 	return network, nil
 }
+
+func (r *Reader) GetNetworksOverlappingCIDR(ctx context.Context, cidr string) ([]*models.Network, error) {
+	query := `
+		SELECT
+			n.namespace,
+			n.name,
+			n.cidr::text,
+			n.network_items,
+			n.is_bound,
+			n.binding_ref_namespace,
+			n.binding_ref_name,
+			n.address_group_ref_namespace,
+			n.address_group_ref_name,
+			m.resource_version,
+			m.labels,
+			m.annotations,
+			m.conditions,
+			m.created_at,
+			m.updated_at
+		FROM networks n
+		INNER JOIN k8s_metadata m ON n.resource_version = m.resource_version
+		WHERE n.cidr && $1::CIDR
+		  AND m.deletion_timestamp IS NULL
+		ORDER BY n.namespace, n.name`
+
+	rows, err := r.query(ctx, query, cidr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query overlapping networks for CIDR %s: %w", cidr, err)
+	}
+	defer rows.Close()
+
+	var networks []*models.Network
+	for rows.Next() {
+		network, err := r.scanNetwork(rows)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan network: %w", err)
+		}
+		networks = append(networks, &network)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating networks: %w", err)
+	}
+
+	return networks, nil
+}

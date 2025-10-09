@@ -43,6 +43,14 @@ func isUniqueViolation(err error, constraintName string) bool {
 	return false
 }
 
+func isExclusionViolation(err error, constraintName string) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "23P01" && strings.Contains(pgErr.ConstraintName, constraintName)
+	}
+	return false
+}
+
 // SyncNetworks syncs networks to PostgreSQL with K8s metadata support
 func (w *Writer) SyncNetworks(ctx context.Context, networks []models.Network, scope ports.Scope, options ...ports.Option) error {
 	// Extract sync operation from options
@@ -105,8 +113,6 @@ func (w *Writer) upsertNetwork(ctx context.Context, network *models.Network) err
 		return errors.Wrap(err, "failed to marshal conditions")
 	}
 
-	// ALWAYS INSERT new K8s metadata (to get new ResourceVersion)
-	// PostgreSQL BIGSERIAL primary key only increments on INSERT, not UPDATE
 	var resourceVersion int64
 	metadataQuery := `
 		INSERT INTO k8s_metadata (labels, annotations, finalizers, conditions)
@@ -169,7 +175,6 @@ func (w *Writer) upsertNetwork(ctx context.Context, network *models.Network) err
 		agRefName,
 		resourceVersion,
 	); err != nil {
-		// Check if this is a UNIQUE constraint violation on CIDR
 		if isUniqueViolation(err, "idx_networks_cidr_unique") {
 			return &CIDRAlreadyExistsError{
 				CIDR:        network.CIDR,
@@ -177,6 +182,14 @@ func (w *Writer) upsertNetwork(ctx context.Context, network *models.Network) err
 				Err:         err,
 			}
 		}
+
+		if isExclusionViolation(err, "prevent_networks_cidr_overlap") {
+			return &ports.CIDROverlapError{
+				CIDR: network.CIDR,
+				Err:  errors.New("CIDR overlaps with existing network"),
+			}
+		}
+
 		return errors.Wrapf(err, "failed to upsert network %s/%s", network.Namespace, network.Name)
 	}
 
