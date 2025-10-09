@@ -243,11 +243,6 @@ func (s *HostResourceService) DeleteHost(ctx context.Context, id models.Resource
 		if ag, err := reader.GetAddressGroupByID(ctx, agID); err == nil && ag != nil {
 			addressGroupToSync = ag
 		}
-
-		hostBindingID := models.NewResourceIdentifier(hostBindingToDelete.Name, models.WithNamespace(hostBindingToDelete.Namespace))
-		if err := writer.DeleteHostBindingsByIDs(ctx, []models.ResourceIdentifier{hostBindingID}); err != nil {
-			return fmt.Errorf("failed to delete host binding %s: %w", hostBindingToDelete.Key(), err)
-		}
 	}
 
 	if err := writer.DeleteHostsByIDs(ctx, []models.ResourceIdentifier{id}); err != nil {
@@ -409,10 +404,6 @@ func (s *HostResourceService) findHostBindingByHostID(ctx context.Context, hostI
 	return foundBinding, nil
 }
 
-// HostBinding is a NetGuard-only resource, no external sync needed
-// syncHostBindingWithExternal is removed - HostBinding doesn't sync with external systems
-
-// getHostByID retrieves a host by its key using Reader pattern
 func (s *HostResourceService) getHostByID(ctx context.Context, id string) (*models.Host, error) {
 	reader, err := s.repo.Reader(ctx)
 	if err != nil {
@@ -420,7 +411,6 @@ func (s *HostResourceService) getHostByID(ctx context.Context, id string) (*mode
 	}
 	defer reader.Close()
 
-	// Parse namespace/name from id (format: "namespace/name")
 	parts := strings.Split(id, "/")
 	var resourceID models.ResourceIdentifier
 	if len(parts) == 2 {
@@ -645,15 +635,12 @@ func (s *HostResourceService) updateHostBindingStatusForHost(ctx context.Context
 // updateHostStatus updates only the host status/conditions in the database without triggering sync
 func (s *HostResourceService) updateHostStatus(ctx context.Context, host *models.Host) error {
 	host.GetMeta().TouchOnWrite(fmt.Sprintf("%d", time.Now().UnixNano()))
-
-	// Update only the status in the database
 	writer, err := s.repo.Writer(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get writer: %w", err)
 	}
 	defer writer.Abort()
 
-	// Convert to slice for sync - this only updates status, no external sync
 	hosts := []models.Host{*host}
 	if err := writer.SyncHosts(ctx, hosts, ports.EmptyScope{}, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
 		return fmt.Errorf("failed to sync host status: %w", err)

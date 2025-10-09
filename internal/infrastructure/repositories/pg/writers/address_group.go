@@ -88,50 +88,44 @@ func (w *Writer) upsertAddressGroup(ctx context.Context, ag models.AddressGroup)
 		return errors.Wrap(err, "failed to marshal conditions")
 	}
 
-	// First, check if address group exists and get existing resource version + Hosts field
-	// (Networks are managed by DB triggers, so we don't fetch them here)
+	// Check if address group exists and get existing resource version + Networks field
 	var existingResourceVersion sql.NullInt64
-	var existingHosts []byte
-	existingQuery := `SELECT resource_version, hosts FROM address_groups WHERE namespace = $1 AND name = $2`
-	err = w.tx.QueryRow(ctx, existingQuery, ag.Namespace, ag.Name).Scan(&existingResourceVersion, &existingHosts)
+	var existingNetworks []byte
+	existingQuery := `SELECT resource_version, networks FROM address_groups WHERE namespace = $1 AND name = $2`
+	err = w.tx.QueryRow(ctx, existingQuery, ag.Namespace, ag.Name).Scan(&existingResourceVersion, &existingNetworks)
 	if err != nil && err != sql.ErrNoRows {
-		klog.V(4).InfoS("Failed to get existing AddressGroup Hosts field", "namespace", ag.Namespace, "name", ag.Name, "error", err.Error())
+		klog.V(4).InfoS("Failed to get existing AddressGroup fields", "namespace", ag.Namespace, "name", ag.Name, "error", err.Error())
 	}
 
-	// Marshal Networks field - NO preserve logic, managed by DB triggers
-	// Networks are now automatically managed by PostgreSQL triggers when NetworkBindings change
-	networksJSON, err := json.Marshal(ag.Networks)
-	if err != nil {
-		return errors.Wrap(err, "failed to marshal networks")
+	var networksJSON []byte
+	networks := ag.Networks
+	if networks == nil {
+		networks = []models.NetworkItem{}
 	}
 
-	// Marshal Hosts field with preserve logic
+	var existingNetworksList []models.NetworkItem
+	if len(existingNetworks) > 0 {
+		_ = json.Unmarshal(existingNetworks, &existingNetworksList)
+	}
+
+	if len(networks) == 0 && len(existingNetworksList) > 0 {
+		networksJSON = existingNetworks
+	} else {
+		networksJSON, err = json.Marshal(networks)
+		if err != nil {
+			return errors.Wrap(err, "failed to marshal networks")
+		}
+	}
+
+	// Marshal Hosts field - user-managed, always use incoming value
 	var hostsJSON []byte
 	hosts := ag.Hosts
 	if hosts == nil {
 		hosts = []netguardv1beta1.ObjectReference{}
 	}
-
-	// Decode existing Hosts JSON to check if it has actual data
-	var existingHostsList []netguardv1beta1.ObjectReference
-	if len(existingHosts) > 0 {
-		// Ignore unmarshal errors - if it fails, existingHostsList stays empty
-		_ = json.Unmarshal(existingHosts, &existingHostsList)
-	}
-
-	// Preserve only if incoming is empty AND existing has actual host items (not null/empty array)
-	if len(hosts) == 0 && len(existingHostsList) > 0 {
-		// Preserve existing Hosts - they contain real data
-		hostsJSON = existingHosts
-		klog.V(4).InfoS("Preserved existing Hosts during AddressGroup update",
-			"namespace", ag.Namespace, "name", ag.Name,
-			"preservedCount", len(existingHostsList))
-	} else {
-		// Use incoming Hosts (could be empty or populated)
-		hostsJSON, err = json.Marshal(hosts)
-		if err != nil {
-			return errors.Wrap(err, "failed to marshal hosts")
-		}
+	hostsJSON, err = json.Marshal(hosts)
+	if err != nil {
+		return errors.Wrap(err, "failed to marshal hosts")
 	}
 
 	var resourceVersion int64
@@ -158,7 +152,7 @@ func (w *Writer) upsertAddressGroup(ctx context.Context, ag models.AddressGroup)
 		}
 	}
 
-	// Then, upsert the address group using the resource version (including Networks and Hosts fields)
+	// Upsert address group
 	addressGroupQuery := `
 		INSERT INTO address_groups (namespace, name, default_action, logs, trace, description, networks, hosts, resource_version)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -167,7 +161,6 @@ func (w *Writer) upsertAddressGroup(ctx context.Context, ag models.AddressGroup)
 			logs = $4,
 			trace = $5,
 			description = $6,
-			networks = $7,
 			hosts = $8,
 			resource_version = $9`
 
@@ -199,8 +192,7 @@ func (w *Writer) deleteAddressGroupsInScope(ctx context.Context, scope ports.Sco
 		return nil
 	}
 
-	query := fmt.Sprintf(`
-		DELETE FROM address_groups ag WHERE %s`, whereClause)
+	query := fmt.Sprintf(`DELETE FROM address_groups ag WHERE %s`, whereClause)
 
 	if err := w.exec(ctx, query, args...); err != nil {
 		return errors.Wrap(err, "failed to delete address groups in scope")
@@ -238,7 +230,6 @@ func (w *Writer) deleteAddressGroupsByIdentifiers(ctx context.Context, identifie
 	markQuery := fmt.Sprintf(markDeleteQuery, strings.Join(conditions, " OR "))
 	_, err := w.tx.Exec(ctx, markQuery, args...)
 	if err != nil {
-		// Log but don't fail - deletion_timestamp is optional for now
 		klog.V(4).InfoS("Failed to mark address groups as deleting in k8s_metadata", "error", err.Error())
 	}
 
@@ -272,7 +263,6 @@ func (w *Writer) SyncAddressGroupBindings(ctx context.Context, bindings []models
 		}
 	}
 
-	// Handle operations based on sync operation
 	switch syncOp {
 	case models.SyncOpDelete:
 		// For DELETE operations, delete the specific bindings

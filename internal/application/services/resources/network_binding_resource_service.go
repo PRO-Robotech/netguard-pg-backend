@@ -53,37 +53,28 @@ func (s *NetworkBindingResourceService) CreateNetworkBinding(ctx context.Context
 	networkRef := models.ResourceIdentifier{Name: binding.NetworkRef.Name, Namespace: binding.Namespace}
 	addressGroupRef := models.ResourceIdentifier{Name: binding.AddressGroupRef.Name, Namespace: binding.Namespace}
 
-	// Initialize metadata
 	binding.GetMeta().TouchOnCreate()
-
-	// No finalizers needed - we'll force sync immediately after AddressGroup Networks update
-
-	// Create the network binding
 	writer, err := s.repo.Writer(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get writer: %w", err)
 	}
 	defer writer.Abort()
 
-	// Get reader from writer to ensure same session/transaction visibility
 	reader, err := s.repo.ReaderFromWriter(ctx, writer)
 	if err != nil {
 		return fmt.Errorf("failed to get reader from writer: %w", err)
 	}
 	defer reader.Close()
 
-	// Validate that the referenced Network exists and is not already bound
 	bindingID := models.ResourceIdentifier{Name: binding.Name, Namespace: binding.Namespace}
 	if err := s.networkResourceService.ValidateNetworkBindingWithReader(ctx, reader, networkRef, bindingID); err != nil {
 		return fmt.Errorf("network validation failed: %w", err)
 	}
 
-	// Validate that the referenced AddressGroup exists
 	if err := s.validateAddressGroupWithReader(ctx, reader, addressGroupRef); err != nil {
 		return fmt.Errorf("address group validation failed: %w", err)
 	}
 
-	// Check if NetworkBinding already exists
 	existing, err := s.getNetworkBindingByIDWithReader(ctx, reader, binding.Key())
 	if err != nil && !errors.Is(err, ports.ErrNotFound) {
 		return fmt.Errorf("failed to check existing network binding: %w", err)
@@ -92,7 +83,6 @@ func (s *NetworkBindingResourceService) CreateNetworkBinding(ctx context.Context
 		return fmt.Errorf("network binding already exists: %s", binding.Key())
 	}
 
-	// Convert to slice for sync
 	bindings := []models.NetworkBinding{*binding}
 	if err := writer.SyncNetworkBindings(ctx, bindings, ports.EmptyScope{}, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
 		return fmt.Errorf("failed to sync network bindings: %w", err)
@@ -102,7 +92,6 @@ func (s *NetworkBindingResourceService) CreateNetworkBinding(ctx context.Context
 		return fmt.Errorf("failed to commit network binding creation: %w", err)
 	}
 
-	// Process conditions after successful commit
 	if s.conditionManager != nil {
 		if err := s.conditionManager.ProcessNetworkBindingConditions(ctx, binding); err != nil {
 			klog.Errorf("Failed to process network binding conditions for %s/%s: %v",
@@ -117,7 +106,6 @@ func (s *NetworkBindingResourceService) CreateNetworkBinding(ctx context.Context
 		}
 	}
 
-	// Update the Network to mark it as bound
 	if err := s.networkResourceService.UpdateNetworkBinding(ctx, networkRef, bindingID, addressGroupRef); err != nil {
 		return fmt.Errorf("failed to update network binding: %w", err)
 	}
@@ -143,16 +131,12 @@ func (s *NetworkBindingResourceService) UpdateNetworkBinding(ctx context.Context
 		return fmt.Errorf("network binding not found: %s", binding.Key())
 	}
 
-	// Convert ObjectReference to ResourceIdentifier for validation
 	networkRef := models.ResourceIdentifier{Name: binding.NetworkRef.Name, Namespace: binding.Namespace}
 	addressGroupRef := models.ResourceIdentifier{Name: binding.AddressGroupRef.Name, Namespace: binding.Namespace}
-
-	// Validate that the referenced Network exists
 	if err := s.validateNetwork(ctx, networkRef); err != nil {
 		return fmt.Errorf("network validation failed: %w", err)
 	}
 
-	// Validate that the referenced AddressGroup exists
 	if err := s.validateAddressGroup(ctx, addressGroupRef); err != nil {
 		return fmt.Errorf("address group validation failed: %w", err)
 	}
@@ -581,8 +565,6 @@ func (s *NetworkBindingResourceService) syncNetworkBindingWithExternal(ctx conte
 	}
 
 	s.syncTracker.RecordSuccess(syncKey)
-	// Skip condition setting for delete operations to avoid trying to save conditions
-	// for a resource that has already been deleted from the database
 	if operation != "delete" {
 		utils.SetSyncSuccessCondition(binding)
 	} else {
@@ -602,7 +584,7 @@ func (s *NetworkBindingResourceService) saveNetworkBindingConditions(ctx context
 		}
 	}()
 
-	scope := ports.NewResourceIdentifierScope(binding.ResourceIdentifier)
+	scope := ports.EmptyScope{}
 
 	// Sync the NetworkBinding with updated conditions
 	if err := writer.SyncNetworkBindings(ctx, []models.NetworkBinding{*binding}, scope); err != nil {

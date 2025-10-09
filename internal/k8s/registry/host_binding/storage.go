@@ -290,6 +290,9 @@ func (s *HostBindingStorage) updateHostBindingStatus(ctx context.Context, hostBi
 		return fmt.Errorf("failed to get host %s/%s: %w", hostID.Namespace, hostID.Name, err)
 	}
 
+	host.Namespace = hostID.Namespace
+	host.Name = hostID.Name
+
 	// Update Host status based on binding state
 	if isBound {
 		// Set binding information

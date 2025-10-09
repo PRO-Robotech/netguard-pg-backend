@@ -953,7 +953,7 @@ func (cm *ConditionManager) saveNetworkConditions(ctx context.Context, network *
 		return fmt.Errorf("failed to get writer for saving network conditions: %w", err)
 	}
 
-	scope := ports.NewResourceIdentifierScope(network.ResourceIdentifier)
+	scope := ports.EmptyScope{}
 
 	if err := writer.SyncNetworks(ctx, []models.Network{*network}, scope, ports.ConditionOnlyOperation{}); err != nil {
 		writer.Abort()
@@ -974,7 +974,7 @@ func (cm *ConditionManager) saveHostConditions(ctx context.Context, host *models
 		return fmt.Errorf("failed to get writer for saving host conditions: %w", err)
 	}
 
-	scope := ports.NewResourceIdentifierScope(host.ResourceIdentifier)
+	scope := ports.EmptyScope{}
 
 	if err := writer.SyncHosts(ctx, []models.Host{*host}, scope, ports.ConditionOnlyOperation{}); err != nil {
 		writer.Abort()
@@ -995,7 +995,7 @@ func (cm *ConditionManager) saveHostBindingConditions(ctx context.Context, bindi
 		return fmt.Errorf("failed to get writer for saving host binding conditions: %w", err)
 	}
 
-	scope := ports.NewResourceIdentifierScope(binding.ResourceIdentifier)
+	scope := ports.EmptyScope{}
 
 	if err := writer.SyncHostBindings(ctx, []models.HostBinding{*binding}, scope, ports.ConditionOnlyOperation{}); err != nil {
 		writer.Abort()
@@ -1033,17 +1033,13 @@ func (cm *ConditionManager) batchConditionUpdate(resourceType string, resource i
 	batchKey := fmt.Sprintf("%s:%s", resourceType, resourceKey)
 	cm.pendingBatch[batchKey] = resource
 
-	klog.V(3).Infof("Added %s to batch (size: %d/%d)", batchKey, len(cm.pendingBatch), cm.batchSize)
-
 	if len(cm.pendingBatch) >= cm.batchSize {
-		klog.V(2).Infof("Flushing batch due to size limit (%d)", len(cm.pendingBatch))
 		go cm.flushConditionBatch()
 	} else if cm.batchTimer == nil {
 		cm.batchTimer = time.AfterFunc(cm.batchTimeout, func() {
 			cm.batchMutex.Lock()
 			defer cm.batchMutex.Unlock()
 			if len(cm.pendingBatch) > 0 {
-				klog.V(2).Infof("Flushing batch due to timeout (%d resources)", len(cm.pendingBatch))
 				go cm.flushConditionBatch()
 			}
 		})
@@ -1054,7 +1050,6 @@ func (cm *ConditionManager) flushConditionBatch() {
 	if cm.sequentialMutex != nil {
 		cm.sequentialMutex.Lock()
 		defer cm.sequentialMutex.Unlock()
-		klog.V(2).Infof("Acquired sequential processing lock for condition batch")
 	}
 
 	cm.batchMutex.Lock()
@@ -1222,7 +1217,7 @@ func (cm *ConditionManager) saveServiceConditions(ctx context.Context, service *
 			return fmt.Errorf("failed to get condition writer for service %s/%s: %w", service.Namespace, service.Name, err)
 		}
 
-		scope := ports.NewResourceIdentifierScope(service.ResourceIdentifier)
+		scope := ports.EmptyScope{}
 		if err := writer.SyncServices(ctx, []models.Service{*service}, scope, ports.ConditionOnlyOperation{}); err != nil {
 			writer.Abort()
 			return fmt.Errorf("failed to sync service conditions with ReadCommitted transaction: %w", err)
@@ -1241,7 +1236,7 @@ func (cm *ConditionManager) saveServiceConditions(ctx context.Context, service *
 		return fmt.Errorf("failed to get writer for saving service conditions: %w", err)
 	}
 
-	scope := ports.NewResourceIdentifierScope(service.ResourceIdentifier)
+	scope := ports.EmptyScope{}
 	if err := writer.SyncServices(ctx, []models.Service{*service}, scope, ports.ConditionOnlyOperation{}); err != nil {
 		writer.Abort()
 		return fmt.Errorf("failed to sync service with conditions: %w", err)
@@ -1264,7 +1259,7 @@ func (cm *ConditionManager) saveAddressGroupConditions(ctx context.Context, ag *
 			return fmt.Errorf("failed to get condition writer for AddressGroup %s/%s: %w", ag.Namespace, ag.Name, err)
 		}
 
-		scope := ports.NewResourceIdentifierScope(ag.ResourceIdentifier)
+		scope := ports.EmptyScope{}
 		if err := writer.SyncAddressGroups(ctx, []models.AddressGroup{*ag}, scope, ports.ConditionOnlyOperation{}); err != nil {
 			writer.Abort()
 			return fmt.Errorf("failed to sync AddressGroup conditions with ReadCommitted transaction: %w", err)
@@ -1283,7 +1278,7 @@ func (cm *ConditionManager) saveAddressGroupConditions(ctx context.Context, ag *
 		return fmt.Errorf("failed to get writer for saving address group conditions: %w", err)
 	}
 
-	scope := ports.NewResourceIdentifierScope(ag.ResourceIdentifier)
+	scope := ports.EmptyScope{}
 	if err := writer.SyncAddressGroups(ctx, []models.AddressGroup{*ag}, scope, ports.ConditionOnlyOperation{}); err != nil {
 		writer.Abort()
 		return fmt.Errorf("failed to sync address group with conditions: %w", err)
@@ -1303,7 +1298,7 @@ func (cm *ConditionManager) saveServiceAliasConditions(ctx context.Context, alia
 		return fmt.Errorf("failed to get writer for service alias conditions: %w", err)
 	}
 
-	scope := ports.NewResourceIdentifierScope(alias.ResourceIdentifier)
+	scope := ports.EmptyScope{}
 	if err := writer.SyncServiceAliases(ctx, []models.ServiceAlias{*alias}, scope, ports.ConditionOnlyOperation{}); err != nil {
 		writer.Abort()
 		return fmt.Errorf("failed to sync service alias with conditions: %w", err)
@@ -1323,7 +1318,7 @@ func (cm *ConditionManager) saveAddressGroupBindingConditions(ctx context.Contex
 		return fmt.Errorf("failed to get writer for address group binding conditions: %w", err)
 	}
 
-	scope := ports.NewResourceIdentifierScope(binding.ResourceIdentifier)
+	scope := ports.EmptyScope{}
 	if err := writer.SyncAddressGroupBindings(ctx, []models.AddressGroupBinding{*binding}, scope, ports.ConditionOnlyOperation{}); err != nil {
 		writer.Abort()
 		return fmt.Errorf("failed to sync address group binding with conditions: %w", err)
@@ -1349,7 +1344,7 @@ func (cm *ConditionManager) saveIEAgAgRuleConditions(ctx context.Context, rule *
 			return fmt.Errorf("failed to get condition writer for IEAgAgRule %s/%s: %w", rule.Namespace, rule.Name, err)
 		}
 
-		scope := ports.NewResourceIdentifierScope(rule.ResourceIdentifier)
+		scope := ports.EmptyScope{}
 		if err := writer.SyncIEAgAgRules(conditionCtx, []models.IEAgAgRule{*rule}, scope, ports.ConditionOnlyOperation{}); err != nil {
 			writer.Abort()
 			return fmt.Errorf("failed to sync IEAgAgRule conditions with ReadCommitted transaction: %w", err)
@@ -1375,17 +1370,15 @@ func (cm *ConditionManager) saveIEAgAgRuleConditions(ctx context.Context, rule *
 			if attempt == maxRetries {
 				return fmt.Errorf("failed to get writer for IEAgAgRule conditions after %d attempts: %w", maxRetries, err)
 			}
-			klog.V(2).Infof("Writer creation failed on attempt %d for IEAgAgRule %s/%s: %v", attempt, rule.Namespace, rule.Name, err)
 			continue
 		}
 
-		scope := ports.NewResourceIdentifierScope(rule.ResourceIdentifier)
+		scope := ports.EmptyScope{}
 		if err := writer.SyncIEAgAgRules(conditionCtx, []models.IEAgAgRule{*rule}, scope, ports.ConditionOnlyOperation{}); err != nil {
 			writer.Abort()
 			if attempt == maxRetries {
 				return fmt.Errorf("failed to sync IEAgAgRule with conditions after %d attempts: %w", maxRetries, err)
 			}
-			klog.V(2).Infof("Sync failed on attempt %d for IEAgAgRule %s/%s: %v", attempt, rule.Namespace, rule.Name, err)
 			continue
 		}
 
@@ -1394,7 +1387,6 @@ func (cm *ConditionManager) saveIEAgAgRuleConditions(ctx context.Context, rule *
 			if attempt == maxRetries {
 				return fmt.Errorf("failed to commit IEAgAgRule conditions after %d attempts: %w", maxRetries, err)
 			}
-			klog.V(2).Infof("Commit failed on attempt %d for IEAgAgRule %s/%s: %v", attempt, rule.Namespace, rule.Name, err)
 			continue
 		}
 
@@ -1417,7 +1409,7 @@ func (cm *ConditionManager) saveRuleS2SConditions(ctx context.Context, rule *mod
 			return fmt.Errorf("failed to get condition writer for RuleS2S %s/%s: %w", rule.Namespace, rule.Name, err)
 		}
 
-		scope := ports.NewResourceIdentifierScope(rule.ResourceIdentifier)
+		scope := ports.EmptyScope{}
 		if err := writer.SyncRuleS2S(conditionCtx, []models.RuleS2S{*rule}, scope, ports.ConditionOnlyOperation{}); err != nil {
 			writer.Abort()
 			return fmt.Errorf("failed to sync RuleS2S conditions with ReadCommitted transaction: %w", err)
@@ -1447,13 +1439,12 @@ func (cm *ConditionManager) saveRuleS2SConditions(ctx context.Context, rule *mod
 			continue
 		}
 
-		scope := ports.NewResourceIdentifierScope(rule.ResourceIdentifier)
+		scope := ports.EmptyScope{}
 		if err := writer.SyncRuleS2S(conditionCtx, []models.RuleS2S{*rule}, scope, ports.ConditionOnlyOperation{}); err != nil {
 			writer.Abort()
 			if attempt == maxRetries {
 				return fmt.Errorf("failed to sync RuleS2S with conditions after %d attempts: %w", maxRetries, err)
 			}
-			klog.V(2).Infof("Sync failed on attempt %d for RuleS2S %s/%s: %v", attempt, rule.Namespace, rule.Name, err)
 			continue
 		}
 
@@ -1462,7 +1453,6 @@ func (cm *ConditionManager) saveRuleS2SConditions(ctx context.Context, rule *mod
 			if attempt == maxRetries {
 				return fmt.Errorf("failed to commit RuleS2S conditions after %d attempts: %w", maxRetries, err)
 			}
-			klog.V(2).Infof("Commit failed on attempt %d for RuleS2S %s/%s: %v", attempt, rule.Namespace, rule.Name, err)
 			continue
 		}
 
@@ -1478,7 +1468,7 @@ func (cm *ConditionManager) saveAddressGroupPortMappingConditions(ctx context.Co
 		return fmt.Errorf("failed to get writer for AddressGroupPortMapping conditions: %w", err)
 	}
 
-	scope := ports.NewResourceIdentifierScope(mapping.ResourceIdentifier)
+	scope := ports.EmptyScope{}
 	if err := writer.SyncAddressGroupPortMappings(ctx, []models.AddressGroupPortMapping{*mapping}, scope, ports.ConditionOnlyOperation{}); err != nil {
 		writer.Abort()
 		return fmt.Errorf("failed to sync AddressGroupPortMapping with conditions: %w", err)
@@ -1498,7 +1488,7 @@ func (cm *ConditionManager) saveAddressGroupBindingPolicyConditions(ctx context.
 		return fmt.Errorf("failed to get writer for AddressGroupBindingPolicy conditions: %w", err)
 	}
 
-	scope := ports.NewResourceIdentifierScope(policy.ResourceIdentifier)
+	scope := ports.EmptyScope{}
 	if err := writer.SyncAddressGroupBindingPolicies(ctx, []models.AddressGroupBindingPolicy{*policy}, scope, ports.ConditionOnlyOperation{}); err != nil {
 		writer.Abort()
 		return fmt.Errorf("failed to sync AddressGroupBindingPolicy with conditions: %w", err)
@@ -1518,7 +1508,7 @@ func (cm *ConditionManager) saveNetworkBindingConditions(ctx context.Context, bi
 		return fmt.Errorf("failed to get writer for NetworkBinding conditions: %w", err)
 	}
 
-	scope := ports.NewResourceIdentifierScope(binding.ResourceIdentifier)
+	scope := ports.EmptyScope{}
 	if err := writer.SyncNetworkBindings(ctx, []models.NetworkBinding{*binding}, scope, ports.ConditionOnlyOperation{}); err != nil {
 		writer.Abort()
 		return fmt.Errorf("failed to sync NetworkBinding with conditions: %w", err)

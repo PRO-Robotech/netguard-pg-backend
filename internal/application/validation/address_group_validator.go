@@ -28,8 +28,6 @@ func (v *AddressGroupValidator) ValidateReferences(ctx context.Context, group mo
 
 // ValidateForCreation validates an address group before creation
 func (v *AddressGroupValidator) ValidateForCreation(ctx context.Context, group models.AddressGroup) error {
-	// PHASE 1: Check for duplicate entity (CRITICAL FIX for overwrite issue)
-	// This prevents creation of entities with the same namespace/name combination
 	keyExtractor := func(entity interface{}) string {
 		if ag, ok := entity.(*models.AddressGroup); ok {
 			return ag.Key()
@@ -46,30 +44,20 @@ func (v *AddressGroupValidator) ValidateForCreation(ctx context.Context, group m
 		return fmt.Errorf("networks can't be modified or added during creation")
 	}
 
-	// PHASE 2.5: Validate host references (existence and format)
 	if err := v.validateHostReferences(ctx, group.Hosts, group.ResourceIdentifier); err != nil {
 		return err
 	}
 
-	// PHASE 2.6: Validate host exclusivity (NEW: ensure hosts don't belong to other AddressGroups)
 	if err := v.validateHostExclusivity(ctx, group.Hosts, group.ResourceIdentifier); err != nil {
 		return err
 	}
 
-	// PHASE 3: Validate references (existing validation)
 	return v.ValidateReferences(ctx, group)
 }
 
 // ValidateForPostCommit validates an address group after it has been committed to database
 // This skips duplicate checking since the entity already exists in the database
 func (v *AddressGroupValidator) ValidateForPostCommit(ctx context.Context, group models.AddressGroup) error {
-	// PHASE 1: Skip duplicate entity check (entity is already committed)
-	// This method is called AFTER the entity is saved to database, so existence is expected
-
-	// PHASE 2: Skip networks check (networks are managed by the system, not validated post-commit)
-	// Networks are added/removed by NetworkBinding operations, not direct user input
-
-	// PHASE 3: Validate references (existing validation)
 	return v.ValidateReferences(ctx, group)
 }
 
@@ -79,18 +67,14 @@ func (v *AddressGroupValidator) ValidateForUpdate(ctx context.Context, oldGroup,
 		return err
 	}
 
-	// Validate host references (existence and format) for new or changed hosts
 	if err := v.validateHostReferences(ctx, newGroup.Hosts, newGroup.ResourceIdentifier); err != nil {
 		return err
 	}
 
-	// Validate host exclusivity for new or changed hosts
 	if err := v.validateHostExclusivity(ctx, newGroup.Hosts, newGroup.ResourceIdentifier); err != nil {
 		return err
 	}
 
-	// For address groups, the validation for update is the same as for creation
-	// We might add specific update validation rules in the future if needed
 	return v.ValidateReferences(ctx, newGroup)
 }
 
@@ -126,23 +110,19 @@ func (v *AddressGroupValidator) validateHostReferences(ctx context.Context, host
 	}
 
 	for i, host := range hosts {
-		// PHASE 1: Validate ObjectReference format
 		if host.Name == "" {
 			return fmt.Errorf("host reference %d: name is required", i)
 		}
 
-		// PHASE 2: Validate correct Kind (must be "Host", not "Hosts")
 		if host.Kind != "Host" {
 			return fmt.Errorf("host reference %d (%s): invalid kind '%s' - must be 'Host' (not 'Hosts')", i, host.Name, host.Kind)
 		}
 
-		// PHASE 3: Validate correct ApiVersion
 		expectedAPIVersion := "netguard.sgroups.io/v1beta1"
 		if host.APIVersion != expectedAPIVersion {
 			return fmt.Errorf("host reference %d (%s): invalid apiVersion '%s' - must be '%s'", i, host.Name, host.APIVersion, expectedAPIVersion)
 		}
 
-		// PHASE 4: Validate host existence
 		hostID := models.ResourceIdentifier{
 			Name:      host.Name,
 			Namespace: currentAG.Namespace, // Hosts must be in same namespace as AddressGroup
@@ -171,13 +151,9 @@ func (v *AddressGroupValidator) validateHostExclusivity(ctx context.Context, hos
 	for _, host := range hosts {
 		// List all AddressGroups to check for host conflicts
 		err := v.reader.ListAddressGroups(ctx, func(ag models.AddressGroup) error {
-			// Skip the current AddressGroup being validated
 			if ag.Key() == currentAG.Key() {
 				return nil
 			}
-
-			// Check if any of the AG's hosts match the host we're validating
-			// Note: hosts must be in the same namespace as the AddressGroup
 			for _, existingHost := range ag.Hosts {
 				if host.Name == existingHost.Name && currentAG.Namespace == ag.Namespace {
 					return fmt.Errorf("host %s/%s already belongs to AddressGroup %s - each host can belong to only one AddressGroup",

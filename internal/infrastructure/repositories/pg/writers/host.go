@@ -2,6 +2,7 @@ package writers
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -14,7 +15,6 @@ import (
 	"netguard-pg-backend/internal/domain/ports"
 )
 
-// UUIDAlreadyExistsError represents a UUID uniqueness violation error
 type UUIDAlreadyExistsError struct {
 	UUID     string
 	HostName string
@@ -31,7 +31,6 @@ func (e *UUIDAlreadyExistsError) Unwrap() error {
 
 // SyncHosts syncs hosts to PostgreSQL with K8s metadata support
 func (w *Writer) SyncHosts(ctx context.Context, hosts []models.Host, scope ports.Scope, options ...ports.Option) error {
-	// Extract sync operation from options
 	syncOp := models.SyncOpUpsert // Default operation
 	for _, opt := range options {
 		if syncOption, ok := opt.(ports.SyncOption); ok {
@@ -40,14 +39,12 @@ func (w *Writer) SyncHosts(ctx context.Context, hosts []models.Host, scope ports
 		}
 	}
 
-	// Handle scoped sync - delete existing resources in scope first (for non-DELETE operations)
 	if !scope.IsEmpty() && syncOp != models.SyncOpDelete {
 		if err := w.deleteHostsInScope(ctx, scope); err != nil {
 			return errors.Wrap(err, "failed to delete hosts in scope")
 		}
 	}
 
-	// Handle operations based on sync operation
 	switch syncOp {
 	case models.SyncOpDelete:
 		// For DELETE operations, delete the specific hosts
@@ -62,7 +59,6 @@ func (w *Writer) SyncHosts(ctx context.Context, hosts []models.Host, scope ports
 			return errors.Wrap(err, "failed to delete hosts")
 		}
 	case models.SyncOpUpsert, models.SyncOpFullSync:
-		// For UPSERT/FULLSYNC operations, upsert all provided hosts
 		for i := range hosts {
 			if err := w.upsertHost(ctx, &hosts[i]); err != nil {
 				// Check for UUID uniqueness violation
@@ -94,17 +90,27 @@ func (w *Writer) upsertHost(ctx context.Context, host *models.Host) error {
 		return errors.Wrap(err, "failed to marshal conditions")
 	}
 
-	// Marshal IP list to JSON
 	var ipListJSON []byte
+	var existingIpListJSON []byte
+	var existingResourceVersion sql.NullInt64
+	checkQuery := `SELECT COALESCE(ip_list, '[]'::jsonb), resource_version FROM hosts WHERE namespace = $1 AND name = $2`
+	err = w.tx.QueryRow(ctx, checkQuery, host.Namespace, host.Name).Scan(&existingIpListJSON, &existingResourceVersion)
+
+	var existingIpList []models.IPItem
+	if err == nil && existingIpListJSON != nil && len(existingIpListJSON) > 0 {
+		_ = json.Unmarshal(existingIpListJSON, &existingIpList)
+	}
+
 	if host.IpList != nil && len(host.IpList) > 0 {
 		ipListJSON, err = json.Marshal(host.IpList)
 		if err != nil {
 			return errors.Wrap(err, "failed to marshal IP list")
 		}
+	} else if len(existingIpList) > 0 {
+		ipListJSON = existingIpListJSON
 	}
 
-	// ALWAYS INSERT new K8s metadata (to get new ResourceVersion)
-	// PostgreSQL BIGSERIAL primary key only increments on INSERT, not UPDATE
+	// Insert new K8s metadata to get new ResourceVersion
 	var resourceVersion int64
 	metadataQuery := `
 		INSERT INTO k8s_metadata (labels, annotations, conditions)
@@ -115,10 +121,8 @@ func (w *Writer) upsertHost(ctx context.Context, host *models.Host) error {
 		return errors.Wrapf(err, "failed to insert K8s metadata for host %s/%s", host.Namespace, host.Name)
 	}
 
-	// Update domain model with new ResourceVersion from DB
 	host.Meta.TouchOnWrite(strconv.FormatInt(resourceVersion, 10))
 
-	// Prepare nullable status fields
 	var hostNameSync, addressGroupName *string
 	if host.HostName != "" {
 		hostNameSync = &host.HostName
@@ -127,22 +131,18 @@ func (w *Writer) upsertHost(ctx context.Context, host *models.Host) error {
 		addressGroupName = &host.AddressGroupName
 	}
 
-	// Prepare nullable reference fields
 	var bindingRefNamespace, bindingRefName *string
 	if host.BindingRef != nil {
-		// For HostBinding, we need to get namespace from the host itself as ObjectReference has no namespace field
 		bindingRefNamespace = &host.Namespace
 		bindingRefName = &host.BindingRef.Name
 	}
 
 	var addressGroupRefNamespace, addressGroupRefName *string
 	if host.AddressGroupRef != nil {
-		// For AddressGroup, we need to get namespace from the host itself as ObjectReference has no namespace field
 		addressGroupRefNamespace = &host.Namespace
 		addressGroupRefName = &host.AddressGroupRef.Name
 	}
 
-	// UPSERT host record with NEW resource version
 	hostQuery := `
 		INSERT INTO hosts (
 			namespace, name, uuid,

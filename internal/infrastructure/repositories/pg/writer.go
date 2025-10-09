@@ -8,7 +8,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/pkg/errors"
-	"k8s.io/klog/v2"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -22,9 +21,9 @@ type writer struct {
 	registry      *Registry
 	tx            pgx.Tx
 	ctx           context.Context
-	modularWriter *writers.Writer    // Delegate to modular writer
-	affectedRows  *int64             // Track affected rows (sgroups pattern)
-	txHolder      *atm.Value[pgx.Tx] // Atomic transaction holder (sgroups pattern)
+	modularWriter *writers.Writer
+	affectedRows  *int64
+	txHolder      *atm.Value[pgx.Tx]
 }
 
 // Close closes the writer
@@ -32,7 +31,6 @@ func (w *writer) Close() error {
 	return nil // Transaction lifecycle managed by Commit/Abort
 }
 
-// Commit commits the transaction with sgroups-style affected rows tracking
 func (w *writer) Commit() error {
 	if w.txHolder == nil {
 		return errors.New("writer closed")
@@ -41,10 +39,7 @@ func (w *writer) Commit() error {
 	var err error = errors.New("writer closed")
 
 	w.txHolder.Clear(func(tx pgx.Tx) {
-		// Track affected rows like sgroups
 		if n := atomic.AddInt64(w.affectedRows, 0); n > 0 {
-			// TODO: Add sync status update when implemented
-			// For now, just commit the transaction
 		}
 
 		if err = tx.Commit(w.ctx); err != nil {
@@ -184,21 +179,8 @@ func (w *writer) MarkAsDeletingByName(namespace, name, kind string) error {
 		SET deletion_timestamp = NOW()
 		WHERE namespace = $1 AND name = $2 AND kind = $3 AND deletion_timestamp IS NULL`
 
-	result, err := w.tx.Exec(w.ctx, query, namespace, name, kind)
-	if err != nil {
-		return err
-	}
-
-	rowsAffected := result.RowsAffected()
-	if rowsAffected > 0 {
-		klog.InfoS("✅ Marked resource as deleting by name",
-			"namespace", namespace,
-			"name", name,
-			"kind", kind,
-			"rowsAffected", rowsAffected)
-	}
-
-	return nil
+	_, err := w.tx.Exec(w.ctx, query, namespace, name, kind)
+	return err
 }
 
 // MarkAsDeletingBatch sets deletion_timestamp for multiple resources by resourceVersion
@@ -222,15 +204,6 @@ func (w *writer) MarkAsDeletingBatch(resourceVersions []string) error {
 		WHERE resource_version IN (%s) AND deletion_timestamp IS NULL`,
 		strings.Join(placeholders, ", "))
 
-	result, err := w.tx.Exec(w.ctx, query, args...)
-	if err != nil {
-		return err
-	}
-
-	rowsAffected := result.RowsAffected()
-	klog.InfoS("✅ Marked resources as deleting in batch",
-		"count", len(resourceVersions),
-		"rowsAffected", rowsAffected)
-
-	return nil
+	_, err := w.tx.Exec(w.ctx, query, args...)
+	return err
 }

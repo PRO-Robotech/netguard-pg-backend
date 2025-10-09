@@ -381,6 +381,19 @@ func convertAddressGroupToProto(addressGroup models.AddressGroup) *netguardpb.Ad
 		protoAG.Meta.CreationTs = timestamppb.New(addressGroup.Meta.CreationTS.Time)
 	}
 
+	if len(addressGroup.Networks) > 0 {
+		protoAG.Networks = make([]*netguardpb.NetworkItem, len(addressGroup.Networks))
+		for i, network := range addressGroup.Networks {
+			protoAG.Networks[i] = &netguardpb.NetworkItem{
+				Name:       network.Name,
+				Cidr:       network.CIDR,
+				ApiVersion: network.ApiVersion,
+				Kind:       network.Kind,
+				Namespace:  network.Namespace,
+			}
+		}
+	}
+
 	// Convert hosts field (NEW: hosts belonging to this address group)
 	if len(addressGroup.Hosts) > 0 {
 		protoAG.Hosts = make([]*netguardpb.ObjectReference, len(addressGroup.Hosts))
