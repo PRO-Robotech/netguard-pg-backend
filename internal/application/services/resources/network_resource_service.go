@@ -7,8 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/klog/v2"
-
 	"netguard-pg-backend/internal/application/utils"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -62,39 +60,33 @@ func (s *NetworkResourceService) CreateNetwork(ctx context.Context, network *mod
 		return fmt.Errorf("network already exists: %s", network.Key())
 	}
 
-	// Initialize metadata
 	network.GetMeta().TouchOnCreate()
 
-	// Create the network
 	writer, err := s.repo.Writer(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get writer: %w", err)
 	}
 	defer writer.Abort()
 
-	// Convert to slice for sync
 	networks := []models.Network{*network}
 	if err := writer.SyncNetworks(ctx, networks, ports.EmptyScope{}, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
 		return fmt.Errorf("failed to sync networks: %w", err)
+	}
+
+	syncErr := s.syncNetworkWithExternal(ctx, network, types.SyncOperationUpsert)
+	if syncErr != nil {
+		return fmt.Errorf("failed to sync with SGROUP: %w", syncErr)
 	}
 
 	if err := writer.Commit(); err != nil {
 		return fmt.Errorf("failed to commit network creation: %w", err)
 	}
 
-	// Sync with external systems
-	syncErr := s.syncNetworkWithExternal(ctx, network, types.SyncOperationUpsert)
-
-	// Process conditions after sync (so sync result can be included in conditions)
 	if s.conditionManager != nil {
-		if err := s.conditionManager.ProcessNetworkConditions(ctx, network, syncErr); err != nil {
-			klog.Errorf("Failed to process network conditions for %s/%s: %v",
-				network.Namespace, network.Name, err)
-			// Don't fail the operation if condition processing fails
-		}
+		_ = s.conditionManager.ProcessNetworkConditions(ctx, network, nil)
 	}
 
-	return syncErr
+	return nil
 }
 
 // UpdateNetwork updates an existing Network with business logic validation
@@ -121,39 +113,33 @@ func (s *NetworkResourceService) UpdateNetwork(ctx context.Context, network *mod
 		}
 	}
 
-	// Update metadata
 	network.GetMeta().TouchOnWrite(fmt.Sprintf("%d", time.Now().UnixNano()))
 
-	// Update the network
 	writer, err := s.repo.Writer(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get writer: %w", err)
 	}
 	defer writer.Abort()
 
-	// Convert to slice for sync
 	networks := []models.Network{*network}
 	if err := writer.SyncNetworks(ctx, networks, ports.EmptyScope{}, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
 		return fmt.Errorf("failed to sync networks: %w", err)
+	}
+
+	syncErr := s.syncNetworkWithExternal(ctx, network, types.SyncOperationUpsert)
+	if syncErr != nil {
+		return fmt.Errorf("failed to sync with SGROUP: %w", syncErr)
 	}
 
 	if err := writer.Commit(); err != nil {
 		return fmt.Errorf("failed to commit network update: %w", err)
 	}
 
-	// Sync with external systems
-	syncErr := s.syncNetworkWithExternal(ctx, network, types.SyncOperationUpsert)
-
-	// Process conditions after sync (so sync result can be included in conditions)
 	if s.conditionManager != nil {
-		if err := s.conditionManager.ProcessNetworkConditions(ctx, network, syncErr); err != nil {
-			klog.Errorf("Failed to process network conditions for %s/%s: %v",
-				network.Namespace, network.Name, err)
-			// Don't fail the operation if condition processing fails
-		}
+		_ = s.conditionManager.ProcessNetworkConditions(ctx, network, nil)
 	}
 
-	return syncErr
+	return nil
 }
 
 // DeleteNetwork deletes a Network with cleanup logic
@@ -306,39 +292,38 @@ func (s *NetworkResourceService) ListNetworks(ctx context.Context, scope ports.S
 
 // SyncNetworks synchronizes multiple networks with the specified operation
 func (s *NetworkResourceService) SyncNetworks(ctx context.Context, networks []models.Network, scope ports.Scope, syncOp models.SyncOp) error {
-	// Get writer from registry
 	writer, err := s.repo.Writer(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get writer: %w", err)
 	}
-	defer func() {
-		if err != nil {
-			writer.Abort()
-		}
-	}()
+	defer writer.Abort()
 
-	// Call writer.SyncNetworks directly with the networks and syncOp
 	if err = writer.SyncNetworks(ctx, networks, scope, ports.WithSyncOp(syncOp)); err != nil {
 		return fmt.Errorf("failed to sync networks: %w", err)
 	}
 
-	// Commit transaction
+	if s.syncManager != nil && syncOp != models.SyncOpDelete {
+		for i := range networks {
+			syncErr := s.syncNetworkWithExternal(ctx, &networks[i], types.SyncOperationUpsert)
+			if syncErr != nil {
+				return fmt.Errorf("failed to sync Network %s with SGROUP: %w", networks[i].Key(), syncErr)
+			}
+		}
+	}
+
 	if err = writer.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	if s.syncManager != nil {
-		if syncOp == models.SyncOpDelete {
-			for i := range networks {
-				_ = s.syncNetworkWithExternal(ctx, &networks[i], types.SyncOperationDelete)
-			}
-		} else {
-			for i := range networks {
-				syncErr := s.syncNetworkWithExternal(ctx, &networks[i], types.SyncOperationUpsert)
-				if s.conditionManager != nil {
-					_ = s.conditionManager.ProcessNetworkConditions(ctx, &networks[i], syncErr)
-				}
-			}
+	if s.syncManager != nil && syncOp == models.SyncOpDelete {
+		for i := range networks {
+			_ = s.syncNetworkWithExternal(ctx, &networks[i], types.SyncOperationDelete)
+		}
+	}
+
+	if s.conditionManager != nil && syncOp != models.SyncOpDelete {
+		for i := range networks {
+			_ = s.conditionManager.ProcessNetworkConditions(ctx, &networks[i], nil)
 		}
 	}
 
