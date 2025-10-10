@@ -171,12 +171,24 @@ func (s *AddressGroupResourceService) CreateAddressGroup(ctx context.Context, ad
 		return errors.Wrap(err, "failed to commit transaction")
 	}
 
-	// Process conditions after successful commit
 	if s.conditionManager != nil {
 		if err := s.conditionManager.ProcessAddressGroupConditions(ctx, &addressGroup); err != nil {
 			klog.Errorf("Failed to process address group conditions for %s/%s: %v",
 				addressGroup.Namespace, addressGroup.Name, err)
 			// Don't fail the operation if condition processing fails
+		}
+	}
+
+	readerForNetworks, err := s.registry.Reader(ctx)
+	if err != nil {
+		klog.Errorf("Failed to get reader for re-reading AddressGroup %s/%s: %v", addressGroup.Namespace, addressGroup.Name, err)
+	} else {
+		defer readerForNetworks.Close()
+		createdAG, err := readerForNetworks.GetAddressGroupByID(ctx, addressGroup.ResourceIdentifier)
+		if err != nil {
+			klog.Errorf("Failed to re-read AddressGroup %s/%s after creation: %v", addressGroup.Namespace, addressGroup.Name, err)
+		} else {
+			addressGroup = *createdAG
 		}
 	}
 
@@ -258,6 +270,19 @@ func (s *AddressGroupResourceService) UpdateAddressGroup(ctx context.Context, ad
 		}
 	}
 
+	readerForNetworks, err := s.registry.Reader(ctx)
+	if err != nil {
+		klog.Errorf("Failed to get reader for re-reading AddressGroup %s/%s: %v", addressGroup.Namespace, addressGroup.Name, err)
+	} else {
+		defer readerForNetworks.Close()
+		updatedAG, err := readerForNetworks.GetAddressGroupByID(ctx, addressGroup.ResourceIdentifier)
+		if err != nil {
+			klog.Errorf("Failed to re-read AddressGroup %s/%s after update: %v", addressGroup.Namespace, addressGroup.Name, err)
+		} else {
+			addressGroup = *updatedAG
+		}
+	}
+
 	// Sync with external systems after successful update
 	s.syncAddressGroupsWithSGroups(ctx, []models.AddressGroup{addressGroup}, types.SyncOperationUpsert)
 
@@ -306,6 +331,24 @@ func (s *AddressGroupResourceService) SyncAddressGroups(ctx context.Context, add
 
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit transaction")
+	}
+
+	if syncOp != models.SyncOpDelete {
+		readerForNetworks, err := s.registry.Reader(ctx)
+		if err != nil {
+			klog.Errorf("Failed to get reader for re-reading AddressGroups: %v", err)
+		} else {
+			defer readerForNetworks.Close()
+			for i := range addressGroups {
+				updatedAG, err := readerForNetworks.GetAddressGroupByID(ctx, addressGroups[i].ResourceIdentifier)
+				if err != nil {
+					klog.Errorf("Failed to re-read AddressGroup %s/%s after sync: %v",
+						addressGroups[i].Namespace, addressGroups[i].Name, err)
+				} else {
+					addressGroups[i] = *updatedAG
+				}
+			}
+		}
 	}
 
 	if syncOp == models.SyncOpUpsert && s.syncManager != nil {

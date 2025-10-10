@@ -110,10 +110,6 @@ func (s *NetworkBindingResourceService) CreateNetworkBinding(ctx context.Context
 		return fmt.Errorf("failed to update network binding: %w", err)
 	}
 
-	if err := s.updateAddressGroupNetworks(ctx, addressGroupRef, networkRef, binding, true); err != nil {
-		return fmt.Errorf("failed to update address group networks: %w", err)
-	}
-
 	if err := s.forceSyncAddressGroupWithSGroups(ctx, addressGroupRef); err != nil {
 	}
 
@@ -149,10 +145,6 @@ func (s *NetworkBindingResourceService) UpdateNetworkBinding(ctx context.Context
 			return fmt.Errorf("failed to remove old network binding: %w", err)
 		}
 
-		if err := s.updateAddressGroupNetworks(ctx, existingAddressGroupRef, existingNetworkRef, existing, false); err != nil {
-			return fmt.Errorf("failed to remove network from old address group: %w", err)
-		}
-
 		bindingID := models.ResourceIdentifier{Name: binding.Name, Namespace: binding.Namespace}
 		if err := s.networkResourceService.ValidateNetworkBinding(ctx, networkRef, bindingID); err != nil {
 			return fmt.Errorf("new network validation failed: %w", err)
@@ -162,10 +154,8 @@ func (s *NetworkBindingResourceService) UpdateNetworkBinding(ctx context.Context
 			return fmt.Errorf("failed to update new network binding: %w", err)
 		}
 
-		if err := s.updateAddressGroupNetworks(ctx, addressGroupRef, networkRef, binding, true); err != nil {
-			return fmt.Errorf("failed to add network to new address group: %w", err)
+		if err := s.forceSyncAddressGroupWithSGroups(ctx, existingAddressGroupRef); err != nil {
 		}
-
 		if err := s.forceSyncAddressGroupWithSGroups(ctx, addressGroupRef); err != nil {
 		}
 	}
@@ -231,16 +221,6 @@ func (s *NetworkBindingResourceService) DeleteNetworkBinding(ctx context.Context
 		return fmt.Errorf("failed to remove network binding: %w", err)
 	}
 
-	// Remove Network from AddressGroup
-	if err := s.updateAddressGroupNetworks(ctx, addressGroupRef, networkRef, existing, false); err != nil {
-		return fmt.Errorf("failed to remove network from address group: %w", err)
-	}
-
-	// FORCE SYNC: Immediately sync AddressGroup with sgroups after network removal
-	if err := s.forceSyncAddressGroupWithSGroups(ctx, addressGroupRef); err != nil {
-	}
-
-	// Delete the network binding
 	writer, err := s.repo.Writer(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get writer: %w", err)
@@ -253,6 +233,9 @@ func (s *NetworkBindingResourceService) DeleteNetworkBinding(ctx context.Context
 
 	if err := writer.Commit(); err != nil {
 		return fmt.Errorf("failed to commit network binding deletion: %w", err)
+	}
+
+	if err := s.forceSyncAddressGroupWithSGroups(ctx, addressGroupRef); err != nil {
 	}
 
 	// Sync deletion with external systems
@@ -550,8 +533,6 @@ func (s *NetworkBindingResourceService) syncNetworkBindingWithExternal(ctx conte
 
 	// Execute sync with retry
 	err := utils.ExecuteWithRetry(ctx, s.retryConfig, func() error {
-		// NetworkBinding itself is not synced with SGROUP
-		// Only Network and AddressGroup resources are synced
 		return nil
 	})
 

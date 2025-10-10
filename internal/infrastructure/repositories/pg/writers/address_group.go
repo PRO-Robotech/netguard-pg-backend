@@ -54,14 +54,7 @@ func (w *Writer) SyncAddressGroups(ctx context.Context, addressGroups []models.A
 		}
 		return errors.New("registry does not support condition operations")
 	}
-	// Handle scoped sync - delete existing resources in scope first
-	if !scope.IsEmpty() {
-		if err := w.deleteAddressGroupsInScope(ctx, scope); err != nil {
-			return errors.Wrap(err, "failed to delete address groups in scope")
-		}
-	}
 
-	// Upsert all provided address groups
 	for i := range addressGroups {
 		if addressGroups[i].Meta.UID == "" {
 			addressGroups[i].Meta.TouchOnCreate()
@@ -265,7 +258,6 @@ func (w *Writer) SyncAddressGroupBindings(ctx context.Context, bindings []models
 
 	switch syncOp {
 	case models.SyncOpDelete:
-		// For DELETE operations, delete the specific bindings
 		var identifiers []models.ResourceIdentifier
 		for _, binding := range bindings {
 			identifiers = append(identifiers, binding.SelfRef.ResourceIdentifier)

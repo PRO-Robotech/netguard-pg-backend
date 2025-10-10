@@ -11,7 +11,6 @@ import (
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/sync/interfaces"
-	"netguard-pg-backend/internal/sync/types"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
@@ -164,17 +163,6 @@ func (cm *ConditionManager) ProcessAddressGroupConditions(ctx context.Context, a
 		ag.Meta.SetErrorCondition(models.ReasonValidationFailed, fmt.Sprintf("Post-commit validation failed: %v", err))
 		ag.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Address group validation failed")
 		return err
-	}
-
-	if cm.syncManager != nil {
-		if err := cm.syncManager.SyncEntity(ctx, ag, types.SyncOperationUpsert); err != nil {
-			klog.Errorf("Failed to sync AddressGroup %s/%s to SGROUP: %v", ag.Namespace, ag.Name, err)
-			ag.Meta.SetSyncedCondition(metav1.ConditionFalse, models.ReasonSyncFailed, fmt.Sprintf("Failed to sync with external SGROUP: %v", err))
-			ag.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "External sync failed")
-			ag.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "Address group passed all validations")
-			cm.batchConditionUpdate("AddressGroup", ag)
-			return fmt.Errorf("external sync failed for AddressGroup %s/%s: %w", ag.Namespace, ag.Name, err)
-		}
 	}
 
 	ag.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Address group is ready and operational")
@@ -1131,21 +1119,9 @@ func (cm *ConditionManager) flushConditionBatch() {
 				agModels[i] = *ag
 			}
 
-			if cm.syncManager != nil {
-				for _, ag := range addressGroups {
-					if err := cm.syncManager.SyncEntity(ctx, ag, types.SyncOperationUpsert); err != nil {
-						klog.Errorf("Failed to sync AddressGroup %s/%s to SGROUP: %v", ag.Namespace, ag.Name, err)
-						success = false
-						break
-					}
-				}
-			}
-
-			if success {
-				if err := writer.SyncAddressGroups(ctx, agModels, ports.EmptyScope{}, ports.ConditionOnlyOperation{}); err != nil {
-					klog.Errorf("Failed to batch sync %d address groups: %v", len(addressGroups), err)
-					success = false
-				}
+			if err := writer.SyncAddressGroups(ctx, agModels, ports.EmptyScope{}, ports.ConditionOnlyOperation{}); err != nil {
+				klog.Errorf("Failed to batch sync %d address groups: %v", len(addressGroups), err)
+				success = false
 			}
 		}
 
