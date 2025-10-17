@@ -118,6 +118,13 @@ func (r *Registry) Subject() patterns.Subject {
 	return r.subject
 }
 
+// Pool returns the underlying connection pool for direct access (for OutboxWorker)
+func (r *Registry) Pool() *pgxpool.Pool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.pool
+}
+
 // Writer creates a new PostgreSQL writer (simplified approach)
 func (r *Registry) Writer(ctx context.Context) (ports.Writer, error) {
 	r.mu.RLock()

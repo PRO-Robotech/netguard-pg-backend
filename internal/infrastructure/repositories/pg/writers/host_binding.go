@@ -7,11 +7,14 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
 
+	"netguard-pg-backend/internal/domain"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
+	"netguard-pg-backend/internal/infrastructure/repositories"
 )
 
 // SyncHostBindings syncs host bindings to PostgreSQL with K8s metadata support
@@ -49,6 +52,11 @@ func (w *Writer) SyncHostBindings(ctx context.Context, hostBindings []models.Hos
 	case models.SyncOpUpsert, models.SyncOpFullSync:
 		// For UPSERT/FULLSYNC operations, upsert all provided bindings
 		for i := range hostBindings {
+			// Initialize metadata fields if not set
+			if hostBindings[i].Meta.UID == "" {
+				hostBindings[i].Meta.TouchOnCreate()
+			}
+
 			if err := w.upsertHostBinding(ctx, &hostBindings[i]); err != nil {
 				// Check for unique constraint violation (one binding per host)
 				if isUniqueViolation(err, "host_bindings_host_namespace_host_name_key") {
@@ -117,6 +125,10 @@ func (w *Writer) upsertHostBinding(ctx context.Context, hostBinding *models.Host
 		return errors.Wrapf(err, "failed to upsert host binding %s/%s", hostBinding.Namespace, hostBinding.Name)
 	}
 
+	if err := w.createHostBindingOutboxEntry(ctx, hostBinding); err != nil {
+		return errors.Wrap(err, "failed to create outbox entry for host binding")
+	}
+
 	return nil
 }
 
@@ -169,28 +181,78 @@ func (w *Writer) DeleteHostBindingsByIDs(ctx context.Context, ids []models.Resou
 		argIndex += 2
 	}
 
-	// First, mark objects as being deleted in k8s_metadata to prevent re-creation by ListWatch
-	markDeleteQuery := `
-		UPDATE k8s_metadata m
-		SET deletion_timestamp = NOW()
-		FROM host_bindings hb
-		WHERE hb.resource_version = m.resource_version
-		  AND (hb.namespace, hb.name) IN (%s)
-		  AND m.deletion_timestamp IS NULL`
-
-	markQuery := fmt.Sprintf(markDeleteQuery, strings.Join(values, ","))
-	_, err := w.tx.Exec(ctx, markQuery, args...)
-	if err != nil {
-		// Log but don't fail - deletion_timestamp is optional for now
-		klog.V(4).InfoS("Failed to mark host bindings as deleting in k8s_metadata", "error", err.Error())
-	}
-
-	// Then delete from host_bindings table
+	// Execute DELETE - trigger will intercept and apply Sync-First strategy
 	query := fmt.Sprintf(`DELETE FROM host_bindings WHERE (namespace, name) IN (%s)`, strings.Join(values, ","))
-	_, err = w.tx.Exec(ctx, query, args...)
+	_, err := w.tx.Exec(ctx, query, args...)
 	if err != nil {
 		return errors.Wrap(err, "failed to delete host bindings by IDs")
 	}
+
+	return nil
+}
+
+// createHostBindingOutboxEntry creates an outbox entry for HostBinding resource (PROCESS RESOURCE)
+func (w *Writer) createHostBindingOutboxEntry(ctx context.Context, binding *models.HostBinding) error {
+	affectedResources := []map[string]string{
+		{
+			"type":      "Host",
+			"namespace": binding.HostRef.Namespace,
+			"name":      binding.HostRef.Name,
+		},
+		{
+			"type":      "AddressGroup",
+			"namespace": binding.AddressGroupRef.Namespace,
+			"name":      binding.AddressGroupRef.Name,
+		},
+	}
+	affectedResourcesJSON, err := json.Marshal(affectedResources)
+	if err != nil {
+		return errors.Wrap(err, "failed to marshal affected resources")
+	}
+
+	// Build payload
+	payload := map[string]interface{}{
+		"namespace": binding.Namespace,
+		"name":      binding.Name,
+		"host_ref":  binding.HostRef.Name,
+		"ag_ref":    binding.AddressGroupRef.Name,
+	}
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		return errors.Wrap(err, "failed to marshal host binding payload")
+	}
+
+	// Parse resource UUID from Meta.UID
+	resourceUUID, err := uuid.Parse(binding.Meta.UID)
+	if err != nil {
+		return errors.Wrapf(err, "invalid host binding UID: %s", binding.Meta.UID)
+	}
+
+	// Create outbox entry
+	outboxEntry := &domain.OutboxEntry{
+		ResourceType:      "HostBinding",
+		ResourceID:        resourceUUID,
+		ResourceNamespace: binding.Namespace,
+		ResourceName:      binding.Name,
+		Operation:         domain.SyncOperationCreate,
+		TargetSystem:      domain.TargetSystemInternal,
+		Payload:           payloadJSON,
+		AffectsResources:  affectedResourcesJSON,
+		Status:            domain.OutboxStatusPending,
+		MaxRetries:        5,
+	}
+
+	// Use OutboxRepository with existing transaction
+	outboxRepo := repositories.NewOutboxRepository(w.tx)
+	if err := outboxRepo.Create(ctx, outboxEntry); err != nil {
+		return errors.Wrap(err, "failed to persist outbox entry")
+	}
+
+	klog.V(4).InfoS("Created outbox entry for HostBinding",
+		"namespace", binding.Namespace,
+		"name", binding.Name,
+		"outbox_id", outboxEntry.ID,
+		"affected_resources", len(affectedResources))
 
 	return nil
 }

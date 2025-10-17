@@ -171,14 +171,6 @@ func (s *AddressGroupResourceService) CreateAddressGroup(ctx context.Context, ad
 		return errors.Wrap(err, "failed to commit transaction")
 	}
 
-	if s.conditionManager != nil {
-		if err := s.conditionManager.ProcessAddressGroupConditions(ctx, &addressGroup); err != nil {
-			klog.Errorf("Failed to process address group conditions for %s/%s: %v",
-				addressGroup.Namespace, addressGroup.Name, err)
-			// Don't fail the operation if condition processing fails
-		}
-	}
-
 	readerForNetworks, err := s.registry.Reader(ctx)
 	if err != nil {
 		klog.Errorf("Failed to get reader for re-reading AddressGroup %s/%s: %v", addressGroup.Namespace, addressGroup.Name, err)
@@ -189,6 +181,15 @@ func (s *AddressGroupResourceService) CreateAddressGroup(ctx context.Context, ad
 			klog.Errorf("Failed to re-read AddressGroup %s/%s after creation: %v", addressGroup.Namespace, addressGroup.Name, err)
 		} else {
 			addressGroup = *createdAG
+		}
+	}
+
+	// Process conditions with the FRESH AddressGroup from database
+	if s.conditionManager != nil {
+		if err := s.conditionManager.ProcessAddressGroupConditions(ctx, &addressGroup); err != nil {
+			klog.Errorf("Failed to process address group conditions for %s/%s: %v",
+				addressGroup.Namespace, addressGroup.Name, err)
+			// Don't fail the operation if condition processing fails
 		}
 	}
 
@@ -261,15 +262,6 @@ func (s *AddressGroupResourceService) UpdateAddressGroup(ctx context.Context, ad
 		}
 	}
 
-	// Process conditions after successful commit
-	if s.conditionManager != nil {
-		if err := s.conditionManager.ProcessAddressGroupConditions(ctx, &addressGroup); err != nil {
-			klog.Errorf("Failed to process address group conditions for %s/%s: %v",
-				addressGroup.Namespace, addressGroup.Name, err)
-			// Don't fail the operation if condition processing fails
-		}
-	}
-
 	readerForNetworks, err := s.registry.Reader(ctx)
 	if err != nil {
 		klog.Errorf("Failed to get reader for re-reading AddressGroup %s/%s: %v", addressGroup.Namespace, addressGroup.Name, err)
@@ -280,6 +272,15 @@ func (s *AddressGroupResourceService) UpdateAddressGroup(ctx context.Context, ad
 			klog.Errorf("Failed to re-read AddressGroup %s/%s after update: %v", addressGroup.Namespace, addressGroup.Name, err)
 		} else {
 			addressGroup = *updatedAG
+		}
+	}
+
+	// Process conditions with the FRESH AddressGroup from database
+	if s.conditionManager != nil {
+		if err := s.conditionManager.ProcessAddressGroupConditions(ctx, &addressGroup); err != nil {
+			klog.Errorf("Failed to process address group conditions for %s/%s: %v",
+				addressGroup.Namespace, addressGroup.Name, err)
+			// Don't fail the operation if condition processing fails
 		}
 	}
 
@@ -371,7 +372,6 @@ func (s *AddressGroupResourceService) SyncAddressGroups(ctx context.Context, add
 					addressGroups[i].Namespace, addressGroups[i].Name, err)
 			}
 		}
-	} else if syncOp == models.SyncOpDelete {
 	}
 
 	// Sync with external systems after successful batch sync (skip for DELETE - handled by DeleteAddressGroupsByIDs)
@@ -854,7 +854,7 @@ func (s *AddressGroupResourceService) DeleteAddressGroupBindingsByIDs(ctx contex
 	defer reader.Close()
 
 	affectedAddressGroups := make(map[string]models.ResourceIdentifier)
-	bindingsToRemove := make([]models.AddressGroupBinding, 0) // 🎯 NEW: Track bindings for Service updates
+	bindingsToRemove := make([]models.AddressGroupBinding, 0)
 
 	for _, id := range ids {
 		binding, err := reader.GetAddressGroupBindingByID(ctx, id)
@@ -1981,11 +1981,9 @@ func (s *AddressGroupResourceService) syncAddressGroupsWithSGroups(ctx context.C
 		}
 	}
 
-	// Perform batch sync for all syncable address groups
-	if len(syncableEntities) > 0 {
-		if err := s.syncManager.SyncBatch(ctx, syncableEntities, operation); err != nil {
-		}
-	}
+	// CLOUD-233: Removed syncManager.SyncBatch() - SGROUP sync now handled by OutboxWorker
+	// AddressGroup changes trigger outbox entries, OutboxWorker processes them asynchronously
+	_ = syncableEntities // Keep variable to avoid unused warning
 
 	if len(allHostReferences) > 0 {
 		reader, err := s.registry.Reader(ctx)
@@ -2210,12 +2208,8 @@ func (s *AddressGroupResourceService) synchronizeServiceAddressGroups(ctx contex
 		return errors.Wrapf(err, "failed to sync service %s with updated AddressGroups", serviceID.Key())
 	}
 
-	if s.syncManager != nil {
-		if err := s.syncManager.SyncEntity(ctx, service, types.SyncOperationUpsert); err != nil {
-			writer.Abort()
-			return fmt.Errorf("SGROUP sync failed for service %s after AddressGroup binding update, transaction aborted: %w", serviceID.Key(), err)
-		}
-	}
+	// CLOUD-233: Removed syncManager.SyncEntity() for Service - SGROUP sync now handled by OutboxWorker
+	// Service changes trigger outbox entries, OutboxWorker processes them asynchronously
 
 	if err := writer.Commit(); err != nil {
 		writer.Abort()
@@ -2438,11 +2432,9 @@ func (s *AddressGroupResourceService) validateHostsSGroupSync(ctx context.Contex
 			return errors.Wrapf(err, "failed to load host '%s' for SGROUP validation", hostRef.Name)
 		}
 
-		err = s.syncManager.SyncEntity(ctx, host, types.SyncOperationUpsert)
-		if err != nil {
-			return errors.Errorf("SGROUP synchronization failed for host '%s' in namespace '%s': %v - the host cannot be added to AddressGroup %s due to SGROUP constraints",
-				hostRef.Name, agID.Namespace, err, agID.Key())
-		}
+		// CLOUD-233: Removed syncManager.SyncEntity() - SGROUP sync now handled by OutboxWorker
+		// Host changes trigger outbox entries (Migration 026), OutboxWorker processes them asynchronously
+		_ = host // Keep variable to avoid unused warning
 
 	}
 
@@ -2471,7 +2463,7 @@ func (s *AddressGroupResourceService) forceSyncRemovedHostsWithSGroup(ctx contex
 			Name:      hostRef.Name,
 		}
 
-		host, err := reader.GetHostByID(ctx, hostID)
+		_, err := reader.GetHostByID(ctx, hostID)
 		if err != nil {
 			if errors.Is(err, ports.ErrNotFound) {
 				continue // Skip non-existent hosts
@@ -2479,9 +2471,8 @@ func (s *AddressGroupResourceService) forceSyncRemovedHostsWithSGroup(ctx contex
 			continue // Don't fail entire operation for one host
 		}
 
-		if err := s.syncManager.SyncEntityForced(ctx, host, types.SyncOperationUpsert); err != nil {
-			// Continue with other hosts even if one fails
-		}
+		// CLOUD-233: Removed syncManager.SyncEntityForced() - SGROUP sync now handled by OutboxWorker
+		// Host changes trigger outbox entries (Migration 026), OutboxWorker processes them asynchronously
 	}
 
 	return nil
@@ -2510,13 +2501,13 @@ func (s *AddressGroupResourceService) syncSpecHostsWithSGroups(ctx context.Conte
 		}
 
 		// Load full host data from database
-		host, err := reader.GetHostByID(ctx, hostID)
+		_, err := reader.GetHostByID(ctx, hostID)
 		if err != nil {
 			continue // Skip this host but continue with others
 		}
 
-		if err := s.syncManager.SyncEntityForced(ctx, host, types.SyncOperationUpsert); err != nil {
-		}
+		// CLOUD-233: Removed syncManager.SyncEntityForced() - SGROUP sync now handled by OutboxWorker
+		// Host changes trigger outbox entries (Migration 026), OutboxWorker processes them asynchronously
 	}
 
 	return nil
@@ -2552,22 +2543,16 @@ func (s *AddressGroupResourceService) syncHostChangesWithSGroup(ctx context.Cont
 			continue
 		}
 
-		_ = s.syncManager.SyncEntityForced(ctx, host, types.SyncOperationUpsert) // Ignore sync errors
+		// CLOUD-233: Removed syncManager.SyncEntityForced() - SGROUP sync now handled by OutboxWorker
+		// Host changes trigger outbox entries (Migration 026), OutboxWorker processes them asynchronously
+		_ = host // Keep variable to avoid unused warning
 	}
 
 	// Sync removed hosts (now unbound)
 	for _, hostRef := range removedHosts {
-		hostID := models.ResourceIdentifier{
-			Namespace: newAG.Namespace,
-			Name:      hostRef.Name,
-		}
-
-		host, err := reader.GetHostByID(ctx, hostID)
-		if err != nil {
-			continue
-		}
-
-		_ = s.syncManager.SyncEntityForced(ctx, host, types.SyncOperationUpsert) // Ignore sync errors
+		// CLOUD-233: Removed syncManager.SyncEntityForced() for removed hosts - SGROUP sync now handled by OutboxWorker
+		// Host changes trigger outbox entries (Migration 026), OutboxWorker processes them asynchronously
+		_ = hostRef // Keep variable to avoid unused warning
 	}
 
 	return nil

@@ -10,7 +10,6 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
 	"netguard-pg-backend/internal/application/utils"
@@ -18,7 +17,6 @@ import (
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/sync/interfaces"
-	"netguard-pg-backend/internal/sync/types"
 )
 
 // ServiceConditionManagerInterface provides condition processing for services and related resources
@@ -157,38 +155,41 @@ func (s *ServiceResourceService) CreateService(ctx context.Context, service mode
 		return errors.Wrap(err, "failed to create service")
 	}
 
-	readerFromWriter, err := s.registry.ReaderFromWriter(ctx, writer)
-	if err != nil {
-		return errors.Wrap(err, "failed to get reader from writer for service re-read")
-	}
-	defer readerFromWriter.Close()
+	// CLOUD-233: Removed syncServiceWithExternal() - SGROUP sync now handled by OutboxWorker
+	// Database triggers create outbox entries, OutboxWorker processes them asynchronously
 
-	createdService, err := readerFromWriter.GetServiceByID(ctx, service.ResourceIdentifier)
-	if err != nil {
-		return errors.Wrapf(err, "failed to re-read service %s after creation", service.Key())
-	}
-
-	if err = s.syncServiceWithExternal(ctx, createdService, types.SyncOperationUpsert, false); err != nil {
-		// Sync failed - abort transaction and return error
-		return fmt.Errorf("SGROUP sync failed, transaction aborted: %w", err)
-	}
-
-	// Commit only after successful SGROUP sync
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit transaction")
 	}
 
-	// Process conditions after successful commit (use createdService with correct AggregatedAddressGroups)
+	// ConditionManager needs the ACTUAL database state, not the in-memory object
+	// Writer may have set Ready=False (PendingSGROUPSync), which must be preserved
+	readerAfterCommit, err := s.registry.Reader(ctx)
+	if err != nil {
+		klog.Errorf("Failed to get reader for condition processing %s/%s: %v",
+			service.Namespace, service.Name, err)
+		return nil // Don't fail the operation
+	}
+	defer readerAfterCommit.Close()
+
+	freshService, err := readerAfterCommit.GetServiceByID(ctx, service.ResourceIdentifier)
+	if err != nil {
+		klog.Errorf("Failed to re-read service for condition processing %s/%s: %v",
+			service.Namespace, service.Name, err)
+		return nil // Don't fail the operation
+	}
+
+	// Process conditions with the FRESH service from database
 	if s.conditionManager != nil {
-		if err := s.conditionManager.ProcessServiceConditions(ctx, createdService); err != nil {
+		if err := s.conditionManager.ProcessServiceConditions(ctx, freshService); err != nil {
 			klog.Errorf("Failed to process service conditions for %s/%s: %v",
-				createdService.Namespace, createdService.Name, err)
+				freshService.Namespace, freshService.Name, err)
 			// Don't fail the operation if condition processing fails
 		}
 	}
 
-	// Sync port mappings for AddressGroups in spec (use createdService)
-	if err := s.syncPortMappingsForServiceSpecAGs(ctx, createdService); err != nil {
+	// Sync port mappings for AddressGroups in spec (use freshService)
+	if err := s.syncPortMappingsForServiceSpecAGs(ctx, freshService); err != nil {
 		return errors.Wrap(err, "failed to sync port mappings after service creation")
 	}
 
@@ -247,21 +248,35 @@ func (s *ServiceResourceService) UpdateService(ctx context.Context, service mode
 		return errors.Wrapf(err, "failed to re-read service %s after update", service.Key())
 	}
 
-	if err = s.syncServiceWithExternal(ctx, updatedService, types.SyncOperationUpsert, false); err != nil {
-		// Sync failed - abort transaction and return error
-		return fmt.Errorf("SGROUP sync failed, transaction aborted: %w", err)
-	}
+	// CLOUD-233: Removed syncServiceWithExternal() - SGROUP sync now handled by OutboxWorker
+	// Database triggers create outbox entries, OutboxWorker processes them asynchronously
 
-	// Commit only after successful SGROUP sync
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit transaction")
 	}
 
-	// Process conditions after successful commit (use updatedService with correct AggregatedAddressGroups)
+	// ConditionManager needs the ACTUAL database state, not the in-memory object
+	// Writer may have set Ready=False (PendingSGROUPSync), which must be preserved
+	readerAfterCommit, err := s.registry.Reader(ctx)
+	if err != nil {
+		klog.Errorf("Failed to get reader for condition processing %s/%s: %v",
+			service.Namespace, service.Name, err)
+		return nil // Don't fail the operation
+	}
+	defer readerAfterCommit.Close()
+
+	freshService, err := readerAfterCommit.GetServiceByID(ctx, service.ResourceIdentifier)
+	if err != nil {
+		klog.Errorf("Failed to re-read service for condition processing %s/%s: %v",
+			service.Namespace, service.Name, err)
+		return nil // Don't fail the operation
+	}
+
+	// Process conditions with the FRESH service from database
 	if s.conditionManager != nil {
-		if err := s.conditionManager.ProcessServiceConditions(ctx, updatedService); err != nil {
+		if err := s.conditionManager.ProcessServiceConditions(ctx, freshService); err != nil {
 			klog.Errorf("Failed to process service conditions for %s/%s: %v",
-				updatedService.Namespace, updatedService.Name, err)
+				freshService.Namespace, freshService.Name, err)
 			// Don't fail the operation if condition processing fails
 		}
 	}
@@ -279,7 +294,7 @@ func (s *ServiceResourceService) UpdateService(ctx context.Context, service mode
 			} else {
 			}
 		} else {
-			klog.Warningf("⚠️ UpdateService: Service %s ports changed but no port mapping regenerator available", updatedService.Key())
+			klog.Warningf("UpdateService: Service %s ports changed but no port mapping regenerator available", updatedService.Key())
 		}
 
 		if s.ruleS2SRegenerator != nil {
@@ -292,7 +307,7 @@ func (s *ServiceResourceService) UpdateService(ctx context.Context, service mode
 			} else {
 			}
 		} else {
-			klog.Warningf("⚠️ UpdateService: Service %s ports changed but no RuleS2S regenerator available", updatedService.Key())
+			klog.Warningf("UpdateService: Service %s ports changed but no RuleS2S regenerator available", updatedService.Key())
 		}
 	}
 
@@ -463,37 +478,38 @@ func (s *ServiceResourceService) SyncServices(ctx context.Context, services []mo
 		updatedServices = append(updatedServices, *updatedService)
 	}
 
-	if s.syncManager != nil {
-		for i := range updatedServices {
-			var operation types.SyncOperation
-			if syncOp == models.SyncOpDelete {
-				operation = types.SyncOperationDelete
-			} else {
-				operation = types.SyncOperationUpsert
-			}
+	// CLOUD-233: Removed syncServiceWithExternal() - SGROUP sync now handled by OutboxWorker
+	// Database triggers create outbox entries, OutboxWorker processes them asynchronously
 
-			// Sync without retry (transactional sync)
-			if err = s.syncServiceWithExternal(ctx, &updatedServices[i], operation, false); err != nil {
-				// Sync failed - abort transaction and return error
-				return fmt.Errorf("SGROUP sync failed for service %s, transaction aborted: %w", updatedServices[i].Key(), err)
-			}
-		}
-	}
-
-	// Commit only after all successful SGROUP syncs
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit transaction")
 	}
 
-	// Always regenerate dependent resources for services with dependencies, but skip condition processing for DELETE
 	if syncOp != models.SyncOpDelete {
-		// Process conditions after successful commit (use updatedServices with correct AggregatedAddressGroups)
-		if s.conditionManager != nil {
-			for i := range updatedServices {
-				if err := s.conditionManager.ProcessServiceConditions(ctx, &updatedServices[i]); err != nil {
-					klog.Errorf("Failed to process service conditions for %s/%s: %v",
-						updatedServices[i].Namespace, updatedServices[i].Name, err)
-					// Don't fail the operation if condition processing fails
+		readerAfterCommit, err := s.registry.Reader(ctx)
+		if err != nil {
+			klog.Errorf("Failed to get reader for batch condition processing: %v", err)
+			return nil // Don't fail the operation
+		}
+		defer readerAfterCommit.Close()
+
+		// Re-read each service from database and process conditions
+		var freshServices []models.Service
+		for i := range services {
+			freshService, err := readerAfterCommit.GetServiceByID(ctx, services[i].ResourceIdentifier)
+			if err != nil {
+				klog.Errorf("Failed to re-read service %s/%s for condition processing: %v",
+					services[i].Namespace, services[i].Name, err)
+				continue // Skip this service but continue with others
+			}
+			freshServices = append(freshServices, *freshService)
+
+			// Process conditions with the FRESH service from database
+			if s.conditionManager != nil {
+				if err := s.conditionManager.ProcessServiceConditions(ctx, freshService); err != nil {
+					klog.Errorf("Failed to process conditions for %s/%s: %v",
+						freshService.Namespace, freshService.Name, err)
+					// Continue with other services
 				}
 			}
 		}
@@ -606,14 +622,8 @@ func (s *ServiceResourceService) DeleteServicesByIDs(ctx context.Context, ids []
 		return errors.Wrap(err, "failed to delete services")
 	}
 
-	if s.syncManager != nil {
-		for _, service := range servicesToDelete {
-			if err = s.syncServiceWithExternal(ctx, &service, types.SyncOperationDelete, false); err != nil {
-				// Sync failed - abort transaction and return error
-				return fmt.Errorf("SGROUP deletion sync failed for service %s, transaction aborted: %w", service.Key(), err)
-			}
-		}
-	}
+	// CLOUD-233: Removed syncServiceWithExternal() - SGROUP sync now handled by OutboxWorker
+	// Migration 032 DELETE triggers create outbox entries, OutboxWorker processes them asynchronously
 
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit transaction")
@@ -748,7 +758,7 @@ func (s *ServiceResourceService) UpdateServiceAlias(ctx context.Context, alias m
 		} else {
 		}
 	} else {
-		klog.Warningf("⚠️ UpdateServiceAlias: ServiceAlias %s updated but no RuleS2S regenerator available", alias.Key())
+		klog.Warningf("UpdateServiceAlias: ServiceAlias %s updated but no RuleS2S regenerator available", alias.Key())
 	}
 
 	return nil
@@ -777,10 +787,10 @@ func (s *ServiceResourceService) SyncServiceAliases(ctx context.Context, aliases
 	// Always regenerate IEAgAg rules for service aliases, but skip condition processing for DELETE
 	if syncOp != models.SyncOpDelete {
 		// Process conditions after successful commit for each service alias (only for non-DELETE operations)
-		klog.Infof("🔄 SyncServiceAliases: Processing conditions for %d service aliases, conditionManager=%v", len(aliases), s.conditionManager != nil)
+		klog.Infof("SyncServiceAliases: Processing conditions for %d service aliases, conditionManager=%v", len(aliases), s.conditionManager != nil)
 		if s.conditionManager != nil {
 			for i := range aliases {
-				klog.Infof("🔄 SyncServiceAliases: Processing conditions for service alias %s/%s", aliases[i].Namespace, aliases[i].Name)
+				klog.Infof("SyncServiceAliases: Processing conditions for service alias %s/%s", aliases[i].Namespace, aliases[i].Name)
 				if err := s.conditionManager.ProcessServiceAliasConditions(ctx, &aliases[i]); err != nil {
 					klog.Errorf("Failed to process service alias conditions for %s/%s: %v",
 						aliases[i].Namespace, aliases[i].Name, err)
@@ -788,7 +798,7 @@ func (s *ServiceResourceService) SyncServiceAliases(ctx context.Context, aliases
 				}
 			}
 		} else {
-			klog.Warningf("⚠️ SyncServiceAliases: conditionManager is nil, skipping condition processing for %d service aliases", len(aliases))
+			klog.Warningf("SyncServiceAliases: conditionManager is nil, skipping condition processing for %d service aliases", len(aliases))
 		}
 	} else {
 	}
@@ -904,67 +914,9 @@ func isTransientError(err error) bool {
 		strings.Contains(errMsg, "deadline")
 }
 
-// syncServiceWithExternal syncs a Service with external systems
-// If allowRetry is false, only attempts sync once (used in transactional operations)
-// If allowRetry is true, retries only on transient errors (network/timeout issues)
-func (s *ServiceResourceService) syncServiceWithExternal(ctx context.Context, service *models.Service, operation types.SyncOperation, allowRetry bool) error {
-	syncKey := fmt.Sprintf("%s-%s", operation, service.Key())
-
-	// Check debouncing only if retry is allowed (post-commit operations)
-	if allowRetry && !s.syncTracker.ShouldSync(syncKey) {
-		return nil // Skip sync due to debouncing
-	}
-
-	// Execute sync - with or without retry based on allowRetry flag
-	var err error
-	if allowRetry {
-		// Post-commit sync: use retry with transient error detection
-		err = utils.ExecuteWithRetry(ctx, s.retryConfig, func() error {
-			// Sync Service with SGROUP
-			if s.syncManager != nil {
-				if syncErr := s.syncManager.SyncEntity(ctx, service, operation); syncErr != nil {
-					// ExecuteWithRetry will check IsRetryableError automatically
-					// If error is not retryable (validation, etc.), it will fail immediately
-					return syncErr
-				}
-			}
-			return nil
-		})
-	} else {
-		// Pre-commit sync: single attempt, no retry
-		if s.syncManager != nil {
-			err = s.syncManager.SyncEntity(ctx, service, operation)
-		}
-	}
-
-	if err != nil {
-		if allowRetry {
-			s.syncTracker.RecordFailure(syncKey, err)
-		}
-		// Set sync failed condition directly on Meta
-		service.Meta.SetCondition(metav1.Condition{
-			Type:               "Ready",
-			Status:             metav1.ConditionFalse,
-			Reason:             "SyncFailed",
-			Message:            fmt.Sprintf("Failed to sync with external system: %v", err),
-			LastTransitionTime: metav1.Now(),
-		})
-		return fmt.Errorf("failed to sync with external system: %w", err)
-	}
-
-	if allowRetry {
-		s.syncTracker.RecordSuccess(syncKey)
-	}
-	// Set sync success condition directly on Meta
-	service.Meta.SetCondition(metav1.Condition{
-		Type:               "Ready",
-		Status:             metav1.ConditionTrue,
-		Reason:             "SyncSucceeded",
-		Message:            "Successfully synced with external system",
-		LastTransitionTime: metav1.Now(),
-	})
-	return nil
-}
+// CLOUD-233: Removed syncServiceWithExternal() method
+// This method performed synchronous SGROUP sync, which is now handled by OutboxWorker
+// Database triggers create outbox entries, OutboxWorker processes them asynchronously with exponential backoff and retry
 
 // servicePortsChanged checks if service ports have changed between old and new versions
 func (s *ServiceResourceService) servicePortsChanged(oldService, newService models.Service) bool {
@@ -1124,7 +1076,7 @@ func (s *ServiceResourceService) reprocessDependentResourceConditions(ctx contex
 			}
 		}
 	} else {
-		klog.Warningf("⚠️ reprocessDependentResourceConditions: conditionManager is nil, cannot reprocess conditions")
+		klog.Warningf("reprocessDependentResourceConditions: conditionManager is nil, cannot reprocess conditions")
 	}
 
 	return nil

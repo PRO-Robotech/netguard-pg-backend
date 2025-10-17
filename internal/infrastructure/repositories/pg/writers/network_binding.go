@@ -7,11 +7,14 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
 
+	"netguard-pg-backend/internal/domain"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
+	"netguard-pg-backend/internal/infrastructure/repositories"
 )
 
 // SyncNetworkBindings syncs network bindings to PostgreSQL with K8s metadata support
@@ -114,6 +117,10 @@ func (w *Writer) upsertNetworkBinding(ctx context.Context, binding *models.Netwo
 		return errors.Wrapf(err, "failed to upsert network binding %s/%s", binding.Namespace, binding.Name)
 	}
 
+	if err := w.createNetworkBindingOutboxEntry(ctx, binding); err != nil {
+		return errors.Wrap(err, "failed to create outbox entry for network binding")
+	}
+
 	return nil
 }
 
@@ -155,23 +162,7 @@ func (w *Writer) DeleteNetworkBindingsByIDs(ctx context.Context, ids []models.Re
 		argIndex += 2
 	}
 
-	// First, mark objects as being deleted in k8s_metadata to prevent re-creation by ListWatch
-	markDeleteQuery := `
-		UPDATE k8s_metadata m
-		SET deletion_timestamp = NOW()
-		FROM network_bindings nb
-		WHERE nb.resource_version = m.resource_version
-		  AND (%s)
-		  AND m.deletion_timestamp IS NULL`
-
-	markQuery := fmt.Sprintf(markDeleteQuery, strings.Join(conditions, " OR "))
-	_, err := w.tx.Exec(ctx, markQuery, args...)
-	if err != nil {
-		// Log but don't fail - deletion_timestamp is optional for now
-		klog.V(4).InfoS("Failed to mark network bindings as deleting in k8s_metadata", "error", err.Error())
-	}
-
-	// Then delete from network_bindings table
+	// Execute DELETE - trigger will intercept and apply Sync-First strategy
 	query := fmt.Sprintf(`
 		DELETE FROM network_bindings WHERE %s`,
 		strings.Join(conditions, " OR "))
@@ -179,6 +170,72 @@ func (w *Writer) DeleteNetworkBindingsByIDs(ctx context.Context, ids []models.Re
 	if err := w.exec(ctx, query, args...); err != nil {
 		return errors.Wrap(err, "failed to delete network bindings by identifiers")
 	}
+
+	return nil
+}
+
+// createNetworkBindingOutboxEntry creates an outbox entry for NetworkBinding resource (PROCESS RESOURCE)
+func (w *Writer) createNetworkBindingOutboxEntry(ctx context.Context, binding *models.NetworkBinding) error {
+	affectedResources := []map[string]string{
+		{
+			"type":      "Network",
+			"namespace": binding.Namespace,
+			"name":      binding.NetworkRef.Name,
+		},
+		{
+			"type":      "AddressGroup",
+			"namespace": binding.Namespace,
+			"name":      binding.AddressGroupRef.Name,
+		},
+	}
+	affectedResourcesJSON, err := json.Marshal(affectedResources)
+	if err != nil {
+		return errors.Wrap(err, "failed to marshal affected resources")
+	}
+
+	// Build payload
+	payload := map[string]interface{}{
+		"namespace":   binding.Namespace,
+		"name":        binding.Name,
+		"network_ref": binding.NetworkRef.Name,
+		"ag_ref":      binding.AddressGroupRef.Name,
+	}
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		return errors.Wrap(err, "failed to marshal network binding payload")
+	}
+
+	// Parse resource UUID from Meta.UID
+	resourceUUID, err := uuid.Parse(binding.Meta.UID)
+	if err != nil {
+		return errors.Wrapf(err, "invalid network binding UID: %s", binding.Meta.UID)
+	}
+
+	// Create outbox entry
+	outboxEntry := &domain.OutboxEntry{
+		ResourceType:      "NetworkBinding",
+		ResourceID:        resourceUUID,
+		ResourceNamespace: binding.Namespace,
+		ResourceName:      binding.Name,
+		Operation:         domain.SyncOperationCreate,
+		TargetSystem:      domain.TargetSystemInternal,
+		Payload:           payloadJSON,
+		AffectsResources:  affectedResourcesJSON,
+		Status:            domain.OutboxStatusPending,
+		MaxRetries:        5,
+	}
+
+	// Use OutboxRepository with existing transaction
+	outboxRepo := repositories.NewOutboxRepository(w.tx)
+	if err := outboxRepo.Create(ctx, outboxEntry); err != nil {
+		return errors.Wrap(err, "failed to persist outbox entry")
+	}
+
+	klog.V(4).InfoS("Created outbox entry for NetworkBinding",
+		"namespace", binding.Namespace,
+		"name", binding.Name,
+		"outbox_id", outboxEntry.ID,
+		"affected_resources", len(affectedResources))
 
 	return nil
 }

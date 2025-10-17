@@ -23,8 +23,20 @@ func (v *ServiceValidator) ValidateReferences(ctx context.Context, service model
 	agValidator := NewAddressGroupValidator(v.reader)
 
 	for _, agRef := range service.AddressGroups {
-		if err := agValidator.ValidateExists(ctx, models.ResourceIdentifier{Name: agRef.Name, Namespace: agRef.Namespace}); err != nil {
+		agID := models.ResourceIdentifier{Name: agRef.Name, Namespace: agRef.Namespace}
+
+		if err := agValidator.ValidateExists(ctx, agID); err != nil {
 			return errors.Wrapf(err, "invalid address group reference in service %s", service.Key())
+		}
+
+		// ========================================
+		// ========================================
+		ag, err := v.reader.GetAddressGroupByID(ctx, agID)
+		if err != nil {
+			return errors.Wrapf(err, "failed to get address group %s for Ready check", agID.Key())
+		}
+		if !isAddressGroupReadyForService(ag) {
+			return fmt.Errorf("address group is not ready yet (Ready=False): %s - service can only reference Ready address groups", agID.Key())
 		}
 	}
 
@@ -377,4 +389,20 @@ func (v *ServiceValidator) CheckDependencies(ctx context.Context, id models.Reso
 	}
 
 	return nil
+}
+
+// ========================================
+// ========================================
+
+// isAddressGroupReadyForService checks if AddressGroup has Ready=True condition
+func isAddressGroupReadyForService(ag *models.AddressGroup) bool {
+	if ag == nil || ag.Meta.Conditions == nil {
+		return false
+	}
+	for _, cond := range ag.Meta.Conditions {
+		if cond.Type == "Ready" && cond.Status == "True" {
+			return true
+		}
+	}
+	return false
 }

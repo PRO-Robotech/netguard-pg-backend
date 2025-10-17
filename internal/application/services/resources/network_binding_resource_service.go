@@ -13,7 +13,6 @@ import (
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/sync/interfaces"
-	"netguard-pg-backend/internal/sync/types"
 )
 
 // NetworkBindingConditionManagerInterface provides condition processing for network bindings
@@ -410,6 +409,13 @@ func (s *NetworkBindingResourceService) validateAddressGroupWithReader(ctx conte
 	if addressGroup == nil {
 		return fmt.Errorf("address group not found: %s", addressGroupRef.Key())
 	}
+
+	// ========================================
+	// ========================================
+	if !s.isAddressGroupReady(addressGroup) {
+		return fmt.Errorf("address group is not ready yet (Ready=False): %s - binding can only be created between Ready resources", addressGroupRef.Key())
+	}
+
 	return nil
 }
 
@@ -590,11 +596,9 @@ func (s *NetworkBindingResourceService) forceSyncNetworkWithSGroups(ctx context.
 		return fmt.Errorf("failed to get Network %s: %w", networkRef.Key(), err)
 	}
 
-	if s.syncManager != nil {
-		if err := s.syncManager.SyncEntityForced(ctx, freshNetwork, types.SyncOperationUpsert); err != nil {
-			return fmt.Errorf("failed to sync Network %s with sgroups: %w", networkRef.Key(), err)
-		}
-	}
+	// CLOUD-233: Removed syncManager.SyncEntityForced() - SGROUP sync now handled by OutboxWorker
+	// Migration 027 (Network UPSERT) triggers create outbox entries, OutboxWorker processes them asynchronously
+	_ = freshNetwork // Keep variable to avoid unused warning
 
 	return nil
 }
@@ -605,11 +609,25 @@ func (s *NetworkBindingResourceService) forceSyncAddressGroupWithSGroups(ctx con
 		return fmt.Errorf("failed to get AddressGroup %s: %w", addressGroupRef.Key(), err)
 	}
 
-	if s.syncManager != nil {
-		if err := s.syncManager.SyncEntityForced(ctx, freshAddressGroup, types.SyncOperationUpsert); err != nil {
-			return fmt.Errorf("failed to sync AddressGroup %s with sgroups: %w", addressGroupRef.Key(), err)
-		}
-	}
+	// CLOUD-233: Removed syncManager.SyncEntityForced() - SGROUP sync now handled by OutboxWorker
+	// AddressGroup changes trigger outbox entries, OutboxWorker processes them asynchronously
+	_ = freshAddressGroup // Keep variable to avoid unused warning
 
 	return nil
+}
+
+// ========================================
+// ========================================
+
+// isAddressGroupReady checks if AddressGroup has Ready=True condition
+func (s *NetworkBindingResourceService) isAddressGroupReady(ag *models.AddressGroup) bool {
+	if ag == nil || ag.Meta.Conditions == nil {
+		return false
+	}
+	for _, cond := range ag.Meta.Conditions {
+		if cond.Type == "Ready" && cond.Status == "True" {
+			return true
+		}
+	}
+	return false
 }

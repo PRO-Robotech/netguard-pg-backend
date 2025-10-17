@@ -136,6 +136,19 @@ func (cm *ConditionManager) ProcessServiceConditions(ctx context.Context, servic
 		return nil
 	}
 
+	existingReady := service.Meta.GetCondition("Ready")
+	isPendingSync := existingReady != nil &&
+		existingReady.Status == metav1.ConditionFalse &&
+		existingReady.Reason == "PendingSGROUPSync"
+
+	if isPendingSync {
+		klog.Infof("ConditionManager: Service %s/%s is pending SGROUP sync, NOT overriding Ready=False",
+			service.Namespace, service.Name)
+		// Keep Ready=False (PendingSGROUPSync) - OutboxWorker will set Ready=True after successful sync
+		cm.batchConditionUpdate("Service", service)
+		return nil
+	}
+
 	service.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Service is ready for use")
 	cm.batchConditionUpdate("Service", service)
 	return nil
@@ -165,6 +178,23 @@ func (cm *ConditionManager) ProcessAddressGroupConditions(ctx context.Context, a
 		return err
 	}
 
+	existingReady := ag.Meta.GetCondition("Ready")
+	isPendingSync := existingReady != nil &&
+		existingReady.Status == metav1.ConditionFalse &&
+		existingReady.Reason == "PendingSGROUPSync"
+
+	if isPendingSync {
+		klog.V(4).InfoS("ConditionManager: AddressGroup is pending SGROUP sync, NOT setting Ready=True",
+			"namespace", ag.Namespace, "name", ag.Name)
+
+		// Only set Validated condition, leave Ready=False
+		ag.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "Address group passed all validations")
+		// Keep Ready=False (PendingSGROUPSync) - Worker will update after successful sync
+		cm.batchConditionUpdate("AddressGroup", ag)
+		return nil
+	}
+
+	// OLD BEHAVIOR: For existing resources, set Ready=True
 	ag.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Address group is ready and operational")
 	ag.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Address group successfully synced to backend and SGROUP")
 	ag.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "Address group passed all validations")
@@ -611,6 +641,39 @@ func (cm *ConditionManager) ProcessNetworkConditions(ctx context.Context, networ
 		return nil
 	}
 
+	existingReady := network.Meta.GetCondition("Ready")
+	isPendingSync := existingReady != nil &&
+		existingReady.Status == metav1.ConditionFalse &&
+		existingReady.Reason == "PendingSGROUPSync"
+
+	if isPendingSync {
+		klog.V(4).InfoS("ConditionManager: Network is pending SGROUP sync, NOT setting Ready=True",
+			"namespace", network.Namespace, "name", network.Name)
+
+		// Only set Validated condition, leave Ready=False
+		validator := validation.NewDependencyValidator(reader)
+		networkValidator := validator.GetNetworkValidator()
+
+		if err := networkValidator.ValidateCIDR(network.CIDR); err != nil {
+			klog.Errorf("ConditionManager: Network CIDR validation failed for %s/%s: %v", network.Namespace, network.Name, err)
+			network.Meta.SetErrorCondition(models.ReasonValidationFailed, fmt.Sprintf("Network CIDR validation failed: %v", err))
+			network.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Network has validation errors")
+			network.Meta.SetValidatedCondition(metav1.ConditionFalse, models.ReasonValidationFailed, fmt.Sprintf("CIDR validation failed: %v", err))
+			return nil
+		}
+
+		network.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "Network passed validation")
+		// Keep Ready=False (PendingSGROUPSync) - Worker will update after successful sync
+
+		if err := cm.saveNetworkConditions(ctx, network); err != nil {
+			klog.Errorf("ConditionManager: Failed to save conditions for network %s/%s: %v", network.Namespace, network.Name, err)
+			return nil
+		}
+
+		return nil
+	}
+
+	// OLD BEHAVIOR: For existing resources, set Ready=True
 	network.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Network committed to backend and synced with sgroups successfully")
 
 	validator := validation.NewDependencyValidator(reader)
@@ -721,6 +784,28 @@ func (cm *ConditionManager) ProcessHostConditions(ctx context.Context, host *mod
 		return nil
 	}
 
+	existingReady := host.Meta.GetCondition("Ready")
+	isPendingSync := existingReady != nil &&
+		existingReady.Status == metav1.ConditionFalse &&
+		existingReady.Reason == "PendingSGROUPSync"
+
+	if isPendingSync {
+		klog.V(4).InfoS("ConditionManager: Host is pending SGROUP sync, NOT setting Ready=True",
+			"namespace", host.Namespace, "name", host.Name)
+
+		// Only set Validated condition, leave Ready=False
+		host.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "Host passed validation")
+		// Keep Ready=False (PendingSGROUPSync) - Worker will update after successful sync
+
+		if err := cm.saveHostConditions(ctx, host); err != nil {
+			klog.Errorf("ConditionManager: Failed to save conditions for host %s/%s: %v", host.Namespace, host.Name, err)
+			return nil
+		}
+
+		return nil
+	}
+
+	// OLD BEHAVIOR: For existing resources, set Ready=True
 	host.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Host committed to backend and synced with sgroups successfully")
 	host.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "Host passed validation")
 	host.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Host is ready for use")

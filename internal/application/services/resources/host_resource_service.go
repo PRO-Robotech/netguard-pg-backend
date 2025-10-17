@@ -14,7 +14,6 @@ import (
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 	"netguard-pg-backend/internal/sync/interfaces"
-	"netguard-pg-backend/internal/sync/types"
 )
 
 // HostConditionManagerInterface provides condition processing for hosts
@@ -82,22 +81,40 @@ func (s *HostResourceService) CreateHost(ctx context.Context, host *models.Host)
 		return fmt.Errorf("failed to commit host creation: %w", err)
 	}
 
-	// Sync with external systems
-	syncErr := s.syncHostWithExternal(ctx, host, types.SyncOperationUpsert)
-	if syncErr != nil {
-		// Continue with condition processing even if sync fails
-	}
+	// CLOUD-233: Removed syncHostWithExternal() - SGROUP sync now handled by OutboxWorker
+	// Migration 026 triggers create outbox entries, OutboxWorker processes them asynchronously
 
-	// Process conditions after sync (so sync result can be included in conditions)
+	// ConditionManager needs the ACTUAL database state, not the in-memory object
+	// Writer may have set Ready=False (PendingSGROUPSync), which must be preserved
 	if s.conditionManager != nil {
-		if err := s.conditionManager.ProcessHostConditions(ctx, host, syncErr); err != nil {
+		// Re-read the host from database to get Writer-applied conditions
+		reader, err := s.repo.Reader(ctx)
+		if err != nil {
+			klog.Errorf("Failed to get reader for condition processing %s/%s: %v",
+				host.Namespace, host.Name, err)
+			return nil // Don't fail the operation
+		}
+		defer reader.Close()
+
+		freshHost, err := reader.GetHostByID(ctx, models.ResourceIdentifier{
+			Namespace: host.Namespace,
+			Name:      host.Name,
+		})
+		if err != nil {
+			klog.Errorf("Failed to re-read host for condition processing %s/%s: %v",
+				host.Namespace, host.Name, err)
+			return nil // Don't fail the operation
+		}
+
+		// Process conditions with the FRESH host from database
+		if err := s.conditionManager.ProcessHostConditions(ctx, freshHost, nil); err != nil {
 			klog.Errorf("Failed to process host conditions for %s/%s: %v",
 				host.Namespace, host.Name, err)
 			// Don't fail the operation if condition processing fails
 		}
 	}
 
-	return syncErr
+	return nil
 }
 
 // UpdateHost updates an existing Host
@@ -127,19 +144,40 @@ func (s *HostResourceService) UpdateHost(ctx context.Context, host *models.Host)
 		return fmt.Errorf("failed to commit host update: %w", err)
 	}
 
-	// Sync with external systems
-	syncErr := s.syncHostWithExternal(ctx, host, types.SyncOperationUpsert)
+	// CLOUD-233: Removed syncHostWithExternal() - SGROUP sync now handled by OutboxWorker
+	// Migration 026 triggers create outbox entries, OutboxWorker processes them asynchronously
 
-	// Process conditions after sync
+	// ConditionManager needs the ACTUAL database state, not the in-memory object
+	// Writer may have set Ready=False (PendingSGROUPSync), which must be preserved
 	if s.conditionManager != nil {
-		if err := s.conditionManager.ProcessHostConditions(ctx, host, syncErr); err != nil {
+		// Re-read the host from database to get Writer-applied conditions
+		reader, err := s.repo.Reader(ctx)
+		if err != nil {
+			klog.Errorf("Failed to get reader for condition processing %s/%s: %v",
+				host.Namespace, host.Name, err)
+			return nil // Don't fail the operation
+		}
+		defer reader.Close()
+
+		freshHost, err := reader.GetHostByID(ctx, models.ResourceIdentifier{
+			Namespace: host.Namespace,
+			Name:      host.Name,
+		})
+		if err != nil {
+			klog.Errorf("Failed to re-read host for condition processing %s/%s: %v",
+				host.Namespace, host.Name, err)
+			return nil // Don't fail the operation
+		}
+
+		// Process conditions with the FRESH host from database
+		if err := s.conditionManager.ProcessHostConditions(ctx, freshHost, nil); err != nil {
 			klog.Errorf("Failed to process host conditions for %s/%s: %v",
 				host.Namespace, host.Name, err)
 			// Don't fail the operation if condition processing fails
 		}
 	}
 
-	return syncErr
+	return nil
 }
 
 // DeleteHost deletes a Host by resource identifier with cascading deletion of HostBinding
@@ -226,24 +264,9 @@ func (s *HostResourceService) DeleteHost(ctx context.Context, id models.Resource
 	}
 	defer writer.Abort()
 
-	// If there's a HostBinding to delete, delete it first
-	var addressGroupToSync *models.AddressGroup
-	if hostBindingToDelete != nil {
-		agID := models.ResourceIdentifier{
-			Name:      hostBindingToDelete.AddressGroupRef.Name,
-			Namespace: hostBindingToDelete.Namespace, // HostBinding is in same namespace as AddressGroup
-		}
-
-		reader, err := s.repo.ReaderFromWriter(ctx, writer)
-		if err != nil {
-			return fmt.Errorf("failed to get reader from writer: %w", err)
-		}
-		defer reader.Close()
-
-		if ag, err := reader.GetAddressGroupByID(ctx, agID); err == nil && ag != nil {
-			addressGroupToSync = ag
-		}
-	}
+	// CLOUD-233: Removed AddressGroup sync preparation - no longer needed with OutboxWorker
+	// HostBinding deletion and AG updates now handled by database triggers + OutboxWorker
+	_ = hostBindingToDelete // Keep variable to avoid unused warning
 
 	if err := writer.DeleteHostsByIDs(ctx, []models.ResourceIdentifier{id}); err != nil {
 		return fmt.Errorf("failed to delete host: %w", err)
@@ -253,20 +276,14 @@ func (s *HostResourceService) DeleteHost(ctx context.Context, id models.Resource
 		return fmt.Errorf("failed to commit cascading deletion: %w", err)
 	}
 
-	if addressGroupToSync != nil && s.syncManager != nil {
-		reader, err := s.repo.Reader(ctx)
-		if err == nil {
-			if updatedAG, err := reader.GetAddressGroupByID(ctx, models.ResourceIdentifier{
-				Name:      addressGroupToSync.Name,
-				Namespace: addressGroupToSync.Namespace,
-			}); err == nil && updatedAG != nil {
-				_ = s.syncManager.SyncEntityForced(ctx, updatedAG, types.SyncOperationUpsert)
-			}
-			reader.Close()
-		}
-	}
+	// CLOUD-233: Removed syncManager.SyncEntityForced() for AddressGroup
+	// Migration 028 AddressGroup triggers handle aggregated_hosts updates
+	// OutboxWorker processes AddressGroup sync asynchronously
 
-	_ = s.syncHostWithExternal(ctx, existing, types.SyncOperationDelete)
+	// CLOUD-233: Removed syncHostWithExternal() for DELETE
+	// Migration 032 DELETE triggers create outbox entries
+	// OutboxWorker processes Host deletion sync asynchronously
+
 	return nil
 }
 
@@ -319,17 +336,37 @@ func (s *HostResourceService) SyncHosts(ctx context.Context, hosts []models.Host
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	if s.syncManager != nil {
-		if syncOp == models.SyncOpDelete {
-			for i := range hosts {
-				_ = s.syncHostWithExternal(ctx, &hosts[i], types.SyncOperationDelete)
+	// CLOUD-233: Removed syncHostWithExternal() for both UPSERT and DELETE
+	// Migration 026 (UPSERT) and 032 (DELETE) triggers create outbox entries
+	// OutboxWorker processes them asynchronously with retry/backoff
+
+	// ConditionManager needs the ACTUAL database state, not the in-memory objects
+	// Writer may have set Ready=False (PendingSGROUPSync), which must be preserved
+	if s.conditionManager != nil && syncOp != models.SyncOpDelete {
+		reader, err := s.repo.Reader(ctx)
+		if err != nil {
+			klog.Errorf("Failed to get reader for batch condition processing: %v", err)
+			return nil // Don't fail the operation
+		}
+		defer reader.Close()
+
+		// Re-read each host from database and process conditions
+		for i := range hosts {
+			freshHost, err := reader.GetHostByID(ctx, models.ResourceIdentifier{
+				Namespace: hosts[i].Namespace,
+				Name:      hosts[i].Name,
+			})
+			if err != nil {
+				klog.Errorf("Failed to re-read host %s/%s for condition processing: %v",
+					hosts[i].Namespace, hosts[i].Name, err)
+				continue // Skip this host but continue with others
 			}
-		} else {
-			for i := range hosts {
-				syncErr := s.syncHostWithExternal(ctx, &hosts[i], types.SyncOperationUpsert)
-				if s.conditionManager != nil {
-					_ = s.conditionManager.ProcessHostConditions(ctx, &hosts[i], syncErr)
-				}
+
+			// Process conditions with the FRESH host from database
+			if err := s.conditionManager.ProcessHostConditions(ctx, freshHost, nil); err != nil {
+				klog.Errorf("Failed to process conditions for %s/%s: %v",
+					freshHost.Namespace, freshHost.Name, err)
+				// Continue with other hosts
 			}
 		}
 	}
@@ -423,34 +460,10 @@ func (s *HostResourceService) getHostByID(ctx context.Context, id string) (*mode
 	return host, err
 }
 
-// syncHostWithExternal syncs a Host with external systems
-func (s *HostResourceService) syncHostWithExternal(ctx context.Context, host *models.Host, operation types.SyncOperation) error {
-	syncKey := fmt.Sprintf("%s-%s", operation, host.Key())
-
-	// Check debouncing
-	if !s.syncTracker.ShouldSync(syncKey) {
-		return nil // Skip sync due to debouncing
-	}
-
-	// Execute sync with retry
-	err := utils.ExecuteWithRetry(ctx, s.retryConfig, func() error {
-		// Sync Host with SGROUP
-		if s.syncManager != nil {
-			if syncErr := s.syncManager.SyncEntity(ctx, host, operation); syncErr != nil {
-				return syncErr
-			}
-		}
-		return nil
-	})
-
-	if err != nil {
-		s.syncTracker.RecordFailure(syncKey, err)
-		return fmt.Errorf("failed to sync with external system: %w", err)
-	}
-
-	s.syncTracker.RecordSuccess(syncKey)
-	return nil
-}
+// CLOUD-233: Removed syncHostWithExternal()
+// This method performed synchronous SGROUP sync, which is now handled by OutboxWorker
+// Migration 026 (Host UPSERT), 032 (Host DELETE) triggers create outbox entries
+// OutboxWorker processes them asynchronously with exponential backoff and retry
 
 // UpdateHostBinding updates Host status when a binding is created
 func (s *HostResourceService) UpdateHostBinding(ctx context.Context, hostID models.ResourceIdentifier, bindingID models.ResourceIdentifier, addressGroupID models.ResourceIdentifier) error {
@@ -519,20 +532,14 @@ func (s *HostResourceService) UpdateHostBinding(ctx context.Context, hostID mode
 		return fmt.Errorf("failed to commit host binding: %w", err)
 	}
 
-	// Sync with SGROUP
-	if s.syncManager != nil {
-		if syncErr := s.syncManager.SyncEntity(ctx, host, types.SyncOperationUpsert); syncErr != nil {
-			// Don't fail the operation, sync can be retried later
-		}
-	}
+	// CLOUD-233: Removed syncManager.SyncEntity() - SGROUP sync now handled by OutboxWorker
+	// Migration 026 triggers create outbox entries, OutboxWorker processes them asynchronously
 
 	return nil
 }
 
-// SyncHostWithExternal syncs a Host with external systems (public wrapper)
-func (s *HostResourceService) SyncHostWithExternal(ctx context.Context, host *models.Host, operation types.SyncOperation) error {
-	return s.syncHostWithExternal(ctx, host, operation)
-}
+// CLOUD-233: Removed SyncHostWithExternal() - public wrapper for old sync method
+// SGROUP sync now handled by OutboxWorker asynchronously
 
 // UpdateHostBindingStatus updates Host.isBound status based on AddressGroup hosts changes
 func (s *HostResourceService) UpdateHostBindingStatus(ctx context.Context, oldAG, newAG *models.AddressGroup) error {
@@ -604,7 +611,6 @@ func (s *HostResourceService) updateHostBindingStatusForHost(ctx context.Context
 		return fmt.Errorf("failed to get host %s/%s: %w", namespace, hostName, err)
 	}
 
-	// CRITICAL: Only allow binding via AG.spec if host is ready (synchronized with SGROUP)
 	if isBound && !utils.IsReadyConditionTrue(host) {
 		return fmt.Errorf("host %s/%s is not ready for binding via AddressGroup.spec - must be synchronized with SGROUP first (Ready condition must be True)", namespace, hostName)
 	}
@@ -629,10 +635,8 @@ func (s *HostResourceService) updateHostBindingStatusForHost(ctx context.Context
 		return fmt.Errorf("failed to update host status: %w", err)
 	}
 
-	if s.syncManager != nil {
-		if syncErr := s.syncManager.SyncEntityForced(ctx, host, types.SyncOperationUpsert); syncErr != nil {
-		}
-	}
+	// CLOUD-233: Removed syncManager.SyncEntityForced() - SGROUP sync now handled by OutboxWorker
+	// UpdateHost() above already triggers Migration 026, which creates outbox entries
 
 	return nil
 }

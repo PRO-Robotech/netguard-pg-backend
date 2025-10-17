@@ -98,6 +98,16 @@ func (w *MutationWebhook) mutateService(ctx context.Context, req *admissionv1.Ad
 		})
 	}
 
+	for i := range service.Spec.AddressGroups {
+		if service.Spec.AddressGroups[i].Namespace == "" {
+			patches = append(patches, map[string]interface{}{
+				"op":    "replace",
+				"path":  fmt.Sprintf("/spec/addressGroups/%d/namespace", i),
+				"value": service.Namespace,
+			})
+		}
+	}
+
 	return w.createPatchResponse(req.UID, patches)
 }
 

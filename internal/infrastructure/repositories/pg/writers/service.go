@@ -7,11 +7,14 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
 
+	"netguard-pg-backend/internal/domain"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
+	"netguard-pg-backend/internal/infrastructure/repositories"
 )
 
 // addressGroupRefJSON represents the JSON structure for address group references in the database
@@ -133,11 +136,6 @@ func (w *Writer) upsertService(ctx context.Context, service models.Service) erro
 		return errors.Wrap(err, "failed to marshal K8s metadata")
 	}
 
-	conditionsJSON, err := json.Marshal(service.Meta.Conditions)
-	if err != nil {
-		return errors.Wrap(err, "failed to marshal conditions")
-	}
-
 	// First, check if service exists and get existing resource version
 	var existingResourceVersion sql.NullInt64
 	existingQuery := `SELECT resource_version FROM services WHERE namespace = $1 AND name = $2`
@@ -149,6 +147,21 @@ func (w *Writer) upsertService(ctx context.Context, service models.Service) erro
 		}
 		// Reset err to nil for sql.ErrNoRows or "no rows in result set"
 		err = nil
+	}
+
+	// Ready will be set to True by Worker after successful SGROUP sync
+	// Business Rule: Resources should NOT have Ready=True until synced to SGROUP
+	conditions := service.Meta.Conditions
+	if !existingResourceVersion.Valid {
+		// This is a new resource - force Pending status
+		conditions = forcePendingSyncCondition(conditions)
+		klog.V(4).InfoS("Forcing PendingSGROUPSync status for new Service",
+			"namespace", service.Namespace, "name", service.Name)
+	}
+
+	conditionsJSON, err := json.Marshal(conditions)
+	if err != nil {
+		return errors.Wrap(err, "failed to marshal conditions")
 	}
 
 	var resourceVersion int64
@@ -194,6 +207,12 @@ func (w *Writer) upsertService(ctx context.Context, service models.Service) erro
 		resourceVersion,
 	); err != nil {
 		return errors.Wrapf(err, "failed to upsert service %s/%s", service.Namespace, service.Name)
+	}
+
+	// ========================================
+	// ========================================
+	if err := w.createServiceOutboxEntry(ctx, service); err != nil {
+		return errors.Wrap(err, "failed to create outbox entry for service")
 	}
 
 	return nil
@@ -283,23 +302,14 @@ func (w *Writer) deleteServicesByIdentifiers(ctx context.Context, identifiers []
 		argIndex += 2
 	}
 
-	// First, mark objects as being deleted in k8s_metadata to prevent re-creation by ListWatch
-	markDeleteQuery := `
-		UPDATE k8s_metadata m
-		SET deletion_timestamp = NOW()
-		FROM services s
-		WHERE s.resource_version = m.resource_version
-		  AND (%s)
-		  AND m.deletion_timestamp IS NULL`
+	// The service_before_delete trigger (Migration 036) handles deletion_timestamp:
+	// - If deletion_timestamp is NULL → Trigger sets it, creates outbox entry, prevents deletion
+	// - If deletion_timestamp is SET → Trigger allows deletion (Worker already synced)
+	//
+	// If we set deletion_timestamp manually, the trigger will think Worker already synced
+	// and allow immediate deletion, bypassing Sync-First strategy!
 
-	markQuery := fmt.Sprintf(markDeleteQuery, strings.Join(conditions, " OR "))
-	_, err := w.tx.Exec(ctx, markQuery, args...)
-	if err != nil {
-		// Log but don't fail - deletion_timestamp is optional for now
-		klog.V(4).InfoS("Failed to mark services as deleting in k8s_metadata", "error", err.Error())
-	}
-
-	// Then delete from services table
+	// Execute DELETE - trigger will intercept and apply Sync-First strategy
 	query := fmt.Sprintf(`
 		DELETE FROM services WHERE %s`,
 		strings.Join(conditions, " OR "))
@@ -558,6 +568,54 @@ func (w *Writer) updateServiceAliasConditionsOnly(ctx context.Context, alias mod
 	if err := w.exec(ctx, conditionUpdateQuery, conditionsJSON, resourceVersion); err != nil {
 		return errors.Wrapf(err, "failed to update conditions for service alias %s/%s", alias.Namespace, alias.Name)
 	}
+
+	return nil
+}
+
+// createServiceOutboxEntry creates an outbox entry for Service resource
+func (w *Writer) createServiceOutboxEntry(ctx context.Context, service models.Service) error {
+	// Build payload
+	payload := map[string]interface{}{
+		"namespace":      service.Namespace,
+		"name":           service.Name,
+		"description":    service.Description,
+		"ingress_ports":  service.IngressPorts,
+		"address_groups": service.AddressGroups,
+	}
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		return errors.Wrap(err, "failed to marshal service payload")
+	}
+
+	// Parse resource UUID from Meta.UID
+	resourceUUID, err := uuid.Parse(service.Meta.UID)
+	if err != nil {
+		return errors.Wrapf(err, "invalid service UID: %s", service.Meta.UID)
+	}
+
+	// Create outbox entry
+	outboxEntry := &domain.OutboxEntry{
+		ResourceType:      "Service",
+		ResourceID:        resourceUUID,
+		ResourceNamespace: service.Namespace,
+		ResourceName:      service.Name,
+		Operation:         domain.SyncOperationCreate,
+		TargetSystem:      domain.TargetSystemSGROUP,
+		Payload:           payloadJSON,
+		Status:            domain.OutboxStatusPending,
+		MaxRetries:        5,
+	}
+
+	// Use OutboxRepository with existing transaction
+	outboxRepo := repositories.NewOutboxRepository(w.tx)
+	if err := outboxRepo.Create(ctx, outboxEntry); err != nil {
+		return errors.Wrap(err, "failed to persist outbox entry")
+	}
+
+	klog.V(4).InfoS("Created outbox entry for Service",
+		"namespace", service.Namespace,
+		"name", service.Name,
+		"outbox_id", outboxEntry.ID)
 
 	return nil
 }

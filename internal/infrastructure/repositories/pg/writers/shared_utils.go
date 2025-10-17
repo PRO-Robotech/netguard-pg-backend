@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -122,4 +123,36 @@ func (w *Writer) marshalAccessPorts(accessPorts map[models.ServiceRef]models.Ser
 	}
 
 	return json.Marshal(jsonMap)
+}
+
+// forcePendingSyncCondition ensures new resources start with Ready=False
+// until they are successfully synced to SGROUP.
+//
+// Business Rule: Resources should NOT have Ready=True until they are confirmed
+// to exist in SGROUP. This prevents bindings from being created before resources
+// are actually available in the target system.
+//
+// Workflow:
+//  1. Resource created → Ready=False (PendingSGROUPSync)
+//  2. Worker syncs to SGROUP → Ready=True (Synced)
+//  3. Only then can bindings be created (Migration 033 checks Ready status)
+func forcePendingSyncCondition(conditions []metav1.Condition) []metav1.Condition {
+	// Remove any existing Ready condition
+	filtered := []metav1.Condition{}
+	for _, cond := range conditions {
+		if cond.Type != "Ready" {
+			filtered = append(filtered, cond)
+		}
+	}
+
+	// Add Ready=False with PendingSGROUPSync reason
+	pending := metav1.Condition{
+		Type:               "Ready",
+		Status:             metav1.ConditionFalse,
+		Reason:             "PendingSGROUPSync",
+		Message:            "Awaiting synchronization with SGROUP before marking as ready",
+		LastTransitionTime: metav1.Now(),
+	}
+
+	return append(filtered, pending)
 }

@@ -448,6 +448,12 @@ func (s *HostBindingResourceService) validateHostBindingWithReader(ctx context.C
 		return fmt.Errorf("host not found: %s", hostID.Key())
 	}
 
+	// ========================================
+	// ========================================
+	if !s.isHostReady(host) {
+		return fmt.Errorf("host is not ready yet (Ready=False): %s - binding can only be created between Ready resources", hostID.Key())
+	}
+
 	// Check if Host is already bound to a different binding
 	if host.IsBound {
 		// If bound to the same binding, that's valid
@@ -468,7 +474,7 @@ func (s *HostBindingResourceService) validateHostBindingWithReader(ctx context.C
 	return nil
 }
 
-// validateAddressGroupWithReader validates that an AddressGroup exists
+// validateAddressGroupWithReader validates that an AddressGroup exists and is Ready
 func (s *HostBindingResourceService) validateAddressGroupWithReader(ctx context.Context, reader ports.Reader, addressGroupID models.ResourceIdentifier) error {
 	// Check if AddressGroup exists using provided reader
 	addressGroup, err := reader.GetAddressGroupByID(ctx, addressGroupID)
@@ -477,6 +483,12 @@ func (s *HostBindingResourceService) validateAddressGroupWithReader(ctx context.
 	}
 	if addressGroup == nil {
 		return fmt.Errorf("address group not found: %s", addressGroupID.Key())
+	}
+
+	// ========================================
+	// ========================================
+	if !s.isAddressGroupReady(addressGroup) {
+		return fmt.Errorf("address group is not ready yet (Ready=False): %s - binding can only be created between Ready resources", addressGroupID.Key())
 	}
 
 	return nil
@@ -527,4 +539,33 @@ func (s *HostBindingResourceService) getHostBindingByHostID(ctx context.Context,
 	}
 
 	return foundBinding, nil
+}
+
+// ========================================
+// ========================================
+
+// isHostReady checks if Host has Ready=True condition
+func (s *HostBindingResourceService) isHostReady(host *models.Host) bool {
+	if host == nil || host.Meta.Conditions == nil {
+		return false
+	}
+	for _, cond := range host.Meta.Conditions {
+		if cond.Type == "Ready" && cond.Status == "True" {
+			return true
+		}
+	}
+	return false
+}
+
+// isAddressGroupReady checks if AddressGroup has Ready=True condition
+func (s *HostBindingResourceService) isAddressGroupReady(ag *models.AddressGroup) bool {
+	if ag == nil || ag.Meta.Conditions == nil {
+		return false
+	}
+	for _, cond := range ag.Meta.Conditions {
+		if cond.Type == "Ready" && cond.Status == "True" {
+			return true
+		}
+	}
+	return false
 }

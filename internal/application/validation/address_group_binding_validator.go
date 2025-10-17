@@ -155,10 +155,30 @@ func (v *AddressGroupBindingValidator) ValidateReferences(ctx context.Context, b
 		return errors.Wrapf(err, "invalid service reference in address group binding %s", binding.Key())
 	}
 
+	// ========================================
+	// ========================================
+	service, err := v.reader.GetServiceByID(ctx, serviceID)
+	if err != nil {
+		return errors.Wrapf(err, "failed to get service %s for Ready check", serviceID.Key())
+	}
+	if !isServiceReadyForBinding(service) {
+		return fmt.Errorf("service is not ready yet (Ready=False): %s - binding can only be created between Ready resources", serviceID.Key())
+	}
+
 	// Create ResourceIdentifier from NamespacedObjectReference
 	agID := models.NewResourceIdentifier(binding.AddressGroupRef.Name, models.WithNamespace(binding.AddressGroupRef.Namespace))
 	if err := addressGroupValidator.ValidateExists(ctx, agID); err != nil {
 		return errors.Wrapf(err, "invalid address group reference in address group binding %s", binding.Key())
+	}
+
+	// ========================================
+	// ========================================
+	ag, err := v.reader.GetAddressGroupByID(ctx, agID)
+	if err != nil {
+		return errors.Wrapf(err, "failed to get address group %s for Ready check", agID.Key())
+	}
+	if !isAddressGroupReadyForBinding(ag) {
+		return fmt.Errorf("address group is not ready yet (Ready=False): %s - binding can only be created between Ready resources", agID.Key())
 	}
 
 	return nil
@@ -510,4 +530,33 @@ func (v *AddressGroupBindingValidator) ValidateForUpdate(ctx context.Context, ol
 // CheckDependencies checks if there are dependencies before deleting an address group binding
 func (v *AddressGroupBindingValidator) CheckDependencies(ctx context.Context, id models.ResourceIdentifier) error {
 	return nil
+}
+
+// ========================================
+// ========================================
+
+// isServiceReadyForBinding checks if Service has Ready=True condition
+func isServiceReadyForBinding(service *models.Service) bool {
+	if service == nil || service.Meta.Conditions == nil {
+		return false
+	}
+	for _, cond := range service.Meta.Conditions {
+		if cond.Type == "Ready" && cond.Status == "True" {
+			return true
+		}
+	}
+	return false
+}
+
+// isAddressGroupReadyForBinding checks if AddressGroup has Ready=True condition
+func isAddressGroupReadyForBinding(ag *models.AddressGroup) bool {
+	if ag == nil || ag.Meta.Conditions == nil {
+		return false
+	}
+	for _, cond := range ag.Meta.Conditions {
+		if cond.Type == "Ready" && cond.Status == "True" {
+			return true
+		}
+	}
+	return false
 }
