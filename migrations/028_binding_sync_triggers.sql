@@ -20,15 +20,21 @@ BEGIN
     END IF;
 
     IF TG_OP = 'DELETE' THEN
-        SELECT h.ready INTO v_host_ready
-        FROM hosts h
-        WHERE h.namespace = OLD.host_namespace
-          AND h.name = OLD.host_name;
+        SELECT EXISTS(
+            SELECT 1 FROM hosts h
+            JOIN k8s_metadata km ON h.resource_version = km.resource_version
+            WHERE h.namespace = OLD.host_namespace
+              AND h.name = OLD.host_name
+              AND km.conditions @> '[{"type":"Ready","status":"True"}]'::jsonb
+        ) INTO v_host_ready;
     ELSE
-        SELECT h.ready INTO v_host_ready
-        FROM hosts h
-        WHERE h.namespace = NEW.host_namespace
-          AND h.name = NEW.host_name;
+        SELECT EXISTS(
+            SELECT 1 FROM hosts h
+            JOIN k8s_metadata km ON h.resource_version = km.resource_version
+            WHERE h.namespace = NEW.host_namespace
+              AND h.name = NEW.host_name
+              AND km.conditions @> '[{"type":"Ready","status":"True"}]'::jsonb
+        ) INTO v_host_ready;
     END IF;
 
     IF v_host_ready IS NULL OR NOT v_host_ready THEN
