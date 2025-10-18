@@ -176,17 +176,6 @@ func (c *sgroupsClient) GetStatuses(ctx context.Context) (chan *timestamppb.Time
 	return statusChan, nil
 }
 
-// Health checks the health of sgroups service
-func (c *sgroupsClient) Health(ctx context.Context) error {
-	// Create context with timeout
-	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
-	defer cancel()
-
-	// Real health check using SyncStatuses
-	_, err := c.client.SyncStatuses(ctx, &emptypb.Empty{})
-	return err
-}
-
 // GetHostsByUUIDs retrieves hosts from SGROUP by their UUIDs
 func (c *sgroupsClient) GetHostsByUUIDs(ctx context.Context, uuids []string) ([]*pb.Host, error) {
 	// Create context with timeout

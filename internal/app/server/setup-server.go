@@ -16,8 +16,7 @@ import (
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
 )
 
-// SetupServer sets up the HTTP server with gRPC-Gateway and Swagger UI
-func SetupServer(ctx context.Context, grpcAddr string, httpAddr string, service *services.NetguardFacade) (*http.Server, error) {
+func SetupServer(ctx context.Context, grpcAddr string, httpAddr string, service *services.NetguardFacade) (*http.Server, *http.ServeMux, error) {
 	// Create gRPC server
 	grpcServer := grpc.NewServer()
 	netguardServer := netguard.NewServiceServer(service)
@@ -38,7 +37,7 @@ func SetupServer(ctx context.Context, grpcAddr string, httpAddr string, service 
 	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 	err := netguardpb.RegisterNetguardServiceHandlerFromEndpoint(ctx, gwmux, grpcAddr, opts)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to register netguard gateway")
+		return nil, nil, errors.Wrap(err, "failed to register netguard gateway")
 	}
 
 	httpMux := http.NewServeMux()
@@ -53,6 +52,11 @@ func SetupServer(ctx context.Context, grpcAddr string, httpAddr string, service 
 			return
 		}
 
+		if strings.HasPrefix(r.URL.Path, "/healthz/") || strings.HasPrefix(r.URL.Path, "/metrics") {
+			httpMux.ServeHTTP(w, r)
+			return
+		}
+
 		gwmux.ServeHTTP(w, r)
 	})
 
@@ -61,5 +65,5 @@ func SetupServer(ctx context.Context, grpcAddr string, httpAddr string, service 
 		Handler: handler,
 	}
 
-	return httpServer, nil
+	return httpServer, httpMux, nil
 }

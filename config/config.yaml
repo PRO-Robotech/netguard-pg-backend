@@ -23,9 +23,14 @@ authn:
       verify: "skip"
       ca-files: []
 
-# Конфигурация синхронизации
+# Конфигурация синхронизации с SGROUP
 sync:
   enabled: true
+
+  # required: определяет критичность SGROUP для запуска backend
+  #   false - graceful degradation (backend стартует без SGROUP, подключится позже)
+  #   true - fail-fast (backend не стартует если SGROUP недоступен)
+  required: false
 
   # Настройки sgroups клиента
   sgroups:

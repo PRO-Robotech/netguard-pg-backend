@@ -13,6 +13,7 @@ import (
 	"netguard-pg-backend/internal/domain"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/infrastructure/repositories"
+	"netguard-pg-backend/internal/sync/monitor"
 	"netguard-pg-backend/internal/sync/syncers"
 )
 
@@ -34,6 +35,11 @@ type OutboxWorker struct {
 	// Configuration
 	config *WorkerConfig
 	logger *zap.Logger
+
+	// Connection monitoring (NEW)
+	connectionMonitor *monitor.SGroupConnectionMonitor
+	isPaused          bool
+	pausedMu          sync.RWMutex // protects isPaused
 
 	// Lifecycle management
 	stopCh    chan struct{}
@@ -59,6 +65,7 @@ func NewOutboxWorker(
 	serviceSyncer *syncers.ServiceSyncer,
 	logger *zap.Logger,
 	config *WorkerConfig,
+	connectionMonitor *monitor.SGroupConnectionMonitor,
 ) *OutboxWorker {
 	if config == nil {
 		config = DefaultConfig()
@@ -66,6 +73,10 @@ func NewOutboxWorker(
 
 	if err := config.Validate(); err != nil {
 		logger.Fatal("invalid worker config", zap.Error(err))
+	}
+
+	if connectionMonitor == nil {
+		logger.Fatal("connectionMonitor cannot be nil")
 	}
 
 	return &OutboxWorker{
@@ -78,6 +89,8 @@ func NewOutboxWorker(
 		serviceSyncer:      serviceSyncer,
 		config:             config,
 		logger:             logger.With(zap.String("component", "outbox-worker")),
+		connectionMonitor:  connectionMonitor,
+		isPaused:           false,
 		stopCh:             make(chan struct{}),
 		doneCh:             make(chan struct{}),
 	}
@@ -91,6 +104,10 @@ func (w *OutboxWorker) Start(ctx context.Context) error {
 
 	// Mark worker as running
 	setWorkerUp()
+
+	// Subscribe to connection events (NEW)
+	w.connectionMonitor.Subscribe(w)
+	w.logger.Info("OutboxWorker subscribed to connection events")
 
 	w.logger.Info("OutboxWorker starting",
 		zap.Duration("poll_interval", w.config.PollInterval),
@@ -176,6 +193,16 @@ func (w *OutboxWorker) ProcessOnce(ctx context.Context) error {
 
 // processBatch processes a single batch of pending outbox entries
 func (w *OutboxWorker) processBatch(ctx context.Context) error {
+	// Check if processing is paused (NEW)
+	w.pausedMu.RLock()
+	paused := w.isPaused
+	w.pausedMu.RUnlock()
+
+	if paused {
+		w.logger.Debug("Skipping batch processing - SGROUP disconnected")
+		return nil
+	}
+
 	// Find pending entries using FOR UPDATE SKIP LOCKED
 	entries, err := w.outboxRepo.FindPending(ctx, w.config.BatchSize)
 	if err != nil {
@@ -240,4 +267,37 @@ func (w *OutboxWorker) processEntry(ctx context.Context, entry *domain.OutboxEnt
 			zap.Error(err))
 		return err
 	}
+}
+
+// OnConnectionEvent обрабатывает события связи с SGROUP
+// Implements monitor.ConnectionListener interface
+func (w *OutboxWorker) OnConnectionEvent(event monitor.ConnectionEvent) {
+	switch event.Type {
+	case monitor.EventConnected:
+		w.pausedMu.Lock()
+		wasPaused := w.isPaused
+		w.isPaused = false
+		w.pausedMu.Unlock()
+
+		if wasPaused {
+			w.logger.Info("OutboxWorker: SGROUP connected, resuming processing")
+		}
+
+	case monitor.EventDisconnected:
+		w.pausedMu.Lock()
+		w.isPaused = true
+		w.pausedMu.Unlock()
+
+		w.logger.Warn("OutboxWorker: SGROUP disconnected, pausing processing",
+			zap.Error(event.Error))
+
+	case monitor.EventTimestamp:
+		// OutboxWorker не интересуют timestamps
+	}
+}
+
+// GetListenerName возвращает имя listener для логирования
+// Implements monitor.ConnectionListener interface
+func (w *OutboxWorker) GetListenerName() string {
+	return "OutboxWorker"
 }

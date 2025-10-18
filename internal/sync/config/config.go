@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"netguard-pg-backend/internal/sync/detector"
 	"netguard-pg-backend/internal/sync/manager"
 	"netguard-pg-backend/internal/sync/processors"
 	"netguard-pg-backend/internal/sync/synchronizer"
@@ -14,9 +13,6 @@ import (
 type ReverseSyncSystemConfig struct {
 	// Manager configuration
 	Manager manager.ReverseSyncConfig `json:"manager" yaml:"manager"`
-
-	// Change detector configuration
-	SGROUPDetector detector.SGROUPDetectorConfig `json:"sgroup_detector" yaml:"sgroup_detector"`
 
 	// Host synchronization configuration
 	HostSynchronizer synchronizer.HostSyncConfig `json:"host_synchronizer" yaml:"host_synchronizer"`
@@ -56,11 +52,6 @@ func DefaultReverseSyncSystemConfig() ReverseSyncSystemConfig {
 			MaxConcurrentProcessors: 5,
 			HealthCheckInterval:     60 * time.Second,
 		},
-		SGROUPDetector: detector.SGROUPDetectorConfig{
-			ReconnectInterval: 5 * time.Second,
-			MaxRetries:        10,
-			ChangeEventSource: "sgroup",
-		},
 		HostSynchronizer: synchronizer.DefaultHostSyncConfig(),
 		HostProcessor:    processors.DefaultHostProcessorConfig(),
 		System: SystemConfig{
@@ -81,10 +72,6 @@ func DevelopmentConfig() ReverseSyncSystemConfig {
 	config.System.LogLevel = "debug"
 	config.System.Environment = "development"
 
-	// Faster reconnection for development
-	config.SGROUPDetector.ReconnectInterval = 2 * time.Second
-	config.SGROUPDetector.MaxRetries = 5
-
 	// Smaller batches for easier debugging
 	config.HostSynchronizer.BatchSize = 10
 	config.Manager.MaxConcurrentProcessors = 2
@@ -103,10 +90,6 @@ func ProductionConfig() ReverseSyncSystemConfig {
 	// Less verbose logging for production
 	config.System.LogLevel = "info"
 	config.System.Environment = "production"
-
-	// Longer reconnection intervals for stability
-	config.SGROUPDetector.ReconnectInterval = 10 * time.Second
-	config.SGROUPDetector.MaxRetries = 20
 
 	// Larger batches for efficiency
 	config.HostSynchronizer.BatchSize = 100
@@ -129,10 +112,6 @@ func TestConfig() ReverseSyncSystemConfig {
 	// Debug logging for tests
 	config.System.LogLevel = "debug"
 	config.System.Environment = "test"
-
-	// Fast reconnection for tests
-	config.SGROUPDetector.ReconnectInterval = 100 * time.Millisecond
-	config.SGROUPDetector.MaxRetries = 2
 
 	// Small batches for test predictability
 	config.HostSynchronizer.BatchSize = 2
@@ -160,15 +139,6 @@ func (c *ReverseSyncSystemConfig) Validate() error {
 
 	if c.Manager.MaxConcurrentProcessors <= 0 {
 		return fmt.Errorf("manager max concurrent processors must be positive")
-	}
-
-	// Validate SGROUP detector config
-	if c.SGROUPDetector.ReconnectInterval <= 0 {
-		return fmt.Errorf("SGROUP detector reconnect interval must be positive")
-	}
-
-	if c.SGROUPDetector.MaxRetries < 0 {
-		return fmt.Errorf("SGROUP detector max retries must be non-negative")
 	}
 
 	// Validate host synchronizer config
