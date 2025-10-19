@@ -147,10 +147,20 @@ func (w *OutboxWorker) processEntityResource(
 					zap.String("dep_reason", dep.Reason))
 			}
 
-			// Integration Point #2.5: Update PendingSync when waiting for entity dependencies
-			if err := w.updatePendingSyncWaitingEntityDeps(ctx, item.ResourceType, item.ResourceNamespace, item.ResourceName,
-				len(missingDeps), missingDeps[0].Type, missingDeps[0].Name); err != nil {
-				w.logger.Warn("failed to update PendingSync condition for entity dependencies", zap.Error(err))
+			// Integration Point #2.5: Update PendingSync with specific message based on dependency type
+			// Special case: Host waiting for AddressGroup (most common and user-visible case)
+			if item.ResourceType == string(registry.TypeHost) && len(missingDeps) == 1 && missingDeps[0].Type == string(registry.TypeAddressGroup) {
+				// Host → AddressGroup dependency: Use specific, user-friendly message
+				if err := w.updatePendingSyncWaitingAddressGroup(ctx, item.ResourceType, item.ResourceNamespace, item.ResourceName,
+					missingDeps[0].Namespace, missingDeps[0].Name); err != nil {
+					w.logger.Warn("failed to update PendingSync condition for AddressGroup dependency", zap.Error(err))
+				}
+			} else {
+				// General entity dependencies (AddressGroup→Host, Network→AddressGroup, Service→AddressGroup)
+				if err := w.updatePendingSyncWaitingEntityDeps(ctx, item.ResourceType, item.ResourceNamespace, item.ResourceName,
+					len(missingDeps), missingDeps[0].Type, missingDeps[0].Name); err != nil {
+					w.logger.Warn("failed to update PendingSync condition for entity dependencies", zap.Error(err))
+				}
 			}
 
 			// P0-3: Record failure metric for missing dependencies (will retry)

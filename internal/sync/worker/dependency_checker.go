@@ -321,11 +321,55 @@ func (w *OutboxWorker) extractEntityDependencies(
 	case string(registry.TypeService):
 		return w.extractServiceDependencies(resource)
 	case string(registry.TypeHost):
-		// Hosts have no embedded dependencies
-		return nil, nil
+		// FIXED: Hosts HAVE dependency when bound to AddressGroup!
+		// When IsBound=true, Host includes SgName in ToSGroupsProto()
+		return w.extractHostDependencies(resource)
 	default:
 		return nil, fmt.Errorf("unknown entity resource type: %s", resourceType)
 	}
+}
+
+// extractHostDependencies extracts AddressGroup dependency from Host
+// Host depends on AddressGroup when IsBound=true (1:1 relationship via AddressGroupRef)
+// This is critical because Host.ToSGroupsProto() includes SgName when bound
+func (w *OutboxWorker) extractHostDependencies(
+	resource interface{},
+) ([]EntityDependency, error) {
+	// Type assert to *models.Host
+	host, ok := resource.(*models.Host)
+	if !ok {
+		return nil, fmt.Errorf("invalid resource type for Host extraction: %T (expected *models.Host)", resource)
+	}
+
+	// Host depends on AddressGroup ONLY when bound (IsBound=true)
+	// When not bound, Host syncs without SgName field (no dependency)
+	if !host.IsBound || host.AddressGroupRef == nil {
+		// Host is not bound - no dependency
+		w.logger.Debug("host is not bound to AddressGroup, no dependency",
+			zap.String("host_namespace", host.Namespace),
+			zap.String("host_name", host.Name),
+			zap.Bool("is_bound", host.IsBound))
+		return nil, nil
+	}
+
+	// Host is bound - depends on the referenced AddressGroup
+	// This AddressGroup must be Ready before Host can sync (because SgName is included)
+	// Note: AddressGroup is in the same namespace as Host (cross-namespace references not supported)
+	deps := []EntityDependency{
+		{
+			Type:      string(registry.TypeAddressGroup),
+			Name:      host.AddressGroupRef.Name,
+			Namespace: host.Namespace, // AddressGroup is in same namespace as Host
+			Reason:    fmt.Sprintf("AddressGroup referenced in Host.AddressGroupRef (IsBound=true, sent as SgName='%s/%s' to SGROUP)", host.Namespace, host.AddressGroupRef.Name),
+		},
+	}
+
+	w.logger.Debug("extracted Host dependencies",
+		zap.String("host_namespace", host.Namespace),
+		zap.String("host_name", host.Name),
+		zap.String("ag_ref", fmt.Sprintf("%s/%s", host.Namespace, host.AddressGroupRef.Name)))
+
+	return deps, nil
 }
 
 // extractAddressGroupDependencies extracts Host dependencies from AddressGroup

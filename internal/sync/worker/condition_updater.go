@@ -12,14 +12,15 @@ import (
 
 // PendingSync condition reason values
 const (
-	ReasonInitialSync          = "InitialSync"
-	ReasonAwaitingSGroupSync   = "AwaitingSGroupSync"
-	ReasonRetryingSync         = "RetryingSync"
-	ReasonSynced               = "Synced"
-	ReasonFailedPermanent      = "FailedPermanent"
-	ReasonAwaitingDependencies = "AwaitingDependencies"
-	ReasonAllDependenciesReady = "AllDependenciesReady"
-	ReasonAwaitingEntityDeps   = "AwaitingEntityDependencies"
+	ReasonInitialSync              = "InitialSync"
+	ReasonAwaitingSGroupSync       = "AwaitingSGroupSync"
+	ReasonRetryingSync             = "RetryingSync"
+	ReasonSynced                   = "Synced"
+	ReasonFailedPermanent          = "FailedPermanent"
+	ReasonAwaitingDependencies     = "AwaitingDependencies"
+	ReasonAllDependenciesReady     = "AllDependenciesReady"
+	ReasonAwaitingEntityDeps       = "AwaitingEntityDependencies"
+	ReasonAwaitingAddressGroupSync = "AwaitingAddressGroupSync"
 )
 
 // updatePendingSyncCondition updates the PendingSync condition in k8s_metadata by namespace+name
@@ -244,6 +245,12 @@ func determinePendingSyncReason(pending bool, message string) string {
 		return ReasonAwaitingEntityDeps
 	}
 
+	// Waiting for AddressGroup to sync (Host→AG dependency)
+	// This is a specific case when Host is bound and waits for AG to sync to SGROUP
+	if strings.Contains(msgLower, "addressgroup") && strings.Contains(msgLower, "to sync to sgroup") {
+		return ReasonAwaitingAddressGroupSync
+	}
+
 	// Default for pending=true
 	return ReasonAwaitingSGroupSync
 }
@@ -315,5 +322,16 @@ func (w *OutboxWorker) updatePendingSyncWaitingEntityDeps(
 	exampleType, exampleName string,
 ) error {
 	msg := formatEntityDependencyWaitMessage(depCount, exampleType, exampleName)
+	return w.updatePendingSyncCondition(ctx, resourceType, namespace, name, true, msg)
+}
+
+// updatePendingSyncWaitingAddressGroup sets PendingSync=True when Host waits for AddressGroup
+// This is a specific wrapper for the common case of Host→AddressGroup dependency
+func (w *OutboxWorker) updatePendingSyncWaitingAddressGroup(
+	ctx context.Context,
+	resourceType, namespace, name string,
+	agNamespace, agName string,
+) error {
+	msg := formatAddressGroupWaitMessage(agNamespace, agName)
 	return w.updatePendingSyncCondition(ctx, resourceType, namespace, name, true, msg)
 }

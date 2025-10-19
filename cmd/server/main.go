@@ -15,16 +15,16 @@ import (
 	"netguard-pg-backend/internal/app/server"
 	"netguard-pg-backend/internal/application/services"
 	"netguard-pg-backend/internal/config"
-	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/domain/registry"
 	"netguard-pg-backend/internal/infrastructure/repositories/pg"
-	"netguard-pg-backend/internal/sync"
 	"netguard-pg-backend/internal/sync/adapters"
 	"netguard-pg-backend/internal/sync/clients"
 	"netguard-pg-backend/internal/sync/interfaces"
 	"netguard-pg-backend/internal/sync/manager"
 	"netguard-pg-backend/internal/sync/monitor"
+	"netguard-pg-backend/internal/sync/processors"
 	"netguard-pg-backend/internal/sync/syncers"
+	"netguard-pg-backend/internal/sync/synchronizer"
 	"netguard-pg-backend/internal/sync/types"
 	"netguard-pg-backend/internal/sync/worker"
 
@@ -151,6 +151,7 @@ func main() {
 	syncManager := setupSyncManager(ctx, cfg, sgroupsClient, zapLogger)
 
 	// Setup reverse sync system (SGROUP -> NETGUARD synchronization)
+	// REFACTORED: Now uses full processor registration with HostProcessor
 	reverseSyncSystem := setupReverseSyncSystem(ctx, cfg, pgRegistry, sgroupsClient, connMonitor, zapLogger)
 
 	var outboxWorker *worker.OutboxWorker
@@ -318,42 +319,89 @@ func setupSyncManager(ctx context.Context, cfg *config.Config, sgroupsClient int
 func setupReverseSyncSystem(
 	ctx context.Context,
 	cfg *config.Config,
-	registry ports.Registry,
+	pgRegistry *pg.Registry,
 	sgroupsClient interfaces.SGroupGateway,
 	connMonitor *monitor.SGroupConnectionMonitor,
 	logger *zap.Logger,
-) *sync.ReverseSyncSystem {
+) *manager.ReverseSyncManager {
 	// Skip setup if client or monitor not available (sync disabled)
 	if sgroupsClient == nil || connMonitor == nil {
+		logger.Info("Reverse sync disabled: sgroups client or connection monitor not available")
 		return nil
 	}
 
 	// Validate reverse sync configuration
 	if err := cfg.ReverseSync.Validate(); err != nil {
+		logger.Error("Invalid reverse sync configuration", zap.Error(err))
 		return nil
 	}
 
-	// Create PostgreSQL adapters
-	hostReader := adapters.NewPostgreSQLHostReader(registry)
-	hostWriter := adapters.NewPostgreSQLHostWriter(registry)
+	// Create reverse sync manager with correct config structure
+	reverseSyncSystem := manager.NewReverseSyncManager(
+		connMonitor,
+		cfg.ReverseSync.Manager,
+	)
 
-	// Create reverse sync system
-	reverseSyncSystem, err := sync.NewReverseSyncSystem(
-		sgroupsClient,
+	// ========================================
+	// FULL PROCESSOR SETUP (Host Synchronization)
+	// ========================================
+
+	// Create PostgreSQL adapters for Host synchronization
+	hostReader := adapters.NewPostgreSQLHostReader(pgRegistry)
+	hostWriter := adapters.NewPostgreSQLHostWriter(pgRegistry)
+
+	// SGroupGateway already implements SGROUPHostReader interface
+	// (GetHostsByUUIDs, ListAllHosts, GetHostsInSecurityGroup methods)
+	sgroupHostReader := sgroupsClient
+
+	// Create HostSynchronizer configuration with defaults
+	// Default values: BatchSize=50, MaxConcurrency=5, SyncTimeout=30s
+	hostSyncConfig := synchronizer.DefaultHostSyncConfig()
+
+	// Create HostSynchronizer
+	hostSynchronizer := synchronizer.NewHostSynchronizer(
 		hostReader,
 		hostWriter,
-		cfg.ReverseSync,
-		connMonitor,
+		sgroupHostReader,
+		hostSyncConfig,
 	)
-	if err != nil {
+
+	// Create HostProcessor configuration
+	hostProcessorConfig := processors.DefaultHostProcessorConfig()
+	// Enable full sync on every change (comprehensive approach)
+	hostProcessorConfig.EnableFullSyncOnChange = true
+
+	// Create HostProcessor
+	hostProcessor := processors.NewHostProcessor(
+		hostSynchronizer,
+		hostProcessorConfig,
+	)
+
+	// Register HostProcessor with ReverseSyncManager
+	if err := reverseSyncSystem.RegisterProcessor(hostProcessor); err != nil {
+		logger.Error("Failed to register HostProcessor", zap.Error(err))
 		return nil
 	}
+
+	logger.Info("HostProcessor registered successfully for reverse sync")
+
+	// TODO: Register additional processors for AddressGroup, Network, etc. as needed
+	// Example:
+	// - AddressGroupProcessor (SGROUP Groups → NETGUARD AddressGroups)
+	// - NetworkProcessor (SGROUP Networks → NETGUARD Networks)
+
+	// ========================================
+	// START REVERSE SYNC SYSTEM
+	// ========================================
 
 	// Start reverse sync system
 	go func() {
 		if err := reverseSyncSystem.Start(ctx); err != nil {
+			logger.Error("Failed to start reverse sync system", zap.Error(err))
 			return
 		}
+
+		logger.Info("Reverse sync system started successfully")
 
 		// Log system statistics periodically
 		if cfg.ReverseSync.System.EnableMetrics {
@@ -367,7 +415,13 @@ func setupReverseSyncSystem(
 						return
 					case <-ticker.C:
 						if reverseSyncSystem.IsRunning() {
-							_ = reverseSyncSystem.GetStats()
+							stats := reverseSyncSystem.GetStats()
+							processorCount := reverseSyncSystem.GetProcessorCount()
+							logger.Info("Reverse sync statistics",
+								zap.Int("processors", processorCount),
+								zap.Int64("total_events", stats.TotalEvents),
+								zap.Int64("processed_events", stats.ProcessedEvents),
+								zap.Int64("failed_events", stats.FailedEvents))
 						}
 					}
 				}

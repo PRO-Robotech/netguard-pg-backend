@@ -17,6 +17,7 @@ const (
 	MsgMultiplePendingFmt   = "%d resources pending: %s"
 	MsgSyncingToSGroup      = "Syncing to SGROUP (attempt %d)"
 	MsgEntityDependencyWait = "Waiting for %d dependencies to be Ready (e.g., %s/%s)"
+	MsgAddressGroupWaitFmt  = "Waiting for AddressGroup '%s/%s' to sync to SGROUP before updating Host"
 )
 
 // formatRetryMessage formats a retry message with attempt info and error details
@@ -70,6 +71,12 @@ func formatSyncingMessage(attempt int) string {
 // formatEntityDependencyWaitMessage formats a message for entity dependency waiting
 func formatEntityDependencyWaitMessage(depCount int, exampleType, exampleName string) string {
 	return fmt.Sprintf(MsgEntityDependencyWait, depCount, exampleType, exampleName)
+}
+
+// formatAddressGroupWaitMessage formats a message when Host waits for AddressGroup sync
+// This is a specific case for Host→AddressGroup dependency when Host is bound (IsBound=true)
+func formatAddressGroupWaitMessage(agNamespace, agName string) string {
+	return fmt.Sprintf(MsgAddressGroupWaitFmt, agNamespace, agName)
 }
 
 // Note: formatDuration is defined in health.go - we reuse that implementation
