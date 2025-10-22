@@ -151,6 +151,41 @@ func convertServiceFromProto(protoSvc *netguardpb.Service) models.Service {
 		}
 	}
 
+	// Convert XSvcSvcRules (READ-ONLY field from proto)
+	if protoSvc.XSvcsvcRules != nil {
+		service.XSvcSvcRules = &models.XSvcSvcRules{}
+
+		// Convert AsServiceFrom references
+		if len(protoSvc.XSvcsvcRules.AsServiceFrom) > 0 {
+			service.XSvcSvcRules.AsServiceFrom = make([]v1beta1.NamespacedObjectReference, len(protoSvc.XSvcsvcRules.AsServiceFrom))
+			for i, ref := range protoSvc.XSvcsvcRules.AsServiceFrom {
+				service.XSvcSvcRules.AsServiceFrom[i] = v1beta1.NamespacedObjectReference{
+					ObjectReference: v1beta1.ObjectReference{
+						APIVersion: "netguard.sgroups.io/v1beta1",
+						Kind:       "SvcSvcRule",
+						Name:       ref.Name,
+					},
+					Namespace: ref.Namespace,
+				}
+			}
+		}
+
+		// Convert AsServiceTo references
+		if len(protoSvc.XSvcsvcRules.AsServiceTo) > 0 {
+			service.XSvcSvcRules.AsServiceTo = make([]v1beta1.NamespacedObjectReference, len(protoSvc.XSvcsvcRules.AsServiceTo))
+			for i, ref := range protoSvc.XSvcsvcRules.AsServiceTo {
+				service.XSvcSvcRules.AsServiceTo[i] = v1beta1.NamespacedObjectReference{
+					ObjectReference: v1beta1.ObjectReference{
+						APIVersion: "netguard.sgroups.io/v1beta1",
+						Kind:       "SvcSvcRule",
+						Name:       ref.Name,
+					},
+					Namespace: ref.Namespace,
+				}
+			}
+		}
+	}
+
 	return service
 }
 
