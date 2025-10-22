@@ -1051,6 +1051,57 @@ func (c *GRPCBackendClient) syncIEAgAgRule(ctx context.Context, syncOp models.Sy
 	return nil
 }
 
+// GetSvcSvcRule retrieves a single SvcSvcRule by ID
+func (c *GRPCBackendClient) GetSvcSvcRule(ctx context.Context, id models.ResourceIdentifier) (*models.SvcSvcRule, error) {
+	if !c.limiter.Allow() {
+		return nil, fmt.Errorf("rate limit exceeded")
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+	req := &netguardpb.GetSvcSvcRuleReq{
+		Identifier: &netguardpb.ResourceIdentifier{
+			Namespace: id.Namespace,
+			Name:      id.Name,
+		},
+	}
+	resp, err := c.client.GetSvcSvcRule(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get SvcSvcRule: %w", err)
+	}
+	rule := convertSvcSvcRuleFromProto(resp.SvcsvcRule)
+	return &rule, nil
+}
+
+// ListSvcSvcRules retrieves all SvcSvcRules within the given scope
+func (c *GRPCBackendClient) ListSvcSvcRules(ctx context.Context, scope ports.Scope) ([]models.SvcSvcRule, error) {
+	if !c.limiter.Allow() {
+		return nil, fmt.Errorf("rate limit exceeded")
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+	var identifiers []*netguardpb.ResourceIdentifier
+	if resourceScope, ok := scope.(ports.ResourceIdentifierScope); ok {
+		for _, id := range resourceScope.Identifiers {
+			identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
+				Namespace: id.Namespace,
+				Name:      id.Name,
+			})
+		}
+	}
+	req := &netguardpb.ListSvcSvcRulesReq{
+		Identifiers: identifiers,
+	}
+	resp, err := c.client.ListSvcSvcRules(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list SvcSvcRules: %w", err)
+	}
+	rules := make([]models.SvcSvcRule, 0, len(resp.Items))
+	for _, protoRule := range resp.Items {
+		rules = append(rules, convertSvcSvcRuleFromProto(protoRule))
+	}
+	return rules, nil
+}
+
 func (c *GRPCBackendClient) syncNetwork(ctx context.Context, syncOp models.SyncOp, networks []*models.Network) error {
 	if !c.limiter.Allow() {
 		return fmt.Errorf("rate limit exceeded")
@@ -2113,4 +2164,73 @@ func convertHostBindingToPB(hostBinding models.HostBinding) *netguardpb.HostBind
 // convertSyncOpToPB converts domain SyncOp to protobuf SyncOp
 func convertSyncOpToPB(syncOp models.SyncOp) netguardpb.SyncOp {
 	return netguardpb.SyncOp(models.SyncOpToProto(syncOp))
+}
+
+// CreateSvcSvcRule creates a new SvcSvcRule in the backend
+func (c *GRPCBackendClient) CreateSvcSvcRule(ctx context.Context, rule *models.SvcSvcRule) error {
+	return c.syncSvcSvcRule(ctx, models.SyncOpUpsert, []*models.SvcSvcRule{rule})
+}
+
+// UpdateSvcSvcRule updates an existing SvcSvcRule in the backend
+func (c *GRPCBackendClient) UpdateSvcSvcRule(ctx context.Context, rule *models.SvcSvcRule) error {
+	return c.syncSvcSvcRule(ctx, models.SyncOpUpsert, []*models.SvcSvcRule{rule})
+}
+
+// DeleteSvcSvcRule deletes a SvcSvcRule from the backend
+func (c *GRPCBackendClient) DeleteSvcSvcRule(ctx context.Context, id models.ResourceIdentifier) error {
+	rule := &models.SvcSvcRule{
+		SelfRef: models.SelfRef{ResourceIdentifier: id},
+	}
+	return c.syncSvcSvcRule(ctx, models.SyncOpDelete, []*models.SvcSvcRule{rule})
+}
+
+// syncSvcSvcRule performs sync operation for SvcSvcRule resources
+func (c *GRPCBackendClient) syncSvcSvcRule(ctx context.Context, syncOp models.SyncOp, rules []*models.SvcSvcRule) error {
+	if !c.limiter.Allow() {
+		return fmt.Errorf("rate limit exceeded")
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+
+	protoRules := make([]*netguardpb.SvcSvcRule, 0, len(rules))
+	for _, rule := range rules {
+		protoRules = append(protoRules, convertSvcSvcRuleToProto(*rule))
+	}
+
+	var protoSyncOp netguardpb.SyncOp
+	switch syncOp {
+	case models.SyncOpUpsert:
+		protoSyncOp = netguardpb.SyncOp_Upsert
+	case models.SyncOpDelete:
+		protoSyncOp = netguardpb.SyncOp_Delete
+	case models.SyncOpFullSync:
+		protoSyncOp = netguardpb.SyncOp_FullSync
+	default:
+		protoSyncOp = netguardpb.SyncOp_NoOp
+	}
+
+	req := &netguardpb.SyncReq{
+		SyncOp: protoSyncOp,
+		Subject: &netguardpb.SyncReq_SvcsvcRules{
+			SvcsvcRules: &netguardpb.SyncSvcSvcRules{
+				SvcsvcRules: protoRules,
+			},
+		},
+	}
+
+	_, err := c.client.Sync(ctx, req)
+	return err
+}
+
+// UpdateSvcSvcRuleMeta updates the metadata of a SvcSvcRule
+func (c *GRPCBackendClient) UpdateSvcSvcRuleMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	// Get the existing rule
+	rule, err := c.GetSvcSvcRule(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get svcsvcrule for meta update: %w", err)
+	}
+	// Update metadata
+	rule.Meta = meta
+	// Update the rule
+	return c.UpdateSvcSvcRule(ctx, rule)
 }

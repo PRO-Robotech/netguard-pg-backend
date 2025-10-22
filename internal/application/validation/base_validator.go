@@ -143,6 +143,10 @@ func (v *BaseValidator) IsReadyConditionTrue(obj interface{}) bool {
 		return o.Meta.IsReady()
 	case models.NetworkBinding:
 		return o.Meta.IsReady()
+	case *models.SvcSvcRule:
+		return o.Meta.IsReady()
+	case models.SvcSvcRule:
+		return o.Meta.IsReady()
 	case MetaProvider:
 		return o.GetMeta().IsReady()
 	default:

@@ -36,6 +36,9 @@ const (
 
 	// KindAddressGroupBinding represents AddressGroupBinding resource kind
 	KindAddressGroupBinding = "AddressGroupBinding"
+
+	// KindSvcSvcRule represents SvcSvcRule resource kind
+	KindSvcSvcRule = "SvcSvcRule"
 )
 
 // Helper functions for creating ObjectReference

@@ -159,6 +159,15 @@ func (w *writer) DeleteHostBindingsByIDs(ctx context.Context, ids []models.Resou
 	return w.modularWriter.DeleteHostBindingsByIDs(ctx, ids)
 }
 
+// SvcSvcRule methods - delegated to writers/svcsvc_rule.go
+func (w *writer) SyncSvcSvcRules(ctx context.Context, rules []models.SvcSvcRule, scope ports.Scope, opts ...ports.Option) error {
+	return w.modularWriter.SyncSvcSvcRules(ctx, rules, scope, opts...)
+}
+
+func (w *writer) DeleteSvcSvcRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	return w.modularWriter.DeleteSvcSvcRulesByIDs(ctx, ids, opts...)
+}
+
 // MarkAsDeleting sets deletion_timestamp for a resource in k8s_metadata
 // This prevents the resource from being re-created by backend ListWatch during deletion
 func (w *writer) MarkAsDeleting(resourceVersion string) error {

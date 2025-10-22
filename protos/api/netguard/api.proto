@@ -59,6 +59,10 @@ message Service {
   repeated AddressGroupRef address_groups = 5;
   Meta meta = 6;
   repeated AddressGroupReference aggregated_address_groups = 7;
+
+  // XSvcSvcRules - READ-ONLY field populated by PostgreSQL triggers
+  // Contains all rules where this Service participates (as source or destination)
+  XSvcSvcRules x_svcsvc_rules = 8;
 }
 
 // IngressPort - defines a port configuration for ingress traffic
@@ -120,6 +124,15 @@ message NamespacedObjectReference {
 
   // Namespace of the referenced object
   string namespace = 4;
+}
+
+// XSvcSvcRules - READ-ONLY field for Service resource containing all rules where Service participates
+message XSvcSvcRules {
+  // AsServiceFrom contains rules where this Service is the source
+  repeated ResourceIdentifier as_service_from = 1;
+
+  // AsServiceTo contains rules where this Service is the destination
+  repeated ResourceIdentifier as_service_to = 2;
 }
 
 // Condition - kubernetes condition for resource status
@@ -419,6 +432,23 @@ message PortSpec {
   string destination = 2;
 }
 
+// SvcSvcRule - service-to-service firewall rule
+message SvcSvcRule {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      required: ["self_ref", "service_from", "service_to", "action"]
+    }
+  };
+  ResourceIdentifier self_ref = 1;
+  ResourceIdentifier service_from = 2;  // Source service reference
+  ResourceIdentifier service_to = 3;    // Destination service reference
+  RuleAction action = 4;                // Firewall action (ACCEPT or DROP)
+  int32 priority = 5;                   // Rule priority (0-1000, lower = higher priority)
+  bool logs = 6;                        // Enable traffic logging
+  bool trace = 7;                       // Enable detailed tracing
+  Meta meta = 8;                        // Kubernetes metadata
+}
+
 // SyncStatusResp - sync status
 message SyncStatusResp {
   google.protobuf.Timestamp updated_at = 1;
@@ -497,6 +527,11 @@ message SyncHosts {
 // SyncHostBindings - subject of Host Bindings to sync
 message SyncHostBindings {
   repeated HostBinding host_bindings = 1;
+}
+
+// SyncSvcSvcRules - subject of SvcSvcRules to sync
+message SyncSvcSvcRules {
+  repeated SvcSvcRule svcsvc_rules = 1;
 }
 
 
@@ -742,6 +777,26 @@ message GetHostBindingResp {
   HostBinding host_binding = 1;
 }
 
+// ListSvcSvcRulesReq - request to list SvcSvcRules
+message ListSvcSvcRulesReq {
+  repeated ResourceIdentifier identifiers = 1;
+}
+
+// ListSvcSvcRulesResp - response with list of SvcSvcRules
+message ListSvcSvcRulesResp {
+  repeated SvcSvcRule items = 1;
+}
+
+// GetSvcSvcRuleReq - request to get a specific SvcSvcRule
+message GetSvcSvcRuleReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetSvcSvcRuleResp - response with a specific SvcSvcRule
+message GetSvcSvcRuleResp {
+  SvcSvcRule svcsvc_rule = 1;
+}
+
 // SyncReq - request to sync
 message SyncReq {
   // Sync operation to apply
@@ -785,6 +840,8 @@ message SyncReq {
     // Subject of Host Bindings
     SyncHostBindings host_bindings = 13;
 
+    // Subject of SvcSvcRules
+    SyncSvcSvcRules svcsvc_rules = 14;
   }
 }
 
@@ -1052,6 +1109,26 @@ service NetguardService {
     };
     option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
       description: "GetHostBinding: gets a specific host binding by ID";
+    };
+  }
+
+  // ListSvcSvcRules - gets list of SvcSvcRules
+  rpc ListSvcSvcRules(ListSvcSvcRulesReq) returns (ListSvcSvcRulesResp) {
+    option (google.api.http) = {
+      get: "/v1/svcsvc-rules"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "ListSvcSvcRules: gets list of service-to-service rules";
+    };
+  }
+
+  // GetSvcSvcRule - gets a specific SvcSvcRule by ID
+  rpc GetSvcSvcRule(GetSvcSvcRuleReq) returns (GetSvcSvcRuleResp) {
+    option (google.api.http) = {
+      get: "/v1/svcsvc-rules/{identifier.namespace}/{identifier.name}"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "GetSvcSvcRule: gets a specific service-to-service rule by ID";
     };
   }
 }

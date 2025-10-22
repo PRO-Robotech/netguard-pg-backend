@@ -84,6 +84,12 @@ type BackendClient interface {
 	UpdateHostBinding(ctx context.Context, binding *models.HostBinding) error
 	DeleteHostBinding(ctx context.Context, id models.ResourceIdentifier) error
 
+	GetSvcSvcRule(ctx context.Context, id models.ResourceIdentifier) (*models.SvcSvcRule, error)
+	ListSvcSvcRules(ctx context.Context, scope ports.Scope) ([]models.SvcSvcRule, error)
+	CreateSvcSvcRule(ctx context.Context, rule *models.SvcSvcRule) error
+	UpdateSvcSvcRule(ctx context.Context, rule *models.SvcSvcRule) error
+	DeleteSvcSvcRule(ctx context.Context, id models.ResourceIdentifier) error
+
 	// Sync операции
 	Sync(ctx context.Context, syncOp models.SyncOp, resources interface{}) error
 	GetSyncStatus(ctx context.Context) (*models.SyncStatus, error)
@@ -112,6 +118,7 @@ type BackendClient interface {
 	UpdateNetworkBindingMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
 	UpdateHostMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
 	UpdateHostBindingMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
+	UpdateSvcSvcRuleMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
 
 	// Helper методы для subresources (оптимизированные запросы)
 	ListAddressGroupsForService(ctx context.Context, serviceID models.ResourceIdentifier) ([]models.AddressGroup, error)

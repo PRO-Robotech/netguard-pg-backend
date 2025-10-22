@@ -75,6 +75,11 @@ func (v *DependencyValidator) GetNetworkBindingValidator() *NetworkBindingValida
 	return NewNetworkBindingValidator(v.reader)
 }
 
+// GetSvcSvcRuleValidator returns a validator for service-to-service rules
+func (v *DependencyValidator) GetSvcSvcRuleValidator() *SvcSvcRuleValidator {
+	return NewSvcSvcRuleValidator(v.reader)
+}
+
 // ServiceValidator provides methods for validating services
 type ServiceValidator struct {
 	reader        ports.Reader

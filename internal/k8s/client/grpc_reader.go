@@ -322,3 +322,23 @@ func (r *GRPCReader) ListNetworkBindings(ctx context.Context, consume func(model
 
 	return nil
 }
+
+// SvcSvcRule methods - delegated to GRPCBackendClient
+func (r *GRPCReader) ListSvcSvcRules(ctx context.Context, consume func(models.SvcSvcRule) error, scope ports.Scope) error {
+	rules, err := r.grpcClient.ListSvcSvcRules(ctx, scope)
+	if err != nil {
+		return err
+	}
+
+	for _, rule := range rules {
+		if err := consume(rule); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *GRPCReader) GetSvcSvcRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcSvcRule, error) {
+	return r.grpcClient.GetSvcSvcRule(ctx, id)
+}

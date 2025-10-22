@@ -490,3 +490,33 @@ func (hb *HostBindingBackendOperations) Update(ctx context.Context, obj *models.
 func (hb *HostBindingBackendOperations) Delete(ctx context.Context, id models.ResourceIdentifier) error {
 	return hb.client.DeleteHostBinding(ctx, id)
 }
+
+// SvcSvcRuleBackendOperations implements BackendOperations for SvcSvcRule resources
+type SvcSvcRuleBackendOperations struct {
+	client client.BackendClient
+}
+
+// NewSvcSvcRuleBackendOperations creates a new SvcSvcRuleBackendOperations
+func NewSvcSvcRuleBackendOperations(client client.BackendClient) BackendOperations[models.SvcSvcRule] {
+	return &SvcSvcRuleBackendOperations{client: client}
+}
+
+func (s *SvcSvcRuleBackendOperations) Get(ctx context.Context, id models.ResourceIdentifier) (*models.SvcSvcRule, error) {
+	return s.client.GetSvcSvcRule(ctx, id)
+}
+
+func (s *SvcSvcRuleBackendOperations) List(ctx context.Context, scope ports.Scope) ([]models.SvcSvcRule, error) {
+	return s.client.ListSvcSvcRules(ctx, scope)
+}
+
+func (s *SvcSvcRuleBackendOperations) Create(ctx context.Context, obj *models.SvcSvcRule) error {
+	return s.client.CreateSvcSvcRule(ctx, obj)
+}
+
+func (s *SvcSvcRuleBackendOperations) Update(ctx context.Context, obj *models.SvcSvcRule) error {
+	return s.client.UpdateSvcSvcRule(ctx, obj)
+}
+
+func (s *SvcSvcRuleBackendOperations) Delete(ctx context.Context, id models.ResourceIdentifier) error {
+	return s.client.DeleteSvcSvcRule(ctx, id)
+}

@@ -324,6 +324,9 @@ func (w *OutboxWorker) extractEntityDependencies(
 		// FIXED: Hosts HAVE dependency when bound to AddressGroup!
 		// When IsBound=true, Host includes SgName in ToSGroupsProto()
 		return w.extractHostDependencies(resource)
+	case string(registry.TypeSvcSvcRule):
+		// SvcSvcRule depends on ServiceFromRef and ServiceToRef (both Services must be Ready)
+		return w.extractSvcSvcRuleDependencies(resource)
 	default:
 		return nil, fmt.Errorf("unknown entity resource type: %s", resourceType)
 	}
@@ -368,6 +371,42 @@ func (w *OutboxWorker) extractHostDependencies(
 		zap.String("host_namespace", host.Namespace),
 		zap.String("host_name", host.Name),
 		zap.String("ag_ref", fmt.Sprintf("%s/%s", host.Namespace, host.AddressGroupRef.Name)))
+
+	return deps, nil
+}
+
+// extractSvcSvcRuleDependencies extracts Service dependencies from SvcSvcRule
+// SvcSvcRule depends on both ServiceFromRef and ServiceToRef (both Services must be Ready)
+func (w *OutboxWorker) extractSvcSvcRuleDependencies(
+	resource interface{},
+) ([]EntityDependency, error) {
+	// Type assert to *models.SvcSvcRule
+	rule, ok := resource.(*models.SvcSvcRule)
+	if !ok {
+		return nil, fmt.Errorf("invalid resource type for SvcSvcRule extraction: %T (expected *models.SvcSvcRule)", resource)
+	}
+
+	// SvcSvcRule depends on two Services: ServiceFromRef and ServiceToRef
+	deps := []EntityDependency{
+		{
+			Type:      string(registry.TypeService),
+			Name:      rule.ServiceFromRef.Name,
+			Namespace: rule.ServiceFromRef.Namespace,
+			Reason:    fmt.Sprintf("Service referenced in SvcSvcRule.ServiceFromRef (sent as SvcFrom='%s/%s' to SGROUP)", rule.ServiceFromRef.Namespace, rule.ServiceFromRef.Name),
+		},
+		{
+			Type:      string(registry.TypeService),
+			Name:      rule.ServiceToRef.Name,
+			Namespace: rule.ServiceToRef.Namespace,
+			Reason:    fmt.Sprintf("Service referenced in SvcSvcRule.ServiceToRef (sent as SvcTo='%s/%s' to SGROUP)", rule.ServiceToRef.Namespace, rule.ServiceToRef.Name),
+		},
+	}
+
+	w.logger.Debug("extracted SvcSvcRule dependencies",
+		zap.String("rule_namespace", rule.Namespace),
+		zap.String("rule_name", rule.Name),
+		zap.String("service_from", fmt.Sprintf("%s/%s", rule.ServiceFromRef.Namespace, rule.ServiceFromRef.Name)),
+		zap.String("service_to", fmt.Sprintf("%s/%s", rule.ServiceToRef.Namespace, rule.ServiceToRef.Name)))
 
 	return deps, nil
 }

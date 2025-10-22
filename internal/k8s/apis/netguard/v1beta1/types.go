@@ -58,6 +58,12 @@ type Service struct {
 	// Source field values: "spec" = direct registration via spec.addressGroups, "binding" = registration via AddressGroupBinding
 	// +optional
 	AggregatedAddressGroups []AddressGroupReference `json:"xAggregatedAddressGroups,omitempty"`
+
+	// xSvcSvcRules contains references to all SvcSvcRule resources where this Service participates.
+	// This field is automatically populated by PostgreSQL triggers and is READ-ONLY.
+	// Users should NOT modify this field directly - changes will be ignored.
+	// +optional
+	XSvcSvcRules *XSvcSvcRules `json:"xSvcSvcRules,omitempty"`
 }
 
 // ServiceSpec defines the desired state of Service
@@ -111,6 +117,21 @@ type ServiceStatus struct {
 	// ObservedGeneration is the most recent generation observed by the controller
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+}
+
+// XSvcSvcRules - READ-ONLY field for Service resource
+// Contains references to all rules where this Service participates
+// Populated automatically by PostgreSQL triggers via junction table
+type XSvcSvcRules struct {
+	// AsServiceFrom contains rules where this Service is the source
+	// Full NamespacedObjectReference for each rule
+	// +optional
+	AsServiceFrom []NamespacedObjectReference `json:"asServiceFrom,omitempty"`
+
+	// AsServiceTo contains rules where this Service is the destination
+	// Full NamespacedObjectReference for each rule
+	// +optional
+	AsServiceTo []NamespacedObjectReference `json:"asServiceTo,omitempty"`
 }
 
 // AddressGroupsSpec defines the address groups associated with a Service
@@ -870,4 +891,71 @@ type HostBindingList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []HostBinding `json:"items"`
+}
+
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// SvcSvcRule represents a service-to-service firewall rule
+type SvcSvcRule struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   SvcSvcRuleSpec   `json:"spec"`
+	Status SvcSvcRuleStatus `json:"status,omitempty"`
+}
+
+// SvcSvcRuleSpec defines the desired state of SvcSvcRule
+type SvcSvcRuleSpec struct {
+	// ServiceFrom - source service reference
+	// Uses existing NamespacedObjectReference (line 295)
+	// +kubebuilder:validation:Required
+	ServiceFrom NamespacedObjectReference `json:"serviceFrom"`
+
+	// ServiceTo - destination service reference
+	// +kubebuilder:validation:Required
+	ServiceTo NamespacedObjectReference `json:"serviceTo"`
+
+	// Action - firewall action (ACCEPT or DROP)
+	// +kubebuilder:validation:Enum=ACCEPT;DROP
+	// +kubebuilder:validation:Required
+	Action RuleAction `json:"action"`
+
+	// Priority - rule priority (0-1000, lower = higher priority)
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=1000
+	// +optional
+	Priority int32 `json:"priority,omitempty"`
+
+	// Logs - enable traffic logging
+	// +optional
+	Logs bool `json:"logs,omitempty"`
+
+	// Trace - enable detailed tracing
+	// +optional
+	Trace bool `json:"trace,omitempty"`
+}
+
+// SvcSvcRuleStatus defines the observed state
+type SvcSvcRuleStatus struct {
+	// Conditions represent the latest available observations of the rule's current state
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// ObservedGeneration is the most recent generation observed by the controller
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
+	// SyncReady indicates if the rule is ready for SGROUP synchronization
+	// +optional
+	SyncReady bool `json:"syncReady,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// SvcSvcRuleList contains a list of SvcSvcRule
+type SvcSvcRuleList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []SvcSvcRule `json:"items"`
 }

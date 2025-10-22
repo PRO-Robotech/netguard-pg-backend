@@ -1,5 +1,5 @@
 /*
-Copyright 2024 The PRO-Robotech Authors.
+Copyright 2024 The Netguard Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -75,6 +75,10 @@ func (c *FakeNetguardV1beta1) Services(namespace string) v1beta1.ServiceInterfac
 
 func (c *FakeNetguardV1beta1) ServiceAliases(namespace string) v1beta1.ServiceAliasInterface {
 	return newFakeServiceAliases(c, namespace)
+}
+
+func (c *FakeNetguardV1beta1) SvcSvcRules(namespace string) v1beta1.SvcSvcRuleInterface {
+	return newFakeSvcSvcRules(c, namespace)
 }
 
 // RESTClient returns a RESTClient that is used to communicate

@@ -35,6 +35,7 @@ func (r *Reader) ListServices(ctx context.Context, consume func(models.Service) 
 	query := `
 		SELECT s.namespace, s.name, s.description, s.ingress_ports,
 		       s.address_groups, s.aggregated_address_groups,
+		       s.xsvcsvc_rules_as_from, s.xsvcsvc_rules_as_to,
 		       m.resource_version, m.labels, m.annotations, m.conditions,
 		       m.created_at, m.updated_at
 		FROM services s
@@ -90,6 +91,7 @@ func (r *Reader) GetServiceByID(ctx context.Context, id models.ResourceIdentifie
 	query := `
 		SELECT s.namespace, s.name, s.description, s.ingress_ports,
 		       s.address_groups, s.aggregated_address_groups,
+		       s.xsvcsvc_rules_as_from, s.xsvcsvc_rules_as_to,
 		       m.resource_version, m.labels, m.annotations, m.conditions,
 		       m.created_at, m.updated_at
 		FROM services s
@@ -126,6 +128,7 @@ func (r *Reader) scanService(rows pgx.Rows) (models.Service, error) {
 	var service models.Service
 	var addressGroupsJSON, aggregatedAddressGroupsJSON []byte
 	var ingressPortsJSON []byte
+	var xsvcsvcRulesAsFromJSON, xsvcsvcRulesAsToJSON []byte
 	var labelsJSON, annotationsJSON, conditionsJSON []byte
 	var createdAt, updatedAt time.Time // Temporary variables for timestamps
 	var resourceVersion int64          // Scan as int64 from database
@@ -137,6 +140,8 @@ func (r *Reader) scanService(rows pgx.Rows) (models.Service, error) {
 		&ingressPortsJSON,
 		&addressGroupsJSON,
 		&aggregatedAddressGroupsJSON,
+		&xsvcsvcRulesAsFromJSON,
+		&xsvcsvcRulesAsToJSON,
 		&resourceVersion,
 		&labelsJSON,
 		&annotationsJSON,
@@ -186,6 +191,26 @@ func (r *Reader) scanService(rows pgx.Rows) (models.Service, error) {
 		}
 	}
 
+	// Parse xSvcSvcRules - READ-ONLY field populated by PostgreSQL triggers
+	if (xsvcsvcRulesAsFromJSON != nil && len(xsvcsvcRulesAsFromJSON) > 0 && string(xsvcsvcRulesAsFromJSON) != "null") ||
+		(xsvcsvcRulesAsToJSON != nil && len(xsvcsvcRulesAsToJSON) > 0 && string(xsvcsvcRulesAsToJSON) != "null") {
+		service.XSvcSvcRules = &models.XSvcSvcRules{}
+
+		// Parse AsServiceFrom
+		if xsvcsvcRulesAsFromJSON != nil && len(xsvcsvcRulesAsFromJSON) > 0 && string(xsvcsvcRulesAsFromJSON) != "null" {
+			if err := json.Unmarshal(xsvcsvcRulesAsFromJSON, &service.XSvcSvcRules.AsServiceFrom); err != nil {
+				return service, errors.Wrap(err, "failed to parse xsvcsvc_rules_as_from JSON")
+			}
+		}
+
+		// Parse AsServiceTo
+		if xsvcsvcRulesAsToJSON != nil && len(xsvcsvcRulesAsToJSON) > 0 && string(xsvcsvcRulesAsToJSON) != "null" {
+			if err := json.Unmarshal(xsvcsvcRulesAsToJSON, &service.XSvcSvcRules.AsServiceTo); err != nil {
+				return service, errors.Wrap(err, "failed to parse xsvcsvc_rules_as_to JSON")
+			}
+		}
+	}
+
 	// Convert K8s metadata (convert int64 to string) - skip finalizers for now
 	service.Meta, err = utils.ConvertK8sMetadata(fmt.Sprintf("%d", resourceVersion), labelsJSON, annotationsJSON, conditionsJSON, createdAt, updatedAt)
 	if err != nil {
@@ -203,6 +228,7 @@ func (r *Reader) scanServiceRow(row pgx.Row) (*models.Service, error) {
 	var service models.Service
 	var addressGroupsJSON, aggregatedAddressGroupsJSON []byte
 	var ingressPortsJSON []byte
+	var xsvcsvcRulesAsFromJSON, xsvcsvcRulesAsToJSON []byte
 	var labelsJSON, annotationsJSON, conditionsJSON []byte
 	var createdAt, updatedAt time.Time // Temporary variables for timestamps
 	var resourceVersion int64          // Scan as int64 from database
@@ -214,6 +240,8 @@ func (r *Reader) scanServiceRow(row pgx.Row) (*models.Service, error) {
 		&ingressPortsJSON,
 		&addressGroupsJSON,
 		&aggregatedAddressGroupsJSON,
+		&xsvcsvcRulesAsFromJSON,
+		&xsvcsvcRulesAsToJSON,
 		&resourceVersion,
 		&labelsJSON,
 		&annotationsJSON,
@@ -257,6 +285,26 @@ func (r *Reader) scanServiceRow(row pgx.Row) (*models.Service, error) {
 			service.AggregatedAddressGroups[i] = models.AddressGroupReference{
 				Ref:    domainRef,
 				Source: models.AddressGroupRegistrationSource(ref.Source),
+			}
+		}
+	}
+
+	// Parse xSvcSvcRules - READ-ONLY field populated by PostgreSQL triggers
+	if (xsvcsvcRulesAsFromJSON != nil && len(xsvcsvcRulesAsFromJSON) > 0 && string(xsvcsvcRulesAsFromJSON) != "null") ||
+		(xsvcsvcRulesAsToJSON != nil && len(xsvcsvcRulesAsToJSON) > 0 && string(xsvcsvcRulesAsToJSON) != "null") {
+		service.XSvcSvcRules = &models.XSvcSvcRules{}
+
+		// Parse AsServiceFrom
+		if xsvcsvcRulesAsFromJSON != nil && len(xsvcsvcRulesAsFromJSON) > 0 && string(xsvcsvcRulesAsFromJSON) != "null" {
+			if err := json.Unmarshal(xsvcsvcRulesAsFromJSON, &service.XSvcSvcRules.AsServiceFrom); err != nil {
+				return nil, errors.Wrap(err, "failed to parse xsvcsvc_rules_as_from JSON")
+			}
+		}
+
+		// Parse AsServiceTo
+		if xsvcsvcRulesAsToJSON != nil && len(xsvcsvcRulesAsToJSON) > 0 && string(xsvcsvcRulesAsToJSON) != "null" {
+			if err := json.Unmarshal(xsvcsvcRulesAsToJSON, &service.XSvcSvcRules.AsServiceTo); err != nil {
+				return nil, errors.Wrap(err, "failed to parse xsvcsvc_rules_as_to JSON")
 			}
 		}
 	}

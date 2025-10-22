@@ -1011,6 +1011,17 @@ func (w *writer) DeleteIEAgAgRulesByIDs(ctx context.Context, ids []models.Resour
 	return nil
 }
 
+// Stub methods for SvcSvcRule - not implemented in memory repository yet
+func (w *writer) SyncSvcSvcRules(ctx context.Context, rules []models.SvcSvcRule, scope ports.Scope, opts ...ports.Option) error {
+	// Stub implementation - do nothing
+	return nil
+}
+
+func (w *writer) DeleteSvcSvcRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	// Stub implementation - do nothing
+	return nil
+}
+
 func (w *writer) SyncNetworks(ctx context.Context, networks []models.Network, scope ports.Scope, opts ...ports.Option) error {
 	// Определение операции (по умолчанию FullSync)
 	syncOp := models.SyncOpFullSync

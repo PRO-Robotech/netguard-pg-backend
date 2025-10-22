@@ -764,6 +764,68 @@
         ]
       }
     },
+    "/v1/svcsvc-rules": {
+      "get": {
+        "summary": "ListSvcSvcRules - gets list of SvcSvcRules",
+        "description": "ListSvcSvcRules: gets list of service-to-service rules",
+        "operationId": "NetguardService_ListSvcSvcRules",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListSvcSvcRulesResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/svcsvc-rules/{identifier.namespace}/{identifier.name}": {
+      "get": {
+        "summary": "GetSvcSvcRule - gets a specific SvcSvcRule by ID",
+        "description": "GetSvcSvcRule: gets a specific service-to-service rule by ID",
+        "operationId": "NetguardService_GetSvcSvcRule",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetSvcSvcRuleResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "identifier.namespace",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "identifier.name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
     "/v1/sync": {
       "post": {
         "summary": "Sync - syncs data in DB",
@@ -1157,6 +1219,15 @@
       },
       "title": "GetServiceResp - response with a specific service"
     },
+    "v1GetSvcSvcRuleResp": {
+      "type": "object",
+      "properties": {
+        "svcsvcRule": {
+          "$ref": "#/definitions/v1SvcSvcRule"
+        }
+      },
+      "title": "GetSvcSvcRuleResp - response with a specific SvcSvcRule"
+    },
     "v1Host": {
       "type": "object",
       "properties": {
@@ -1491,6 +1562,19 @@
         }
       },
       "title": "ListServicesResp - response with list of services"
+    },
+    "v1ListSvcSvcRulesResp": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1SvcSvcRule"
+          }
+        }
+      },
+      "title": "ListSvcSvcRulesResp - response with list of SvcSvcRules"
     },
     "v1ManagedFieldsEntry": {
       "type": "object",
@@ -1862,6 +1946,10 @@
             "type": "object",
             "$ref": "#/definitions/v1AddressGroupReference"
           }
+        },
+        "xSvcsvcRules": {
+          "$ref": "#/definitions/v1XSvcSvcRules",
+          "title": "XSvcSvcRules - READ-ONLY field populated by PostgreSQL triggers\nContains all rules where this Service participates (as source or destination)"
         }
       },
       "title": "Service - represents a service with ports",
@@ -1919,6 +2007,50 @@
         }
       },
       "title": "ServiceRef - reference to a service"
+    },
+    "v1SvcSvcRule": {
+      "type": "object",
+      "properties": {
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
+        },
+        "serviceFrom": {
+          "$ref": "#/definitions/v1ResourceIdentifier",
+          "title": "Source service reference"
+        },
+        "serviceTo": {
+          "$ref": "#/definitions/v1ResourceIdentifier",
+          "title": "Destination service reference"
+        },
+        "action": {
+          "$ref": "#/definitions/v1RuleAction",
+          "title": "Firewall action (ACCEPT or DROP)"
+        },
+        "priority": {
+          "type": "integer",
+          "format": "int32",
+          "title": "Rule priority (0-1000, lower = higher priority)"
+        },
+        "logs": {
+          "type": "boolean",
+          "title": "Enable traffic logging"
+        },
+        "trace": {
+          "type": "boolean",
+          "title": "Enable detailed tracing"
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta",
+          "title": "Kubernetes metadata"
+        }
+      },
+      "title": "SvcSvcRule - service-to-service firewall rule",
+      "required": [
+        "selfRef",
+        "serviceFrom",
+        "serviceTo",
+        "action"
+      ]
     },
     "v1SyncAddressGroupBindingPolicies": {
       "type": "object",
@@ -2103,6 +2235,10 @@
         "hostBindings": {
           "$ref": "#/definitions/v1SyncHostBindings",
           "title": "Subject of Host Bindings"
+        },
+        "svcsvcRules": {
+          "$ref": "#/definitions/v1SyncSvcSvcRules",
+          "title": "Subject of SvcSvcRules"
         }
       },
       "title": "SyncReq - request to sync"
@@ -2156,6 +2292,19 @@
       },
       "title": "SyncStatusResp - sync status"
     },
+    "v1SyncSvcSvcRules": {
+      "type": "object",
+      "properties": {
+        "svcsvcRules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1SvcSvcRule"
+          }
+        }
+      },
+      "title": "SyncSvcSvcRules - subject of SvcSvcRules to sync"
+    },
     "v1Traffic": {
       "type": "string",
       "enum": [
@@ -2163,6 +2312,28 @@
         "Egress"
       ],
       "default": "Ingress"
+    },
+    "v1XSvcSvcRules": {
+      "type": "object",
+      "properties": {
+        "asServiceFrom": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ResourceIdentifier"
+          },
+          "title": "AsServiceFrom contains rules where this Service is the source"
+        },
+        "asServiceTo": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ResourceIdentifier"
+          },
+          "title": "AsServiceTo contains rules where this Service is the destination"
+        }
+      },
+      "title": "XSvcSvcRules - READ-ONLY field for Service resource containing all rules where Service participates"
     }
   },
   "externalDocs": {

@@ -60,6 +60,14 @@ func (c *ServiceConverter) ToDomain(ctx context.Context, k8sObj *netguardv1beta1
 	aggregatedAGs := convertAddressGroupReferencesToDomain(k8sObj.AggregatedAddressGroups)
 	domainService.AggregatedAddressGroups = aggregatedAGs
 
+	// Convert XSvcSvcRules (READ-ONLY field, but convert for completeness)
+	if k8sObj.XSvcSvcRules != nil {
+		domainService.XSvcSvcRules = &models.XSvcSvcRules{
+			AsServiceFrom: k8sObj.XSvcSvcRules.AsServiceFrom,
+			AsServiceTo:   k8sObj.XSvcSvcRules.AsServiceTo,
+		}
+	}
+
 	return domainService, nil
 }
 
@@ -122,6 +130,14 @@ func (c *ServiceConverter) FromDomain(ctx context.Context, domainObj *models.Ser
 	}
 
 	k8sService.AggregatedAddressGroups = aggregatedAGsK8s
+
+	// Convert XSvcSvcRules (READ-ONLY field populated by PostgreSQL triggers)
+	if domainObj.XSvcSvcRules != nil {
+		k8sService.XSvcSvcRules = &netguardv1beta1.XSvcSvcRules{
+			AsServiceFrom: domainObj.XSvcSvcRules.AsServiceFrom,
+			AsServiceTo:   domainObj.XSvcSvcRules.AsServiceTo,
+		}
+	}
 
 	// Convert status using standard helper
 	conditions, observedGeneration := ConvertStatusFromDomain(domainObj.Meta)

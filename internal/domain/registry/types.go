@@ -32,6 +32,9 @@ const (
 	// TypeService represents a network service with port mappings
 	TypeService ResourceType = "Service"
 
+	// TypeSvcSvcRule represents a service-to-service firewall rule
+	TypeSvcSvcRule ResourceType = "SvcSvcRule"
+
 	// TypeHostBinding represents a binding between a Host and an AddressGroup
 	TypeHostBinding ResourceType = "HostBinding"
 
@@ -120,6 +123,16 @@ func init() {
 
 	resourceRegistry[TypeService] = ResourceDefinition{
 		Type:             TypeService,
+		Category:         CategoryEntity,
+		TargetSystem:     TargetSGROUP,
+		SupportsCreate:   true,
+		SupportsUpdate:   true,
+		SupportsDelete:   true,
+		AffectsResources: nil,
+	}
+
+	resourceRegistry[TypeSvcSvcRule] = ResourceDefinition{
+		Type:             TypeSvcSvcRule,
 		Category:         CategoryEntity,
 		TargetSystem:     TargetSGROUP,
 		SupportsCreate:   true,

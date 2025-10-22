@@ -31,6 +31,7 @@ import (
 	rules2sstorage "netguard-pg-backend/internal/k8s/registry/rules2s"
 	svcstorage "netguard-pg-backend/internal/k8s/registry/service"
 	aliasstorage "netguard-pg-backend/internal/k8s/registry/servicealias"
+	svcsvcstorage "netguard-pg-backend/internal/k8s/registry/svcsvc_rule"
 
 	"k8s.io/apiserver/pkg/endpoints/openapi"
 	"k8s.io/apiserver/pkg/util/compatibility"
@@ -205,6 +206,7 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 	pmStore := portmappingstorage.NewAddressGroupPortMappingStorage(bClient)
 	rules2sStore := rules2sstorage.NewRuleS2SStorage(bClient)
 	ieagagStore := ieagagstorage.NewIEAgAgRuleStorage(bClient)
+	svcSvcRuleStore := svcsvcstorage.NewSvcSvcRuleStorage(bClient)
 
 	// Use BaseStorage approach for Network resources (supports generateName)
 	networkStore := networkstorage.NewNetworkStorageWithClient(bClient)
@@ -224,6 +226,7 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 		"addressgroupportmappings":    pmStore,
 		"rules2s":                     rules2sStore,
 		"ieagagrules":                 ieagagStore,
+		"svcsvcrules":                 svcSvcRuleStore,
 		"networks":                    networkStore,
 		"networkbindings":             networkBindingStore,
 		"hosts":                       hostStore,
@@ -237,6 +240,7 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 		"addressgroupportmappings/status":    portmappingstorage.NewStatusREST(pmStore),
 		"rules2s/status":                     rules2sstorage.NewStatusREST(rules2sStore),
 		"ieagagrules/status":                 ieagagstorage.NewStatusREST(ieagagStore),
+		"svcsvcrules/status":                 svcsvcstorage.NewStatusREST(svcSvcRuleStore),
 
 		"services/addressgroups":               svcstorage.NewAddressGroupsREST(bClient),
 		"services/rules2sdstownref":            svcstorage.NewRuleS2SDstOwnRefREST(bClient),

@@ -1113,3 +1113,92 @@ func convertIEAgAgRuleToProto(m models.IEAgAgRule) *netguardpb.IEAgAgRule {
 
 	return proto
 }
+
+// convertSvcSvcRuleFromProto converts protobuf SvcSvcRule to domain model
+func convertSvcSvcRuleFromProto(proto *netguardpb.SvcSvcRule) models.SvcSvcRule {
+	rule := models.SvcSvcRule{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: models.NewResourceIdentifier(
+				proto.SelfRef.Name,
+				models.WithNamespace(proto.SelfRef.Namespace),
+			),
+		},
+		ServiceFromRef: v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "Service",
+				Name:       proto.ServiceFrom.Name,
+			},
+			Namespace: proto.ServiceFrom.Namespace,
+		},
+		ServiceToRef: v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "Service",
+				Name:       proto.ServiceTo.Name,
+			},
+			Namespace: proto.ServiceTo.Namespace,
+		},
+		Action:   models.RuleAction(proto.Action.String()),
+		Priority: proto.Priority,
+		Logs:     proto.Logs,
+		Trace:    proto.Trace,
+	}
+
+	// meta
+	if proto.Meta != nil {
+		rule.Meta = models.Meta{
+			UID:                proto.Meta.Uid,
+			ResourceVersion:    proto.Meta.ResourceVersion,
+			Generation:         proto.Meta.Generation,
+			Labels:             proto.Meta.Labels,
+			Annotations:        proto.Meta.Annotations,
+			GeneratedName:      proto.Meta.GeneratedName,
+			Conditions:         models.ProtoConditionsToK8s(proto.Meta.Conditions),
+			ObservedGeneration: proto.Meta.ObservedGeneration,
+			ManagedFields:      convertManagedFieldsFromProto(proto.Meta.ManagedFields),
+		}
+		if proto.Meta.CreationTs != nil {
+			rule.Meta.CreationTS = metav1.NewTime(proto.Meta.CreationTs.AsTime())
+		}
+	}
+
+	return rule
+}
+
+// convertSvcSvcRuleToProto converts domain SvcSvcRule to protobuf
+func convertSvcSvcRuleToProto(m models.SvcSvcRule) *netguardpb.SvcSvcRule {
+	proto := &netguardpb.SvcSvcRule{
+		SelfRef: &netguardpb.ResourceIdentifier{
+			Name:      m.ResourceIdentifier.Name,
+			Namespace: m.ResourceIdentifier.Namespace,
+		},
+		ServiceFrom: &netguardpb.ResourceIdentifier{
+			Name:      m.ServiceFromRef.Name,
+			Namespace: m.ServiceFromRef.Namespace,
+		},
+		ServiceTo: &netguardpb.ResourceIdentifier{
+			Name:      m.ServiceToRef.Name,
+			Namespace: m.ServiceToRef.Namespace,
+		},
+		Action:   netguardpb.RuleAction(netguardpb.RuleAction_value[string(m.Action)]),
+		Priority: m.Priority,
+		Logs:     m.Logs,
+		Trace:    m.Trace,
+	}
+
+	if !m.Meta.CreationTS.IsZero() {
+		proto.Meta = &netguardpb.Meta{
+			Uid:             m.Meta.UID,
+			ResourceVersion: m.Meta.ResourceVersion,
+			Generation:      m.Meta.Generation,
+			Labels:          m.Meta.Labels,
+			Annotations:     m.Meta.Annotations,
+			GeneratedName:   m.Meta.GeneratedName,
+			ManagedFields:   convertManagedFieldsToProto(m.Meta.ManagedFields),
+		}
+		proto.Meta.CreationTs = timestamppb.New(m.Meta.CreationTS.Time)
+	}
+
+	return proto
+}

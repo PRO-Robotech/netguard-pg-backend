@@ -168,6 +168,16 @@ func (d *Dispatcher) DispatchSync(ctx context.Context, syncOp models.SyncOp, sub
 		}
 		return d.service.Sync(ctx, syncOp, bindings)
 
+	case *netguardpb.SyncReq_SvcsvcRules:
+		if s.SvcsvcRules == nil || len(s.SvcsvcRules.SvcsvcRules) == 0 {
+			return nil
+		}
+		rules := make([]models.SvcSvcRule, 0, len(s.SvcsvcRules.SvcsvcRules))
+		for _, r := range s.SvcsvcRules.SvcsvcRules {
+			rules = append(rules, converters.ConvertSvcSvcRule(r))
+		}
+		return d.service.Sync(ctx, syncOp, rules)
+
 	default:
 		return errors.New("subject not specified")
 	}

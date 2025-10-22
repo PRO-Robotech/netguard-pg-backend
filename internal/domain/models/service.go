@@ -19,6 +19,10 @@ type Service struct {
 	// AggregatedAddressGroups contains all address groups from both spec and bindings
 	AggregatedAddressGroups []AddressGroupReference
 
+	// XSvcSvcRules contains rules where this Service participates (READ-ONLY)
+	// Populated automatically by PostgreSQL triggers via junction table
+	XSvcSvcRules *XSvcSvcRules
+
 	Meta Meta
 }
 

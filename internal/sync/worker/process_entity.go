@@ -16,6 +16,7 @@ import (
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/domain/registry"
+	v1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 	"netguard-pg-backend/internal/sync/interfaces"
 	"netguard-pg-backend/internal/sync/syncers"
 	"netguard-pg-backend/internal/sync/types"
@@ -345,6 +346,44 @@ func (w *OutboxWorker) reconstructResourceFromPayload(item *domain.OutboxEntry) 
 			},
 		}, nil
 
+	case string(registry.TypeSvcSvcRule):
+		// Extract service references from payload (they're JSONB objects)
+		var serviceFromRef v1beta1.NamespacedObjectReference
+		var serviceToRef v1beta1.NamespacedObjectReference
+
+		if serviceFromData, ok := payload["service_from_ref"].(map[string]interface{}); ok {
+			serviceFromRef = v1beta1.NamespacedObjectReference{
+				ObjectReference: v1beta1.ObjectReference{
+					APIVersion: getStringFromMap(serviceFromData, "apiVersion"),
+					Kind:       getStringFromMap(serviceFromData, "kind"),
+					Name:       getStringFromMap(serviceFromData, "name"),
+				},
+				Namespace: getStringFromMap(serviceFromData, "namespace"),
+			}
+		}
+
+		if serviceToData, ok := payload["service_to_ref"].(map[string]interface{}); ok {
+			serviceToRef = v1beta1.NamespacedObjectReference{
+				ObjectReference: v1beta1.ObjectReference{
+					APIVersion: getStringFromMap(serviceToData, "apiVersion"),
+					Kind:       getStringFromMap(serviceToData, "kind"),
+					Name:       getStringFromMap(serviceToData, "name"),
+				},
+				Namespace: getStringFromMap(serviceToData, "namespace"),
+			}
+		}
+
+		return &models.SvcSvcRule{
+			SelfRef: models.SelfRef{
+				ResourceIdentifier: models.ResourceIdentifier{
+					Namespace: namespace,
+					Name:      name,
+				},
+			},
+			ServiceFromRef: serviceFromRef,
+			ServiceToRef:   serviceToRef,
+		}, nil
+
 	default:
 		return nil, fmt.Errorf("unknown resource type: %s", item.ResourceType)
 	}
@@ -438,6 +477,23 @@ func (w *OutboxWorker) loadEntityResource(
 		}
 		return foundService, nil
 
+	case string(registry.TypeSvcSvcRule):
+		var foundRule *models.SvcSvcRule
+		err := reader.ListSvcSvcRules(ctx, func(rule models.SvcSvcRule) error {
+			if rule.Namespace == namespace && rule.Name == name {
+				foundRule = &rule
+				return fmt.Errorf("found") // Stop iteration
+			}
+			return nil
+		}, nil)
+		if err != nil && err.Error() != "found" {
+			return nil, err
+		}
+		if foundRule == nil {
+			return nil, ports.ErrNotFound
+		}
+		return foundRule, nil
+
 	default:
 		return nil, fmt.Errorf("unknown resource type: %s", resourceType)
 	}
@@ -455,6 +511,8 @@ func (w *OutboxWorker) getSyncerForEntity(resourceType string) (interfaces.Entit
 		return w.networkSyncer, nil
 	case string(registry.TypeService):
 		return w.serviceSyncer, nil
+	case string(registry.TypeSvcSvcRule):
+		return w.svcSvcRuleSyncer, nil
 	default:
 		return nil, fmt.Errorf("no syncer registered for type: %s", resourceType)
 	}
@@ -476,11 +534,21 @@ func (w *OutboxWorker) markEntityResourceReady(
 	}
 	defer writer.Abort() // Ensure cleanup if commit fails
 
+	w.logger.Debug("markEntityResourceReady: got writer",
+		zap.String("resource_type", resourceType),
+		zap.String("namespace", namespace),
+		zap.String("name", name))
+
 	// Load the resource again
 	resource, err := w.loadEntityResource(ctx, resourceType, namespace, name)
 	if err != nil {
 		return fmt.Errorf("failed to load resource for update: %w", err)
 	}
+
+	w.logger.Debug("markEntityResourceReady: loaded resource",
+		zap.String("resource_type", resourceType),
+		zap.String("namespace", namespace),
+		zap.String("name", name))
 
 	// Update the resource's Meta to set Ready condition
 	var resourceScope ports.Scope
@@ -525,8 +593,29 @@ func (w *OutboxWorker) markEntityResourceReady(
 			Name:      r.Name,
 			Namespace: r.Namespace,
 		})
+		w.logger.Info("markEntityResourceReady: calling SyncServices with ConditionOnlyOperation",
+			zap.String("namespace", r.Namespace),
+			zap.String("name", r.Name))
 		if err := writer.SyncServices(ctx, []models.Service{*r}, resourceScope, ports.ConditionOnlyOperation{}); err != nil {
+			w.logger.Error("markEntityResourceReady: SyncServices failed",
+				zap.String("namespace", r.Namespace),
+				zap.String("name", r.Name),
+				zap.Error(err))
 			return fmt.Errorf("failed to update service: %w", err)
+		}
+		w.logger.Info("markEntityResourceReady: SyncServices succeeded",
+			zap.String("namespace", r.Namespace),
+			zap.String("name", r.Name))
+
+	case *models.SvcSvcRule:
+		r.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
+		r.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced")
+		resourceScope = ports.NewResourceIdentifierScope(models.ResourceIdentifier{
+			Name:      r.Name,
+			Namespace: r.Namespace,
+		})
+		if err := writer.SyncSvcSvcRules(ctx, []models.SvcSvcRule{*r}, resourceScope, ports.ConditionOnlyOperation{}); err != nil {
+			return fmt.Errorf("failed to update svcsvc rule: %w", err)
 		}
 
 	default:
@@ -534,14 +623,37 @@ func (w *OutboxWorker) markEntityResourceReady(
 	}
 
 	// Commit the changes
+	w.logger.Info("markEntityResourceReady: committing transaction",
+		zap.String("resource_type", resourceType),
+		zap.String("namespace", namespace),
+		zap.String("name", name))
 	if err := writer.Commit(); err != nil {
+		w.logger.Error("markEntityResourceReady: commit failed",
+			zap.String("resource_type", resourceType),
+			zap.String("namespace", namespace),
+			zap.String("name", name),
+			zap.Error(err))
 		return fmt.Errorf("failed to commit changes: %w", err)
 	}
+	w.logger.Info("markEntityResourceReady: transaction committed",
+		zap.String("resource_type", resourceType),
+		zap.String("namespace", namespace),
+		zap.String("name", name))
 
 	// Delete outbox entry using outbox repository
+	w.logger.Debug("markEntityResourceReady: deleting outbox entry",
+		zap.String("outbox_id", outboxID.(uuid.UUID).String()))
 	if err := w.outboxRepo.Delete(ctx, outboxID.(uuid.UUID)); err != nil {
+		w.logger.Error("markEntityResourceReady: failed to delete outbox entry",
+			zap.String("outbox_id", outboxID.(uuid.UUID).String()),
+			zap.Error(err))
 		return fmt.Errorf("failed to delete outbox entry: %w", err)
 	}
+	w.logger.Info("markEntityResourceReady: outbox entry deleted",
+		zap.String("resource_type", resourceType),
+		zap.String("namespace", namespace),
+		zap.String("name", name),
+		zap.String("outbox_id", outboxID.(uuid.UUID).String()))
 
 	return nil
 }
@@ -567,6 +679,7 @@ type EntitySyncerAdapter struct {
 	addressGroupSyncer *syncers.AddressGroupSyncer
 	networkSyncer      *syncers.NetworkSyncer
 	serviceSyncer      *syncers.ServiceSyncer
+	svcSvcRuleSyncer   *syncers.SvcSvcRuleSyncer
 	subjectType        types.SyncSubjectType
 }
 
@@ -580,6 +693,8 @@ func (a *EntitySyncerAdapter) Sync(ctx context.Context, entity interfaces.Syncab
 		return a.networkSyncer.Sync(ctx, entity, operation)
 	case types.SyncSubjectTypeServices:
 		return a.serviceSyncer.Sync(ctx, entity, operation)
+	case types.SyncSubjectTypeSvcSvcRules:
+		return a.svcSvcRuleSyncer.Sync(ctx, entity, operation)
 	default:
 		return fmt.Errorf("unsupported subject type: %s", a.subjectType)
 	}
@@ -595,6 +710,8 @@ func (a *EntitySyncerAdapter) SyncBatch(ctx context.Context, entities []interfac
 		return a.networkSyncer.SyncBatch(ctx, entities, operation)
 	case types.SyncSubjectTypeServices:
 		return a.serviceSyncer.SyncBatch(ctx, entities, operation)
+	case types.SyncSubjectTypeSvcSvcRules:
+		return a.svcSvcRuleSyncer.SyncBatch(ctx, entities, operation)
 	default:
 		return fmt.Errorf("unsupported subject type: %s", a.subjectType)
 	}
@@ -634,6 +751,8 @@ func (w *OutboxWorker) deleteResourceFromDB(ctx context.Context, item *domain.Ou
 		deleteQuery = `DELETE FROM address_groups WHERE namespace = $1 AND name = $2`
 	case string(registry.TypeService):
 		deleteQuery = `DELETE FROM services WHERE namespace = $1 AND name = $2`
+	case string(registry.TypeSvcSvcRule):
+		deleteQuery = `DELETE FROM svc_svc_rules WHERE namespace = $1 AND name = $2`
 	default:
 		return fmt.Errorf("unknown resource type for deletion: %s", item.ResourceType)
 	}
@@ -673,4 +792,13 @@ func (w *OutboxWorker) deleteResourceFromDB(ctx context.Context, item *domain.Ou
 		zap.String("name", item.ResourceName))
 
 	return nil
+}
+
+// getStringFromMap safely extracts a string value from a map[string]interface{}
+// Returns empty string if key doesn't exist or value is not a string
+func getStringFromMap(m map[string]interface{}, key string) string {
+	if val, ok := m[key].(string); ok {
+		return val
+	}
+	return ""
 }

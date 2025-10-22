@@ -103,6 +103,34 @@ func ConvertServiceToPB(svc models.Service) *netguardpb.Service {
 			}
 		}
 	}
+
+	// Convert XSvcSvcRules (READ-ONLY field populated by PostgreSQL triggers)
+	if svc.XSvcSvcRules != nil {
+		result.XSvcsvcRules = &netguardpb.XSvcSvcRules{}
+
+		// Convert AsServiceFrom references
+		if len(svc.XSvcSvcRules.AsServiceFrom) > 0 {
+			result.XSvcsvcRules.AsServiceFrom = make([]*netguardpb.ResourceIdentifier, len(svc.XSvcSvcRules.AsServiceFrom))
+			for i, ref := range svc.XSvcSvcRules.AsServiceFrom {
+				result.XSvcsvcRules.AsServiceFrom[i] = &netguardpb.ResourceIdentifier{
+					Name:      ref.Name,
+					Namespace: ref.Namespace,
+				}
+			}
+		}
+
+		// Convert AsServiceTo references
+		if len(svc.XSvcSvcRules.AsServiceTo) > 0 {
+			result.XSvcsvcRules.AsServiceTo = make([]*netguardpb.ResourceIdentifier, len(svc.XSvcSvcRules.AsServiceTo))
+			for i, ref := range svc.XSvcSvcRules.AsServiceTo {
+				result.XSvcsvcRules.AsServiceTo[i] = &netguardpb.ResourceIdentifier{
+					Name:      ref.Name,
+					Namespace: ref.Namespace,
+				}
+			}
+		}
+	}
+
 	return result
 }
 

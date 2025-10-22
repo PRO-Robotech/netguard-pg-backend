@@ -513,6 +513,65 @@ func (s *ValidationService) ValidateNetworkForDeletion(ctx context.Context, netw
 }
 
 // =============================================================================
+// SvcSvcRule Validation
+// =============================================================================
+
+// ValidateSvcSvcRuleForCreation validates a SvcSvcRule for creation
+func (s *ValidationService) ValidateSvcSvcRuleForCreation(ctx context.Context, rule models.SvcSvcRule) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	validator := validation.NewDependencyValidator(reader)
+	ruleValidator := validator.GetSvcSvcRuleValidator()
+
+	if err := ruleValidator.ValidateForCreation(ctx, rule); err != nil {
+		return errors.Wrapf(err, "SvcSvcRule validation failed for creation: %s", rule.Key())
+	}
+
+	return nil
+}
+
+// ValidateSvcSvcRuleForUpdate validates a SvcSvcRule for update
+func (s *ValidationService) ValidateSvcSvcRuleForUpdate(ctx context.Context, oldRule, newRule models.SvcSvcRule) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	validator := validation.NewDependencyValidator(reader)
+	ruleValidator := validator.GetSvcSvcRuleValidator()
+
+	if err := ruleValidator.ValidateForUpdate(ctx, oldRule, newRule); err != nil {
+		return errors.Wrapf(err, "SvcSvcRule validation failed for update: %s", newRule.Key())
+	}
+
+	return nil
+}
+
+// ValidateSvcSvcRuleForDeletion validates a SvcSvcRule for deletion
+func (s *ValidationService) ValidateSvcSvcRuleForDeletion(ctx context.Context, rule models.SvcSvcRule) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	validator := validation.NewDependencyValidator(reader)
+	ruleValidator := validator.GetSvcSvcRuleValidator()
+
+	// Basic existence check for deletion - rule should exist
+	if err := ruleValidator.ValidateExists(ctx, rule.SelfRef.ResourceIdentifier); err != nil {
+		return errors.Wrapf(err, "SvcSvcRule validation failed for deletion: %s", rule.Key())
+	}
+
+	return nil
+}
+
+// =============================================================================
 // NetworkBinding Validation
 // =============================================================================
 

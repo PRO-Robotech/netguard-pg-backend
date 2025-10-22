@@ -307,6 +307,13 @@ func setupSyncManager(ctx context.Context, cfg *config.Config, sgroupsClient int
 		return nil
 	}
 
+	// Register SvcSvcRule syncer
+	svcSvcRuleSyncer := syncers.NewSvcSvcRuleSyncer(sgroupsClient, logrLogger)
+	if err := syncManager.RegisterSyncer(types.SyncSubjectTypeSvcSvcRules, svcSvcRuleSyncer); err != nil {
+		logger.Error("failed to register SvcSvcRule syncer", zap.Error(err))
+		return nil
+	}
+
 	if err := syncManager.Start(ctx); err != nil {
 		logger.Error("failed to start sync manager", zap.Error(err))
 		return nil
@@ -473,6 +480,7 @@ func setupOutboxWorker(
 	addressGroupSyncer := syncers.NewAddressGroupSyncer(sgroupsClient, logrLogger)
 	networkSyncer := syncers.NewNetworkSyncer(sgroupsClient, logrLogger)
 	serviceSyncer := syncers.NewServiceSyncer(sgroupsClient, logrLogger)
+	svcSvcRuleSyncer := syncers.NewSvcSvcRuleSyncer(sgroupsClient, logrLogger)
 
 	// Create OutboxWorker with ConnectionMonitor
 	outboxWorker := worker.NewOutboxWorker(
@@ -482,6 +490,7 @@ func setupOutboxWorker(
 		addressGroupSyncer,
 		networkSyncer,
 		serviceSyncer,
+		svcSvcRuleSyncer,
 		logger,
 		workerConfig,
 		connMonitor,

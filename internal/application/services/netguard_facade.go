@@ -23,6 +23,7 @@ type NetguardFacade struct {
 	serviceResourceService      *resources.ServiceResourceService
 	addressGroupResourceService *resources.AddressGroupResourceService
 	ruleS2SResourceService      *resources.RuleS2SResourceService
+	svcSvcRuleResourceService   *resources.SvcSvcRuleResourceService
 	validationService           *resources.ValidationService
 
 	// Network resource services
@@ -54,6 +55,7 @@ func NewNetguardFacade(
 	hostConditionAdapter := &hostConditionManagerAdapter{conditionManager}
 	hostBindingConditionAdapter := &hostBindingConditionManagerAdapter{conditionManager}
 	ruleConditionAdapter := &ruleConditionManager{conditionManager}
+	svcSvcRuleConditionAdapter := &svcSvcRuleConditionManager{conditionManager}
 
 	validationService := resources.NewValidationService(registry, syncManager)
 	hostResourceService := resources.NewHostResourceService(registry, syncManager, hostConditionAdapter)
@@ -67,11 +69,13 @@ func NewNetguardFacade(
 		addressGroupResourceService, syncManager, hostBindingConditionAdapter)
 
 	ruleS2SResourceService := resources.NewRuleS2SResourceService(registry, syncManager, ruleConditionAdapter)
+	svcSvcRuleResourceService := resources.NewSvcSvcRuleResourceService(registry, syncManager, svcSvcRuleConditionAdapter)
 
 	facade := &NetguardFacade{
 		serviceResourceService:        serviceResourceService,
 		addressGroupResourceService:   addressGroupResourceService,
 		ruleS2SResourceService:        ruleS2SResourceService,
+		svcSvcRuleResourceService:     svcSvcRuleResourceService,
 		validationService:             validationService,
 		networkResourceService:        networkResourceService,
 		networkBindingResourceService: networkBindingResourceService,
@@ -455,6 +459,38 @@ func (f *NetguardFacade) UpdateIEAgAgRulesForRuleS2SWithReader(ctx context.Conte
 }
 
 // =============================================================================
+// SvcSvcRule Operations - delegate to SvcSvcRuleResourceService
+// =============================================================================
+
+func (f *NetguardFacade) GetSvcSvcRules(ctx context.Context, scope ports.Scope) ([]models.SvcSvcRule, error) {
+	return f.svcSvcRuleResourceService.GetSvcSvcRules(ctx, scope)
+}
+
+func (f *NetguardFacade) GetSvcSvcRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcSvcRule, error) {
+	return f.svcSvcRuleResourceService.GetSvcSvcRuleByID(ctx, id)
+}
+
+func (f *NetguardFacade) GetSvcSvcRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier) ([]models.SvcSvcRule, error) {
+	return f.svcSvcRuleResourceService.GetSvcSvcRulesByIDs(ctx, ids)
+}
+
+func (f *NetguardFacade) CreateSvcSvcRule(ctx context.Context, rule models.SvcSvcRule) error {
+	return f.svcSvcRuleResourceService.CreateSvcSvcRule(ctx, rule)
+}
+
+func (f *NetguardFacade) UpdateSvcSvcRule(ctx context.Context, rule models.SvcSvcRule) error {
+	return f.svcSvcRuleResourceService.UpdateSvcSvcRule(ctx, rule)
+}
+
+func (f *NetguardFacade) SyncSvcSvcRules(ctx context.Context, rules []models.SvcSvcRule, scope ports.Scope) error {
+	return f.svcSvcRuleResourceService.SyncSvcSvcRules(ctx, rules, scope, models.SyncOpUpsert)
+}
+
+func (f *NetguardFacade) DeleteSvcSvcRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier) error {
+	return f.svcSvcRuleResourceService.DeleteSvcSvcRulesByIDs(ctx, ids)
+}
+
+// =============================================================================
 // Network Operations - delegate to NetworkService
 // =============================================================================
 
@@ -702,6 +738,8 @@ func (f *NetguardFacade) Sync(ctx context.Context, syncOp models.SyncOp, resourc
 		return f.hostResourceService.SyncHosts(ctx, typedResources, ports.EmptyScope{}, syncOp)
 	case []models.HostBinding:
 		return f.hostBindingResourceService.SyncHostBindings(ctx, typedResources, ports.EmptyScope{}, syncOp)
+	case []models.SvcSvcRule:
+		return f.svcSvcRuleResourceService.SyncSvcSvcRules(ctx, typedResources, ports.EmptyScope{}, syncOp)
 	default:
 		return errors.New(fmt.Sprintf("unsupported resource type: %T", resources))
 	}
@@ -916,4 +954,22 @@ func (f *NetguardFacade) processAddressGroupPortMappingConditionsAfterBinding(ct
 // This is used by the FinalizerController to access NetworkBinding operations
 func (f *NetguardFacade) GetNetworkBindingResourceService() *resources.NetworkBindingResourceService {
 	return f.networkBindingResourceService
+}
+
+// =============================================================================
+// Condition Manager Adapters
+// =============================================================================
+
+// svcSvcRuleConditionManager adapts ConditionManager for SvcSvcRuleResourceService
+type svcSvcRuleConditionManager struct {
+	conditionManager *ConditionManager
+}
+
+func (s *svcSvcRuleConditionManager) ProcessSvcSvcRuleConditions(ctx context.Context, rule *models.SvcSvcRule) error {
+	if s.conditionManager != nil {
+		// TODO: Implement ProcessSvcSvcRuleConditions in ConditionManager
+		// For now, just return nil (no conditions to process)
+		return nil
+	}
+	return nil
 }

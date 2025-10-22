@@ -257,9 +257,16 @@ func (w *Writer) updateServiceConditionsOnly(ctx context.Context, service models
 		SET conditions = $1, updated_at = NOW()
 		WHERE resource_version = $2`
 
-	if err := w.exec(ctx, conditionUpdateQuery, conditionsJSON, resourceVersion); err != nil {
+	cmdTag, err := w.tx.Exec(ctx, conditionUpdateQuery, conditionsJSON, resourceVersion)
+	if err != nil {
 		return errors.Wrapf(err, "failed to update conditions for service %s/%s", service.Namespace, service.Name)
 	}
+
+	klog.InfoS("Updated conditions only for Service (no outbox entry created)",
+		"namespace", service.Namespace,
+		"name", service.Name,
+		"resource_version", resourceVersion,
+		"rows_affected", cmdTag.RowsAffected())
 
 	return nil
 }

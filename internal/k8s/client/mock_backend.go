@@ -689,3 +689,28 @@ func createMockCircuitBreakerClient(client BackendClient, config BackendClientCo
 func createMockCachedBackendClient(client BackendClient, config BackendClientConfig) BackendClient {
 	return client
 }
+
+// SvcSvcRule methods (stub implementations)
+func (m *MockBackendClient) GetSvcSvcRule(ctx context.Context, id models.ResourceIdentifier) (*models.SvcSvcRule, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (m *MockBackendClient) ListSvcSvcRules(ctx context.Context, scope ports.Scope) ([]models.SvcSvcRule, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (m *MockBackendClient) CreateSvcSvcRule(ctx context.Context, rule *models.SvcSvcRule) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (m *MockBackendClient) UpdateSvcSvcRule(ctx context.Context, rule *models.SvcSvcRule) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (m *MockBackendClient) DeleteSvcSvcRule(ctx context.Context, id models.ResourceIdentifier) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (m *MockBackendClient) UpdateSvcSvcRuleMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	return fmt.Errorf("not implemented")
+}

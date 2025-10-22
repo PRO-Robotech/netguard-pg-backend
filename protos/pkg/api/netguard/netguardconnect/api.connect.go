@@ -110,6 +110,12 @@ const (
 	// NetguardServiceGetHostBindingProcedure is the fully-qualified name of the NetguardService's
 	// GetHostBinding RPC.
 	NetguardServiceGetHostBindingProcedure = "/netguard.v1.NetguardService/GetHostBinding"
+	// NetguardServiceListSvcSvcRulesProcedure is the fully-qualified name of the NetguardService's
+	// ListSvcSvcRules RPC.
+	NetguardServiceListSvcSvcRulesProcedure = "/netguard.v1.NetguardService/ListSvcSvcRules"
+	// NetguardServiceGetSvcSvcRuleProcedure is the fully-qualified name of the NetguardService's
+	// GetSvcSvcRule RPC.
+	NetguardServiceGetSvcSvcRuleProcedure = "/netguard.v1.NetguardService/GetSvcSvcRule"
 )
 
 // NetguardServiceClient is a client for the netguard.v1.NetguardService service.
@@ -166,6 +172,10 @@ type NetguardServiceClient interface {
 	ListHostBindings(context.Context, *connect.Request[netguard.ListHostBindingsReq]) (*connect.Response[netguard.ListHostBindingsResp], error)
 	// GetHostBinding - gets a specific host binding by ID
 	GetHostBinding(context.Context, *connect.Request[netguard.GetHostBindingReq]) (*connect.Response[netguard.GetHostBindingResp], error)
+	// ListSvcSvcRules - gets list of SvcSvcRules
+	ListSvcSvcRules(context.Context, *connect.Request[netguard.ListSvcSvcRulesReq]) (*connect.Response[netguard.ListSvcSvcRulesResp], error)
+	// GetSvcSvcRule - gets a specific SvcSvcRule by ID
+	GetSvcSvcRule(context.Context, *connect.Request[netguard.GetSvcSvcRuleReq]) (*connect.Response[netguard.GetSvcSvcRuleResp], error)
 }
 
 // NewNetguardServiceClient constructs a client for the netguard.v1.NetguardService service. By
@@ -335,6 +345,18 @@ func NewNetguardServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(netguardServiceMethods.ByName("GetHostBinding")),
 			connect.WithClientOptions(opts...),
 		),
+		listSvcSvcRules: connect.NewClient[netguard.ListSvcSvcRulesReq, netguard.ListSvcSvcRulesResp](
+			httpClient,
+			baseURL+NetguardServiceListSvcSvcRulesProcedure,
+			connect.WithSchema(netguardServiceMethods.ByName("ListSvcSvcRules")),
+			connect.WithClientOptions(opts...),
+		),
+		getSvcSvcRule: connect.NewClient[netguard.GetSvcSvcRuleReq, netguard.GetSvcSvcRuleResp](
+			httpClient,
+			baseURL+NetguardServiceGetSvcSvcRuleProcedure,
+			connect.WithSchema(netguardServiceMethods.ByName("GetSvcSvcRule")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -366,6 +388,8 @@ type netguardServiceClient struct {
 	getHost                         *connect.Client[netguard.GetHostReq, netguard.GetHostResp]
 	listHostBindings                *connect.Client[netguard.ListHostBindingsReq, netguard.ListHostBindingsResp]
 	getHostBinding                  *connect.Client[netguard.GetHostBindingReq, netguard.GetHostBindingResp]
+	listSvcSvcRules                 *connect.Client[netguard.ListSvcSvcRulesReq, netguard.ListSvcSvcRulesResp]
+	getSvcSvcRule                   *connect.Client[netguard.GetSvcSvcRuleReq, netguard.GetSvcSvcRuleResp]
 }
 
 // Sync calls netguard.v1.NetguardService.Sync.
@@ -499,6 +523,16 @@ func (c *netguardServiceClient) GetHostBinding(ctx context.Context, req *connect
 	return c.getHostBinding.CallUnary(ctx, req)
 }
 
+// ListSvcSvcRules calls netguard.v1.NetguardService.ListSvcSvcRules.
+func (c *netguardServiceClient) ListSvcSvcRules(ctx context.Context, req *connect.Request[netguard.ListSvcSvcRulesReq]) (*connect.Response[netguard.ListSvcSvcRulesResp], error) {
+	return c.listSvcSvcRules.CallUnary(ctx, req)
+}
+
+// GetSvcSvcRule calls netguard.v1.NetguardService.GetSvcSvcRule.
+func (c *netguardServiceClient) GetSvcSvcRule(ctx context.Context, req *connect.Request[netguard.GetSvcSvcRuleReq]) (*connect.Response[netguard.GetSvcSvcRuleResp], error) {
+	return c.getSvcSvcRule.CallUnary(ctx, req)
+}
+
 // NetguardServiceHandler is an implementation of the netguard.v1.NetguardService service.
 type NetguardServiceHandler interface {
 	// Sync - syncs data in DB
@@ -553,6 +587,10 @@ type NetguardServiceHandler interface {
 	ListHostBindings(context.Context, *connect.Request[netguard.ListHostBindingsReq]) (*connect.Response[netguard.ListHostBindingsResp], error)
 	// GetHostBinding - gets a specific host binding by ID
 	GetHostBinding(context.Context, *connect.Request[netguard.GetHostBindingReq]) (*connect.Response[netguard.GetHostBindingResp], error)
+	// ListSvcSvcRules - gets list of SvcSvcRules
+	ListSvcSvcRules(context.Context, *connect.Request[netguard.ListSvcSvcRulesReq]) (*connect.Response[netguard.ListSvcSvcRulesResp], error)
+	// GetSvcSvcRule - gets a specific SvcSvcRule by ID
+	GetSvcSvcRule(context.Context, *connect.Request[netguard.GetSvcSvcRuleReq]) (*connect.Response[netguard.GetSvcSvcRuleResp], error)
 }
 
 // NewNetguardServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -718,6 +756,18 @@ func NewNetguardServiceHandler(svc NetguardServiceHandler, opts ...connect.Handl
 		connect.WithSchema(netguardServiceMethods.ByName("GetHostBinding")),
 		connect.WithHandlerOptions(opts...),
 	)
+	netguardServiceListSvcSvcRulesHandler := connect.NewUnaryHandler(
+		NetguardServiceListSvcSvcRulesProcedure,
+		svc.ListSvcSvcRules,
+		connect.WithSchema(netguardServiceMethods.ByName("ListSvcSvcRules")),
+		connect.WithHandlerOptions(opts...),
+	)
+	netguardServiceGetSvcSvcRuleHandler := connect.NewUnaryHandler(
+		NetguardServiceGetSvcSvcRuleProcedure,
+		svc.GetSvcSvcRule,
+		connect.WithSchema(netguardServiceMethods.ByName("GetSvcSvcRule")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/netguard.v1.NetguardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case NetguardServiceSyncProcedure:
@@ -772,6 +822,10 @@ func NewNetguardServiceHandler(svc NetguardServiceHandler, opts ...connect.Handl
 			netguardServiceListHostBindingsHandler.ServeHTTP(w, r)
 		case NetguardServiceGetHostBindingProcedure:
 			netguardServiceGetHostBindingHandler.ServeHTTP(w, r)
+		case NetguardServiceListSvcSvcRulesProcedure:
+			netguardServiceListSvcSvcRulesHandler.ServeHTTP(w, r)
+		case NetguardServiceGetSvcSvcRuleProcedure:
+			netguardServiceGetSvcSvcRuleHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -883,4 +937,12 @@ func (UnimplementedNetguardServiceHandler) ListHostBindings(context.Context, *co
 
 func (UnimplementedNetguardServiceHandler) GetHostBinding(context.Context, *connect.Request[netguard.GetHostBindingReq]) (*connect.Response[netguard.GetHostBindingResp], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetHostBinding is not implemented"))
+}
+
+func (UnimplementedNetguardServiceHandler) ListSvcSvcRules(context.Context, *connect.Request[netguard.ListSvcSvcRulesReq]) (*connect.Response[netguard.ListSvcSvcRulesResp], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.ListSvcSvcRules is not implemented"))
+}
+
+func (UnimplementedNetguardServiceHandler) GetSvcSvcRule(context.Context, *connect.Request[netguard.GetSvcSvcRuleReq]) (*connect.Response[netguard.GetSvcSvcRuleResp], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetSvcSvcRule is not implemented"))
 }

@@ -413,6 +413,14 @@ func (w *simpleWriter) DeleteHostBindingsByIDs(ctx context.Context, ids []models
 	return w.modularWriter.DeleteHostBindingsByIDs(ctx, ids)
 }
 
+func (w *simpleWriter) SyncSvcSvcRules(ctx context.Context, rules []models.SvcSvcRule, scope ports.Scope, opts ...ports.Option) error {
+	return w.modularWriter.SyncSvcSvcRules(ctx, rules, scope, opts...)
+}
+
+func (w *simpleWriter) DeleteSvcSvcRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	return w.modularWriter.DeleteSvcSvcRulesByIDs(ctx, ids, opts...)
+}
+
 func (w *simpleWriter) UpdateSyncStatus(ctx context.Context) error {
 	// For simplified approach, just return success
 	return nil

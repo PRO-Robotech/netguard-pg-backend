@@ -1,5 +1,5 @@
 /*
-Copyright 2024 The PRO-Robotech Authors.
+Copyright 2024 The Netguard Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -48,6 +48,8 @@ type Interface interface {
 	Services() ServiceInformer
 	// ServiceAliases returns a ServiceAliasInformer.
 	ServiceAliases() ServiceAliasInformer
+	// SvcSvcRules returns a SvcSvcRuleInformer.
+	SvcSvcRules() SvcSvcRuleInformer
 }
 
 type version struct {
@@ -119,4 +121,9 @@ func (v *version) Services() ServiceInformer {
 // ServiceAliases returns a ServiceAliasInformer.
 func (v *version) ServiceAliases() ServiceAliasInformer {
 	return &serviceAliasInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// SvcSvcRules returns a SvcSvcRuleInformer.
+func (v *version) SvcSvcRules() SvcSvcRuleInformer {
+	return &svcSvcRuleInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

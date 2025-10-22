@@ -158,3 +158,12 @@ func (r *reader) ListHostBindings(ctx context.Context, consume func(models.HostB
 func (r *reader) GetHostBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.HostBinding, error) {
 	return r.modularReader.GetHostBindingByID(ctx, id)
 }
+
+// SvcSvcRule methods - delegated to readers/svcsvc_rule.go
+func (r *reader) ListSvcSvcRules(ctx context.Context, consume func(models.SvcSvcRule) error, scope ports.Scope) error {
+	return r.modularReader.ListSvcSvcRules(ctx, consume, scope)
+}
+
+func (r *reader) GetSvcSvcRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcSvcRule, error) {
+	return r.modularReader.GetSvcSvcRuleByID(ctx, id)
+}

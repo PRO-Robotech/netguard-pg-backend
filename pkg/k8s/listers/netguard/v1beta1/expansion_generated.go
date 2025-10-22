@@ -1,5 +1,5 @@
 /*
-Copyright 2024 The PRO-Robotech Authors.
+Copyright 2024 The Netguard Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -113,3 +113,11 @@ type ServiceAliasListerExpansion interface{}
 // ServiceAliasNamespaceListerExpansion allows custom methods to be added to
 // ServiceAliasNamespaceLister.
 type ServiceAliasNamespaceListerExpansion interface{}
+
+// SvcSvcRuleListerExpansion allows custom methods to be added to
+// SvcSvcRuleLister.
+type SvcSvcRuleListerExpansion interface{}
+
+// SvcSvcRuleNamespaceListerExpansion allows custom methods to be added to
+// SvcSvcRuleNamespaceLister.
+type SvcSvcRuleNamespaceListerExpansion interface{}

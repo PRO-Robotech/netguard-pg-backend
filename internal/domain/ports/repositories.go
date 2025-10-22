@@ -36,6 +36,7 @@ type (
 		ListNetworkBindings(ctx context.Context, consume func(models.NetworkBinding) error, scope Scope) error
 		ListHosts(ctx context.Context, consume func(models.Host) error, scope Scope) error
 		ListHostBindings(ctx context.Context, consume func(models.HostBinding) error, scope Scope) error
+		ListSvcSvcRules(ctx context.Context, consume func(models.SvcSvcRule) error, scope Scope) error
 		GetSyncStatus(ctx context.Context) (*models.SyncStatus, error)
 
 		// Get methods with ResourceIdentifier
@@ -55,6 +56,7 @@ type (
 		GetNetworkBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.NetworkBinding, error)
 		GetHostByID(ctx context.Context, id models.ResourceIdentifier) (*models.Host, error)
 		GetHostBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.HostBinding, error)
+		GetSvcSvcRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcSvcRule, error)
 	}
 
 	// Reader defines read operations
@@ -78,6 +80,7 @@ type (
 		SyncNetworkBindings(ctx context.Context, bindings []models.NetworkBinding, scope Scope, opts ...Option) error
 		SyncHosts(ctx context.Context, hosts []models.Host, scope Scope, opts ...Option) error
 		SyncHostBindings(ctx context.Context, bindings []models.HostBinding, scope Scope, opts ...Option) error
+		SyncSvcSvcRules(ctx context.Context, rules []models.SvcSvcRule, scope Scope, opts ...Option) error
 
 		// Delete methods with ResourceIdentifier
 		DeleteServicesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
@@ -92,6 +95,7 @@ type (
 		DeleteNetworkBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
 		DeleteHostsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
 		DeleteHostBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
+		DeleteSvcSvcRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
 
 		Commit() error
 		Abort()

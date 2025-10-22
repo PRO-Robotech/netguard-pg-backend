@@ -100,3 +100,7 @@ func NewHostPtrOps(client client.BackendClient) BackendOperations[*models.Host] 
 func NewHostBindingPtrOps(client client.BackendClient) BackendOperations[*models.HostBinding] {
 	return NewPtrBackendOperations(NewHostBindingBackendOperations(client))
 }
+
+func NewSvcSvcRulePtrOps(client client.BackendClient) BackendOperations[*models.SvcSvcRule] {
+	return NewPtrBackendOperations(NewSvcSvcRuleBackendOperations(client))
+}
