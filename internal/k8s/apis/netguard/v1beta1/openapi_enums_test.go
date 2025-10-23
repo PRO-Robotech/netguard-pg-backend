@@ -29,6 +29,8 @@ func TestOpenAPIEnumDefinitions_StructureAndContent(t *testing.T) {
 			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.TransportProtocol",
 			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.Traffic",
 			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.RuleAction",
+			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostRegistrationSource",
+			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupRegistrationSource",
 		}
 
 		for _, expectedType := range expectedTypes {
@@ -49,7 +51,8 @@ func TestOpenAPIEnumDefinitions_StructureAndContent(t *testing.T) {
 		require.True(t, exists, "TransportProtocol definition should exist")
 
 		schema := transportDef.Schema
-		assert.Equal(t, []string{"string"}, schema.SchemaProps.Type,
+		assert.Len(t, schema.SchemaProps.Type, 1, "Type should have one element")
+		assert.Equal(t, "string", schema.SchemaProps.Type[0],
 			"TransportProtocol should be of type string")
 		assert.Equal(t, "Transport protocol (TCP or UDP)", schema.SchemaProps.Description,
 			"TransportProtocol should have correct description")
@@ -68,7 +71,8 @@ func TestOpenAPIEnumDefinitions_StructureAndContent(t *testing.T) {
 		require.True(t, exists, "Traffic definition should exist")
 
 		schema := trafficDef.Schema
-		assert.Equal(t, []string{"string"}, schema.SchemaProps.Type,
+		assert.Len(t, schema.SchemaProps.Type, 1, "Type should have one element")
+		assert.Equal(t, "string", schema.SchemaProps.Type[0],
 			"Traffic should be of type string")
 		assert.Equal(t, "Traffic direction (INGRESS or EGRESS)", schema.SchemaProps.Description,
 			"Traffic should have correct description")
@@ -87,7 +91,8 @@ func TestOpenAPIEnumDefinitions_StructureAndContent(t *testing.T) {
 		require.True(t, exists, "RuleAction definition should exist")
 
 		schema := actionDef.Schema
-		assert.Equal(t, []string{"string"}, schema.SchemaProps.Type,
+		assert.Len(t, schema.SchemaProps.Type, 1, "Type should have one element")
+		assert.Equal(t, "string", schema.SchemaProps.Type[0],
 			"RuleAction should be of type string")
 		assert.Equal(t, "Rule action (ACCEPT or DROP)", schema.SchemaProps.Description,
 			"RuleAction should have correct description")
@@ -95,6 +100,46 @@ func TestOpenAPIEnumDefinitions_StructureAndContent(t *testing.T) {
 		expectedEnums := []interface{}{"ACCEPT", "DROP"}
 		assert.Equal(t, expectedEnums, schema.SchemaProps.Enum,
 			"RuleAction should have correct enum values")
+	})
+
+	t.Run("HostRegistrationSource_HasCorrectEnumValues", func(t *testing.T) {
+		// Act
+		enumDefs := v1beta1.GetEnumOpenAPIDefinitions(refCallback)
+		hostSourceDef, exists := enumDefs["netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostRegistrationSource"]
+
+		// Assert
+		require.True(t, exists, "HostRegistrationSource definition should exist")
+
+		schema := hostSourceDef.Schema
+		assert.Len(t, schema.SchemaProps.Type, 1, "Type should have one element")
+		assert.Equal(t, "string", schema.SchemaProps.Type[0],
+			"HostRegistrationSource should be of type string")
+		assert.Equal(t, "Host registration source (spec or binding)", schema.SchemaProps.Description,
+			"HostRegistrationSource should have correct description")
+
+		expectedEnums := []interface{}{"spec", "binding"}
+		assert.Equal(t, expectedEnums, schema.SchemaProps.Enum,
+			"HostRegistrationSource should have correct enum values")
+	})
+
+	t.Run("AddressGroupRegistrationSource_HasCorrectEnumValues", func(t *testing.T) {
+		// Act
+		enumDefs := v1beta1.GetEnumOpenAPIDefinitions(refCallback)
+		agSourceDef, exists := enumDefs["netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupRegistrationSource"]
+
+		// Assert
+		require.True(t, exists, "AddressGroupRegistrationSource definition should exist")
+
+		schema := agSourceDef.Schema
+		assert.Len(t, schema.SchemaProps.Type, 1, "Type should have one element")
+		assert.Equal(t, "string", schema.SchemaProps.Type[0],
+			"AddressGroupRegistrationSource should be of type string")
+		assert.Equal(t, "AddressGroup registration source (spec or binding)", schema.SchemaProps.Description,
+			"AddressGroupRegistrationSource should have correct description")
+
+		expectedEnums := []interface{}{"spec", "binding"}
+		assert.Equal(t, expectedEnums, schema.SchemaProps.Enum,
+			"AddressGroupRegistrationSource should have correct enum values")
 	})
 }
 
@@ -134,6 +179,8 @@ func TestGetOpenAPIDefinitionsWithEnums_Integration(t *testing.T) {
 			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.TransportProtocol",
 			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.Traffic",
 			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.RuleAction",
+			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostRegistrationSource",
+			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupRegistrationSource",
 		}
 
 		for _, expectedDef := range expectedEnumDefs {
@@ -210,6 +257,20 @@ func TestGetOpenAPIDefinitionsWithEnums_Integration(t *testing.T) {
 		assert.Equal(t, []interface{}{"ACCEPT", "DROP"}, defaultActionField.SchemaProps.Enum,
 			"AddressGroupSpec defaultAction field should have enum values")
 	})
+
+	t.Run("SvcSvcRuleSpecFieldsHaveEnumValues", func(t *testing.T) {
+		// Act
+		allDefs := v1beta1.GetOpenAPIDefinitionsWithEnums(refCallback)
+
+		// Assert - SvcSvcRuleSpec action field should have enum values
+		svcSvcRuleSpecDef, exists := allDefs["netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcSvcRuleSpec"]
+		require.True(t, exists, "SvcSvcRuleSpec definition should exist")
+
+		actionField, exists := svcSvcRuleSpecDef.Schema.Properties["action"]
+		require.True(t, exists, "action field should exist")
+		assert.Equal(t, []interface{}{"ACCEPT", "DROP"}, actionField.SchemaProps.Enum,
+			"SvcSvcRuleSpec action field should have enum values")
+	})
 }
 
 func TestOpenAPIEnumSerialization_JSONValidation(t *testing.T) {
@@ -253,6 +314,7 @@ func TestOpenAPIEnumSerialization_JSONValidation(t *testing.T) {
 			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.RuleS2SSpec",
 			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IngressPort",
 			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupSpec",
+			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcSvcRuleSpec",
 		}
 
 		for _, defName := range modifiedDefs {
@@ -325,6 +387,8 @@ func TestOpenAPIEnumDefinitions_CallbackUsage(t *testing.T) {
 			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.TransportProtocol",
 			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.Traffic",
 			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.RuleAction",
+			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostRegistrationSource",
+			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupRegistrationSource",
 		}
 
 		for _, enumType := range enumTypes {

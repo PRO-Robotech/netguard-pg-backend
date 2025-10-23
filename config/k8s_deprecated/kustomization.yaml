@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: netguard-legacy-compatibility
+  annotations:
+    config.kubernetes.io/local-config: "true"
+    netguard.sgroups.io/compatibility: "legacy"
+
+# BACKWARD COMPATIBILITY: Point to memory overlay by default
+bases:
+- overlays/memory
+
+# Note: This file maintains backward compatibility for existing scripts.
+# For explicit deployment modes, use:
+#   kubectl apply -k config/k8s/overlays/memory      # Memory mode
+#   kubectl apply -k config/k8s/overlays/postgresql # PostgreSQL mode
+#
+# Or use the new Makefile commands:
+#   make deploy-memory       # Deploy memory mode
+#   make deploy-postgresql   # Deploy PostgreSQL mode
+#   make switch-to-memory    # Switch to memory mode
+#   make switch-to-postgresql # Switch to PostgreSQL mode 

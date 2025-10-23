@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
+	"k8s.io/klog/v2"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -96,15 +97,23 @@ func (w *Writer) upsertSvcSvcRule(ctx context.Context, rule models.SvcSvcRule) e
 		return errors.Wrap(err, "failed to marshal K8s metadata")
 	}
 
-	conditionsJSON, err := json.Marshal(rule.Meta.Conditions)
-	if err != nil {
-		return errors.Wrap(err, "failed to marshal conditions")
-	}
-
-	// Check if rule exists and get existing resource version
+	// Check if rule exists to determine if conditions need initialization
 	var existingResourceVersion sql.NullInt64
 	existingQuery := `SELECT resource_version FROM svc_svc_rules WHERE namespace = $1 AND name = $2`
 	_ = w.tx.QueryRow(ctx, existingQuery, rule.Namespace, rule.Name).Scan(&existingResourceVersion)
+
+	// Initialize conditions for new resources
+	conditions := rule.Meta.Conditions
+	if !existingResourceVersion.Valid {
+		conditions = forcePendingSyncCondition(conditions)
+		klog.V(4).InfoS("Forcing PendingSGROUPSync status for new SvcSvcRule",
+			"namespace", rule.Namespace, "name", rule.Name)
+	}
+
+	conditionsJSON, err := json.Marshal(conditions)
+	if err != nil {
+		return errors.Wrap(err, "failed to marshal conditions")
+	}
 
 	var resourceVersion int64
 	if existingResourceVersion.Valid {

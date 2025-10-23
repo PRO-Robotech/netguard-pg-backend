@@ -916,9 +916,9 @@ type SvcSvcRuleSpec struct {
 	// +kubebuilder:validation:Required
 	ServiceTo NamespacedObjectReference `json:"serviceTo"`
 
-	// Action - firewall action (ACCEPT or DROP)
+	// Action for the rule (ACCEPT, DROP)
 	// +kubebuilder:validation:Enum=ACCEPT;DROP
-	// +kubebuilder:validation:Required
+	// +optional
 	Action RuleAction `json:"action"`
 
 	// Priority - rule priority (0-1000, lower = higher priority)

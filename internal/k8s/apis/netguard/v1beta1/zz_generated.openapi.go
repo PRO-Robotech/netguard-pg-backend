@@ -6028,7 +6028,7 @@ func schema_k8s_apis_netguard_v1beta1_SvcSvcRuleSpec(ref common.ReferenceCallbac
 					},
 					"action": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Action - firewall action (ACCEPT or DROP)",
+							Description: "Action for the rule (ACCEPT, DROP)",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -6056,7 +6056,7 @@ func schema_k8s_apis_netguard_v1beta1_SvcSvcRuleSpec(ref common.ReferenceCallbac
 						},
 					},
 				},
-				Required: []string{"serviceFrom", "serviceTo", "action"},
+				Required: []string{"serviceFrom", "serviceTo"},
 			},
 		},
 		Dependencies: []string{

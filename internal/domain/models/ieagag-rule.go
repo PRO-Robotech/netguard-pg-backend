@@ -144,11 +144,10 @@ func (r *IEAgAgRule) ToSGroupsProto() (interface{}, error) {
 		sgLocal = r.AddressGroupLocal.Name
 	}
 
-	// Convert to single sgroups protobuf rule (batch aggregation will be handled by syncer)
 	pbRule := &pb.IESgSgRule{
 		Transport: transport,
-		SG:        sg,      // Remote AddressGroup
-		SgLocal:   sgLocal, // Local AddressGroup
+		SG:        sg,
+		SgLocal:   sgLocal,
 		Traffic:   traffic,
 		Ports:     ports,
 		Logs:      r.Logs,
@@ -156,7 +155,5 @@ func (r *IEAgAgRule) ToSGroupsProto() (interface{}, error) {
 		Trace:     r.Trace,
 	}
 
-	// Return single rule element (not wrapped in SyncIESgSgRules)
-	// Batch aggregation will be handled by IEAgAgRuleSyncer.SyncBatch()
 	return pbRule, nil
 }

@@ -1,0 +1,96 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: netguard-apiserver
+  namespace: netguard-system
+  labels:
+    app: netguard-apiserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: netguard-apiserver
+  template:
+    metadata:
+      labels:
+        app: netguard-apiserver
+    spec:
+      serviceAccountName: netguard-apiserver
+      containers:
+        - name: apiserver
+          image: netguard/k8s-apiserver:latest
+          imagePullPolicy: IfNotPresent
+          command: [ "/root/k8s-apiserver" ]
+          args: 
+            - "--secure-port=8443"
+            - "--bind-address=0.0.0.0"
+            - "--tls-cert-file=/etc/certs/tls.crt" 
+            - "--tls-private-key-file=/etc/certs/tls.key"
+            - "--v=1"
+            - "--vmodule=storage=4,patch=4,fieldmanager=4,apiserver=0,httplog=0,request=0,filterlatency=0,apf=0"
+          ports:
+            - containerPort: 8443
+              name: https
+          env:
+            - name: BACKEND_ENDPOINT
+              value: "netguard-backend:9090"
+          volumeMounts:
+            - name: config
+              mountPath: /etc/netguard
+            - name: certs
+              mountPath: /etc/certs
+              readOnly: true
+          livenessProbe:
+            tcpSocket:
+              port: https
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: https
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+      - name: config
+        configMap:
+          name: netguard-apiserver-config
+      - name: certs
+        secret:
+          secretName: netguard-webhook-tls
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: netguard-apiserver
+  namespace: netguard-system
+  labels:
+    app: netguard-apiserver
+spec:
+  type: ClusterIP
+  selector:
+    app: netguard-apiserver
+  ports:
+  - name: https
+    port: 443
+    protocol: TCP
+    targetPort: https
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: netguard-apiserver-webhook
+  namespace: netguard-system
+  labels:
+    app: netguard-apiserver
+spec:
+  type: ClusterIP
+  selector:
+    app: netguard-apiserver
+  ports:
+  - name: webhook
+    port: 443
+    protocol: TCP
+    targetPort: 9443

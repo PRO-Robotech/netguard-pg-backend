@@ -90,7 +90,7 @@ func (s *Service) ToSGroupsProto() (interface{}, error) {
 		serviceName = fmt.Sprintf("%s/%s", s.Namespace, s.Name)
 	}
 
-	// Build TransportSpec from IngressPorts
+	// Build ProtoSpec from IngressPorts
 	// Only create tcp/udp structures if there are corresponding ports
 	var tcpPorts []*pb.AccPorts
 	var udpPorts []*pb.AccPorts
@@ -109,13 +109,13 @@ func (s *Service) ToSGroupsProto() (interface{}, error) {
 		}
 	}
 
-	// Create TransportSpec with only non-empty port lists
-	transportSpec := &pb.TransportSpec{}
+	// Create ProtoSpec with only non-empty port lists
+	protoSpec := &pb.ProtoSpec{}
 	if len(tcpPorts) > 0 {
-		transportSpec.Tcp = &pb.TransportSpec_Ports{Ports: tcpPorts}
+		protoSpec.Tcp = &pb.ProtoSpec_Ports{Ports: tcpPorts}
 	}
 	if len(udpPorts) > 0 {
-		transportSpec.Udp = &pb.TransportSpec_Ports{Ports: udpPorts}
+		protoSpec.Udp = &pb.ProtoSpec_Ports{Ports: udpPorts}
 	}
 
 	// Build sg_names from AggregatedAddressGroups
@@ -130,9 +130,9 @@ func (s *Service) ToSGroupsProto() (interface{}, error) {
 
 	// Convert to sgroups protobuf element
 	protoService := &pb.Service{
-		Name:    serviceName,
-		Ports:   transportSpec,
-		SgNames: sgNames,
+		Name:      serviceName,
+		Protocols: protoSpec,
+		SgNames:   sgNames,
 	}
 
 	return protoService, nil
