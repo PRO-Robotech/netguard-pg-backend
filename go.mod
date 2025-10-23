@@ -83,7 +83,7 @@ require (
 	cel.dev/expr v0.23.0 // indirect
 	github.com/BurntSushi/toml v1.2.1 // indirect
 	github.com/NYTimes/gziphandler v1.1.1 // indirect
-	github.com/PRO-Robotech/protos v1.0.1-dev.6
+	github.com/PRO-Robotech/protos v1.0.1-dev.8
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
@@ -163,5 +163,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.6.0 // indirect
 	sigs.k8s.io/yaml v1.4.0
 )
-
-// replace github.com/H-BF/protos => github.com/H-BF/protos/v2 v2.0.0

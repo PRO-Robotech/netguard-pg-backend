@@ -16,8 +16,8 @@ github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERo
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
 github.com/NYTimes/gziphandler v1.1.1 h1:ZUDjpQae29j0ryrS0u/B8HZfJBtBQHjqw2rQ2cqUQ3I=
 github.com/NYTimes/gziphandler v1.1.1/go.mod h1:n/CVRwUEOgIxrgPvAQhUUr9oeUtvrhMomdKFjzJNB0c=
-github.com/PRO-Robotech/protos v1.0.1-dev.6 h1:UUaINowhhOGnV6YEAsYxiKfbCKUwrRKEsTKNc2JlJGo=
-github.com/PRO-Robotech/protos v1.0.1-dev.6/go.mod h1:TfXCt4ZxBl9Lc9HjzQumkSuECYFGsCuwlnX3ZkqLV30=
+github.com/PRO-Robotech/protos v1.0.1-dev.8 h1:2liXEQ78SkrBfkVr077BcViMBjGkc9eOXf6+EAn9nm0=
+github.com/PRO-Robotech/protos v1.0.1-dev.8/go.mod h1:TfXCt4ZxBl9Lc9HjzQumkSuECYFGsCuwlnX3ZkqLV30=
 github.com/antlr4-go/antlr/v4 v4.13.1 h1:SqQKkuVZ+zWkMMNkjy5FZe5mr5WURWnlpmOuzYWrPrQ=
 github.com/antlr4-go/antlr/v4 v4.13.1/go.mod h1:GKmUxMtwp6ZgGwZSva4eWPC5mS6vUAmOABFgjdkM7Nw=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
