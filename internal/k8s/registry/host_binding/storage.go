@@ -300,15 +300,21 @@ func (s *HostBindingStorage) updateHostBindingStatus(ctx context.Context, hostBi
 		} else {
 			host.AddressGroupName = hostBinding.AddressGroupRef.Name
 		}
-		host.BindingRef = &netguardv1beta1.ObjectReference{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "HostBinding",
-			Name:       hostBinding.Name,
+		host.BindingRef = &netguardv1beta1.NamespacedObjectReference{
+			ObjectReference: netguardv1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "HostBinding",
+				Name:       hostBinding.Name,
+			},
+			Namespace: hostBinding.Namespace,
 		}
-		host.AddressGroupRef = &netguardv1beta1.ObjectReference{
-			APIVersion: hostBinding.AddressGroupRef.APIVersion,
-			Kind:       hostBinding.AddressGroupRef.Kind,
-			Name:       hostBinding.AddressGroupRef.Name,
+		host.AddressGroupRef = &netguardv1beta1.NamespacedObjectReference{
+			ObjectReference: netguardv1beta1.ObjectReference{
+				APIVersion: hostBinding.AddressGroupRef.APIVersion,
+				Kind:       hostBinding.AddressGroupRef.Kind,
+				Name:       hostBinding.AddressGroupRef.Name,
+			},
+			Namespace: hostBinding.AddressGroupRef.Namespace,
 		}
 	} else {
 		// Clear binding information
