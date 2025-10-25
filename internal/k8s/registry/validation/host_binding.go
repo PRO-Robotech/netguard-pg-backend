@@ -116,10 +116,8 @@ func (v *HostBindingValidator) validateObjectReference(objRef v1beta1.Namespaced
 		allErrs = append(allErrs, field.Required(fldPath.Child("name"), "name is required"))
 	}
 
-	// Namespace is required
-	if objRef.Namespace == "" {
-		allErrs = append(allErrs, field.Required(fldPath.Child("namespace"), "namespace is required"))
-	}
+	// Namespace will be filled by mutation webhook if empty, so we don't require it here
+	// The validateSpec function already checks that namespace matches parent namespace if provided
 
 	// Validate Kind if specified
 	if objRef.Kind != "" && objRef.Kind != expectedKind {
