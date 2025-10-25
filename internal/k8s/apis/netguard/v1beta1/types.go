@@ -804,11 +804,11 @@ type HostStatus struct {
 
 	// BindingRef is a reference to the HostBinding that binds this host
 	// +optional
-	BindingRef *ObjectReference `json:"bindingRef,omitempty"`
+	BindingRef *NamespacedObjectReference `json:"bindingRef,omitempty"`
 
 	// AddressGroupRef is a reference to the AddressGroup this host is bound to
 	// +optional
-	AddressGroupRef *ObjectReference `json:"addressGroupRef,omitempty"`
+	AddressGroupRef *NamespacedObjectReference `json:"addressGroupRef,omitempty"`
 
 	// Conditions represent the latest available observations of the resource's state
 	// +optional

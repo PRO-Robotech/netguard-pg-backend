@@ -26,19 +26,25 @@ func ConvertHost(protoHost *netguardpb.Host) models.Host {
 
 	// Set binding reference if present
 	if protoHost.BindingRef != nil {
-		host.BindingRef = &v1beta1.ObjectReference{
-			APIVersion: protoHost.BindingRef.ApiVersion,
-			Kind:       protoHost.BindingRef.Kind,
-			Name:       protoHost.BindingRef.Name,
+		host.BindingRef = &v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: protoHost.BindingRef.ApiVersion,
+				Kind:       protoHost.BindingRef.Kind,
+				Name:       protoHost.BindingRef.Name,
+			},
+			Namespace: protoHost.BindingRef.Namespace,
 		}
 	}
 
 	// Set address group reference if present
 	if protoHost.AddressGroupRef != nil {
-		host.AddressGroupRef = &v1beta1.ObjectReference{
-			APIVersion: protoHost.AddressGroupRef.ApiVersion,
-			Kind:       protoHost.AddressGroupRef.Kind,
-			Name:       protoHost.AddressGroupRef.Name,
+		host.AddressGroupRef = &v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: protoHost.AddressGroupRef.ApiVersion,
+				Kind:       protoHost.AddressGroupRef.Kind,
+				Name:       protoHost.AddressGroupRef.Name,
+			},
+			Namespace: protoHost.AddressGroupRef.Namespace,
 		}
 	}
 
@@ -73,19 +79,21 @@ func ConvertHostToPB(host models.Host) *netguardpb.Host {
 
 	// Convert binding reference if present
 	if host.BindingRef != nil {
-		pbHost.BindingRef = &netguardpb.ObjectReference{
+		pbHost.BindingRef = &netguardpb.NamespacedObjectReference{
 			ApiVersion: host.BindingRef.APIVersion,
 			Kind:       host.BindingRef.Kind,
 			Name:       host.BindingRef.Name,
+			Namespace:  host.BindingRef.Namespace,
 		}
 	}
 
 	// Convert address group reference if present
 	if host.AddressGroupRef != nil {
-		pbHost.AddressGroupRef = &netguardpb.ObjectReference{
+		pbHost.AddressGroupRef = &netguardpb.NamespacedObjectReference{
 			ApiVersion: host.AddressGroupRef.APIVersion,
 			Kind:       host.AddressGroupRef.Kind,
 			Name:       host.AddressGroupRef.Name,
+			Namespace:  host.AddressGroupRef.Namespace,
 		}
 	}
 

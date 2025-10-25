@@ -1975,19 +1975,25 @@ func convertHostFromProto(protoHost *netguardpb.Host) models.Host {
 
 	// Set binding reference if present
 	if protoHost.GetBindingRef() != nil {
-		result.BindingRef = &v1beta1.ObjectReference{
-			APIVersion: protoHost.GetBindingRef().GetApiVersion(),
-			Kind:       protoHost.GetBindingRef().GetKind(),
-			Name:       protoHost.GetBindingRef().GetName(),
+		result.BindingRef = &v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: protoHost.GetBindingRef().GetApiVersion(),
+				Kind:       protoHost.GetBindingRef().GetKind(),
+				Name:       protoHost.GetBindingRef().GetName(),
+			},
+			Namespace: protoHost.GetBindingRef().GetNamespace(),
 		}
 	}
 
 	// Set address group reference if present
 	if protoHost.GetAddressGroupRef() != nil {
-		result.AddressGroupRef = &v1beta1.ObjectReference{
-			APIVersion: protoHost.GetAddressGroupRef().GetApiVersion(),
-			Kind:       protoHost.GetAddressGroupRef().GetKind(),
-			Name:       protoHost.GetAddressGroupRef().GetName(),
+		result.AddressGroupRef = &v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: protoHost.GetAddressGroupRef().GetApiVersion(),
+				Kind:       protoHost.GetAddressGroupRef().GetKind(),
+				Name:       protoHost.GetAddressGroupRef().GetName(),
+			},
+			Namespace: protoHost.GetAddressGroupRef().GetNamespace(),
 		}
 	}
 
@@ -2036,23 +2042,25 @@ func convertHostToPB(host models.Host) *netguardpb.Host {
 		AddressGroupName: host.AddressGroupName,
 		IsBound:          host.IsBound,
 
-		BindingRef: func() *netguardpb.ObjectReference {
+		BindingRef: func() *netguardpb.NamespacedObjectReference {
 			if host.BindingRef != nil {
-				return &netguardpb.ObjectReference{
+				return &netguardpb.NamespacedObjectReference{
 					ApiVersion: host.BindingRef.APIVersion,
 					Kind:       host.BindingRef.Kind,
 					Name:       host.BindingRef.Name,
+					Namespace:  host.BindingRef.Namespace,
 				}
 			}
 			return nil
 		}(),
 
-		AddressGroupRef: func() *netguardpb.ObjectReference {
+		AddressGroupRef: func() *netguardpb.NamespacedObjectReference {
 			if host.AddressGroupRef != nil {
-				return &netguardpb.ObjectReference{
+				return &netguardpb.NamespacedObjectReference{
 					ApiVersion: host.AddressGroupRef.APIVersion,
 					Kind:       host.AddressGroupRef.Kind,
 					Name:       host.AddressGroupRef.Name,
+					Namespace:  host.AddressGroupRef.Namespace,
 				}
 			}
 			return nil

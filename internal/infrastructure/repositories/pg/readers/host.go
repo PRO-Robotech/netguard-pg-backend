@@ -138,21 +138,27 @@ func (r *Reader) scanHost(rows pgx.Rows) (models.Host, error) {
 	}
 	host.IsBound = isBound
 
-	// Set binding ref if exists (ObjectReference doesn't include namespace)
+	// Set binding ref if exists (NamespacedObjectReference includes namespace)
 	if bindingRefNamespace != nil && bindingRefName != nil {
-		host.BindingRef = &v1beta1.ObjectReference{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "HostBinding",
-			Name:       *bindingRefName,
+		host.BindingRef = &v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "HostBinding",
+				Name:       *bindingRefName,
+			},
+			Namespace: *bindingRefNamespace,
 		}
 	}
 
-	// Set address group ref if exists (ObjectReference doesn't include namespace)
+	// Set address group ref if exists (NamespacedObjectReference includes namespace)
 	if addressGroupRefNamespace != nil && addressGroupRefName != nil {
-		host.AddressGroupRef = &v1beta1.ObjectReference{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "AddressGroup",
-			Name:       *addressGroupRefName,
+		host.AddressGroupRef = &v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "AddressGroup",
+				Name:       *addressGroupRefName,
+			},
+			Namespace: *addressGroupRefNamespace,
 		}
 	}
 
@@ -226,19 +232,25 @@ func (r *Reader) scanHostRow(row pgx.Row) (*models.Host, error) {
 
 	// Set binding ref if exists
 	if bindingRefNamespace != nil && bindingRefName != nil {
-		host.BindingRef = &v1beta1.ObjectReference{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "HostBinding",
-			Name:       *bindingRefName,
+		host.BindingRef = &v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "HostBinding",
+				Name:       *bindingRefName,
+			},
+			Namespace: *bindingRefNamespace,
 		}
 	}
 
 	// Set address group ref if exists
 	if addressGroupRefNamespace != nil && addressGroupRefName != nil {
-		host.AddressGroupRef = &v1beta1.ObjectReference{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "AddressGroup",
-			Name:       *addressGroupRefName,
+		host.AddressGroupRef = &v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "AddressGroup",
+				Name:       *addressGroupRefName,
+			},
+			Namespace: *addressGroupRefNamespace,
 		}
 	}
 

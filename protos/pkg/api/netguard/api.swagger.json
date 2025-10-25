@@ -1252,12 +1252,12 @@
           "title": "Whether the host is bound to an AddressGroup"
         },
         "bindingRef": {
-          "$ref": "#/definitions/v1ObjectReference",
-          "title": "Reference to the HostBinding"
+          "$ref": "#/definitions/v1NamespacedObjectReference",
+          "title": "Reference to the HostBinding (includes namespace)"
         },
         "addressGroupRef": {
-          "$ref": "#/definitions/v1ObjectReference",
-          "title": "Reference to the bound AddressGroup"
+          "$ref": "#/definitions/v1NamespacedObjectReference",
+          "title": "Reference to the bound AddressGroup (includes namespace)"
         },
         "ipList": {
           "type": "array",

@@ -501,15 +501,21 @@ func (s *HostResourceService) UpdateHostBinding(ctx context.Context, hostID mode
 		host.AddressGroupName = ""
 	} else {
 		// Binding case - set all binding references
-		host.BindingRef = &v1beta1.ObjectReference{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "HostBinding",
-			Name:       bindingID.Name,
+		host.BindingRef = &v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "HostBinding",
+				Name:       bindingID.Name,
+			},
+			Namespace: bindingID.Namespace,
 		}
-		host.AddressGroupRef = &v1beta1.ObjectReference{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "AddressGroup",
-			Name:       addressGroupID.Name,
+		host.AddressGroupRef = &v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "AddressGroup",
+				Name:       addressGroupID.Name,
+			},
+			Namespace: addressGroupID.Namespace,
 		}
 		host.IsBound = true
 		if addressGroupID.Namespace != "" {
@@ -619,10 +625,13 @@ func (s *HostResourceService) updateHostBindingStatusForHost(ctx context.Context
 	host.IsBound = isBound
 	if isBound {
 		host.AddressGroupName = addressGroupName
-		host.AddressGroupRef = &v1beta1.ObjectReference{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "AddressGroup",
-			Name:       addressGroupName,
+		host.AddressGroupRef = &v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "AddressGroup",
+				Name:       addressGroupName,
+			},
+			Namespace: namespace,
 		}
 	} else {
 		host.AddressGroupName = ""

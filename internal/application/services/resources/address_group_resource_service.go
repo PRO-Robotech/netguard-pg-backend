@@ -2299,8 +2299,13 @@ func (s *AddressGroupResourceService) updateHostBindingStatusForSyncedAddressGro
 
 					// Bind this host
 					host.IsBound = true
-					host.AddressGroupRef = &netguardv1beta1.ObjectReference{
-						Name: ag.Name,
+					host.AddressGroupRef = &netguardv1beta1.NamespacedObjectReference{
+						ObjectReference: netguardv1beta1.ObjectReference{
+							APIVersion: "netguard.sgroups.io/v1beta1",
+							Kind:       "AddressGroup",
+							Name:       ag.Name,
+						},
+						Namespace: ag.Namespace,
 					}
 					hostsToUpdate = append(hostsToUpdate, *host)
 				}

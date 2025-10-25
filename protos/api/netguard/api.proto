@@ -309,8 +309,8 @@ message Host {
   string host_name_sync = 4;                   // Host name for synchronization (avoiding conflict with hostname)
   string address_group_name = 5;               // Name of bound AddressGroup
   bool is_bound = 6;                           // Whether the host is bound to an AddressGroup
-  ObjectReference binding_ref = 7;             // Reference to the HostBinding
-  ObjectReference address_group_ref = 8;       // Reference to the bound AddressGroup
+  NamespacedObjectReference binding_ref = 7;   // Reference to the HostBinding (includes namespace)
+  NamespacedObjectReference address_group_ref = 8; // Reference to the bound AddressGroup (includes namespace)
   repeated IPItem ip_list = 10;                // List of IP addresses from SGROUP synchronization
 
   Meta meta = 11;
