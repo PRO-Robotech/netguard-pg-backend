@@ -121,7 +121,8 @@ func (s *NetworkBindingStorage) ConvertToTable(ctx context.Context, object runti
 				binding.Name,
 				binding.Spec.NetworkRef,
 				binding.Spec.AddressGroupRef,
-				binding.NetworkItem.Name,
+				//binding.NetworkItem.Name,
+				"",
 				networkBindingTranslateTimestampSince(binding.CreationTimestamp),
 			},
 		}

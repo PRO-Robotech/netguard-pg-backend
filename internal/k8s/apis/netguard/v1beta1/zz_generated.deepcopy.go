@@ -1020,7 +1020,6 @@ func (in *NetworkBinding) DeepCopyInto(out *NetworkBinding) {
 	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
 	out.Spec = in.Spec
 	in.Status.DeepCopyInto(&out.Status)
-	out.NetworkItem = in.NetworkItem
 	return
 }
 

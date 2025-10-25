@@ -767,9 +767,9 @@ type NetworkBinding struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec        NetworkBindingSpec   `json:"spec,omitempty"`
-	Status      NetworkBindingStatus `json:"status,omitempty"`
-	NetworkItem NetworkItem          `json:"network,omitempty"`
+	Spec   NetworkBindingSpec   `json:"spec,omitempty"`
+	Status NetworkBindingStatus `json:"status,omitempty"`
+	//NetworkItem NetworkItem          `json:"network,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

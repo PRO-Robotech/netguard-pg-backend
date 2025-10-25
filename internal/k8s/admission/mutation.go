@@ -63,6 +63,8 @@ func (w *MutationWebhook) Handle(ctx context.Context, req *admissionv1.Admission
 		return w.mutateAddressGroupBindingPolicy(ctx, req)
 	case "IEAgAgRule":
 		return w.mutateIEAgAgRule(ctx, req)
+	case "HostBinding":
+		return w.mutateHostBinding(ctx, req)
 	default:
 		return &admissionv1.AdmissionResponse{
 			UID:     req.UID,
@@ -324,8 +326,41 @@ func (w *MutationWebhook) mutateIEAgAgRule(ctx context.Context, req *admissionv1
 	// Add created-by annotation
 	patches = append(patches, w.addCreatedByAnnotation(&rule)...)
 
-	// Add finalizer for graceful deletion
-	patches = append(patches, w.addFinalizer(&rule, "netguard.sgroups.io/backend-sync")...)
+	return w.createPatchResponse(req.UID, patches)
+}
+
+// mutateHostBinding applies mutations to HostBinding resources
+func (w *MutationWebhook) mutateHostBinding(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
+	var binding netguardv1beta1.HostBinding
+	if err := runtime.DecodeInto(w.decoder, req.Object.Raw, &binding); err != nil {
+		return w.errorResponse(req.UID, fmt.Sprintf("Failed to decode HostBinding: %v", err))
+	}
+
+	var patches []map[string]interface{}
+
+	// Add managed-by label
+	patches = append(patches, w.addManagedByLabel(&binding)...)
+
+	// Add created-by annotation
+	patches = append(patches, w.addCreatedByAnnotation(&binding)...)
+
+	// Normalize namespace in HostRef if empty - HostBinding and Host must be in same namespace
+	if binding.Spec.HostRef.Namespace == "" {
+		patches = append(patches, map[string]interface{}{
+			"op":    "replace",
+			"path":  "/spec/hostRef/namespace",
+			"value": binding.Namespace,
+		})
+	}
+
+	// Normalize namespace in AddressGroupRef if empty - HostBinding and AddressGroup must be in same namespace
+	if binding.Spec.AddressGroupRef.Namespace == "" {
+		patches = append(patches, map[string]interface{}{
+			"op":    "replace",
+			"path":  "/spec/addressGroupRef/namespace",
+			"value": binding.Namespace,
+		})
+	}
 
 	return w.createPatchResponse(req.UID, patches)
 }

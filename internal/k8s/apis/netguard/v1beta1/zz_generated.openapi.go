@@ -4581,17 +4581,11 @@ func schema_k8s_apis_netguard_v1beta1_NetworkBinding(ref common.ReferenceCallbac
 							Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NetworkBindingStatus"),
 						},
 					},
-					"network": {
-						SchemaProps: spec.SchemaProps{
-							Default: map[string]interface{}{},
-							Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NetworkItem"),
-						},
-					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NetworkBindingSpec", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NetworkBindingStatus", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NetworkItem"},
+			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NetworkBindingSpec", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NetworkBindingStatus"},
 	}
 }
 
