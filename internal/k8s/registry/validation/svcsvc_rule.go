@@ -2,6 +2,7 @@ package validation
 
 import (
 	"context"
+	"fmt"
 
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
@@ -19,12 +20,12 @@ var _ base.Validator[*v1beta1.SvcSvcRule] = &SvcSvcRuleValidator{}
 
 // ValidateCreate validates a new SvcSvcRule being created
 func (v *SvcSvcRuleValidator) ValidateCreate(ctx context.Context, obj *v1beta1.SvcSvcRule) field.ErrorList {
-	return v.validate(ctx, obj)
+	return v.validate(ctx, obj, obj.Namespace)
 }
 
 // ValidateUpdate validates a SvcSvcRule being updated
 func (v *SvcSvcRuleValidator) ValidateUpdate(ctx context.Context, obj *v1beta1.SvcSvcRule, old *v1beta1.SvcSvcRule) field.ErrorList {
-	allErrs := v.validate(ctx, obj)
+	allErrs := v.validate(ctx, obj, obj.Namespace)
 
 	// Additional update-specific validation
 	if old != nil {
@@ -48,7 +49,7 @@ func (v *SvcSvcRuleValidator) ValidateDelete(ctx context.Context, obj *v1beta1.S
 }
 
 // validate performs comprehensive validation of a SvcSvcRule object
-func (v *SvcSvcRuleValidator) validate(ctx context.Context, obj *v1beta1.SvcSvcRule) field.ErrorList {
+func (v *SvcSvcRuleValidator) validate(ctx context.Context, obj *v1beta1.SvcSvcRule, parentNamespace string) field.ErrorList {
 	allErrs := field.ErrorList{}
 
 	if obj == nil {
@@ -59,7 +60,7 @@ func (v *SvcSvcRuleValidator) validate(ctx context.Context, obj *v1beta1.SvcSvcR
 	allErrs = append(allErrs, v.validateMetadata(obj)...)
 
 	// Validate spec
-	allErrs = append(allErrs, v.validateSpec(obj.Spec, field.NewPath("spec"))...)
+	allErrs = append(allErrs, v.validateSpec(obj.Spec, parentNamespace, field.NewPath("spec"))...)
 
 	return allErrs
 }
@@ -71,16 +72,24 @@ func (v *SvcSvcRuleValidator) validateMetadata(obj *v1beta1.SvcSvcRule) field.Er
 }
 
 // validateSpec validates the SvcSvcRule spec using standard validation
-func (v *SvcSvcRuleValidator) validateSpec(spec v1beta1.SvcSvcRuleSpec, fldPath *field.Path) field.ErrorList {
+func (v *SvcSvcRuleValidator) validateSpec(spec v1beta1.SvcSvcRuleSpec, parentNamespace string, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
 	// Validate ServiceFrom using standard validation
 	allErrs = append(allErrs, ValidateNamespacedObjectReference(&spec.ServiceFrom, fldPath.Child("serviceFrom"))...)
 	allErrs = append(allErrs, v.validateServiceFromDomain(spec.ServiceFrom, fldPath.Child("serviceFrom"))...)
 
+	// CRITICAL: ServiceFrom.Namespace MUST match parent namespace
+	if spec.ServiceFrom.Namespace != "" && spec.ServiceFrom.Namespace != parentNamespace {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("serviceFrom").Child("namespace"), spec.ServiceFrom.Namespace,
+			fmt.Sprintf("serviceFrom.namespace must match SvcSvcRule namespace (%s)", parentNamespace)))
+	}
+
 	// Validate ServiceTo using standard validation
 	allErrs = append(allErrs, ValidateNamespacedObjectReference(&spec.ServiceTo, fldPath.Child("serviceTo"))...)
 	allErrs = append(allErrs, v.validateServiceToDomain(spec.ServiceTo, fldPath.Child("serviceTo"))...)
+
+	// ServiceTo.Namespace can be cross-namespace, no validation needed
 
 	// Validate Action using standard validation
 	allErrs = append(allErrs, v.validateActionRequired(spec.Action, fldPath.Child("action"))...)

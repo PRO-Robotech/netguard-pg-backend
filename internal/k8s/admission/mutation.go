@@ -57,6 +57,8 @@ func (w *MutationWebhook) Handle(ctx context.Context, req *admissionv1.Admission
 		return w.mutateAddressGroupPortMapping(ctx, req)
 	case "RuleS2S":
 		return w.mutateRuleS2S(ctx, req)
+	case "SvcSvcRule":
+		return w.mutateSvcSvcRule(ctx, req)
 	case "ServiceAlias":
 		return w.mutateServiceAlias(ctx, req)
 	case "AddressGroupBindingPolicy":
@@ -235,6 +237,42 @@ func (w *MutationWebhook) mutateRuleS2S(ctx context.Context, req *admissionv1.Ad
 		patches = append(patches, map[string]interface{}{
 			"op":    "replace",
 			"path":  "/spec/serviceRef/namespace",
+			"value": rule.Namespace,
+		})
+	}
+
+	return w.createPatchResponse(req.UID, patches)
+}
+
+// mutateSvcSvcRule applies mutations to SvcSvcRule resources
+func (w *MutationWebhook) mutateSvcSvcRule(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
+	var rule netguardv1beta1.SvcSvcRule
+	if err := runtime.DecodeInto(w.decoder, req.Object.Raw, &rule); err != nil {
+		return w.errorResponse(req.UID, fmt.Sprintf("Failed to decode SvcSvcRule: %v", err))
+	}
+
+	var patches []map[string]interface{}
+
+	// Add managed-by label
+	patches = append(patches, w.addManagedByLabel(&rule)...)
+
+	// Add created-by annotation
+	patches = append(patches, w.addCreatedByAnnotation(&rule)...)
+
+	// Normalize namespace in ServiceFrom if empty
+	if rule.Spec.ServiceFrom.Namespace == "" {
+		patches = append(patches, map[string]interface{}{
+			"op":    "replace",
+			"path":  "/spec/serviceFrom/namespace",
+			"value": rule.Namespace,
+		})
+	}
+
+	// Normalize namespace in ServiceTo if empty
+	if rule.Spec.ServiceTo.Namespace == "" {
+		patches = append(patches, map[string]interface{}{
+			"op":    "replace",
+			"path":  "/spec/serviceTo/namespace",
 			"value": rule.Namespace,
 		})
 	}
