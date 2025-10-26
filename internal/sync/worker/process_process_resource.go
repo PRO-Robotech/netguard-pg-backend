@@ -9,6 +9,7 @@ import (
 
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog/v2"
 
 	"netguard-pg-backend/internal/domain"
 	"netguard-pg-backend/internal/domain/models"
@@ -23,7 +24,7 @@ type AffectedResource struct {
 	Name      string `json:"name"`
 }
 
-// processProcessResource processes process resources (HostBinding, NetworkBinding)
+// processProcessResource processes process resources (HostBinding, NetworkBinding, AddressGroupBinding)
 // Process resources don't sync to SGROUP directly. Instead, they:
 // 1. Parse affects_resources from Outbox entry
 // 2. Check if ALL affected resources are Ready
@@ -132,8 +133,26 @@ func (w *OutboxWorker) markProcessResourceReady(
 ) error {
 	w.logger.Info("marking process resource ready",
 		zap.String("resource_type", item.ResourceType),
-		zap.String("resource_id", item.ResourceID.String()))
+		zap.String("resource_id", item.ResourceID.String()),
+		zap.String("operation", string(item.Operation)))
 
+	if item.Operation == domain.SyncOperationDelete {
+		w.logger.Info("DELETE operation for process resource - skipping condition update, deleting outbox entry",
+			zap.String("resource_type", item.ResourceType),
+			zap.String("resource_id", item.ResourceID.String()))
+
+		if err := w.outboxRepo.Delete(ctx, item.ID); err != nil {
+			return fmt.Errorf("failed to delete outbox entry: %w", err)
+		}
+
+		w.logger.Info("process resource DELETE operation completed successfully",
+			zap.String("resource_type", item.ResourceType),
+			zap.String("resource_id", item.ResourceID.String()))
+
+		return nil
+	}
+
+	// For UPSERT operations (CREATE/UPDATE), proceed with normal flow:
 	// Get writer from registry to perform transaction
 	writer, err := w.registry.Writer(ctx)
 	if err != nil {
@@ -156,6 +175,8 @@ func (w *OutboxWorker) markProcessResourceReady(
 			defer reader.Close()
 
 			return reader.ListHostBindings(ctx, func(hb models.HostBinding) error {
+				klog.Infof("[Worker] Comparing HostBinding UIDs: hb.Meta.UID=%s, item.ResourceID=%s, match=%t",
+					hb.Meta.UID, item.ResourceID.String(), hb.Meta.UID == item.ResourceID.String())
 				if hb.Meta.UID == item.ResourceID.String() {
 					foundBinding = &hb
 					return fmt.Errorf("found") // Stop iteration
@@ -201,6 +222,8 @@ func (w *OutboxWorker) markProcessResourceReady(
 			defer reader.Close()
 
 			return reader.ListNetworkBindings(ctx, func(nb models.NetworkBinding) error {
+				klog.Infof("[Worker] Comparing NetworkBinding UIDs: nb.Meta.UID=%s, item.ResourceID=%s, match=%t",
+					nb.Meta.UID, item.ResourceID.String(), nb.Meta.UID == item.ResourceID.String())
 				if nb.Meta.UID == item.ResourceID.String() {
 					foundBinding = &nb
 					return fmt.Errorf("found") // Stop iteration
@@ -212,6 +235,7 @@ func (w *OutboxWorker) markProcessResourceReady(
 		if err != nil && err.Error() != "found" {
 			return fmt.Errorf("failed to load NetworkBinding: %w", err)
 		}
+		klog.Infof("[Worker] After ListNetworkBindings: foundBinding=%v, err=%v", foundBinding != nil, err)
 		if foundBinding == nil {
 			return fmt.Errorf("NetworkBinding not found: %s", item.ResourceID)
 		}
@@ -233,6 +257,54 @@ func (w *OutboxWorker) markProcessResourceReady(
 		// Update using registry writer
 		if err := writer.SyncNetworkBindings(ctx, []models.NetworkBinding{*foundBinding}, resourceScope, ports.ConditionOnlyOperation{}); err != nil {
 			return fmt.Errorf("failed to update NetworkBinding: %w", err)
+		}
+
+	case string(registry.TypeAddressGroupBinding):
+		// Find the AddressGroupBinding
+		var foundBinding *models.AddressGroupBinding
+		err := w.loadResourceFromRegistry(ctx, item, func() error {
+			reader, err := w.registry.Reader(ctx)
+			if err != nil {
+				return err
+			}
+			defer reader.Close()
+
+			return reader.ListAddressGroupBindings(ctx, func(agb models.AddressGroupBinding) error {
+				klog.Infof("[Worker] Comparing AddressGroupBinding UIDs: agb.Meta.UID=%s, item.ResourceID=%s, match=%t",
+					agb.Meta.UID, item.ResourceID.String(), agb.Meta.UID == item.ResourceID.String())
+				if agb.Meta.UID == item.ResourceID.String() {
+					foundBinding = &agb
+					return fmt.Errorf("found") // Stop iteration
+				}
+				return nil
+			}, nil)
+		})
+
+		if err != nil && err.Error() != "found" {
+			return fmt.Errorf("failed to load AddressGroupBinding: %w", err)
+		}
+		klog.Infof("[Worker] After ListAddressGroupBindings: foundBinding=%v, err=%v", foundBinding != nil, err)
+		if foundBinding == nil {
+			return fmt.Errorf("AddressGroupBinding not found: %s", item.ResourceID)
+		}
+
+		// Update conditions
+		foundBinding.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "All dependencies are ready")
+		foundBinding.Meta.SetCondition(metav1.Condition{
+			Type:    "PendingSync",
+			Status:  metav1.ConditionFalse,
+			Reason:  "AllDependenciesReady",
+			Message: "",
+		})
+
+		resourceScope = ports.NewResourceIdentifierScope(models.ResourceIdentifier{
+			Name:      foundBinding.Name,
+			Namespace: foundBinding.Namespace,
+		})
+
+		// Update using registry writer
+		if err := writer.SyncAddressGroupBindings(ctx, []models.AddressGroupBinding{*foundBinding}, resourceScope, ports.ConditionOnlyOperation{}); err != nil {
+			return fmt.Errorf("failed to update AddressGroupBinding: %w", err)
 		}
 
 	default:

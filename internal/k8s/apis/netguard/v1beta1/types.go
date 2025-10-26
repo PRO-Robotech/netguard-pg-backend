@@ -908,7 +908,6 @@ type SvcSvcRule struct {
 // SvcSvcRuleSpec defines the desired state of SvcSvcRule
 type SvcSvcRuleSpec struct {
 	// ServiceFrom - source service reference
-	// Uses existing NamespacedObjectReference (line 295)
 	// +kubebuilder:validation:Required
 	ServiceFrom NamespacedObjectReference `json:"serviceFrom"`
 

@@ -74,9 +74,6 @@ func (s *NetworkResourceService) CreateNetwork(ctx context.Context, network *mod
 		return fmt.Errorf("failed to sync networks: %w", err)
 	}
 
-	// CLOUD-233: Removed syncNetworkWithExternal() - SGROUP sync now handled by OutboxWorker
-	// Migration 027 triggers create outbox entries, OutboxWorker processes them asynchronously
-
 	if err := writer.Commit(); err != nil {
 		return fmt.Errorf("failed to commit network creation: %w", err)
 	}
@@ -150,9 +147,6 @@ func (s *NetworkResourceService) UpdateNetwork(ctx context.Context, network *mod
 	if err := writer.SyncNetworks(ctx, networks, ports.EmptyScope{}, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
 		return fmt.Errorf("failed to sync networks: %w", err)
 	}
-
-	// CLOUD-233: Removed syncNetworkWithExternal() - SGROUP sync now handled by OutboxWorker
-	// Migration 027 triggers create outbox entries, OutboxWorker processes them asynchronously
 
 	if err := writer.Commit(); err != nil {
 		return fmt.Errorf("failed to commit network update: %w", err)
@@ -257,9 +251,6 @@ func (s *NetworkResourceService) DeleteNetwork(ctx context.Context, id models.Re
 		return fmt.Errorf("failed to commit network deletion: %w", err)
 	}
 
-	// CLOUD-233: Removed syncManager.SyncEntity() - SGROUP sync now handled by OutboxWorker
-	// Migration 032 DELETE triggers create outbox entries, OutboxWorker processes them asynchronously
-
 	return nil
 }
 
@@ -348,10 +339,6 @@ func (s *NetworkResourceService) SyncNetworks(ctx context.Context, networks []mo
 	if err = writer.SyncNetworks(ctx, networks, scope, ports.WithSyncOp(syncOp)); err != nil {
 		return fmt.Errorf("failed to sync networks: %w", err)
 	}
-
-	// CLOUD-233: Removed syncNetworkWithExternal() for both UPSERT and DELETE
-	// Migration 027 (UPSERT) and 032 (DELETE) triggers create outbox entries
-	// OutboxWorker processes them asynchronously with retry/backoff
 
 	if err = writer.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
@@ -444,8 +431,6 @@ func (s *NetworkResourceService) ValidateNetworkBindingWithReader(ctx context.Co
 		return fmt.Errorf("network is already bound to another binding (expected: %s, actual: %s)", bindingID.Name, network.BindingRef.Name)
 	}
 
-	// ========================================
-	// ========================================
 	if !s.isNetworkReady(network) {
 		return fmt.Errorf("network is not ready yet (Ready=False): %s - binding can only be created between Ready resources", networkID.Key())
 	}
@@ -496,7 +481,6 @@ func (s *NetworkResourceService) UpdateNetworkBinding(ctx context.Context, netwo
 	// Set success condition
 	utils.SetSyncSuccessCondition(network)
 
-	// Sync the updated network
 	networks := []models.Network{*network}
 	if err := writer.SyncNetworks(ctx, networks, ports.EmptyScope{}, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
 		return fmt.Errorf("failed to sync network binding: %w", err)
@@ -505,9 +489,6 @@ func (s *NetworkResourceService) UpdateNetworkBinding(ctx context.Context, netwo
 	if err := writer.Commit(); err != nil {
 		return fmt.Errorf("failed to commit network binding: %w", err)
 	}
-
-	// CLOUD-233: Removed syncManager.SyncEntity() - SGROUP sync now handled by OutboxWorker
-	// Migration 027 triggers create outbox entries, OutboxWorker processes them asynchronously
 
 	return nil
 }
@@ -546,8 +527,6 @@ func (s *NetworkResourceService) RemoveNetworkBinding(ctx context.Context, netwo
 
 	// Set success condition
 	utils.SetSyncSuccessCondition(network)
-
-	// Sync the updated network
 	networks := []models.Network{*network}
 	if err := writer.SyncNetworks(ctx, networks, ports.EmptyScope{}, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
 		return fmt.Errorf("failed to sync network unbinding: %w", err)
@@ -557,13 +536,8 @@ func (s *NetworkResourceService) RemoveNetworkBinding(ctx context.Context, netwo
 		return fmt.Errorf("failed to commit network unbinding: %w", err)
 	}
 
-	// CLOUD-233: Removed syncManager.SyncEntity() - SGROUP sync now handled by OutboxWorker
-	// Migration 027 triggers create outbox entries, OutboxWorker processes them asynchronously
-
 	return nil
 }
-
-// Helper methods
 
 // removeNetworkFromAddressGroup removes a network from AddressGroup.Networks field
 func (s *NetworkResourceService) removeNetworkFromAddressGroup(ctx context.Context, addressGroupRef, networkRef models.ResourceIdentifier) error {
@@ -642,14 +616,6 @@ func (s *NetworkResourceService) validateCIDR(cidr string) error {
 
 	return nil
 }
-
-// CLOUD-233: Removed syncNetworkWithExternal() and syncAddressGroupWithExternal()
-// These methods performed synchronous SGROUP sync, which is now handled by OutboxWorker
-// Migration 027 (Network UPSERT), 032 (Network DELETE) triggers create outbox entries
-// OutboxWorker processes them asynchronously with exponential backoff and retry
-
-// ========================================
-// ========================================
 
 // isNetworkReady checks if Network has Ready=True condition
 func (s *NetworkResourceService) isNetworkReady(network *models.Network) bool {

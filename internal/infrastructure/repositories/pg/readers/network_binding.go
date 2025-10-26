@@ -20,7 +20,7 @@ func (r *Reader) ListNetworkBindings(ctx context.Context, consume func(models.Ne
 		SELECT nb.namespace, nb.name,
 		       nb.network_namespace, nb.network_name,
 		       nb.address_group_namespace, nb.address_group_name,
-			   m.resource_version, m.labels, m.annotations, m.conditions,
+			   m.resource_version, m.uid, m.labels, m.annotations, m.conditions,
 			   m.created_at, m.updated_at
 		FROM network_bindings nb
 		INNER JOIN k8s_metadata m ON nb.resource_version = m.resource_version`
@@ -64,7 +64,7 @@ func (r *Reader) GetNetworkBindingByID(ctx context.Context, id models.ResourceId
 		SELECT nb.namespace, nb.name,
 		       nb.network_namespace, nb.network_name,
 		       nb.address_group_namespace, nb.address_group_name,
-			   m.resource_version, m.labels, m.annotations, m.conditions,
+			   m.resource_version, m.uid, m.labels, m.annotations, m.conditions,
 			   m.created_at, m.updated_at
 		FROM network_bindings nb
 		INNER JOIN k8s_metadata m ON nb.resource_version = m.resource_version
@@ -89,6 +89,7 @@ func (r *Reader) scanNetworkBinding(rows pgx.Rows) (models.NetworkBinding, error
 	var labelsJSON, annotationsJSON, conditionsJSON []byte
 	var createdAt, updatedAt time.Time // Temporary variables for timestamps
 	var resourceVersion int64          // Scan as int64 from database
+	var uid string                     // UID from k8s_metadata
 
 	// NetworkBinding-specific fields - separate namespace/name columns
 	var networkNamespace, networkName string           // Network reference fields
@@ -102,6 +103,7 @@ func (r *Reader) scanNetworkBinding(rows pgx.Rows) (models.NetworkBinding, error
 		&addressGroupNamespace,
 		&addressGroupName,
 		&resourceVersion,
+		&uid,
 		&labelsJSON,
 		&annotationsJSON,
 		&conditionsJSON,
@@ -117,6 +119,9 @@ func (r *Reader) scanNetworkBinding(rows pgx.Rows) (models.NetworkBinding, error
 	if err != nil {
 		return networkBinding, err
 	}
+
+	// Set UID from database
+	networkBinding.Meta.UID = uid
 
 	// Set SelfRef
 	networkBinding.SelfRef = models.NewSelfRef(models.NewResourceIdentifier(networkBinding.Name, models.WithNamespace(networkBinding.Namespace)))
@@ -147,6 +152,7 @@ func (r *Reader) scanNetworkBindingRow(row pgx.Row) (*models.NetworkBinding, err
 	var labelsJSON, annotationsJSON, conditionsJSON []byte
 	var createdAt, updatedAt time.Time // Temporary variables for timestamps
 	var resourceVersion int64          // Scan as int64 from database
+	var uid string                     // UID from k8s_metadata
 
 	// NetworkBinding-specific fields - separate namespace/name columns
 	var networkNamespace, networkName string           // Network reference fields
@@ -160,6 +166,7 @@ func (r *Reader) scanNetworkBindingRow(row pgx.Row) (*models.NetworkBinding, err
 		&addressGroupNamespace,
 		&addressGroupName,
 		&resourceVersion,
+		&uid,
 		&labelsJSON,
 		&annotationsJSON,
 		&conditionsJSON,
@@ -175,6 +182,9 @@ func (r *Reader) scanNetworkBindingRow(row pgx.Row) (*models.NetworkBinding, err
 	if err != nil {
 		return nil, err
 	}
+
+	// Set UID from database
+	networkBinding.Meta.UID = uid
 
 	// Set SelfRef
 	networkBinding.SelfRef = models.NewSelfRef(models.NewResourceIdentifier(networkBinding.Name, models.WithNamespace(networkBinding.Namespace)))

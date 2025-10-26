@@ -52,7 +52,8 @@ func (s *NetworkBindingResourceService) CreateNetworkBinding(ctx context.Context
 	networkRef := models.ResourceIdentifier{Name: binding.NetworkRef.Name, Namespace: binding.Namespace}
 	addressGroupRef := models.ResourceIdentifier{Name: binding.AddressGroupRef.Name, Namespace: binding.Namespace}
 
-	binding.GetMeta().TouchOnCreate()
+	// Don't call TouchOnCreate() here - let upsertNetworkBinding handle UID generation
+	// This ensures UID comes from database (uuid_generate_v4()) and matches Outbox entry
 	writer, err := s.repo.Writer(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get writer: %w", err)
@@ -410,8 +411,6 @@ func (s *NetworkBindingResourceService) validateAddressGroupWithReader(ctx conte
 		return fmt.Errorf("address group not found: %s", addressGroupRef.Key())
 	}
 
-	// ========================================
-	// ========================================
 	if !s.isAddressGroupReady(addressGroup) {
 		return fmt.Errorf("address group is not ready yet (Ready=False): %s - binding can only be created between Ready resources", addressGroupRef.Key())
 	}
@@ -573,8 +572,8 @@ func (s *NetworkBindingResourceService) saveNetworkBindingConditions(ctx context
 
 	scope := ports.EmptyScope{}
 
-	// Sync the NetworkBinding with updated conditions
-	if err := writer.SyncNetworkBindings(ctx, []models.NetworkBinding{*binding}, scope); err != nil {
+	// Sync the NetworkBinding with updated conditions (CONDITION-ONLY update - no Outbox creation)
+	if err := writer.SyncNetworkBindings(ctx, []models.NetworkBinding{*binding}, scope, ports.ConditionOnlyOperation{}); err != nil {
 		return fmt.Errorf("failed to sync NetworkBinding with conditions: %w", err)
 	}
 
@@ -596,9 +595,7 @@ func (s *NetworkBindingResourceService) forceSyncNetworkWithSGroups(ctx context.
 		return fmt.Errorf("failed to get Network %s: %w", networkRef.Key(), err)
 	}
 
-	// CLOUD-233: Removed syncManager.SyncEntityForced() - SGROUP sync now handled by OutboxWorker
-	// Migration 027 (Network UPSERT) triggers create outbox entries, OutboxWorker processes them asynchronously
-	_ = freshNetwork // Keep variable to avoid unused warning
+	_ = freshNetwork
 
 	return nil
 }
@@ -609,15 +606,10 @@ func (s *NetworkBindingResourceService) forceSyncAddressGroupWithSGroups(ctx con
 		return fmt.Errorf("failed to get AddressGroup %s: %w", addressGroupRef.Key(), err)
 	}
 
-	// CLOUD-233: Removed syncManager.SyncEntityForced() - SGROUP sync now handled by OutboxWorker
-	// AddressGroup changes trigger outbox entries, OutboxWorker processes them asynchronously
-	_ = freshAddressGroup // Keep variable to avoid unused warning
+	_ = freshAddressGroup
 
 	return nil
 }
-
-// ========================================
-// ========================================
 
 // isAddressGroupReady checks if AddressGroup has Ready=True condition
 func (s *NetworkBindingResourceService) isAddressGroupReady(ag *models.AddressGroup) bool {

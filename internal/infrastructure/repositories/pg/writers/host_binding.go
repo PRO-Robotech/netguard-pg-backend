@@ -21,21 +21,22 @@ import (
 func (w *Writer) SyncHostBindings(ctx context.Context, hostBindings []models.HostBinding, scope ports.Scope, options ...ports.Option) error {
 	// Extract sync operation from options
 	syncOp := models.SyncOpUpsert // Default operation
+	var conditionOnly bool
 	for _, opt := range options {
 		if syncOption, ok := opt.(ports.SyncOption); ok {
 			syncOp = syncOption.Operation
 			break
 		}
-	}
-
-	// Handle scoped sync - delete existing resources in scope first (for non-DELETE operations)
-	if !scope.IsEmpty() && syncOp != models.SyncOpDelete {
-		if err := w.deleteHostBindingsInScope(ctx, scope); err != nil {
-			return errors.Wrap(err, "failed to delete host bindings in scope")
+		if _, ok := opt.(ports.ConditionOnlyOperation); ok {
+			conditionOnly = true
+			break
 		}
 	}
 
-	// Handle operations based on sync operation
+	if conditionOnly {
+		return w.updateHostBindingConditionsOnly(ctx, hostBindings)
+	}
+
 	switch syncOp {
 	case models.SyncOpDelete:
 		// For DELETE operations, delete the specific bindings
@@ -52,11 +53,6 @@ func (w *Writer) SyncHostBindings(ctx context.Context, hostBindings []models.Hos
 	case models.SyncOpUpsert, models.SyncOpFullSync:
 		// For UPSERT/FULLSYNC operations, upsert all provided bindings
 		for i := range hostBindings {
-			// Initialize metadata fields if not set
-			if hostBindings[i].Meta.UID == "" {
-				hostBindings[i].Meta.TouchOnCreate()
-			}
-
 			if err := w.upsertHostBinding(ctx, &hostBindings[i]); err != nil {
 				// Check for unique constraint violation (one binding per host)
 				if isUniqueViolation(err, "host_bindings_host_namespace_host_name_key") {
@@ -85,19 +81,18 @@ func (w *Writer) upsertHostBinding(ctx context.Context, hostBinding *models.Host
 		return errors.Wrap(err, "failed to marshal conditions")
 	}
 
-	// ALWAYS INSERT new K8s metadata (to get new ResourceVersion)
-	// PostgreSQL BIGSERIAL primary key only increments on INSERT, not UPDATE
 	var resourceVersion int64
+	var uid string
 	metadataQuery := `
 		INSERT INTO k8s_metadata (labels, annotations, conditions)
 		VALUES ($1, $2, $3)
-		RETURNING resource_version`
-	err = w.tx.QueryRow(ctx, metadataQuery, labelsJSON, annotationsJSON, conditionsJSON).Scan(&resourceVersion)
+		RETURNING resource_version, uid`
+	err = w.tx.QueryRow(ctx, metadataQuery, labelsJSON, annotationsJSON, conditionsJSON).Scan(&resourceVersion, &uid)
 	if err != nil {
 		return errors.Wrapf(err, "failed to insert K8s metadata for host binding %s/%s", hostBinding.Namespace, hostBinding.Name)
 	}
 
-	// Update domain model with new ResourceVersion from DB
+	hostBinding.Meta.UID = uid
 	hostBinding.Meta.TouchOnWrite(strconv.FormatInt(resourceVersion, 10))
 
 	// UPSERT host binding record with NEW resource version
@@ -181,7 +176,6 @@ func (w *Writer) DeleteHostBindingsByIDs(ctx context.Context, ids []models.Resou
 		argIndex += 2
 	}
 
-	// Execute DELETE - trigger will intercept and apply Sync-First strategy
 	query := fmt.Sprintf(`DELETE FROM host_bindings WHERE (namespace, name) IN (%s)`, strings.Join(values, ","))
 	_, err := w.tx.Exec(ctx, query, args...)
 	if err != nil {
@@ -253,6 +247,41 @@ func (w *Writer) createHostBindingOutboxEntry(ctx context.Context, binding *mode
 		"name", binding.Name,
 		"outbox_id", outboxEntry.ID,
 		"affected_resources", len(affectedResources))
+
+	return nil
+}
+
+// updateHostBindingConditionsOnly updates only conditions without creating Outbox entries
+// Used by ConditionManager to update Ready/PendingSync status
+func (w *Writer) updateHostBindingConditionsOnly(ctx context.Context, bindings []models.HostBinding) error {
+	for i := range bindings {
+		binding := &bindings[i]
+
+		// Marshal conditions
+		conditionsJSON, err := json.Marshal(binding.Meta.Conditions)
+		if err != nil {
+			return errors.Wrap(err, "failed to marshal conditions")
+		}
+
+		// Find existing resource_version
+		var existingResourceVersion int64
+		query := `SELECT resource_version FROM host_bindings WHERE namespace = $1 AND name = $2`
+		err = w.tx.QueryRow(ctx, query, binding.Namespace, binding.Name).Scan(&existingResourceVersion)
+		if err != nil {
+			return errors.Wrapf(err, "failed to find existing HostBinding %s/%s", binding.Namespace, binding.Name)
+		}
+
+		// Update only conditions in k8s_metadata (no new resource_version)
+		updateQuery := `UPDATE k8s_metadata SET conditions = $1 WHERE resource_version = $2`
+		if err := w.exec(ctx, updateQuery, conditionsJSON, existingResourceVersion); err != nil {
+			return errors.Wrapf(err, "failed to update conditions for HostBinding %s/%s", binding.Namespace, binding.Name)
+		}
+
+		klog.V(4).InfoS("Updated HostBinding conditions only",
+			"namespace", binding.Namespace,
+			"name", binding.Name,
+			"resource_version", existingResourceVersion)
+	}
 
 	return nil
 }

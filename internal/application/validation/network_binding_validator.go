@@ -2,6 +2,7 @@ package validation
 
 import (
 	"context"
+	"fmt"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -83,6 +84,21 @@ func (v *NetworkBindingValidator) ValidateForCreation(ctx context.Context, bindi
 		return err
 	}
 
+	networkID := models.ResourceIdentifier{Name: binding.NetworkRef.Name, Namespace: binding.Namespace}
+	network, err := v.reader.GetNetworkByID(ctx, networkID)
+	if err != nil {
+		return errors.Wrap(err, "failed to get network")
+	}
+	if network != nil && network.IsBound {
+		// Network is already bound - get the binding details for error message
+		agRefInfo := "unknown"
+		if network.AddressGroupRef != nil {
+			agRefInfo = fmt.Sprintf("%s/%s", binding.Namespace, network.AddressGroupRef.Name)
+		}
+		return errors.Errorf("network %s is already bound to address group %s (each network can only be bound to one address group)",
+			networkID.Key(), agRefInfo)
+	}
+
 	return nil
 }
 
@@ -133,9 +149,6 @@ func (v *NetworkBindingValidator) ValidateForUpdate(ctx context.Context, oldBind
 
 // CheckDependencies checks if the network binding can be deleted
 func (v *NetworkBindingValidator) CheckDependencies(ctx context.Context, id models.ResourceIdentifier) error {
-	// Network bindings don't have dependencies that would prevent deletion
-	// The cleanup of related resources (like updating Network.IsBound status)
-	// should be handled by the application service
 	return nil
 }
 

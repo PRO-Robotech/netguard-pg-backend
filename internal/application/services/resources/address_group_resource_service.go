@@ -1981,8 +1981,6 @@ func (s *AddressGroupResourceService) syncAddressGroupsWithSGroups(ctx context.C
 		}
 	}
 
-	// CLOUD-233: Removed syncManager.SyncBatch() - SGROUP sync now handled by OutboxWorker
-	// AddressGroup changes trigger outbox entries, OutboxWorker processes them asynchronously
 	_ = syncableEntities // Keep variable to avoid unused warning
 
 	if len(allHostReferences) > 0 {
@@ -2207,9 +2205,6 @@ func (s *AddressGroupResourceService) synchronizeServiceAddressGroups(ctx contex
 		writer.Abort()
 		return errors.Wrapf(err, "failed to sync service %s with updated AddressGroups", serviceID.Key())
 	}
-
-	// CLOUD-233: Removed syncManager.SyncEntity() for Service - SGROUP sync now handled by OutboxWorker
-	// Service changes trigger outbox entries, OutboxWorker processes them asynchronously
 
 	if err := writer.Commit(); err != nil {
 		writer.Abort()
@@ -2437,8 +2432,6 @@ func (s *AddressGroupResourceService) validateHostsSGroupSync(ctx context.Contex
 			return errors.Wrapf(err, "failed to load host '%s' for SGROUP validation", hostRef.Name)
 		}
 
-		// CLOUD-233: Removed syncManager.SyncEntity() - SGROUP sync now handled by OutboxWorker
-		// Host changes trigger outbox entries (Migration 026), OutboxWorker processes them asynchronously
 		_ = host // Keep variable to avoid unused warning
 
 	}
@@ -2476,8 +2469,6 @@ func (s *AddressGroupResourceService) forceSyncRemovedHostsWithSGroup(ctx contex
 			continue // Don't fail entire operation for one host
 		}
 
-		// CLOUD-233: Removed syncManager.SyncEntityForced() - SGROUP sync now handled by OutboxWorker
-		// Host changes trigger outbox entries (Migration 026), OutboxWorker processes them asynchronously
 	}
 
 	return nil
@@ -2511,8 +2502,6 @@ func (s *AddressGroupResourceService) syncSpecHostsWithSGroups(ctx context.Conte
 			continue // Skip this host but continue with others
 		}
 
-		// CLOUD-233: Removed syncManager.SyncEntityForced() - SGROUP sync now handled by OutboxWorker
-		// Host changes trigger outbox entries (Migration 026), OutboxWorker processes them asynchronously
 	}
 
 	return nil
@@ -2548,15 +2537,10 @@ func (s *AddressGroupResourceService) syncHostChangesWithSGroup(ctx context.Cont
 			continue
 		}
 
-		// CLOUD-233: Removed syncManager.SyncEntityForced() - SGROUP sync now handled by OutboxWorker
-		// Host changes trigger outbox entries (Migration 026), OutboxWorker processes them asynchronously
 		_ = host // Keep variable to avoid unused warning
 	}
 
-	// Sync removed hosts (now unbound)
 	for _, hostRef := range removedHosts {
-		// CLOUD-233: Removed syncManager.SyncEntityForced() for removed hosts - SGROUP sync now handled by OutboxWorker
-		// Host changes trigger outbox entries (Migration 026), OutboxWorker processes them asynchronously
 		_ = hostRef // Keep variable to avoid unused warning
 	}
 

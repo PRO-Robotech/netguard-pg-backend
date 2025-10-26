@@ -81,9 +81,6 @@ func (s *HostResourceService) CreateHost(ctx context.Context, host *models.Host)
 		return fmt.Errorf("failed to commit host creation: %w", err)
 	}
 
-	// CLOUD-233: Removed syncHostWithExternal() - SGROUP sync now handled by OutboxWorker
-	// Migration 026 triggers create outbox entries, OutboxWorker processes them asynchronously
-
 	// ConditionManager needs the ACTUAL database state, not the in-memory object
 	// Writer may have set Ready=False (PendingSGROUPSync), which must be preserved
 	if s.conditionManager != nil {
@@ -143,9 +140,6 @@ func (s *HostResourceService) UpdateHost(ctx context.Context, host *models.Host)
 	if err := writer.Commit(); err != nil {
 		return fmt.Errorf("failed to commit host update: %w", err)
 	}
-
-	// CLOUD-233: Removed syncHostWithExternal() - SGROUP sync now handled by OutboxWorker
-	// Migration 026 triggers create outbox entries, OutboxWorker processes them asynchronously
 
 	// ConditionManager needs the ACTUAL database state, not the in-memory object
 	// Writer may have set Ready=False (PendingSGROUPSync), which must be preserved
@@ -264,8 +258,6 @@ func (s *HostResourceService) DeleteHost(ctx context.Context, id models.Resource
 	}
 	defer writer.Abort()
 
-	// CLOUD-233: Removed AddressGroup sync preparation - no longer needed with OutboxWorker
-	// HostBinding deletion and AG updates now handled by database triggers + OutboxWorker
 	_ = hostBindingToDelete // Keep variable to avoid unused warning
 
 	if err := writer.DeleteHostsByIDs(ctx, []models.ResourceIdentifier{id}); err != nil {
@@ -275,14 +267,6 @@ func (s *HostResourceService) DeleteHost(ctx context.Context, id models.Resource
 	if err := writer.Commit(); err != nil {
 		return fmt.Errorf("failed to commit cascading deletion: %w", err)
 	}
-
-	// CLOUD-233: Removed syncManager.SyncEntityForced() for AddressGroup
-	// Migration 028 AddressGroup triggers handle aggregated_hosts updates
-	// OutboxWorker processes AddressGroup sync asynchronously
-
-	// CLOUD-233: Removed syncHostWithExternal() for DELETE
-	// Migration 032 DELETE triggers create outbox entries
-	// OutboxWorker processes Host deletion sync asynchronously
 
 	return nil
 }
@@ -335,10 +319,6 @@ func (s *HostResourceService) SyncHosts(ctx context.Context, hosts []models.Host
 	if err = writer.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
-
-	// CLOUD-233: Removed syncHostWithExternal() for both UPSERT and DELETE
-	// Migration 026 (UPSERT) and 032 (DELETE) triggers create outbox entries
-	// OutboxWorker processes them asynchronously with retry/backoff
 
 	// ConditionManager needs the ACTUAL database state, not the in-memory objects
 	// Writer may have set Ready=False (PendingSGROUPSync), which must be preserved
@@ -460,11 +440,6 @@ func (s *HostResourceService) getHostByID(ctx context.Context, id string) (*mode
 	return host, err
 }
 
-// CLOUD-233: Removed syncHostWithExternal()
-// This method performed synchronous SGROUP sync, which is now handled by OutboxWorker
-// Migration 026 (Host UPSERT), 032 (Host DELETE) triggers create outbox entries
-// OutboxWorker processes them asynchronously with exponential backoff and retry
-
 // UpdateHostBinding updates Host status when a binding is created
 func (s *HostResourceService) UpdateHostBinding(ctx context.Context, hostID models.ResourceIdentifier, bindingID models.ResourceIdentifier, addressGroupID models.ResourceIdentifier) error {
 	writer, err := s.repo.Writer(ctx)
@@ -527,8 +502,6 @@ func (s *HostResourceService) UpdateHostBinding(ctx context.Context, hostID mode
 
 	// Update metadata
 	host.GetMeta().TouchOnWrite(fmt.Sprintf("%d", time.Now().UnixNano()))
-
-	// Sync the updated host
 	hosts := []models.Host{*host}
 	if err := writer.SyncHosts(ctx, hosts, ports.EmptyScope{}, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
 		return fmt.Errorf("failed to sync host binding: %w", err)
@@ -538,14 +511,8 @@ func (s *HostResourceService) UpdateHostBinding(ctx context.Context, hostID mode
 		return fmt.Errorf("failed to commit host binding: %w", err)
 	}
 
-	// CLOUD-233: Removed syncManager.SyncEntity() - SGROUP sync now handled by OutboxWorker
-	// Migration 026 triggers create outbox entries, OutboxWorker processes them asynchronously
-
 	return nil
 }
-
-// CLOUD-233: Removed SyncHostWithExternal() - public wrapper for old sync method
-// SGROUP sync now handled by OutboxWorker asynchronously
 
 // UpdateHostBindingStatus updates Host.isBound status based on AddressGroup hosts changes
 func (s *HostResourceService) UpdateHostBindingStatus(ctx context.Context, oldAG, newAG *models.AddressGroup) error {
@@ -643,9 +610,6 @@ func (s *HostResourceService) updateHostBindingStatusForHost(ctx context.Context
 	if err := s.UpdateHost(ctx, host); err != nil {
 		return fmt.Errorf("failed to update host status: %w", err)
 	}
-
-	// CLOUD-233: Removed syncManager.SyncEntityForced() - SGROUP sync now handled by OutboxWorker
-	// UpdateHost() above already triggers Migration 026, which creates outbox entries
 
 	return nil
 }

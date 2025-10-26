@@ -19,7 +19,7 @@ func (r *Reader) ListAddressGroupBindings(ctx context.Context, consume func(mode
 	query := `
 		SELECT agb.namespace, agb.name, agb.service_namespace, agb.service_name,
 			   agb.address_group_namespace, agb.address_group_name,
-			   m.resource_version, m.labels, m.annotations, m.conditions,
+			   m.resource_version, m.uid::text, m.labels, m.annotations, m.conditions,
 			   m.created_at, m.updated_at
 		FROM address_group_bindings agb
 		INNER JOIN k8s_metadata m ON agb.resource_version = m.resource_version`
@@ -74,7 +74,7 @@ func (r *Reader) GetAddressGroupBindingByID(ctx context.Context, id models.Resou
 	query := `
 		SELECT agb.namespace, agb.name, agb.service_namespace, agb.service_name,
 			   agb.address_group_namespace, agb.address_group_name,
-			   m.resource_version, m.labels, m.annotations, m.conditions,
+			   m.resource_version, m.uid::text, m.labels, m.annotations, m.conditions,
 			   m.created_at, m.updated_at
 		FROM address_group_bindings agb
 		INNER JOIN k8s_metadata m ON agb.resource_version = m.resource_version
@@ -99,6 +99,7 @@ func (r *Reader) scanAddressGroupBinding(rows pgx.Rows) (models.AddressGroupBind
 	var labelsJSON, annotationsJSON, conditionsJSON []byte
 	var createdAt, updatedAt time.Time // Temporary variables for timestamps
 	var resourceVersion int64          // Scan as int64 from database
+	var uid string                     // UID from k8s_metadata
 	var serviceNamespace, serviceName string
 	var addressGroupNamespace, addressGroupName string
 
@@ -110,6 +111,7 @@ func (r *Reader) scanAddressGroupBinding(rows pgx.Rows) (models.AddressGroupBind
 		&addressGroupNamespace,
 		&addressGroupName,
 		&resourceVersion,
+		&uid,
 		&labelsJSON,
 		&annotationsJSON,
 		&conditionsJSON,
@@ -120,11 +122,13 @@ func (r *Reader) scanAddressGroupBinding(rows pgx.Rows) (models.AddressGroupBind
 		return binding, err
 	}
 
-	// Convert K8s metadata (convert int64 to string)
 	binding.Meta, err = utils.ConvertK8sMetadata(fmt.Sprintf("%d", resourceVersion), labelsJSON, annotationsJSON, conditionsJSON, createdAt, updatedAt)
 	if err != nil {
 		return binding, err
 	}
+
+	// Set UID from database (CRITICAL FIX!)
+	binding.Meta.UID = uid
 
 	// Set SelfRef
 	binding.SelfRef = models.NewSelfRef(models.NewResourceIdentifier(binding.Name, models.WithNamespace(binding.Namespace)))
@@ -142,6 +146,7 @@ func (r *Reader) scanAddressGroupBindingRow(row pgx.Row) (*models.AddressGroupBi
 	var labelsJSON, annotationsJSON, conditionsJSON []byte
 	var createdAt, updatedAt time.Time // Temporary variables for timestamps
 	var resourceVersion int64          // Scan as int64 from database
+	var uid string                     // UID from k8s_metadata
 	var serviceNamespace, serviceName string
 	var addressGroupNamespace, addressGroupName string
 
@@ -153,6 +158,7 @@ func (r *Reader) scanAddressGroupBindingRow(row pgx.Row) (*models.AddressGroupBi
 		&addressGroupNamespace,
 		&addressGroupName,
 		&resourceVersion,
+		&uid,
 		&labelsJSON,
 		&annotationsJSON,
 		&conditionsJSON,
@@ -163,11 +169,14 @@ func (r *Reader) scanAddressGroupBindingRow(row pgx.Row) (*models.AddressGroupBi
 		return nil, err
 	}
 
-	// Convert K8s metadata (convert int64 to string)
+	// Convert K8s metadata (pass resourceVersion, not uid)
 	binding.Meta, err = utils.ConvertK8sMetadata(fmt.Sprintf("%d", resourceVersion), labelsJSON, annotationsJSON, conditionsJSON, createdAt, updatedAt)
 	if err != nil {
 		return nil, err
 	}
+
+	// Set UID from database (CRITICAL FIX!)
+	binding.Meta.UID = uid
 
 	// Set SelfRef
 	binding.SelfRef = models.NewSelfRef(models.NewResourceIdentifier(binding.Name, models.WithNamespace(binding.Namespace)))

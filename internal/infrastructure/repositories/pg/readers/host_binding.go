@@ -20,7 +20,7 @@ func (r *Reader) ListHostBindings(ctx context.Context, consume func(models.HostB
 		SELECT hb.namespace, hb.name,
 		       hb.host_namespace, hb.host_name,
 		       hb.address_group_namespace, hb.address_group_name,
-		       m.resource_version, m.labels, m.annotations, m.conditions,
+		       m.resource_version, m.uid, m.labels, m.annotations, m.conditions,
 		       m.created_at, m.updated_at
 		FROM host_bindings hb
 		INNER JOIN k8s_metadata m ON hb.resource_version = m.resource_version`
@@ -64,7 +64,7 @@ func (r *Reader) GetHostBindingByID(ctx context.Context, id models.ResourceIdent
 		SELECT hb.namespace, hb.name,
 		       hb.host_namespace, hb.host_name,
 		       hb.address_group_namespace, hb.address_group_name,
-		       m.resource_version, m.labels, m.annotations, m.conditions,
+		       m.resource_version, m.uid, m.labels, m.annotations, m.conditions,
 		       m.created_at, m.updated_at
 		FROM host_bindings hb
 		INNER JOIN k8s_metadata m ON hb.resource_version = m.resource_version
@@ -89,6 +89,7 @@ func (r *Reader) scanHostBinding(rows pgx.Rows) (models.HostBinding, error) {
 	var labelsJSON, annotationsJSON, conditionsJSON []byte
 	var createdAt, updatedAt time.Time // Temporary variables for timestamps
 	var resourceVersion int64          // Scan as int64 from database
+	var uid string                     // UID from k8s_metadata
 
 	// HostBinding-specific fields
 	var hostNamespace, hostName string                 // Host reference
@@ -102,6 +103,7 @@ func (r *Reader) scanHostBinding(rows pgx.Rows) (models.HostBinding, error) {
 		&addressGroupNamespace,
 		&addressGroupName,
 		&resourceVersion,
+		&uid,
 		&labelsJSON,
 		&annotationsJSON,
 		&conditionsJSON,
@@ -138,6 +140,9 @@ func (r *Reader) scanHostBinding(rows pgx.Rows) (models.HostBinding, error) {
 		return models.HostBinding{}, errors.Wrap(err, "failed to parse host binding metadata")
 	}
 
+	// Set UID from database
+	hostBinding.Meta.UID = uid
+
 	return hostBinding, nil
 }
 
@@ -147,6 +152,7 @@ func (r *Reader) scanHostBindingRow(row pgx.Row) (*models.HostBinding, error) {
 	var labelsJSON, annotationsJSON, conditionsJSON []byte
 	var createdAt, updatedAt time.Time // Temporary variables for timestamps
 	var resourceVersion int64          // Scan as int64 from database
+	var uid string                     // UID from k8s_metadata
 
 	// HostBinding-specific fields
 	var hostNamespace, hostName string                 // Host reference
@@ -160,6 +166,7 @@ func (r *Reader) scanHostBindingRow(row pgx.Row) (*models.HostBinding, error) {
 		&addressGroupNamespace,
 		&addressGroupName,
 		&resourceVersion,
+		&uid,
 		&labelsJSON,
 		&annotationsJSON,
 		&conditionsJSON,
@@ -195,6 +202,9 @@ func (r *Reader) scanHostBindingRow(row pgx.Row) (*models.HostBinding, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to parse host binding metadata")
 	}
+
+	// Set UID from database
+	hostBinding.Meta.UID = uid
 
 	return &hostBinding, nil
 }

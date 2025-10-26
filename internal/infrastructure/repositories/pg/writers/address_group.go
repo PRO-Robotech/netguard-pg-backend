@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -333,11 +334,6 @@ func (w *Writer) deleteAddressGroupsByIdentifiers(ctx context.Context, identifie
 		"count", len(addressGroupsToDelete),
 		"requested", len(identifiers))
 
-	// ========================================================================
-	// STEP 2 - Mark as "pending deletion" in k8s_metadata
-	// ========================================================================
-	// SYNC-FIRST PRINCIPLE: We DON'T delete from DB yet!
-	// Worker will sync to SGROUP first, THEN delete from DB
 	markDeleteQuery := `
 		UPDATE k8s_metadata m
 		SET deletion_timestamp = NOW(),
@@ -357,10 +353,6 @@ func (w *Writer) deleteAddressGroupsByIdentifiers(ctx context.Context, identifie
 	klog.V(4).InfoS("Marked address groups as pending deletion (NOT deleted from DB yet)",
 		"count", len(addressGroupsToDelete))
 
-	// ========================================================================
-	// STEP 3 - Create DELETE outbox entries for SGROUP sync
-	// ========================================================================
-	// Worker will process these, sync to SGROUP, THEN delete from DB
 	for i := range addressGroupsToDelete {
 		if err := w.createAddressGroupDeleteOutboxEntry(ctx, addressGroupsToDelete[i]); err != nil {
 			return errors.Wrapf(err, "failed to create DELETE outbox entry for address group %s/%s",
@@ -382,13 +374,6 @@ func (w *Writer) SyncAddressGroupBindings(ctx context.Context, bindings []models
 		if syncOption, ok := opt.(ports.SyncOption); ok {
 			syncOp = syncOption.Operation
 			break
-		}
-	}
-
-	// Handle scoped sync - delete existing resources in scope first (for non-DELETE operations)
-	if !scope.IsEmpty() && syncOp != models.SyncOpDelete {
-		if err := w.deleteAddressGroupBindingsInScope(ctx, scope); err != nil {
-			return errors.Wrap(err, "failed to delete address group bindings in scope")
 		}
 	}
 
@@ -430,35 +415,21 @@ func (w *Writer) upsertAddressGroupBinding(ctx context.Context, binding models.A
 		return errors.Wrap(err, "failed to marshal conditions")
 	}
 
-	// First, check if address group binding exists and get existing resource version
-	var existingResourceVersion sql.NullInt64
-	existingQuery := `SELECT resource_version FROM address_group_bindings WHERE namespace = $1 AND name = $2`
-	_ = w.tx.QueryRow(ctx, existingQuery, binding.Namespace, binding.Name).Scan(&existingResourceVersion)
-
 	var resourceVersion int64
-	if existingResourceVersion.Valid {
-		metadataQuery := `
-			UPDATE k8s_metadata
-			SET labels = $1, annotations = $2, conditions = $3, updated_at = NOW()
-			WHERE resource_version = $4
-			RETURNING resource_version`
-		err = w.tx.QueryRow(ctx, metadataQuery, labelsJSON, annotationsJSON, conditionsJSON, existingResourceVersion.Int64).Scan(&resourceVersion)
-		if err != nil {
-			return errors.Wrapf(err, "failed to update K8s metadata for address group binding %s/%s", binding.Namespace, binding.Name)
-		}
-	} else {
-		// INSERT new K8s metadata
-		metadataQuery := `
-			INSERT INTO k8s_metadata (labels, annotations, finalizers, conditions)
-			VALUES ($1, $2, '{}', $3)
-			RETURNING resource_version`
-		err = w.tx.QueryRow(ctx, metadataQuery, labelsJSON, annotationsJSON, conditionsJSON).Scan(&resourceVersion)
-		if err != nil {
-			return errors.Wrapf(err, "failed to create K8s metadata for address group binding %s/%s", binding.Namespace, binding.Name)
-		}
+	var uid string
+	metadataQuery := `
+		INSERT INTO k8s_metadata (labels, annotations, finalizers, conditions)
+		VALUES ($1, $2, '{}', $3)
+		RETURNING resource_version, uid`
+	err = w.tx.QueryRow(ctx, metadataQuery, labelsJSON, annotationsJSON, conditionsJSON).Scan(&resourceVersion, &uid)
+	if err != nil {
+		return errors.Wrapf(err, "failed to insert K8s metadata for address group binding %s/%s", binding.Namespace, binding.Name)
 	}
 
-	// Then, upsert the address group binding using the resource version
+	binding.Meta.UID = uid
+	binding.Meta.TouchOnWrite(strconv.FormatInt(resourceVersion, 10))
+
+	// Then, upsert the address group binding using the NEW resource version
 	bindingQuery := `
 		INSERT INTO address_group_bindings (namespace, name, service_namespace, service_name, address_group_namespace, address_group_name, resource_version)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -522,14 +493,6 @@ func (w *Writer) deleteAddressGroupBindingsByIdentifiers(ctx context.Context, id
 		argIndex += 2
 	}
 
-	// The address_group_binding_before_delete trigger (Migration 036) handles deletion_timestamp:
-	// - If deletion_timestamp is NULL → Trigger sets it, creates outbox entry, prevents deletion
-	// - If deletion_timestamp is SET → Trigger allows deletion (Worker already synced)
-	//
-	// If we set deletion_timestamp manually, the trigger will think Worker already synced
-	// and allow immediate deletion, bypassing Sync-First strategy!
-
-	// Execute DELETE - trigger will intercept and apply Sync-First strategy
 	query := fmt.Sprintf(`
 		DELETE FROM address_group_bindings WHERE %s`,
 		strings.Join(conditions, " OR "))
@@ -967,11 +930,7 @@ func (w *Writer) createAddressGroupDeleteOutboxEntry(ctx context.Context, ag mod
 	return nil
 }
 
-// updateAddressGroupConditionsOnly updates ONLY the k8s_metadata.conditions field
-// WITHOUT touching the address_groups table or creating outbox entries
-// This is used by OutboxWorker to update Ready/Synced conditions after successful sync
 func (w *Writer) updateAddressGroupConditionsOnly(ctx context.Context, ag models.AddressGroup) error {
-	// First, get the resource_version from the address_groups table
 	var resourceVersion int64
 	getVersionQuery := `SELECT resource_version FROM address_groups WHERE namespace = $1 AND name = $2`
 	err := w.tx.QueryRow(ctx, getVersionQuery, ag.Namespace, ag.Name).Scan(&resourceVersion)
@@ -982,13 +941,11 @@ func (w *Writer) updateAddressGroupConditionsOnly(ctx context.Context, ag models
 		return errors.Wrapf(err, "failed to get resource_version for address group %s/%s", ag.Namespace, ag.Name)
 	}
 
-	// Marshal only the conditions
 	conditionsJSON, err := json.Marshal(ag.Meta.Conditions)
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal conditions")
 	}
 
-	// Update ONLY the conditions in k8s_metadata
 	updateQuery := `
 		UPDATE k8s_metadata
 		SET conditions = $1, updated_at = NOW()
@@ -999,7 +956,7 @@ func (w *Writer) updateAddressGroupConditionsOnly(ctx context.Context, ag models
 		return errors.Wrapf(err, "failed to update conditions for address group %s/%s", ag.Namespace, ag.Name)
 	}
 
-	klog.V(4).InfoS("Updated conditions only for AddressGroup (no outbox entry created)",
+	klog.V(4).InfoS("Updated conditions only for AddressGroup",
 		"namespace", ag.Namespace,
 		"name", ag.Name,
 		"resource_version", resourceVersion)

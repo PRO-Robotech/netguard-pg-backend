@@ -40,6 +40,9 @@ const (
 
 	// TypeNetworkBinding represents a binding between a Network and an AddressGroup
 	TypeNetworkBinding ResourceType = "NetworkBinding"
+
+	// TypeAddressGroupBinding represents a binding between a Service and an AddressGroup
+	TypeAddressGroupBinding ResourceType = "AddressGroupBinding"
 )
 
 // TargetSystem identifies external systems for resource synchronization
@@ -165,6 +168,17 @@ func init() {
 		SupportsDelete: true,
 		// NetworkBinding affects AddressGroup (updates aggregated_networks)
 		AffectsResources: []ResourceType{TypeAddressGroup},
+	}
+
+	resourceRegistry[TypeAddressGroupBinding] = ResourceDefinition{
+		Type:           TypeAddressGroupBinding,
+		Category:       CategoryProcess,
+		TargetSystem:   TargetInternal,
+		SupportsCreate: true,
+		SupportsUpdate: false, // AddressGroupBinding only supports CREATE/DELETE
+		SupportsDelete: true,
+		// AddressGroupBinding affects Service and AddressGroup
+		AffectsResources: []ResourceType{TypeService, TypeAddressGroup},
 	}
 }
 

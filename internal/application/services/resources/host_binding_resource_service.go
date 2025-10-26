@@ -12,7 +12,6 @@ import (
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 	"netguard-pg-backend/internal/sync/interfaces"
-	"netguard-pg-backend/internal/sync/types"
 )
 
 // HostBindingConditionManagerInterface provides condition processing for host bindings
@@ -54,9 +53,6 @@ func NewHostBindingResourceService(
 func (s *HostBindingResourceService) CreateHostBinding(ctx context.Context, hostBinding *models.HostBinding) error {
 	hostRef := models.ResourceIdentifier{Name: hostBinding.HostRef.Name, Namespace: hostBinding.HostRef.Namespace}
 	addressGroupRef := models.ResourceIdentifier{Name: hostBinding.AddressGroupRef.Name, Namespace: hostBinding.AddressGroupRef.Namespace}
-
-	// Initialize metadata
-	hostBinding.GetMeta().TouchOnCreate()
 
 	// Create the host binding
 	writer, err := s.repo.Writer(ctx)
@@ -231,60 +227,10 @@ func (s *HostBindingResourceService) DeleteHostBinding(ctx context.Context, id m
 		Namespace: existingBinding.HostRef.Namespace,
 		Name:      existingBinding.HostRef.Name,
 	}
-
-	// Get reader to load the Host
-	readerForHost, err := s.repo.Reader(ctx)
-	if err != nil {
-	} else {
-		defer readerForHost.Close()
-
-		host, err := readerForHost.GetHostByID(ctx, hostID)
-		if err != nil {
-		} else {
-			host.IsBound = false
-			host.BindingRef = nil
-			host.AddressGroupRef = nil
-			host.AddressGroupName = ""
-
-			// Save updated Host to storage
-			writerForHost, err := s.repo.Writer(ctx)
-			if err != nil {
-			} else {
-				defer writerForHost.Abort()
-
-				// Use SyncHosts with UPSERT to update the Host
-				if err := writerForHost.SyncHosts(ctx, []models.Host{*host}, ports.EmptyScope{}, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
-				} else {
-					if err := writerForHost.Commit(); err != nil {
-					} else {
-						if err := s.hostResourceService.syncManager.SyncEntity(ctx, host, types.SyncOperationUpsert); err != nil {
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// Get the affected AddressGroup
-	addressGroupID := models.ResourceIdentifier{
-		Namespace: existingBinding.AddressGroupRef.Namespace,
-		Name:      existingBinding.AddressGroupRef.Name,
-	}
-
-	// Get reader to load the AddressGroup
-	readerForAG, err := s.repo.Reader(ctx)
-	if err != nil {
-		// Don't fail the entire operation, just log the warning
-	} else {
-		defer readerForAG.Close()
-
-		// Load the AddressGroup
-		addressGroup, err := readerForAG.GetAddressGroupByID(ctx, addressGroupID)
-		if err != nil {
-		} else {
-			if err := s.addressGroupResourceService.syncManager.SyncEntity(ctx, addressGroup, types.SyncOperationUpsert); err != nil {
-			}
-		}
+	if err := s.hostResourceService.UpdateHostBinding(ctx, hostID, models.ResourceIdentifier{}, models.ResourceIdentifier{}); err != nil {
+		// Log warning but don't fail - the HostBinding is already deleted
+		// The Host will still have stale binding references but that's better than failing the entire operation
+		// User can manually update the Host if needed
 	}
 
 	return nil
@@ -448,27 +394,20 @@ func (s *HostBindingResourceService) validateHostBindingWithReader(ctx context.C
 		return fmt.Errorf("host not found: %s", hostID.Key())
 	}
 
-	// ========================================
-	// ========================================
+	// Check if Host is Ready (can only bind Ready resources)
 	if !s.isHostReady(host) {
 		return fmt.Errorf("host is not ready yet (Ready=False): %s - binding can only be created between Ready resources", hostID.Key())
 	}
 
-	// Check if Host is already bound to a different binding
 	if host.IsBound {
-		// If bound to the same binding, that's valid
-		if host.BindingRef != nil {
-			expectedName := bindingID.Name
-			actualName := host.BindingRef.Name
-
-			if actualName == expectedName {
-				return nil
-			}
-			return fmt.Errorf("host is already bound to another binding (expected: %s, actual: %s)", bindingID.Name, actualName)
-		} else {
-			// Host is bound but BindingRef is nil - means it's bound via AddressGroup.spec.hosts
-			return fmt.Errorf("host is already bound to AddressGroup via spec.hosts - cannot create HostBinding")
+		// Host is already bound - get the binding details for error message
+		agRefInfo := "unknown"
+		if host.AddressGroupRef != nil {
+			// Host.AddressGroupRef is NamespacedObjectReference (has Namespace field)
+			agRefInfo = fmt.Sprintf("%s/%s", host.AddressGroupRef.Namespace, host.AddressGroupRef.Name)
 		}
+		return fmt.Errorf("host %s is already bound to address group %s (each host can only be bound to one address group)",
+			hostID.Key(), agRefInfo)
 	}
 
 	return nil
@@ -485,8 +424,6 @@ func (s *HostBindingResourceService) validateAddressGroupWithReader(ctx context.
 		return fmt.Errorf("address group not found: %s", addressGroupID.Key())
 	}
 
-	// ========================================
-	// ========================================
 	if !s.isAddressGroupReady(addressGroup) {
 		return fmt.Errorf("address group is not ready yet (Ready=False): %s - binding can only be created between Ready resources", addressGroupID.Key())
 	}
@@ -540,9 +477,6 @@ func (s *HostBindingResourceService) getHostBindingByHostID(ctx context.Context,
 
 	return foundBinding, nil
 }
-
-// ========================================
-// ========================================
 
 // isHostReady checks if Host has Ready=True condition
 func (s *HostBindingResourceService) isHostReady(host *models.Host) bool {

@@ -155,9 +155,6 @@ func (s *ServiceResourceService) CreateService(ctx context.Context, service mode
 		return errors.Wrap(err, "failed to create service")
 	}
 
-	// CLOUD-233: Removed syncServiceWithExternal() - SGROUP sync now handled by OutboxWorker
-	// Database triggers create outbox entries, OutboxWorker processes them asynchronously
-
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit transaction")
 	}
@@ -248,15 +245,10 @@ func (s *ServiceResourceService) UpdateService(ctx context.Context, service mode
 		return errors.Wrapf(err, "failed to re-read service %s after update", service.Key())
 	}
 
-	// CLOUD-233: Removed syncServiceWithExternal() - SGROUP sync now handled by OutboxWorker
-	// Database triggers create outbox entries, OutboxWorker processes them asynchronously
-
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit transaction")
 	}
 
-	// ConditionManager needs the ACTUAL database state, not the in-memory object
-	// Writer may have set Ready=False (PendingSGROUPSync), which must be preserved
 	readerAfterCommit, err := s.registry.Reader(ctx)
 	if err != nil {
 		klog.Errorf("Failed to get reader for condition processing %s/%s: %v",
@@ -281,9 +273,7 @@ func (s *ServiceResourceService) UpdateService(ctx context.Context, service mode
 		}
 	}
 
-	// If ports changed, regenerate AddressGroupPortMappings that reference this service
 	if portsChanged {
-
 		if s.portMappingRegenerator != nil {
 			serviceID := models.ResourceIdentifier{Name: updatedService.Name, Namespace: updatedService.Namespace}
 			if err := s.portMappingRegenerator.RegeneratePortMappingsForService(ctx, serviceID); err != nil {
@@ -478,9 +468,6 @@ func (s *ServiceResourceService) SyncServices(ctx context.Context, services []mo
 		updatedServices = append(updatedServices, *updatedService)
 	}
 
-	// CLOUD-233: Removed syncServiceWithExternal() - SGROUP sync now handled by OutboxWorker
-	// Database triggers create outbox entries, OutboxWorker processes them asynchronously
-
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit transaction")
 	}
@@ -621,9 +608,6 @@ func (s *ServiceResourceService) DeleteServicesByIDs(ctx context.Context, ids []
 	if err = writer.DeleteServicesByIDs(ctx, ids); err != nil {
 		return errors.Wrap(err, "failed to delete services")
 	}
-
-	// CLOUD-233: Removed syncServiceWithExternal() - SGROUP sync now handled by OutboxWorker
-	// Migration 032 DELETE triggers create outbox entries, OutboxWorker processes them asynchronously
 
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit transaction")
@@ -913,10 +897,6 @@ func isTransientError(err error) bool {
 		strings.Contains(errMsg, "unavailable") ||
 		strings.Contains(errMsg, "deadline")
 }
-
-// CLOUD-233: Removed syncServiceWithExternal() method
-// This method performed synchronous SGROUP sync, which is now handled by OutboxWorker
-// Database triggers create outbox entries, OutboxWorker processes them asynchronously with exponential backoff and retry
 
 // servicePortsChanged checks if service ports have changed between old and new versions
 func (s *ServiceResourceService) servicePortsChanged(oldService, newService models.Service) bool {
