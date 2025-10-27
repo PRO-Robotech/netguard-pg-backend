@@ -144,6 +144,16 @@ func (w *MutationWebhook) mutateAddressGroup(ctx context.Context, req *admission
 		})
 	}
 
+	for i := range addressGroup.Spec.Hosts {
+		if addressGroup.Spec.Hosts[i].Namespace == "" {
+			patches = append(patches, map[string]interface{}{
+				"op":    "replace",
+				"path":  fmt.Sprintf("/spec/hosts/%d/namespace", i),
+				"value": addressGroup.Namespace,
+			})
+		}
+	}
+
 	return w.createPatchResponse(req.UID, patches)
 }
 

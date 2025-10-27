@@ -1972,9 +1972,9 @@ func (s *AddressGroupResourceService) syncAddressGroupsWithSGroups(ctx context.C
 		if len(addressGroup.AggregatedHosts) == 0 {
 			for _, hostObjRef := range addressGroup.Hosts {
 				hostRef := models.HostReference{
-					ObjectReference: hostObjRef,
-					UUID:            "",
-					Source:          models.HostSourceSpec,
+					Ref:    hostObjRef,
+					UUID:   "",
+					Source: models.HostSourceSpec,
 				}
 				allHostReferences = append(allHostReferences, hostRef)
 			}
@@ -1999,7 +1999,7 @@ func (s *AddressGroupResourceService) syncAddressGroupsWithSGroups(ctx context.C
 			}
 			hostID := models.ResourceIdentifier{
 				Namespace: hostNamespace,
-				Name:      hostRef.ObjectReference.Name,
+				Name:      hostRef.Ref.Name,
 			}
 
 			// Load full host data from database
@@ -2273,13 +2273,13 @@ func (s *AddressGroupResourceService) updateHostBindingStatusForSyncedAddressGro
 			if len(ag.AggregatedHosts) > 0 {
 				// Use AggregatedHosts if available (preferred)
 				for _, hostRef := range ag.AggregatedHosts {
-					hostID := models.ResourceIdentifier{Name: hostRef.GetName(), Namespace: ag.Namespace}
+					hostID := models.ResourceIdentifier{Name: hostRef.GetName(), Namespace: hostRef.GetNamespace()}
 					shouldBeBoundHosts[hostID.Key()] = hostID
 				}
 			} else if len(ag.Hosts) > 0 {
 				// Fallback to spec.hosts if AggregatedHosts is empty
 				for _, hostRef := range ag.Hosts {
-					hostID := models.ResourceIdentifier{Name: hostRef.Name, Namespace: ag.Namespace}
+					hostID := models.ResourceIdentifier{Name: hostRef.Name, Namespace: hostRef.Namespace}
 					shouldBeBoundHosts[hostID.Key()] = hostID
 				}
 			}
@@ -2376,9 +2376,9 @@ func (s *AddressGroupResourceService) validateSGroupSyncForChangedHosts(ctx cont
 }
 
 // getHostChanges compares old and new AddressGroup hosts and returns added/removed hosts
-func (s *AddressGroupResourceService) getHostChanges(newAG models.AddressGroup, oldAG *models.AddressGroup) (addedHosts, removedHosts []netguardv1beta1.ObjectReference) {
-	newHosts := make(map[string]netguardv1beta1.ObjectReference)
-	oldHosts := make(map[string]netguardv1beta1.ObjectReference)
+func (s *AddressGroupResourceService) getHostChanges(newAG models.AddressGroup, oldAG *models.AddressGroup) (addedHosts, removedHosts []netguardv1beta1.NamespacedObjectReference) {
+	newHosts := make(map[string]netguardv1beta1.NamespacedObjectReference)
+	oldHosts := make(map[string]netguardv1beta1.NamespacedObjectReference)
 
 	// Build map of new hosts
 	for _, host := range newAG.Hosts {
@@ -2410,7 +2410,7 @@ func (s *AddressGroupResourceService) getHostChanges(newAG models.AddressGroup, 
 }
 
 // validateHostsSGroupSync validates a list of hosts with SGROUP
-func (s *AddressGroupResourceService) validateHostsSGroupSync(ctx context.Context, hosts []netguardv1beta1.ObjectReference, agID models.ResourceIdentifier) error {
+func (s *AddressGroupResourceService) validateHostsSGroupSync(ctx context.Context, hosts []netguardv1beta1.NamespacedObjectReference, agID models.ResourceIdentifier) error {
 	reader, err := s.registry.Reader(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get reader for host validation")
@@ -2439,7 +2439,7 @@ func (s *AddressGroupResourceService) validateHostsSGroupSync(ctx context.Contex
 	return nil
 }
 
-func (s *AddressGroupResourceService) forceSyncRemovedHostsWithSGroup(ctx context.Context, removedHosts []netguardv1beta1.ObjectReference, agID models.ResourceIdentifier) error {
+func (s *AddressGroupResourceService) forceSyncRemovedHostsWithSGroup(ctx context.Context, removedHosts []netguardv1beta1.NamespacedObjectReference, agID models.ResourceIdentifier) error {
 	if s.syncManager == nil {
 		return nil
 	}
@@ -2474,7 +2474,7 @@ func (s *AddressGroupResourceService) forceSyncRemovedHostsWithSGroup(ctx contex
 	return nil
 }
 
-func (s *AddressGroupResourceService) syncSpecHostsWithSGroups(ctx context.Context, hostRefs []netguardv1beta1.ObjectReference, agID models.ResourceIdentifier) error {
+func (s *AddressGroupResourceService) syncSpecHostsWithSGroups(ctx context.Context, hostRefs []netguardv1beta1.NamespacedObjectReference, agID models.ResourceIdentifier) error {
 	if s.syncManager == nil {
 		return nil
 	}

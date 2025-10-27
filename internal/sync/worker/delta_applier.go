@@ -80,10 +80,13 @@ func applyAddressGroupDelta(ag *models.AddressGroup, delta json.RawMessage) erro
 		// Add new hosts that don't already exist
 		for _, hostName := range d.AddHosts {
 			if !existingHosts[hostName] {
-				ag.Hosts = append(ag.Hosts, netguardv1beta1.ObjectReference{
-					APIVersion: "netguard.sgroups.io/v1beta1",
-					Kind:       "Host",
-					Name:       hostName,
+				ag.Hosts = append(ag.Hosts, netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
+						APIVersion: "netguard.sgroups.io/v1beta1",
+						Kind:       "Host",
+						Name:       hostName,
+					},
+					Namespace: ag.Namespace, // Host must be in same namespace as AddressGroup
 				})
 			}
 		}
@@ -97,7 +100,7 @@ func applyAddressGroupDelta(ag *models.AddressGroup, delta json.RawMessage) erro
 		}
 
 		// Filter out removed hosts
-		var filteredHosts []netguardv1beta1.ObjectReference
+		var filteredHosts []netguardv1beta1.NamespacedObjectReference
 		for _, hostRef := range ag.Hosts {
 			if !removeSet[hostRef.Name] {
 				filteredHosts = append(filteredHosts, hostRef)

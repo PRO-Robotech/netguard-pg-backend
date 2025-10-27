@@ -107,20 +107,13 @@ func (w *Writer) upsertAddressGroup(ctx context.Context, ag models.AddressGroup)
 	var hostsJSON []byte
 	hosts := ag.Hosts
 	if hosts == nil {
-		hosts = []netguardv1beta1.ObjectReference{}
+		hosts = []netguardv1beta1.NamespacedObjectReference{}
 	}
 	hostsJSON, err = json.Marshal(hosts)
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal hosts")
 	}
 
-	// ========================================
-	// ========================================
-	// aggregated_hosts combines:
-	// 1. Hosts from spec.hosts (source: "spec")
-	// 2. Hosts from bindings (source: "binding") - handled by Migration 033 trigger
-	//
-	// Here we only handle spec.hosts. Binding-based hosts are managed by database triggers.
 	var aggregatedHostsJSON []byte
 	if len(ag.Hosts) > 0 {
 		// Build aggregated_hosts from spec.hosts
@@ -235,8 +228,6 @@ func (w *Writer) upsertAddressGroup(ctx context.Context, ag models.AddressGroup)
 		return errors.Wrapf(err, "failed to upsert address group %s/%s", ag.Namespace, ag.Name)
 	}
 
-	// ========================================
-	// ========================================
 	if err := w.createAddressGroupOutboxEntry(ctx, ag); err != nil {
 		return errors.Wrap(err, "failed to create outbox entry for address group")
 	}

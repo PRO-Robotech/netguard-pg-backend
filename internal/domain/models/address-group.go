@@ -21,8 +21,9 @@ const (
 
 // HostReference represents a reference to a Host with additional metadata
 type HostReference struct {
-	// Reference to the Host object (namespace is implied from AddressGroup context)
-	ObjectReference netguardv1beta1.ObjectReference `json:"ref"`
+	// Reference to the Host object
+	// Host namespace MUST match AddressGroup namespace
+	Ref netguardv1beta1.NamespacedObjectReference `json:"ref"`
 
 	// UUID of the host (for efficient lookup and SGroup sync)
 	UUID string `json:"uuid"`
@@ -31,39 +32,47 @@ type HostReference struct {
 	Source HostRegistrationSource `json:"source"`
 }
 
-// NewHostReference creates a new HostReference from an ObjectReference
-func NewHostReference(ref netguardv1beta1.ObjectReference, uuid string, source HostRegistrationSource) HostReference {
+// NewHostReference creates a new HostReference from a NamespacedObjectReference
+func NewHostReference(ref netguardv1beta1.NamespacedObjectReference, uuid string, source HostRegistrationSource) HostReference {
 	return HostReference{
-		ObjectReference: ref,
-		UUID:            uuid,
-		Source:          source,
+		Ref:    ref,
+		UUID:   uuid,
+		Source: source,
 	}
 }
 
 // NewHostReferenceFromHost creates a new HostReference from a Host model
 func NewHostReferenceFromHost(host *Host, source HostRegistrationSource) HostReference {
 	return HostReference{
-		ObjectReference: netguardv1beta1.ObjectReference{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "Host",
-			Name:       host.Name,
+		Ref: netguardv1beta1.NamespacedObjectReference{
+			ObjectReference: netguardv1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "Host",
+				Name:       host.Name,
+			},
+			Namespace: host.Namespace,
 		},
 		UUID:   host.UUID,
 		Source: source,
 	}
 }
 
-// Key returns the unique key for the HostReference within a namespace context
-func (hr *HostReference) Key(namespace string) string {
-	if namespace == "" {
-		return hr.ObjectReference.Name
+// Key returns the unique key for the HostReference
+func (hr *HostReference) Key() string {
+	if hr.Ref.Namespace == "" {
+		return hr.Ref.Name
 	}
-	return fmt.Sprintf("%s/%s", namespace, hr.ObjectReference.Name)
+	return fmt.Sprintf("%s/%s", hr.Ref.Namespace, hr.Ref.Name)
 }
 
 // GetName returns the name of the referenced host
 func (hr *HostReference) GetName() string {
-	return hr.ObjectReference.Name
+	return hr.Ref.Name
+}
+
+// GetNamespace returns the namespace of the referenced host
+func (hr *HostReference) GetNamespace() string {
+	return hr.Ref.Namespace
 }
 
 // NetworkItem represents a network item in an address group
@@ -84,8 +93,10 @@ type AddressGroup struct {
 	Networks         []NetworkItem `json:"networks,omitempty"`         // Networks associated with this address group
 	AddressGroupName string        `json:"addressGroupName,omitempty"` // Name used in sgroups synchronization
 
-	// Hosts that belong to this address group (from spec.hosts)
-	Hosts []netguardv1beta1.ObjectReference `json:"hosts,omitempty"`
+	// Hosts that belong exclusively to this address group (from spec.hosts)
+	// Each host can belong to only one AddressGroup
+	// Host namespace MUST match AddressGroup namespace
+	Hosts []netguardv1beta1.NamespacedObjectReference `json:"hosts,omitempty"`
 
 	// AggregatedHosts contains all hosts that belong to this AddressGroup,
 	// aggregated from both spec.hosts and HostBinding resources
@@ -229,7 +240,7 @@ func (ag *AddressGroup) DeepCopy() Resource {
 
 	// Deep copy hosts
 	if ag.Hosts != nil {
-		copy.Hosts = make([]netguardv1beta1.ObjectReference, len(ag.Hosts))
+		copy.Hosts = make([]netguardv1beta1.NamespacedObjectReference, len(ag.Hosts))
 		for i, host := range ag.Hosts {
 			copy.Hosts[i] = host
 		}

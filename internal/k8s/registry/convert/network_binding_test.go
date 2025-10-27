@@ -33,15 +33,21 @@ func TestNetworkBindingConverter_ToDomain(t *testing.T) {
 					UID:       types.UID("test-uid-123"),
 				},
 				Spec: netguardv1beta1.NetworkBindingSpec{
-					NetworkRef: netguardv1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Network",
-						Name:       "test-network",
+					NetworkRef: netguardv1beta1.NamespacedObjectReference{
+						ObjectReference: netguardv1beta1.ObjectReference{
+							APIVersion: "netguard.sgroups.io/v1beta1",
+							Kind:       "Network",
+							Name:       "test-network",
+						},
+						Namespace: "default",
 					},
-					AddressGroupRef: netguardv1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "test-addressgroup",
+					AddressGroupRef: netguardv1beta1.NamespacedObjectReference{
+						ObjectReference: netguardv1beta1.ObjectReference{
+							APIVersion: "netguard.sgroups.io/v1beta1",
+							Kind:       "AddressGroup",
+							Name:       "test-addressgroup",
+						},
+						Namespace: "default",
 					},
 				},
 				Status: netguardv1beta1.NetworkBindingStatus{
@@ -61,15 +67,21 @@ func TestNetworkBindingConverter_ToDomain(t *testing.T) {
 						Namespace: "default",
 					},
 				},
-				NetworkRef: netguardv1beta1.ObjectReference{
-					APIVersion: "netguard.sgroups.io/v1beta1",
-					Kind:       "Network",
-					Name:       "test-network",
+				NetworkRef: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
+						APIVersion: "netguard.sgroups.io/v1beta1",
+						Kind:       "Network",
+						Name:       "test-network",
+					},
+					Namespace: "default",
 				},
-				AddressGroupRef: netguardv1beta1.ObjectReference{
-					APIVersion: "netguard.sgroups.io/v1beta1",
-					Kind:       "AddressGroup",
-					Name:       "test-addressgroup",
+				AddressGroupRef: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
+						APIVersion: "netguard.sgroups.io/v1beta1",
+						Kind:       "AddressGroup",
+						Name:       "test-addressgroup",
+					},
+					Namespace: "default",
 				},
 				Meta: models.Meta{
 					UID: "test-uid-123",
@@ -131,15 +143,21 @@ func TestNetworkBindingConverter_FromDomain(t *testing.T) {
 						Namespace: "default",
 					},
 				},
-				NetworkRef: netguardv1beta1.ObjectReference{
-					APIVersion: "netguard.sgroups.io/v1beta1",
-					Kind:       "Network",
-					Name:       "test-network",
+				NetworkRef: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
+						APIVersion: "netguard.sgroups.io/v1beta1",
+						Kind:       "Network",
+						Name:       "test-network",
+					},
+					Namespace: "default",
 				},
-				AddressGroupRef: netguardv1beta1.ObjectReference{
-					APIVersion: "netguard.sgroups.io/v1beta1",
-					Kind:       "AddressGroup",
-					Name:       "test-addressgroup",
+				AddressGroupRef: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
+						APIVersion: "netguard.sgroups.io/v1beta1",
+						Kind:       "AddressGroup",
+						Name:       "test-addressgroup",
+					},
+					Namespace: "default",
 				},
 				NetworkItem: models.NetworkItem{
 					Name: "test-network",
@@ -199,15 +217,21 @@ func TestNetworkBindingConverter_RoundTrip(t *testing.T) {
 						Namespace: "default",
 					},
 				},
-				NetworkRef: netguardv1beta1.ObjectReference{
-					APIVersion: "netguard.sgroups.io/v1beta1",
-					Kind:       "Network",
-					Name:       "test-network",
+				NetworkRef: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
+						APIVersion: "netguard.sgroups.io/v1beta1",
+						Kind:       "Network",
+						Name:       "test-network",
+					},
+					Namespace: "default",
 				},
-				AddressGroupRef: netguardv1beta1.ObjectReference{
-					APIVersion: "netguard.sgroups.io/v1beta1",
-					Kind:       "AddressGroup",
-					Name:       "test-addressgroup",
+				AddressGroupRef: netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
+						APIVersion: "netguard.sgroups.io/v1beta1",
+						Kind:       "AddressGroup",
+						Name:       "test-addressgroup",
+					},
+					Namespace: "default",
 				},
 				NetworkItem: models.NetworkItem{
 					Name: "test-network",
@@ -268,15 +292,21 @@ func TestNetworkBindingConverter_ToList(t *testing.T) {
 							Namespace: "default",
 						},
 					},
-					NetworkRef: netguardv1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Network",
-						Name:       "network1",
+					NetworkRef: netguardv1beta1.NamespacedObjectReference{
+						ObjectReference: netguardv1beta1.ObjectReference{
+							APIVersion: "netguard.sgroups.io/v1beta1",
+							Kind:       "Network",
+							Name:       "network1",
+						},
+						Namespace: "default",
 					},
-					AddressGroupRef: netguardv1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "addressgroup1",
+					AddressGroupRef: netguardv1beta1.NamespacedObjectReference{
+						ObjectReference: netguardv1beta1.ObjectReference{
+							APIVersion: "netguard.sgroups.io/v1beta1",
+							Kind:       "AddressGroup",
+							Name:       "addressgroup1",
+						},
+						Namespace: "default",
 					},
 					Meta: models.Meta{
 						UID: "uid-1",

@@ -17,12 +17,15 @@ func ConvertAddressGroup(ag *netguardpb.AddressGroup) models.AddressGroup {
 	}
 
 	if len(ag.Hosts) > 0 {
-		result.Hosts = make([]v1beta1.ObjectReference, len(ag.Hosts))
+		result.Hosts = make([]v1beta1.NamespacedObjectReference, len(ag.Hosts))
 		for i, host := range ag.Hosts {
-			result.Hosts[i] = v1beta1.ObjectReference{
-				APIVersion: host.ApiVersion,
-				Kind:       host.Kind,
-				Name:       host.Name,
+			result.Hosts[i] = v1beta1.NamespacedObjectReference{
+				ObjectReference: v1beta1.ObjectReference{
+					APIVersion: host.ApiVersion,
+					Kind:       host.Kind,
+					Name:       host.Name,
+				},
+				Namespace: host.Namespace,
 			}
 		}
 	}
@@ -32,10 +35,13 @@ func ConvertAddressGroup(ag *netguardpb.AddressGroup) models.AddressGroup {
 		result.AggregatedHosts = make([]models.HostReference, len(ag.AggregatedHosts))
 		for i, hostRef := range ag.AggregatedHosts {
 			result.AggregatedHosts[i] = models.HostReference{
-				ObjectReference: v1beta1.ObjectReference{
-					APIVersion: hostRef.Ref.ApiVersion,
-					Kind:       hostRef.Ref.Kind,
-					Name:       hostRef.Ref.Name,
+				Ref: v1beta1.NamespacedObjectReference{
+					ObjectReference: v1beta1.ObjectReference{
+						APIVersion: hostRef.Ref.ApiVersion,
+						Kind:       hostRef.Ref.Kind,
+						Name:       hostRef.Ref.Name,
+					},
+					Namespace: hostRef.Ref.Namespace,
 				},
 				UUID:   hostRef.Uuid,
 				Source: convertHostRegistrationSourceFromPB(hostRef.Source),
@@ -75,12 +81,13 @@ func ConvertAddressGroupToPB(ag models.AddressGroup) *netguardpb.AddressGroup {
 	}
 
 	if len(ag.Hosts) > 0 {
-		result.Hosts = make([]*netguardpb.ObjectReference, len(ag.Hosts))
+		result.Hosts = make([]*netguardpb.NamespacedObjectReference, len(ag.Hosts))
 		for i, host := range ag.Hosts {
-			result.Hosts[i] = &netguardpb.ObjectReference{
+			result.Hosts[i] = &netguardpb.NamespacedObjectReference{
 				ApiVersion: host.APIVersion,
 				Kind:       host.Kind,
 				Name:       host.Name,
+				Namespace:  host.Namespace,
 			}
 		}
 	}
@@ -90,10 +97,11 @@ func ConvertAddressGroupToPB(ag models.AddressGroup) *netguardpb.AddressGroup {
 		result.AggregatedHosts = make([]*netguardpb.HostReference, len(ag.AggregatedHosts))
 		for i, hostRef := range ag.AggregatedHosts {
 			result.AggregatedHosts[i] = &netguardpb.HostReference{
-				Ref: &netguardpb.ObjectReference{
-					ApiVersion: hostRef.ObjectReference.APIVersion,
-					Kind:       hostRef.ObjectReference.Kind,
-					Name:       hostRef.ObjectReference.Name,
+				Ref: &netguardpb.NamespacedObjectReference{
+					ApiVersion: hostRef.Ref.APIVersion,
+					Kind:       hostRef.Ref.Kind,
+					Name:       hostRef.Ref.Name,
+					Namespace:  hostRef.Ref.Namespace,
 				},
 				Uuid:   hostRef.UUID,
 				Source: convertHostRegistrationSourceToPB(hostRef.Source),

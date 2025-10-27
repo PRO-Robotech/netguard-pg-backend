@@ -956,9 +956,9 @@
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/v1ObjectReference"
+            "$ref": "#/definitions/v1NamespacedObjectReference"
           },
-          "title": "Hosts that belong to this address group (exclusively)"
+          "title": "Hosts that belong exclusively to this AddressGroup\nEach host can belong to only one AddressGroup\nHost namespace MUST match AddressGroup namespace"
         },
         "addressGroupName": {
           "type": "string",
@@ -1306,8 +1306,8 @@
       "type": "object",
       "properties": {
         "ref": {
-          "$ref": "#/definitions/v1ObjectReference",
-          "title": "Reference to the Host object (namespace is implied from AddressGroup context)"
+          "$ref": "#/definitions/v1NamespacedObjectReference",
+          "title": "Reference to the Host object\nHost namespace MUST match AddressGroup namespace"
         },
         "uuid": {
           "type": "string",
@@ -1772,24 +1772,6 @@
         }
       },
       "title": "NetworkItem - represents a network item in an address group"
-    },
-    "v1ObjectReference": {
-      "type": "object",
-      "properties": {
-        "apiVersion": {
-          "type": "string",
-          "title": "APIVersion of the referenced object"
-        },
-        "kind": {
-          "type": "string",
-          "title": "Kind of the referenced object"
-        },
-        "name": {
-          "type": "string",
-          "title": "Name of the referenced object"
-        }
-      },
-      "title": "ObjectReference contains enough information to let you locate the referenced object"
     },
     "v1PortRange": {
       "type": "object",

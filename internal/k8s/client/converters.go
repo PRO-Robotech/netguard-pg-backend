@@ -340,12 +340,15 @@ func convertAddressGroupFromProto(protoAG *netguardpb.AddressGroup) models.Addre
 
 	// Convert hosts field (NEW: hosts belonging to this address group)
 	if len(protoAG.Hosts) > 0 {
-		addressGroup.Hosts = make([]v1beta1.ObjectReference, len(protoAG.Hosts))
+		addressGroup.Hosts = make([]v1beta1.NamespacedObjectReference, len(protoAG.Hosts))
 		for i, host := range protoAG.Hosts {
-			addressGroup.Hosts[i] = v1beta1.ObjectReference{
-				APIVersion: host.ApiVersion,
-				Kind:       host.Kind,
-				Name:       host.Name,
+			addressGroup.Hosts[i] = v1beta1.NamespacedObjectReference{
+				ObjectReference: v1beta1.ObjectReference{
+					APIVersion: host.ApiVersion,
+					Kind:       host.Kind,
+					Name:       host.Name,
+				},
+				Namespace: host.Namespace,
 			}
 		}
 	}
@@ -355,10 +358,13 @@ func convertAddressGroupFromProto(protoAG *netguardpb.AddressGroup) models.Addre
 		addressGroup.AggregatedHosts = make([]models.HostReference, len(protoAG.AggregatedHosts))
 		for i, hostRef := range protoAG.AggregatedHosts {
 			addressGroup.AggregatedHosts[i] = models.HostReference{
-				ObjectReference: v1beta1.ObjectReference{
-					APIVersion: hostRef.Ref.ApiVersion,
-					Kind:       hostRef.Ref.Kind,
-					Name:       hostRef.Ref.Name,
+				Ref: v1beta1.NamespacedObjectReference{
+					ObjectReference: v1beta1.ObjectReference{
+						APIVersion: hostRef.Ref.ApiVersion,
+						Kind:       hostRef.Ref.Kind,
+						Name:       hostRef.Ref.Name,
+					},
+					Namespace: hostRef.Ref.Namespace,
 				},
 				UUID:   hostRef.Uuid,
 				Source: convertHostRegistrationSourceFromPB(hostRef.Source),
@@ -431,12 +437,13 @@ func convertAddressGroupToProto(addressGroup models.AddressGroup) *netguardpb.Ad
 
 	// Convert hosts field (NEW: hosts belonging to this address group)
 	if len(addressGroup.Hosts) > 0 {
-		protoAG.Hosts = make([]*netguardpb.ObjectReference, len(addressGroup.Hosts))
+		protoAG.Hosts = make([]*netguardpb.NamespacedObjectReference, len(addressGroup.Hosts))
 		for i, host := range addressGroup.Hosts {
-			protoAG.Hosts[i] = &netguardpb.ObjectReference{
+			protoAG.Hosts[i] = &netguardpb.NamespacedObjectReference{
 				ApiVersion: host.APIVersion,
 				Kind:       host.Kind,
 				Name:       host.Name,
+				Namespace:  host.Namespace,
 			}
 		}
 	}

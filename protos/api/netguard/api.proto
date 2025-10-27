@@ -92,8 +92,9 @@ message ObjectReference {
 
 // HostReference represents a reference to a Host with additional metadata
 message HostReference {
-  // Reference to the Host object (namespace is implied from AddressGroup context)
-  ObjectReference ref = 1;
+  // Reference to the Host object
+  // Host namespace MUST match AddressGroup namespace
+  NamespacedObjectReference ref = 1;
 
   // UUID of the host (for efficient lookup and SGroup sync)
   string uuid = 2;
@@ -258,7 +259,10 @@ message AddressGroup {
   bool trace = 4;                 // Whether to enable trace
   repeated NetworkItem networks = 5; // Networks associated with this address group
   Meta meta = 6;
-  repeated ObjectReference hosts = 7; // Hosts that belong to this address group (exclusively)
+  // Hosts that belong exclusively to this AddressGroup
+  // Each host can belong to only one AddressGroup
+  // Host namespace MUST match AddressGroup namespace
+  repeated NamespacedObjectReference hosts = 7;
   string address_group_name = 8;  // Computed address group name (e.g., "namespace/name")
   repeated HostReference aggregated_hosts = 9; // All hosts from any source (spec + HostBinding)
 }

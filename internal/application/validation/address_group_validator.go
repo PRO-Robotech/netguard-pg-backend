@@ -104,7 +104,7 @@ func (v *AddressGroupValidator) validateNetworks(networks []models.NetworkItem) 
 }
 
 // validateHostReferences validates host references in AddressGroup (existence and format)
-func (v *AddressGroupValidator) validateHostReferences(ctx context.Context, hosts []netguardv1beta1.ObjectReference, currentAG models.ResourceIdentifier) error {
+func (v *AddressGroupValidator) validateHostReferences(ctx context.Context, hosts []netguardv1beta1.NamespacedObjectReference, currentAG models.ResourceIdentifier) error {
 	if len(hosts) == 0 {
 		return nil // No hosts to validate
 	}
@@ -121,6 +121,11 @@ func (v *AddressGroupValidator) validateHostReferences(ctx context.Context, host
 		expectedAPIVersion := "netguard.sgroups.io/v1beta1"
 		if host.APIVersion != expectedAPIVersion {
 			return fmt.Errorf("host reference %d (%s): invalid apiVersion '%s' - must be '%s'", i, host.Name, host.APIVersion, expectedAPIVersion)
+		}
+
+		// Validate that host namespace matches AddressGroup namespace
+		if host.Namespace != "" && host.Namespace != currentAG.Namespace {
+			return fmt.Errorf("host reference %d (%s): namespace mismatch - host namespace '%s' must match AddressGroup namespace '%s'", i, host.Name, host.Namespace, currentAG.Namespace)
 		}
 
 		hostID := models.ResourceIdentifier{
@@ -142,7 +147,7 @@ func (v *AddressGroupValidator) validateHostReferences(ctx context.Context, host
 
 // validateHostExclusivity validates that hosts in the AddressGroup don't belong to other AddressGroups
 // Each host can belong to only one AddressGroup (exclusivity constraint)
-func (v *AddressGroupValidator) validateHostExclusivity(ctx context.Context, hosts []netguardv1beta1.ObjectReference, currentAG models.ResourceIdentifier) error {
+func (v *AddressGroupValidator) validateHostExclusivity(ctx context.Context, hosts []netguardv1beta1.NamespacedObjectReference, currentAG models.ResourceIdentifier) error {
 	if len(hosts) == 0 {
 		return nil // No hosts to validate
 	}
@@ -173,7 +178,7 @@ func (v *AddressGroupValidator) validateHostExclusivity(ctx context.Context, hos
 
 // ValidateSgroupSyncForHosts validates that hosts can be synchronized with SGROUP
 // This is a pre-validation step that tests SGROUP synchronization before saving to database
-func (v *AddressGroupValidator) ValidateSgroupSyncForHosts(ctx context.Context, hosts []netguardv1beta1.ObjectReference, currentAG models.ResourceIdentifier, syncManager interfaces.SyncManager) error {
+func (v *AddressGroupValidator) ValidateSgroupSyncForHosts(ctx context.Context, hosts []netguardv1beta1.NamespacedObjectReference, currentAG models.ResourceIdentifier, syncManager interfaces.SyncManager) error {
 	if len(hosts) == 0 {
 		return nil // No hosts to validate
 	}
