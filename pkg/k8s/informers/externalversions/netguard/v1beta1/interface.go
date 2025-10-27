@@ -38,8 +38,6 @@ type Interface interface {
 	HostBindings() HostBindingInformer
 	// IEAgAgRules returns a IEAgAgRuleInformer.
 	IEAgAgRules() IEAgAgRuleInformer
-	// Networks returns a NetworkInformer.
-	Networks() NetworkInformer
 	// NetworkBindings returns a NetworkBindingInformer.
 	NetworkBindings() NetworkBindingInformer
 	// RuleS2Ss returns a RuleS2SInformer.
@@ -96,11 +94,6 @@ func (v *version) HostBindings() HostBindingInformer {
 // IEAgAgRules returns a IEAgAgRuleInformer.
 func (v *version) IEAgAgRules() IEAgAgRuleInformer {
 	return &iEAgAgRuleInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
-}
-
-// Networks returns a NetworkInformer.
-func (v *version) Networks() NetworkInformer {
-	return &networkInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // NetworkBindings returns a NetworkBindingInformer.

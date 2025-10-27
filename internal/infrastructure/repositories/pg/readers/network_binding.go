@@ -126,20 +126,26 @@ func (r *Reader) scanNetworkBinding(rows pgx.Rows) (models.NetworkBinding, error
 	// Set SelfRef
 	networkBinding.SelfRef = models.NewSelfRef(models.NewResourceIdentifier(networkBinding.Name, models.WithNamespace(networkBinding.Namespace)))
 
-	// Build ObjectReference from separate namespace/name columns
+	// Build NamespacedObjectReference from separate namespace/name columns
 	if networkNamespace != "" && networkName != "" {
-		networkBinding.NetworkRef = netguardv1beta1.ObjectReference{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "Network",
-			Name:       networkName,
+		networkBinding.NetworkRef = netguardv1beta1.NamespacedObjectReference{
+			ObjectReference: netguardv1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "Network",
+				Name:       networkName,
+			},
+			Namespace: networkNamespace,
 		}
 	}
 
 	if addressGroupNamespace != "" && addressGroupName != "" {
-		networkBinding.AddressGroupRef = netguardv1beta1.ObjectReference{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "AddressGroup",
-			Name:       addressGroupName,
+		networkBinding.AddressGroupRef = netguardv1beta1.NamespacedObjectReference{
+			ObjectReference: netguardv1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "AddressGroup",
+				Name:       addressGroupName,
+			},
+			Namespace: addressGroupNamespace,
 		}
 	}
 
@@ -189,20 +195,26 @@ func (r *Reader) scanNetworkBindingRow(row pgx.Row) (*models.NetworkBinding, err
 	// Set SelfRef
 	networkBinding.SelfRef = models.NewSelfRef(models.NewResourceIdentifier(networkBinding.Name, models.WithNamespace(networkBinding.Namespace)))
 
-	// Build ObjectReference from separate namespace/name columns
+	// Build NamespacedObjectReference from separate namespace/name columns
 	if networkNamespace != "" && networkName != "" {
-		networkBinding.NetworkRef = netguardv1beta1.ObjectReference{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "Network",
-			Name:       networkName,
+		networkBinding.NetworkRef = netguardv1beta1.NamespacedObjectReference{
+			ObjectReference: netguardv1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "Network",
+				Name:       networkName,
+			},
+			Namespace: networkNamespace,
 		}
 	}
 
 	if addressGroupNamespace != "" && addressGroupName != "" {
-		networkBinding.AddressGroupRef = netguardv1beta1.ObjectReference{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "AddressGroup",
-			Name:       addressGroupName,
+		networkBinding.AddressGroupRef = netguardv1beta1.NamespacedObjectReference{
+			ObjectReference: netguardv1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "AddressGroup",
+				Name:       addressGroupName,
+			},
+			Namespace: addressGroupNamespace,
 		}
 	}
 

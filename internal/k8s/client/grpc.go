@@ -1773,17 +1773,23 @@ func convertNetworkBindingFromProto(protoBinding *netguardpb.NetworkBinding) mod
 	}
 
 	// Convert NetworkRef
-	result.NetworkRef = v1beta1.ObjectReference{
-		APIVersion: protoBinding.GetNetworkRef().GetApiVersion(),
-		Kind:       protoBinding.GetNetworkRef().GetKind(),
-		Name:       protoBinding.GetNetworkRef().GetName(),
+	result.NetworkRef = v1beta1.NamespacedObjectReference{
+		ObjectReference: v1beta1.ObjectReference{
+			APIVersion: protoBinding.GetNetworkRef().GetApiVersion(),
+			Kind:       protoBinding.GetNetworkRef().GetKind(),
+			Name:       protoBinding.GetNetworkRef().GetName(),
+		},
+		Namespace: protoBinding.GetNetworkRef().GetNamespace(),
 	}
 
 	// Convert AddressGroupRef
-	result.AddressGroupRef = v1beta1.ObjectReference{
-		APIVersion: protoBinding.GetAddressGroupRef().GetApiVersion(),
-		Kind:       protoBinding.GetAddressGroupRef().GetKind(),
-		Name:       protoBinding.GetAddressGroupRef().GetName(),
+	result.AddressGroupRef = v1beta1.NamespacedObjectReference{
+		ObjectReference: v1beta1.ObjectReference{
+			APIVersion: protoBinding.GetAddressGroupRef().GetApiVersion(),
+			Kind:       protoBinding.GetAddressGroupRef().GetKind(),
+			Name:       protoBinding.GetAddressGroupRef().GetName(),
+		},
+		Namespace: protoBinding.GetAddressGroupRef().GetNamespace(),
 	}
 
 	// Convert NetworkItem if present
@@ -1818,15 +1824,17 @@ func convertNetworkBindingToPB(binding models.NetworkBinding) *netguardpb.Networ
 			Name:      binding.Name,
 			Namespace: binding.Namespace,
 		},
-		NetworkRef: &netguardpb.ObjectReference{
+		NetworkRef: &netguardpb.NamespacedObjectReference{
 			ApiVersion: binding.NetworkRef.APIVersion,
 			Kind:       binding.NetworkRef.Kind,
 			Name:       binding.NetworkRef.Name,
+			Namespace:  binding.NetworkRef.Namespace,
 		},
-		AddressGroupRef: &netguardpb.ObjectReference{
+		AddressGroupRef: &netguardpb.NamespacedObjectReference{
 			ApiVersion: binding.AddressGroupRef.APIVersion,
 			Kind:       binding.AddressGroupRef.Kind,
 			Name:       binding.AddressGroupRef.Name,
+			Namespace:  binding.AddressGroupRef.Namespace,
 		},
 	}
 

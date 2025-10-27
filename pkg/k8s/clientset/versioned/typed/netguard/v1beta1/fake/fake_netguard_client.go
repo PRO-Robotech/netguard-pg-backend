@@ -57,10 +57,6 @@ func (c *FakeNetguardV1beta1) IEAgAgRules(namespace string) v1beta1.IEAgAgRuleIn
 	return newFakeIEAgAgRules(c, namespace)
 }
 
-func (c *FakeNetguardV1beta1) Networks(namespace string) v1beta1.NetworkInterface {
-	return newFakeNetworks(c, namespace)
-}
-
 func (c *FakeNetguardV1beta1) NetworkBindings(namespace string) v1beta1.NetworkBindingInterface {
 	return newFakeNetworkBindings(c, namespace)
 }

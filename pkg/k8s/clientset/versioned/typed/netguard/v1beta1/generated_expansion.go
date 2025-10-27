@@ -32,8 +32,6 @@ type HostBindingExpansion interface{}
 
 type IEAgAgRuleExpansion interface{}
 
-type NetworkExpansion interface{}
-
 type NetworkBindingExpansion interface{}
 
 type RuleS2SExpansion interface{}

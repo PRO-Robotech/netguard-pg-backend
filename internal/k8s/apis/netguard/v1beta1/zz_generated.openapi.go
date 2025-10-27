@@ -4649,14 +4649,14 @@ func schema_k8s_apis_netguard_v1beta1_NetworkBindingSpec(ref common.ReferenceCal
 						SchemaProps: spec.SchemaProps{
 							Description: "NetworkRef is a reference to the Network resource",
 							Default:     map[string]interface{}{},
-							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ObjectReference"),
+							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"),
 						},
 					},
 					"addressGroupRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "AddressGroupRef is a reference to the AddressGroup resource",
 							Default:     map[string]interface{}{},
-							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ObjectReference"),
+							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"),
 						},
 					},
 				},
@@ -4664,7 +4664,7 @@ func schema_k8s_apis_netguard_v1beta1_NetworkBindingSpec(ref common.ReferenceCal
 			},
 		},
 		Dependencies: []string{
-			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ObjectReference"},
+			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"},
 	}
 }
 
@@ -6008,7 +6008,7 @@ func schema_k8s_apis_netguard_v1beta1_SvcSvcRuleSpec(ref common.ReferenceCallbac
 				Properties: map[string]spec.Schema{
 					"serviceFrom": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ServiceFrom - source service reference Uses existing NamespacedObjectReference (line 295)",
+							Description: "ServiceFrom - source service reference",
 							Default:     map[string]interface{}{},
 							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"),
 						},
@@ -6038,6 +6038,7 @@ func schema_k8s_apis_netguard_v1beta1_SvcSvcRuleSpec(ref common.ReferenceCallbac
 					"logs": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Logs - enable traffic logging",
+							Default:     false,
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
@@ -6045,6 +6046,7 @@ func schema_k8s_apis_netguard_v1beta1_SvcSvcRuleSpec(ref common.ReferenceCallbac
 					"trace": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Trace - enable detailed tracing",
+							Default:     false,
 							Type:        []string{"boolean"},
 							Format:      "",
 						},

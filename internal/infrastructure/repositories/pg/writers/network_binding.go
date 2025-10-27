@@ -106,9 +106,9 @@ func (w *Writer) upsertNetworkBinding(ctx context.Context, binding *models.Netwo
 	if err := w.exec(ctx, bindingQuery,
 		binding.Namespace,
 		binding.Name,
-		binding.Namespace, // NetworkRef is in same namespace as binding
+		binding.NetworkRef.Namespace,
 		binding.NetworkRef.Name,
-		binding.Namespace, // AddressGroupRef is in same namespace as binding
+		binding.AddressGroupRef.Namespace,
 		binding.AddressGroupRef.Name,
 		resourceVersion,
 	); err != nil {
@@ -177,12 +177,12 @@ func (w *Writer) createNetworkBindingOutboxEntry(ctx context.Context, binding *m
 	affectedResources := []map[string]string{
 		{
 			"type":      "Network",
-			"namespace": binding.Namespace,
+			"namespace": binding.NetworkRef.Namespace,
 			"name":      binding.NetworkRef.Name,
 		},
 		{
 			"type":      "AddressGroup",
-			"namespace": binding.Namespace,
+			"namespace": binding.AddressGroupRef.Namespace,
 			"name":      binding.AddressGroupRef.Name,
 		},
 	}
@@ -193,10 +193,12 @@ func (w *Writer) createNetworkBindingOutboxEntry(ctx context.Context, binding *m
 
 	// Build payload
 	payload := map[string]interface{}{
-		"namespace":   binding.Namespace,
-		"name":        binding.Name,
-		"network_ref": binding.NetworkRef.Name,
-		"ag_ref":      binding.AddressGroupRef.Name,
+		"namespace":         binding.Namespace,
+		"name":              binding.Name,
+		"network_ref":       binding.NetworkRef.Name,
+		"network_namespace": binding.NetworkRef.Namespace,
+		"ag_ref":            binding.AddressGroupRef.Name,
+		"ag_namespace":      binding.AddressGroupRef.Namespace,
 	}
 	payloadJSON, err := json.Marshal(payload)
 	if err != nil {

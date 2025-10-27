@@ -721,6 +721,7 @@ type NetworkStatus struct {
 }
 
 // +genclient
+
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // Network is the Schema for the networks API
@@ -744,10 +745,10 @@ type NetworkList struct {
 // NetworkBindingSpec defines the desired state of NetworkBinding
 type NetworkBindingSpec struct {
 	// NetworkRef is a reference to the Network resource
-	NetworkRef ObjectReference `json:"networkRef"`
+	NetworkRef NamespacedObjectReference `json:"networkRef"`
 
 	// AddressGroupRef is a reference to the AddressGroup resource
-	AddressGroupRef ObjectReference `json:"addressGroupRef"`
+	AddressGroupRef NamespacedObjectReference `json:"addressGroupRef"`
 }
 
 // NetworkBindingStatus defines the observed state of NetworkBinding
@@ -928,11 +929,11 @@ type SvcSvcRuleSpec struct {
 
 	// Logs - enable traffic logging
 	// +optional
-	Logs bool `json:"logs,omitempty"`
+	Logs bool `json:"logs"`
 
 	// Trace - enable detailed tracing
 	// +optional
-	Trace bool `json:"trace,omitempty"`
+	Trace bool `json:"trace"`
 }
 
 // SvcSvcRuleStatus defines the observed state

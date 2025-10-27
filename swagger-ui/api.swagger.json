@@ -1730,11 +1730,11 @@
           "$ref": "#/definitions/v1ResourceIdentifier"
         },
         "networkRef": {
-          "$ref": "#/definitions/v1ObjectReference",
+          "$ref": "#/definitions/v1NamespacedObjectReference",
           "title": "Reference to the Network resource"
         },
         "addressGroupRef": {
-          "$ref": "#/definitions/v1ObjectReference",
+          "$ref": "#/definitions/v1NamespacedObjectReference",
           "title": "Reference to the AddressGroup resource"
         },
         "networkItem": {

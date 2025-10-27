@@ -284,8 +284,8 @@ message NetworkBinding {
     }
   };
   ResourceIdentifier self_ref = 1;
-  ObjectReference network_ref = 2;  // Reference to the Network resource
-  ObjectReference address_group_ref = 3;  // Reference to the AddressGroup resource
+  NamespacedObjectReference network_ref = 2;  // Reference to the Network resource
+  NamespacedObjectReference address_group_ref = 3;  // Reference to the AddressGroup resource
   NetworkItem network_item = 4;  // Network item details
   Meta meta = 5;
 }

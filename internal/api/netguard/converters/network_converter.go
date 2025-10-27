@@ -2,6 +2,7 @@ package converters
 
 import (
 	"netguard-pg-backend/internal/domain/models"
+	"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
 )
 
@@ -68,24 +69,28 @@ func ConvertNetworkBinding(binding *netguardpb.NetworkBinding) models.NetworkBin
 	}
 
 	// Convert NetworkRef with nil-safe access
-	var networkName string
-	if netRef := binding.GetNetworkRef(); netRef != nil {
-		networkName = netRef.GetName()
+	if netRef := binding.GetNetworkRef(); netRef != nil && netRef.GetName() != "" {
+		result.NetworkRef = v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: netRef.GetApiVersion(),
+				Kind:       netRef.GetKind(),
+				Name:       netRef.GetName(),
+			},
+			Namespace: netRef.GetNamespace(),
+		}
 	}
-	if networkName == "" {
-		return result // Skip conversion if NetworkRef is incomplete
-	}
-	result.NetworkRef = NewObjectReference(KindNetwork, networkName)
 
 	// Convert AddressGroupRef with nil-safe access
-	var agName string
-	if agRef := binding.GetAddressGroupRef(); agRef != nil {
-		agName = agRef.GetName()
+	if agRef := binding.GetAddressGroupRef(); agRef != nil && agRef.GetName() != "" {
+		result.AddressGroupRef = v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: agRef.GetApiVersion(),
+				Kind:       agRef.GetKind(),
+				Name:       agRef.GetName(),
+			},
+			Namespace: agRef.GetNamespace(),
+		}
 	}
-	if agName == "" {
-		return result // Skip conversion if AddressGroupRef is incomplete
-	}
-	result.AddressGroupRef = NewObjectReference(KindAddressGroup, agName)
 
 	if binding.NetworkItem != nil {
 		result.NetworkItem = models.NetworkItem{
@@ -104,15 +109,17 @@ func ConvertNetworkBindingToPB(binding models.NetworkBinding) *netguardpb.Networ
 			Name:      binding.Name,
 			Namespace: binding.Namespace,
 		},
-		NetworkRef: &netguardpb.ObjectReference{
+		NetworkRef: &netguardpb.NamespacedObjectReference{
 			ApiVersion: binding.NetworkRef.APIVersion,
 			Kind:       binding.NetworkRef.Kind,
 			Name:       binding.NetworkRef.Name,
+			Namespace:  binding.NetworkRef.Namespace,
 		},
-		AddressGroupRef: &netguardpb.ObjectReference{
+		AddressGroupRef: &netguardpb.NamespacedObjectReference{
 			ApiVersion: binding.AddressGroupRef.APIVersion,
 			Kind:       binding.AddressGroupRef.Kind,
 			Name:       binding.AddressGroupRef.Name,
+			Namespace:  binding.AddressGroupRef.Namespace,
 		},
 		Meta: ConvertMetaToPB(binding.Meta),
 	}
