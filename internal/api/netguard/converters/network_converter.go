@@ -37,10 +37,11 @@ func ConvertNetworkToPB(network models.Network) *netguardpb.Network {
 	pbNetwork.IsBound = network.IsBound
 
 	if network.BindingRef != nil {
-		pbNetwork.BindingRef = &netguardpb.ObjectReference{
+		pbNetwork.BindingRef = &netguardpb.NamespacedObjectReference{
 			ApiVersion: network.BindingRef.APIVersion,
 			Kind:       network.BindingRef.Kind,
 			Name:       network.BindingRef.Name,
+			Namespace:  network.BindingRef.Namespace,
 		}
 	}
 
@@ -49,7 +50,7 @@ func ConvertNetworkToPB(network models.Network) *netguardpb.Network {
 			ApiVersion: network.AddressGroupRef.APIVersion,
 			Kind:       network.AddressGroupRef.Kind,
 			Name:       network.AddressGroupRef.Name,
-			Namespace:  network.Namespace,
+			Namespace:  network.AddressGroupRef.Namespace,
 		}
 	}
 

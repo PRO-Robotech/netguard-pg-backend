@@ -64,13 +64,13 @@ func (c *NetworkConverter) FromDomain(ctx context.Context, domainObj *models.Net
 		Conditions:  domainObj.Meta.Conditions,
 	}
 
-	// Ensure ObjectReference fields in status are properly set
+	// Ensure NamespacedObjectReference fields in status are properly set
 	if domainObj.BindingRef != nil {
-		bindingRef := EnsureObjectReferenceFields(*domainObj.BindingRef, "NetworkBinding")
+		bindingRef := EnsureNamespacedObjectReferenceFields(*domainObj.BindingRef, "NetworkBinding")
 		k8sNetwork.Status.BindingRef = &bindingRef
 	}
 	if domainObj.AddressGroupRef != nil {
-		addressGroupRef := EnsureObjectReferenceFields(*domainObj.AddressGroupRef, "AddressGroup")
+		addressGroupRef := EnsureNamespacedObjectReferenceFields(*domainObj.AddressGroupRef, "AddressGroup")
 		k8sNetwork.Status.AddressGroupRef = &addressGroupRef
 	}
 

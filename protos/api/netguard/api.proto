@@ -240,7 +240,7 @@ message Network {
 
   // Status fields
   bool is_bound = 4;                               // Whether the network is bound to an AddressGroup
-  ObjectReference binding_ref = 5;                 // Reference to the NetworkBinding
+  NamespacedObjectReference binding_ref = 5;       // Reference to the NetworkBinding
   NamespacedObjectReference address_group_ref = 6; // Reference to the bound AddressGroup
 }
 

@@ -708,10 +708,10 @@ type NetworkStatus struct {
 	IsBound bool `json:"isBound"`
 
 	// BindingRef is a reference to the NetworkBinding that binds this network
-	BindingRef *ObjectReference `json:"bindingRef,omitempty"`
+	BindingRef *NamespacedObjectReference `json:"bindingRef,omitempty"`
 
 	// AddressGroupRef is a reference to the AddressGroup this network is bound to
-	AddressGroupRef *ObjectReference `json:"addressGroupRef,omitempty"`
+	AddressGroupRef *NamespacedObjectReference `json:"addressGroupRef,omitempty"`
 
 	// Conditions represent the latest available observations of the resource's state
 	// +optional

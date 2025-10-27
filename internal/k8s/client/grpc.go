@@ -1716,18 +1716,24 @@ func convertNetworkFromProto(protoNetwork *netguardpb.Network) models.Network {
 	result.IsBound = protoNetwork.IsBound
 
 	if protoNetwork.BindingRef != nil {
-		result.BindingRef = &v1beta1.ObjectReference{
-			APIVersion: protoNetwork.BindingRef.ApiVersion,
-			Kind:       protoNetwork.BindingRef.Kind,
-			Name:       protoNetwork.BindingRef.Name,
+		result.BindingRef = &v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: protoNetwork.BindingRef.ApiVersion,
+				Kind:       protoNetwork.BindingRef.Kind,
+				Name:       protoNetwork.BindingRef.Name,
+			},
+			Namespace: protoNetwork.BindingRef.Namespace,
 		}
 	}
 
 	if protoNetwork.AddressGroupRef != nil {
-		result.AddressGroupRef = &v1beta1.ObjectReference{
-			APIVersion: protoNetwork.AddressGroupRef.ApiVersion,
-			Kind:       protoNetwork.AddressGroupRef.Kind,
-			Name:       protoNetwork.AddressGroupRef.Name,
+		result.AddressGroupRef = &v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: protoNetwork.AddressGroupRef.ApiVersion,
+				Kind:       protoNetwork.AddressGroupRef.Kind,
+				Name:       protoNetwork.AddressGroupRef.Name,
+			},
+			Namespace: protoNetwork.AddressGroupRef.Namespace,
 		}
 	}
 

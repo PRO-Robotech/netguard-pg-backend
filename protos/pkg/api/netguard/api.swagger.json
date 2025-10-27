@@ -1709,7 +1709,7 @@
           "title": "Status fields"
         },
         "bindingRef": {
-          "$ref": "#/definitions/v1ObjectReference",
+          "$ref": "#/definitions/v1NamespacedObjectReference",
           "title": "Reference to the NetworkBinding"
         },
         "addressGroupRef": {

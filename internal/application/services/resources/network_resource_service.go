@@ -463,15 +463,21 @@ func (s *NetworkResourceService) UpdateNetworkBinding(ctx context.Context, netwo
 	}
 
 	// Update binding references
-	network.BindingRef = &v1beta1.ObjectReference{
-		APIVersion: "netguard.sgroups.io/v1beta1",
-		Kind:       "NetworkBinding",
-		Name:       bindingID.Name, // Store only the name part for repository consistency
+	network.BindingRef = &v1beta1.NamespacedObjectReference{
+		ObjectReference: v1beta1.ObjectReference{
+			APIVersion: "netguard.sgroups.io/v1beta1",
+			Kind:       "NetworkBinding",
+			Name:       bindingID.Name,
+		},
+		Namespace: bindingID.Namespace,
 	}
-	network.AddressGroupRef = &v1beta1.ObjectReference{
-		APIVersion: "netguard.sgroups.io/v1beta1",
-		Kind:       "AddressGroup",
-		Name:       addressGroupID.Name,
+	network.AddressGroupRef = &v1beta1.NamespacedObjectReference{
+		ObjectReference: v1beta1.ObjectReference{
+			APIVersion: "netguard.sgroups.io/v1beta1",
+			Kind:       "AddressGroup",
+			Name:       addressGroupID.Name,
+		},
+		Namespace: addressGroupID.Namespace,
 	}
 	network.IsBound = true
 

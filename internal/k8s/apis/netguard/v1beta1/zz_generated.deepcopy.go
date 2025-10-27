@@ -1216,12 +1216,12 @@ func (in *NetworkStatus) DeepCopyInto(out *NetworkStatus) {
 	*out = *in
 	if in.BindingRef != nil {
 		in, out := &in.BindingRef, &out.BindingRef
-		*out = new(ObjectReference)
+		*out = new(NamespacedObjectReference)
 		**out = **in
 	}
 	if in.AddressGroupRef != nil {
 		in, out := &in.AddressGroupRef, &out.AddressGroupRef
-		*out = new(ObjectReference)
+		*out = new(NamespacedObjectReference)
 		**out = **in
 	}
 	if in.Conditions != nil {

@@ -4897,13 +4897,13 @@ func schema_k8s_apis_netguard_v1beta1_NetworkStatus(ref common.ReferenceCallback
 					"bindingRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BindingRef is a reference to the NetworkBinding that binds this network",
-							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ObjectReference"),
+							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"),
 						},
 					},
 					"addressGroupRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "AddressGroupRef is a reference to the AddressGroup this network is bound to",
-							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ObjectReference"),
+							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"),
 						},
 					},
 					"conditions": {
@@ -4931,7 +4931,7 @@ func schema_k8s_apis_netguard_v1beta1_NetworkStatus(ref common.ReferenceCallback
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Condition", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ObjectReference"},
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Condition", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"},
 	}
 }
 

@@ -172,14 +172,14 @@ func (w *Writer) upsertNetwork(ctx context.Context, network *models.Network) err
 		return errors.Wrap(err, "failed to marshal network_items")
 	}
 
-	// Extract reference fields from ObjectReference (references are in same namespace)
+	// Extract reference fields from NamespacedObjectReference
 	var bindingRefNamespace, bindingRefName, agRefNamespace, agRefName interface{}
 	if network.BindingRef != nil {
-		bindingRefNamespace = network.Namespace // References are in same namespace
+		bindingRefNamespace = network.BindingRef.Namespace
 		bindingRefName = network.BindingRef.Name
 	}
 	if network.AddressGroupRef != nil {
-		agRefNamespace = network.Namespace // References are in same namespace
+		agRefNamespace = network.AddressGroupRef.Namespace
 		agRefName = network.AddressGroupRef.Name
 	}
 
@@ -230,8 +230,6 @@ func (w *Writer) upsertNetwork(ctx context.Context, network *models.Network) err
 		return errors.Wrapf(err, "failed to upsert network %s/%s", network.Namespace, network.Name)
 	}
 
-	// ========================================
-	// ========================================
 	if err := w.createNetworkOutboxEntry(ctx, network); err != nil {
 		return errors.Wrap(err, "failed to create outbox entry for network")
 	}

@@ -133,20 +133,26 @@ func (r *Reader) scanNetwork(rows pgx.Rows) (models.Network, error) {
 	// Set Network-specific fields
 	network.IsBound = isBound
 
-	// Build ObjectReferences from separate namespace/name columns
+	// Build NamespacedObjectReferences from separate namespace/name columns
 	if bindingRefNamespace != nil && bindingRefName != nil {
-		network.BindingRef = &v1beta1.ObjectReference{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "NetworkBinding",
-			Name:       *bindingRefName,
+		network.BindingRef = &v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "NetworkBinding",
+				Name:       *bindingRefName,
+			},
+			Namespace: *bindingRefNamespace,
 		}
 	}
 
 	if addressGroupRefNamespace != nil && addressGroupRefName != nil {
-		network.AddressGroupRef = &v1beta1.ObjectReference{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "AddressGroup",
-			Name:       *addressGroupRefName,
+		network.AddressGroupRef = &v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "AddressGroup",
+				Name:       *addressGroupRefName,
+			},
+			Namespace: *addressGroupRefNamespace,
 		}
 	}
 
@@ -203,20 +209,26 @@ func (r *Reader) scanNetworkRow(row pgx.Row) (*models.Network, error) {
 	// Set Network-specific fields
 	network.IsBound = isBound
 
-	// Build ObjectReferences from separate namespace/name columns
+	// Build NamespacedObjectReferences from separate namespace/name columns
 	if bindingRefNamespace != nil && bindingRefName != nil {
-		network.BindingRef = &v1beta1.ObjectReference{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "NetworkBinding",
-			Name:       *bindingRefName,
+		network.BindingRef = &v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "NetworkBinding",
+				Name:       *bindingRefName,
+			},
+			Namespace: *bindingRefNamespace,
 		}
 	}
 
 	if addressGroupRefNamespace != nil && addressGroupRefName != nil {
-		network.AddressGroupRef = &v1beta1.ObjectReference{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "AddressGroup",
-			Name:       *addressGroupRefName,
+		network.AddressGroupRef = &v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "AddressGroup",
+				Name:       *addressGroupRefName,
+			},
+			Namespace: *addressGroupRefNamespace,
 		}
 	}
 
