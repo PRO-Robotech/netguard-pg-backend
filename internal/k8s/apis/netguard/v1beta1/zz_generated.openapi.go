@@ -3594,13 +3594,13 @@ func schema_k8s_apis_netguard_v1beta1_AddressGroupSpec(ref common.ReferenceCallb
 					},
 					"hosts": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Hosts that belong exclusively to this AddressGroup Each host can belong to only one AddressGroup",
+							Description: "Hosts that belong exclusively to this AddressGroup Each host can belong to only one AddressGroup Host namespace MUST match AddressGroup namespace",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ObjectReference"),
+										Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"),
 									},
 								},
 							},
@@ -3611,7 +3611,7 @@ func schema_k8s_apis_netguard_v1beta1_AddressGroupSpec(ref common.ReferenceCallb
 			},
 		},
 		Dependencies: []string{
-			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ObjectReference"},
+			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"},
 	}
 }
 
@@ -4043,9 +4043,9 @@ func schema_k8s_apis_netguard_v1beta1_HostReference(ref common.ReferenceCallback
 				Properties: map[string]spec.Schema{
 					"ref": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Reference to the Host object (namespace is implied from AddressGroup context)",
+							Description: "Reference to the Host object Host namespace MUST match AddressGroup namespace",
 							Default:     map[string]interface{}{},
-							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ObjectReference"),
+							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"),
 						},
 					},
 					"uuid": {
@@ -4069,7 +4069,7 @@ func schema_k8s_apis_netguard_v1beta1_HostReference(ref common.ReferenceCallback
 			},
 		},
 		Dependencies: []string{
-			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ObjectReference"},
+			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"},
 	}
 }
 

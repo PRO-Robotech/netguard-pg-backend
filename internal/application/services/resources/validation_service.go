@@ -798,7 +798,7 @@ func (s *ValidationService) ValidateResourceDependencies(ctx context.Context, re
 // Helper Functions
 // =============================================================================
 
-func getNewOrChangedHosts(oldHosts, newHosts []netguardv1beta1.ObjectReference) []netguardv1beta1.ObjectReference {
+func getNewOrChangedHosts(oldHosts, newHosts []netguardv1beta1.NamespacedObjectReference) []netguardv1beta1.NamespacedObjectReference {
 	if len(oldHosts) == 0 {
 		// All hosts are new
 		return newHosts
@@ -816,7 +816,7 @@ func getNewOrChangedHosts(oldHosts, newHosts []netguardv1beta1.ObjectReference) 
 	}
 
 	// Find new hosts that weren't in the old list
-	var newOrChangedHosts []netguardv1beta1.ObjectReference
+	var newOrChangedHosts []netguardv1beta1.NamespacedObjectReference
 	for _, newHost := range newHosts {
 		if !oldHostsMap[newHost.Name] {
 			// This is a new host, needs validation

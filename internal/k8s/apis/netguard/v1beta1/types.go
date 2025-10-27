@@ -250,8 +250,9 @@ type AddressGroupSpec struct {
 
 	// Hosts that belong exclusively to this AddressGroup
 	// Each host can belong to only one AddressGroup
+	// Host namespace MUST match AddressGroup namespace
 	// +optional
-	Hosts []ObjectReference `json:"hosts,omitempty"`
+	Hosts []NamespacedObjectReference `json:"hosts,omitempty"`
 }
 
 // AddressGroupStatus defines the observed state of AddressGroup
@@ -334,8 +335,9 @@ const (
 
 // HostReference represents a reference to a Host with additional metadata
 type HostReference struct {
-	// Reference to the Host object (namespace is implied from AddressGroup context)
-	ObjectReference ObjectReference `json:"ref"`
+	// Reference to the Host object
+	// Host namespace MUST match AddressGroup namespace
+	Ref NamespacedObjectReference `json:"ref"`
 
 	// UUID of the host (for efficient lookup and SGroup sync)
 	UUID string `json:"uuid"`

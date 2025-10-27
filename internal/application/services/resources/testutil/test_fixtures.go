@@ -142,15 +142,21 @@ var TestFixtures = struct {
 				Namespace: "test-namespace",
 			},
 		},
-		NetworkRef: v1beta1.ObjectReference{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "Network",
-			Name:       "test-network",
+		NetworkRef: v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "Network",
+				Name:       "test-network",
+			},
+			Namespace: "test-namespace",
 		},
-		AddressGroupRef: v1beta1.ObjectReference{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "AddressGroup",
-			Name:       "test-address-group",
+		AddressGroupRef: v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "AddressGroup",
+				Name:       "test-address-group",
+			},
+			Namespace: "test-namespace",
 		},
 		Meta: models.Meta{
 			CreationTS: metav1.NewTime(time.Now()),
@@ -297,15 +303,21 @@ func CreateTestNetworkBinding(name, namespace, networkName, addressGroupName str
 				Namespace: namespace,
 			},
 		},
-		NetworkRef: v1beta1.ObjectReference{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "Network",
-			Name:       networkName,
+		NetworkRef: v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "Network",
+				Name:       networkName,
+			},
+			Namespace: namespace,
 		},
-		AddressGroupRef: v1beta1.ObjectReference{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "AddressGroup",
-			Name:       addressGroupName,
+		AddressGroupRef: v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "AddressGroup",
+				Name:       addressGroupName,
+			},
+			Namespace: namespace,
 		},
 		Meta: models.Meta{
 			CreationTS: metav1.NewTime(time.Now()),

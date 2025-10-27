@@ -208,7 +208,7 @@ func (s *HostResourceService) DeleteHost(ctx context.Context, id models.Resource
 
 		if ag != nil {
 			// Remove host from AddressGroup.spec.hosts
-			var updatedHosts []v1beta1.ObjectReference
+			var updatedHosts []v1beta1.NamespacedObjectReference
 			for _, hostRef := range ag.Hosts {
 				if hostRef.Name != existing.Name {
 					updatedHosts = append(updatedHosts, hostRef)
@@ -518,7 +518,7 @@ func (s *HostResourceService) UpdateHostBinding(ctx context.Context, hostID mode
 func (s *HostResourceService) UpdateHostBindingStatus(ctx context.Context, oldAG, newAG *models.AddressGroup) error {
 
 	// Get lists of hosts from old and new AddressGroups
-	var oldHosts, newHosts []v1beta1.ObjectReference
+	var oldHosts, newHosts []v1beta1.NamespacedObjectReference
 
 	if oldAG != nil {
 		oldHosts = oldAG.Hosts

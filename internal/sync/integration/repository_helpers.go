@@ -50,7 +50,7 @@ func TCCreateAddressGroupViaRepositoryWithConnStr(t *testing.T, connStr, namespa
 		Logs:          false,
 		Trace:         false,
 		Networks:      []models.NetworkItem{},
-		Hosts:         []netguardv1beta1.ObjectReference{},
+		Hosts:         []netguardv1beta1.NamespacedObjectReference{},
 	}
 
 	// Initialize Meta.UID (required by Writer)
