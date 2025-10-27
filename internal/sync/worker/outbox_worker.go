@@ -229,7 +229,17 @@ func (w *OutboxWorker) processBatch(ctx context.Context) error {
 				zap.String("resource_id", entry.ResourceID.String()),
 				zap.Error(err),
 			)
-			// Note: failed is incremented per batch, not per entry
+
+			// CRITICAL FIX: Handle error with retry logic
+			// scheduleRetry will categorize error and either schedule retry or mark as FAILED_PERMANENT
+			if retryErr := w.scheduleRetry(ctx, entry, err); retryErr != nil {
+				w.logger.Error("failed to schedule retry",
+					zap.String("entry_id", entry.ID.String()),
+					zap.String("resource_type", entry.ResourceType),
+					zap.Error(retryErr))
+			}
+
+			atomic.AddInt64(&w.failed, 1)
 		} else {
 			atomic.AddInt64(&w.processed, 1)
 		}

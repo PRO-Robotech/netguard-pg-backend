@@ -85,7 +85,8 @@ func (w *OutboxWorker) processEntityResource(
 				duration := time.Since(startTime)
 				RecordProcessingFailure(item.ResourceType, operation, "resource_not_found", duration)
 
-				return fmt.Errorf("resource not found (deleted): %w", err)
+				// Return wrapped ErrResourceDeleted for proper error handling
+				return fmt.Errorf("%w: %w", ErrResourceDeleted, err)
 			}
 
 			// P0-3: Record failure metric for load error
@@ -115,12 +116,7 @@ func (w *OutboxWorker) processEntityResource(
 	}
 
 	// Step 2.5: Check entity dependencies (embedded references)
-	// BUG-004 FIX: Skip dependency checking for DELETE operations
-	// Deleted resources don't have dependencies to check
 	if item.Operation != domain.SyncOperationDelete {
-		// Entity resources with embedded references (AddressGroup.AggregatedHosts,
-		// Network.AddressGroupRef, Service.AggregatedAddressGroups) require
-		// their dependencies to be Ready before syncing to SGROUP
 		allReady, missingDeps, err := w.checkEntityDependencies(ctx, item.ResourceType, resource)
 		if err != nil {
 			w.logger.Error("failed to check entity dependencies",
@@ -135,8 +131,6 @@ func (w *OutboxWorker) processEntityResource(
 		}
 
 		if !allReady {
-			// Some dependencies are not ready - we must wait
-			// Log each missing dependency for visibility
 			for _, dep := range missingDeps {
 				w.logger.Warn("entity dependency not ready",
 					zap.String("resource_type", item.ResourceType),
@@ -148,10 +142,7 @@ func (w *OutboxWorker) processEntityResource(
 					zap.String("dep_reason", dep.Reason))
 			}
 
-			// Integration Point #2.5: Update PendingSync with specific message based on dependency type
-			// Special case: Host waiting for AddressGroup (most common and user-visible case)
 			if item.ResourceType == string(registry.TypeHost) && len(missingDeps) == 1 && missingDeps[0].Type == string(registry.TypeAddressGroup) {
-				// Host → AddressGroup dependency: Use specific, user-friendly message
 				if err := w.updatePendingSyncWaitingAddressGroup(ctx, item.ResourceType, item.ResourceNamespace, item.ResourceName,
 					missingDeps[0].Namespace, missingDeps[0].Name); err != nil {
 					w.logger.Warn("failed to update PendingSync condition for AddressGroup dependency", zap.Error(err))
@@ -164,12 +155,9 @@ func (w *OutboxWorker) processEntityResource(
 				}
 			}
 
-			// P0-3: Record failure metric for missing dependencies (will retry)
 			duration := time.Since(startTime)
 			RecordProcessingFailure(item.ResourceType, operation, "missing_dependencies", duration)
 
-			// Return temporary error - Worker will retry later
-			// By the time we retry, dependencies might be Ready
 			return fmt.Errorf("waiting for %d dependencies to be Ready (e.g., %s/%s)",
 				len(missingDeps),
 				missingDeps[0].Type,
@@ -193,8 +181,6 @@ func (w *OutboxWorker) processEntityResource(
 		return fmt.Errorf("no syncer for resource type %s: %w", item.ResourceType, err)
 	}
 
-	// Step 4: Sync to SGROUP (Sync-First!)
-	// Create context with configured timeout
 	syncCtx, cancel := context.WithTimeout(ctx, w.config.SGROUPTimeout)
 	defer cancel()
 
@@ -262,7 +248,6 @@ func (w *OutboxWorker) processEntityResource(
 				zap.String("name", item.ResourceName),
 				zap.Error(err))
 
-			// P0-3: Record failure metric for DB update error
 			duration := time.Since(startTime)
 			RecordProcessingFailure(item.ResourceType, operation, "db_update_error", duration)
 
@@ -289,7 +274,6 @@ func (w *OutboxWorker) processEntityResource(
 }
 
 // reconstructResourceFromPayload reconstructs a minimal resource from outbox payload
-// BUG-004 FIX: Used for DELETE operations when resource is already deleted from DB
 func (w *OutboxWorker) reconstructResourceFromPayload(item *domain.OutboxEntry) (interface{}, error) {
 	// Parse payload JSON
 	var payload map[string]interface{}

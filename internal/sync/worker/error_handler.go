@@ -31,6 +31,13 @@ func (w *OutboxWorker) categorizeError(err error) ErrorCategory {
 		return ErrorCategoryTemporary // Should not happen, but safe default
 	}
 
+	// Check for permanent resource deletion error first
+	// This error means the resource was deleted before sync could complete
+	// and should be marked as FAILED_PERMANENT after validation attempts
+	if errors.Is(err, ErrResourceDeleted) {
+		return ErrorCategoryValidation // Fail fast - resource no longer exists
+	}
+
 	// Check context timeout/deadline exceeded
 	if errors.Is(err, context.DeadlineExceeded) {
 		return ErrorCategoryTemporary
