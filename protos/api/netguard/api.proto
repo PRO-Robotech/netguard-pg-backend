@@ -193,6 +193,10 @@ message Meta {
   // ManagedFields stores Server-Side Apply field ownership information
   // Compatible with k8s.io/apimachinery/pkg/apis/meta/v1.ManagedFieldsEntry
   repeated ManagedFieldsEntry managed_fields = 10;
+
+  // DeletionTimestamp is set when resource is being deleted (soft delete)
+  // Null value means resource is not being deleted
+  google.protobuf.Timestamp deletion_ts = 11;
 }
 
 // AddressGroupRef - reference to an address group
@@ -849,6 +853,18 @@ message SyncReq {
   }
 }
 
+// MarkForDeletionReq - request to mark a resource for soft deletion
+message MarkForDeletionReq {
+  // Namespace of the resource
+  string namespace = 1;
+
+  // Name of the resource
+  string name = 2;
+
+  // Kind of the resource (e.g., "AddressGroup", "Host", "Network")
+  string kind = 3;
+}
+
 // Service definition
 service NetguardService {
   option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_tag) = {
@@ -1133,6 +1149,19 @@ service NetguardService {
     };
     option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
       description: "GetSvcSvcRule: gets a specific service-to-service rule by ID";
+    };
+  }
+
+  // MarkForDeletion - soft delete: marks resource for deletion without immediate physical removal
+  // Sets deletionTimestamp and Ready=False (Terminating) status
+  // Physical deletion happens after SGROUP synchronization
+  rpc MarkForDeletion(MarkForDeletionReq) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/v1/resources/{namespace}/{name}/mark-for-deletion"
+      body: "*"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "MarkForDeletion: marks a resource for soft deletion";
     };
   }
 }

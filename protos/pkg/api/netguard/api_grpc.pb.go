@@ -48,6 +48,7 @@ const (
 	NetguardService_GetHostBinding_FullMethodName                  = "/netguard.v1.NetguardService/GetHostBinding"
 	NetguardService_ListSvcSvcRules_FullMethodName                 = "/netguard.v1.NetguardService/ListSvcSvcRules"
 	NetguardService_GetSvcSvcRule_FullMethodName                   = "/netguard.v1.NetguardService/GetSvcSvcRule"
+	NetguardService_MarkForDeletion_FullMethodName                 = "/netguard.v1.NetguardService/MarkForDeletion"
 )
 
 // NetguardServiceClient is the client API for NetguardService service.
@@ -112,6 +113,10 @@ type NetguardServiceClient interface {
 	ListSvcSvcRules(ctx context.Context, in *ListSvcSvcRulesReq, opts ...grpc.CallOption) (*ListSvcSvcRulesResp, error)
 	// GetSvcSvcRule - gets a specific SvcSvcRule by ID
 	GetSvcSvcRule(ctx context.Context, in *GetSvcSvcRuleReq, opts ...grpc.CallOption) (*GetSvcSvcRuleResp, error)
+	// MarkForDeletion - soft delete: marks resource for deletion without immediate physical removal
+	// Sets deletionTimestamp and Ready=False (Terminating) status
+	// Physical deletion happens after SGROUP synchronization
+	MarkForDeletion(ctx context.Context, in *MarkForDeletionReq, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type netguardServiceClient struct {
@@ -402,6 +407,16 @@ func (c *netguardServiceClient) GetSvcSvcRule(ctx context.Context, in *GetSvcSvc
 	return out, nil
 }
 
+func (c *netguardServiceClient) MarkForDeletion(ctx context.Context, in *MarkForDeletionReq, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, NetguardService_MarkForDeletion_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // NetguardServiceServer is the server API for NetguardService service.
 // All implementations must embed UnimplementedNetguardServiceServer
 // for forward compatibility.
@@ -464,6 +479,10 @@ type NetguardServiceServer interface {
 	ListSvcSvcRules(context.Context, *ListSvcSvcRulesReq) (*ListSvcSvcRulesResp, error)
 	// GetSvcSvcRule - gets a specific SvcSvcRule by ID
 	GetSvcSvcRule(context.Context, *GetSvcSvcRuleReq) (*GetSvcSvcRuleResp, error)
+	// MarkForDeletion - soft delete: marks resource for deletion without immediate physical removal
+	// Sets deletionTimestamp and Ready=False (Terminating) status
+	// Physical deletion happens after SGROUP synchronization
+	MarkForDeletion(context.Context, *MarkForDeletionReq) (*emptypb.Empty, error)
 	mustEmbedUnimplementedNetguardServiceServer()
 }
 
@@ -557,6 +576,9 @@ func (UnimplementedNetguardServiceServer) ListSvcSvcRules(context.Context, *List
 }
 func (UnimplementedNetguardServiceServer) GetSvcSvcRule(context.Context, *GetSvcSvcRuleReq) (*GetSvcSvcRuleResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSvcSvcRule not implemented")
+}
+func (UnimplementedNetguardServiceServer) MarkForDeletion(context.Context, *MarkForDeletionReq) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MarkForDeletion not implemented")
 }
 func (UnimplementedNetguardServiceServer) mustEmbedUnimplementedNetguardServiceServer() {}
 func (UnimplementedNetguardServiceServer) testEmbeddedByValue()                         {}
@@ -1083,6 +1105,24 @@ func _NetguardService_GetSvcSvcRule_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NetguardService_MarkForDeletion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MarkForDeletionReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).MarkForDeletion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_MarkForDeletion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).MarkForDeletion(ctx, req.(*MarkForDeletionReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // NetguardService_ServiceDesc is the grpc.ServiceDesc for NetguardService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1201,6 +1241,10 @@ var NetguardService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSvcSvcRule",
 			Handler:    _NetguardService_GetSvcSvcRule_Handler,
+		},
+		{
+			MethodName: "MarkForDeletion",
+			Handler:    _NetguardService_MarkForDeletion_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

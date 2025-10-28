@@ -116,6 +116,9 @@ const (
 	// NetguardServiceGetSvcSvcRuleProcedure is the fully-qualified name of the NetguardService's
 	// GetSvcSvcRule RPC.
 	NetguardServiceGetSvcSvcRuleProcedure = "/netguard.v1.NetguardService/GetSvcSvcRule"
+	// NetguardServiceMarkForDeletionProcedure is the fully-qualified name of the NetguardService's
+	// MarkForDeletion RPC.
+	NetguardServiceMarkForDeletionProcedure = "/netguard.v1.NetguardService/MarkForDeletion"
 )
 
 // NetguardServiceClient is a client for the netguard.v1.NetguardService service.
@@ -176,6 +179,10 @@ type NetguardServiceClient interface {
 	ListSvcSvcRules(context.Context, *connect.Request[netguard.ListSvcSvcRulesReq]) (*connect.Response[netguard.ListSvcSvcRulesResp], error)
 	// GetSvcSvcRule - gets a specific SvcSvcRule by ID
 	GetSvcSvcRule(context.Context, *connect.Request[netguard.GetSvcSvcRuleReq]) (*connect.Response[netguard.GetSvcSvcRuleResp], error)
+	// MarkForDeletion - soft delete: marks resource for deletion without immediate physical removal
+	// Sets deletionTimestamp and Ready=False (Terminating) status
+	// Physical deletion happens after SGROUP synchronization
+	MarkForDeletion(context.Context, *connect.Request[netguard.MarkForDeletionReq]) (*connect.Response[emptypb.Empty], error)
 }
 
 // NewNetguardServiceClient constructs a client for the netguard.v1.NetguardService service. By
@@ -357,6 +364,12 @@ func NewNetguardServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(netguardServiceMethods.ByName("GetSvcSvcRule")),
 			connect.WithClientOptions(opts...),
 		),
+		markForDeletion: connect.NewClient[netguard.MarkForDeletionReq, emptypb.Empty](
+			httpClient,
+			baseURL+NetguardServiceMarkForDeletionProcedure,
+			connect.WithSchema(netguardServiceMethods.ByName("MarkForDeletion")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -390,6 +403,7 @@ type netguardServiceClient struct {
 	getHostBinding                  *connect.Client[netguard.GetHostBindingReq, netguard.GetHostBindingResp]
 	listSvcSvcRules                 *connect.Client[netguard.ListSvcSvcRulesReq, netguard.ListSvcSvcRulesResp]
 	getSvcSvcRule                   *connect.Client[netguard.GetSvcSvcRuleReq, netguard.GetSvcSvcRuleResp]
+	markForDeletion                 *connect.Client[netguard.MarkForDeletionReq, emptypb.Empty]
 }
 
 // Sync calls netguard.v1.NetguardService.Sync.
@@ -533,6 +547,11 @@ func (c *netguardServiceClient) GetSvcSvcRule(ctx context.Context, req *connect.
 	return c.getSvcSvcRule.CallUnary(ctx, req)
 }
 
+// MarkForDeletion calls netguard.v1.NetguardService.MarkForDeletion.
+func (c *netguardServiceClient) MarkForDeletion(ctx context.Context, req *connect.Request[netguard.MarkForDeletionReq]) (*connect.Response[emptypb.Empty], error) {
+	return c.markForDeletion.CallUnary(ctx, req)
+}
+
 // NetguardServiceHandler is an implementation of the netguard.v1.NetguardService service.
 type NetguardServiceHandler interface {
 	// Sync - syncs data in DB
@@ -591,6 +610,10 @@ type NetguardServiceHandler interface {
 	ListSvcSvcRules(context.Context, *connect.Request[netguard.ListSvcSvcRulesReq]) (*connect.Response[netguard.ListSvcSvcRulesResp], error)
 	// GetSvcSvcRule - gets a specific SvcSvcRule by ID
 	GetSvcSvcRule(context.Context, *connect.Request[netguard.GetSvcSvcRuleReq]) (*connect.Response[netguard.GetSvcSvcRuleResp], error)
+	// MarkForDeletion - soft delete: marks resource for deletion without immediate physical removal
+	// Sets deletionTimestamp and Ready=False (Terminating) status
+	// Physical deletion happens after SGROUP synchronization
+	MarkForDeletion(context.Context, *connect.Request[netguard.MarkForDeletionReq]) (*connect.Response[emptypb.Empty], error)
 }
 
 // NewNetguardServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -768,6 +791,12 @@ func NewNetguardServiceHandler(svc NetguardServiceHandler, opts ...connect.Handl
 		connect.WithSchema(netguardServiceMethods.ByName("GetSvcSvcRule")),
 		connect.WithHandlerOptions(opts...),
 	)
+	netguardServiceMarkForDeletionHandler := connect.NewUnaryHandler(
+		NetguardServiceMarkForDeletionProcedure,
+		svc.MarkForDeletion,
+		connect.WithSchema(netguardServiceMethods.ByName("MarkForDeletion")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/netguard.v1.NetguardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case NetguardServiceSyncProcedure:
@@ -826,6 +855,8 @@ func NewNetguardServiceHandler(svc NetguardServiceHandler, opts ...connect.Handl
 			netguardServiceListSvcSvcRulesHandler.ServeHTTP(w, r)
 		case NetguardServiceGetSvcSvcRuleProcedure:
 			netguardServiceGetSvcSvcRuleHandler.ServeHTTP(w, r)
+		case NetguardServiceMarkForDeletionProcedure:
+			netguardServiceMarkForDeletionHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -945,4 +976,8 @@ func (UnimplementedNetguardServiceHandler) ListSvcSvcRules(context.Context, *con
 
 func (UnimplementedNetguardServiceHandler) GetSvcSvcRule(context.Context, *connect.Request[netguard.GetSvcSvcRuleReq]) (*connect.Response[netguard.GetSvcSvcRuleResp], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetSvcSvcRule is not implemented"))
+}
+
+func (UnimplementedNetguardServiceHandler) MarkForDeletion(context.Context, *connect.Request[netguard.MarkForDeletionReq]) (*connect.Response[emptypb.Empty], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.MarkForDeletion is not implemented"))
 }

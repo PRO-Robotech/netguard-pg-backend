@@ -578,6 +578,62 @@
         ]
       }
     },
+    "/v1/resources/{namespace}/{name}/mark-for-deletion": {
+      "post": {
+        "summary": "MarkForDeletion - soft delete: marks resource for deletion without immediate physical removal\nSets deletionTimestamp and Ready=False (Terminating) status\nPhysical deletion happens after SGROUP synchronization",
+        "description": "MarkForDeletion: marks a resource for soft deletion",
+        "operationId": "NetguardService_MarkForDeletion",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "namespace",
+            "description": "Namespace of the resource",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "description": "Name of the resource",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "title": "Kind of the resource (e.g., \"AddressGroup\", \"Host\", \"Network\")"
+                }
+              },
+              "title": "MarkForDeletionReq - request to mark a resource for soft deletion"
+            }
+          }
+        ],
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
     "/v1/rule-s2s": {
       "get": {
         "summary": "ListRuleS2S - gets list of rule s2s",
@@ -1664,6 +1720,11 @@
             "$ref": "#/definitions/v1ManagedFieldsEntry"
           },
           "title": "ManagedFields stores Server-Side Apply field ownership information\nCompatible with k8s.io/apimachinery/pkg/apis/meta/v1.ManagedFieldsEntry"
+        },
+        "deletionTs": {
+          "type": "string",
+          "format": "date-time",
+          "title": "DeletionTimestamp is set when resource is being deleted (soft delete)\nNull value means resource is not being deleted"
         }
       },
       "description": "Meta - kubernetes system metadata stored round-trip."
