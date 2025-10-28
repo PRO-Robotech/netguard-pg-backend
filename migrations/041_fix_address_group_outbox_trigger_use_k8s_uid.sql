@@ -48,6 +48,8 @@ BEGIN
     ) VALUES (
         'AddressGroup',
         v_resource_id,
+        NEW.namespace,
+        NEW.name,
         v_operation_type,
         'SGROUP',
         jsonb_build_object(
@@ -85,7 +87,6 @@ BEGIN
         uuid_ns_dns(),
         'AddressGroup:' || NEW.namespace || '/' || NEW.name
     );
-        'AddressGroup', v_resource_id || 's', v_operation_type || 's', 'SGROUP' || 's';
     INSERT INTO sync_outbox (
         resource_type,
         resource_id,
@@ -100,6 +101,8 @@ BEGIN
     ) VALUES (
         'AddressGroup',
         v_resource_id,
+        NEW.namespace,
+        NEW.name,
         v_operation_type,
         'SGROUP',
         jsonb_build_object(
