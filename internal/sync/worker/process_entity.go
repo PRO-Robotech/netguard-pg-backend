@@ -549,15 +549,55 @@ func (w *OutboxWorker) markEntityResourceReady(
 		}
 
 	case *models.AddressGroup:
+		// ДИАГНОСТИКА: Условия ДО SetReadyCondition
+		w.logger.Info("[DIAG] markEntityResourceReady: AddressGroup - BEFORE SetReadyCondition",
+			zap.String("namespace", r.Namespace),
+			zap.String("name", r.Name),
+			zap.Int("conditions_count", len(r.Meta.Conditions)),
+			zap.Any("conditions_before", r.Meta.Conditions))
+
+		startTime := time.Now()
 		r.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
 		r.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced")
+		setConditionDuration := time.Since(startTime)
+
+		// ДИАГНОСТИКА: Условия ПОСЛЕ SetReadyCondition
+		w.logger.Info("[DIAG] markEntityResourceReady: AddressGroup - AFTER SetReadyCondition",
+			zap.String("namespace", r.Namespace),
+			zap.String("name", r.Name),
+			zap.Int("conditions_count", len(r.Meta.Conditions)),
+			zap.Any("conditions_after", r.Meta.Conditions),
+			zap.Duration("set_duration_ns", setConditionDuration))
+
 		resourceScope = ports.NewResourceIdentifierScope(models.ResourceIdentifier{
 			Name:      r.Name,
 			Namespace: r.Namespace,
 		})
+
+		// ДИАГНОСТИКА: ДО вызова SyncAddressGroups
+		w.logger.Info("[DIAG] markEntityResourceReady: AddressGroup - CALLING SyncAddressGroups",
+			zap.String("namespace", r.Namespace),
+			zap.String("name", r.Name),
+			zap.String("operation_type", "ConditionOnlyOperation"),
+			zap.Bool("has_writer", writer != nil),
+			zap.Bool("has_scope", resourceScope != nil))
+
+		syncStartTime := time.Now()
 		if err := writer.SyncAddressGroups(ctx, []models.AddressGroup{*r}, resourceScope, ports.ConditionOnlyOperation{}); err != nil {
+			w.logger.Error("markEntityResourceReady: SyncAddressGroups FAILED",
+				zap.String("namespace", r.Namespace),
+				zap.String("name", r.Name),
+				zap.Error(err),
+				zap.Duration("failed_after_ns", time.Since(syncStartTime)))
 			return fmt.Errorf("failed to update address group: %w", err)
 		}
+		syncDuration := time.Since(syncStartTime)
+
+		// ДИАГНОСТИКА: ПОСЛЕ успешного SyncAddressGroups
+		w.logger.Info("[DIAG] markEntityResourceReady: AddressGroup - SyncAddressGroups SUCCESS",
+			zap.String("namespace", r.Namespace),
+			zap.String("name", r.Name),
+			zap.Duration("sync_duration_ns", syncDuration))
 
 	case *models.Network:
 		r.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
@@ -624,16 +664,17 @@ func (w *OutboxWorker) markEntityResourceReady(
 		zap.String("namespace", namespace),
 		zap.String("name", name))
 
+	// TEMPORARY: Don't delete outbox entries for debugging
 	// Delete outbox entry using outbox repository
-	w.logger.Debug("markEntityResourceReady: deleting outbox entry",
-		zap.String("outbox_id", outboxID.(uuid.UUID).String()))
-	if err := w.outboxRepo.Delete(ctx, outboxID.(uuid.UUID)); err != nil {
-		w.logger.Error("markEntityResourceReady: failed to delete outbox entry",
-			zap.String("outbox_id", outboxID.(uuid.UUID).String()),
-			zap.Error(err))
-		return fmt.Errorf("failed to delete outbox entry: %w", err)
-	}
-	w.logger.Info("markEntityResourceReady: outbox entry deleted",
+	// w.logger.Debug("markEntityResourceReady: deleting outbox entry",
+	// 	zap.String("outbox_id", outboxID.(uuid.UUID).String()))
+	// if err := w.outboxRepo.Delete(ctx, outboxID.(uuid.UUID)); err != nil {
+	// 	w.logger.Error("markEntityResourceReady: failed to delete outbox entry",
+	// 		zap.String("outbox_id", outboxID.(uuid.UUID).String()),
+	// 		zap.Error(err))
+	// 	return fmt.Errorf("failed to delete outbox entry: %w", err)
+	// }
+	w.logger.Info("markEntityResourceReady: outbox entry PRESERVED (not deleted for debugging)",
 		zap.String("resource_type", resourceType),
 		zap.String("namespace", namespace),
 		zap.String("name", name),

@@ -9,6 +9,7 @@ import (
 	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
 
+	"netguard-pg-backend/internal/application/services/conditions"
 	"netguard-pg-backend/internal/application/services/resources"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -36,7 +37,7 @@ type NetguardFacade struct {
 
 	// Internal dependencies (preserved from original)
 	registry         ports.Registry
-	conditionManager *ConditionManager
+	conditionManager *conditions.ConditionManager
 	syncManager      interfaces.SyncManager
 
 	ruleS2SMutex sync.Mutex
@@ -45,7 +46,7 @@ type NetguardFacade struct {
 // NewNetguardFacade creates a new NetguardFacade with all resource services
 func NewNetguardFacade(
 	registry ports.Registry,
-	conditionManager *ConditionManager,
+	conditionManager *conditions.ConditionManager,
 	syncManager interfaces.SyncManager,
 ) *NetguardFacade {
 	serviceConditionAdapter := &serviceConditionManagerAdapter{conditionManager}
@@ -805,7 +806,7 @@ func (f *NetguardFacade) ProcessConditionsIfNeeded(ctx context.Context, resource
 
 // Adapters to make ConditionManager compatible with resource service interfaces
 type serviceConditionManagerAdapter struct {
-	conditionManager *ConditionManager
+	conditionManager *conditions.ConditionManager
 }
 
 func (a *serviceConditionManagerAdapter) ProcessServiceConditions(ctx context.Context, service *models.Service) error {
@@ -821,7 +822,7 @@ func (a *serviceConditionManagerAdapter) ProcessAddressGroupBindingConditions(ct
 }
 
 type addressGroupConditionManagerAdapter struct {
-	conditionManager *ConditionManager
+	conditionManager *conditions.ConditionManager
 }
 
 func (a *addressGroupConditionManagerAdapter) ProcessAddressGroupConditions(ctx context.Context, addressGroup *models.AddressGroup) error {
@@ -841,23 +842,23 @@ func (a *addressGroupConditionManagerAdapter) ProcessAddressGroupBindingPolicyCo
 }
 
 func (a *addressGroupConditionManagerAdapter) SaveAddressGroupConditions(ctx context.Context, addressGroup *models.AddressGroup) error {
-	return a.conditionManager.saveAddressGroupConditions(ctx, addressGroup)
+	return a.conditionManager.SaveAddressGroupConditions(ctx, addressGroup)
 }
 
 func (a *addressGroupConditionManagerAdapter) SaveAddressGroupBindingConditions(ctx context.Context, binding *models.AddressGroupBinding) error {
-	return a.conditionManager.saveAddressGroupBindingConditions(ctx, binding)
+	return a.conditionManager.SaveAddressGroupBindingConditions(ctx, binding)
 }
 
 func (a *addressGroupConditionManagerAdapter) SaveAddressGroupPortMappingConditions(ctx context.Context, mapping *models.AddressGroupPortMapping) error {
-	return a.conditionManager.saveAddressGroupPortMappingConditions(ctx, mapping)
+	return a.conditionManager.SaveAddressGroupPortMappingConditions(ctx, mapping)
 }
 
 func (a *addressGroupConditionManagerAdapter) SaveAddressGroupBindingPolicyConditions(ctx context.Context, policy *models.AddressGroupBindingPolicy) error {
-	return a.conditionManager.saveAddressGroupBindingPolicyConditions(ctx, policy)
+	return a.conditionManager.SaveAddressGroupBindingPolicyConditions(ctx, policy)
 }
 
 type networkConditionManagerAdapter struct {
-	conditionManager *ConditionManager
+	conditionManager *conditions.ConditionManager
 }
 
 func (a *networkConditionManagerAdapter) ProcessNetworkConditions(ctx context.Context, network *models.Network, syncResult error) error {
@@ -865,7 +866,7 @@ func (a *networkConditionManagerAdapter) ProcessNetworkConditions(ctx context.Co
 }
 
 type networkBindingConditionManagerAdapter struct {
-	conditionManager *ConditionManager
+	conditionManager *conditions.ConditionManager
 }
 
 func (a *networkBindingConditionManagerAdapter) ProcessNetworkBindingConditions(ctx context.Context, networkBinding *models.NetworkBinding) error {
@@ -874,7 +875,7 @@ func (a *networkBindingConditionManagerAdapter) ProcessNetworkBindingConditions(
 
 // hostConditionManagerAdapter adapts the existing ConditionManager to the interface expected by HostResourceService
 type hostConditionManagerAdapter struct {
-	conditionManager *ConditionManager
+	conditionManager *conditions.ConditionManager
 }
 
 func (a *hostConditionManagerAdapter) ProcessHostConditions(ctx context.Context, host *models.Host, syncResult error) error {
@@ -883,7 +884,7 @@ func (a *hostConditionManagerAdapter) ProcessHostConditions(ctx context.Context,
 
 // hostBindingConditionManagerAdapter adapts the existing ConditionManager to the interface expected by HostBindingResourceService
 type hostBindingConditionManagerAdapter struct {
-	conditionManager *ConditionManager
+	conditionManager *conditions.ConditionManager
 }
 
 func (a *hostBindingConditionManagerAdapter) ProcessHostBindingConditions(ctx context.Context, hostBinding *models.HostBinding, syncResult error) error {
@@ -892,7 +893,7 @@ func (a *hostBindingConditionManagerAdapter) ProcessHostBindingConditions(ctx co
 
 // ruleConditionManager adapts the existing ConditionManager to the interface expected by RuleS2SResourceService
 type ruleConditionManager struct {
-	conditionManager *ConditionManager
+	conditionManager *conditions.ConditionManager
 }
 
 func (r *ruleConditionManager) ProcessRuleS2SConditions(ctx context.Context, rule *models.RuleS2S) error {
@@ -916,9 +917,9 @@ func (r *ruleConditionManager) SaveResourceConditions(ctx context.Context, resou
 
 	switch typedResource := resource.(type) {
 	case *models.RuleS2S:
-		return r.conditionManager.saveRuleS2SConditions(ctx, typedResource)
+		return r.conditionManager.SaveRuleS2SConditions(ctx, typedResource)
 	case *models.IEAgAgRule:
-		return r.conditionManager.saveIEAgAgRuleConditions(ctx, typedResource)
+		return r.conditionManager.SaveIEAgAgRuleConditions(ctx, typedResource)
 	default:
 		klog.Warningf("SaveResourceConditions: Unsupported resource type %T", resource)
 		return nil
@@ -962,7 +963,7 @@ func (f *NetguardFacade) GetNetworkBindingResourceService() *resources.NetworkBi
 
 // svcSvcRuleConditionManager adapts ConditionManager for SvcSvcRuleResourceService
 type svcSvcRuleConditionManager struct {
-	conditionManager *ConditionManager
+	conditionManager *conditions.ConditionManager
 }
 
 func (s *svcSvcRuleConditionManager) ProcessSvcSvcRuleConditions(ctx context.Context, rule *models.SvcSvcRule) error {

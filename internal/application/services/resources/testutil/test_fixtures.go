@@ -3,9 +3,10 @@ package testutil
 import (
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // TestFixtures provides consistent test data for all test suites

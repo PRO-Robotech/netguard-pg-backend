@@ -114,15 +114,16 @@ func (w *OutboxWorker) markProcessResourceReady(
 		zap.String("operation", string(item.Operation)))
 
 	if item.Operation == domain.SyncOperationDelete {
-		w.logger.Info("DELETE operation for process resource - skipping condition update, deleting outbox entry",
+		w.logger.Info("DELETE operation for process resource - skipping condition update, NOT deleting outbox entry (debugging)",
 			zap.String("resource_type", item.ResourceType),
 			zap.String("resource_id", item.ResourceID.String()))
 
-		if err := w.outboxRepo.Delete(ctx, item.ID); err != nil {
-			return fmt.Errorf("failed to delete outbox entry: %w", err)
-		}
+		// TEMPORARY: Don't delete for debugging
+		// if err := w.outboxRepo.Delete(ctx, item.ID); err != nil {
+		// 	return fmt.Errorf("failed to delete outbox entry: %w", err)
+		// }
 
-		w.logger.Info("process resource DELETE operation completed successfully",
+		w.logger.Info("process resource DELETE operation completed successfully (outbox preserved)",
 			zap.String("resource_type", item.ResourceType),
 			zap.String("resource_id", item.ResourceID.String()))
 
@@ -275,11 +276,12 @@ func (w *OutboxWorker) markProcessResourceReady(
 		return fmt.Errorf("failed to commit changes: %w", err)
 	}
 
-	if err := w.outboxRepo.Delete(ctx, item.ID); err != nil {
-		return fmt.Errorf("failed to delete outbox entry: %w", err)
-	}
+	// TEMPORARY: Don't delete for debugging
+	// if err := w.outboxRepo.Delete(ctx, item.ID); err != nil {
+	// 	return fmt.Errorf("failed to delete outbox entry: %w", err)
+	// }
 
-	w.logger.Info("process resource marked ready successfully",
+	w.logger.Info("process resource marked ready successfully (outbox preserved for debugging)",
 		zap.String("resource_type", item.ResourceType),
 		zap.String("resource_id", item.ResourceID.String()))
 

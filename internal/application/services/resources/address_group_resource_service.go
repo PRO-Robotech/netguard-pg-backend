@@ -3,9 +3,11 @@ package resources
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
 	"netguard-pg-backend/internal/application/validation"
@@ -171,6 +173,11 @@ func (s *AddressGroupResourceService) CreateAddressGroup(ctx context.Context, ad
 		return errors.Wrap(err, "failed to commit transaction")
 	}
 
+	// LOG 1: Commit completed successfully
+	klog.InfoS("[DEBUG] CreateAddressGroup: Writer commit completed",
+		"namespace", addressGroup.Namespace,
+		"name", addressGroup.Name)
+
 	readerForNetworks, err := s.registry.Reader(ctx)
 	if err != nil {
 		klog.Errorf("Failed to get reader for re-reading AddressGroup %s/%s: %v", addressGroup.Namespace, addressGroup.Name, err)
@@ -181,8 +188,21 @@ func (s *AddressGroupResourceService) CreateAddressGroup(ctx context.Context, ad
 			klog.Errorf("Failed to re-read AddressGroup %s/%s after creation: %v", addressGroup.Namespace, addressGroup.Name, err)
 		} else {
 			addressGroup = *createdAG
+
+			// LOG 2: Re-read from database - show what conditions we got
+			klog.InfoS("[DEBUG] CreateAddressGroup: Re-read AddressGroup from database",
+				"namespace", addressGroup.Namespace,
+				"name", addressGroup.Name,
+				"conditions", formatConditionsForResourceService(addressGroup.Meta.Conditions),
+				"condition_count", len(addressGroup.Meta.Conditions))
 		}
 	}
+
+	// LOG 3: Before processing conditions
+	klog.InfoS("[DEBUG] CreateAddressGroup: About to call ProcessAddressGroupConditions",
+		"namespace", addressGroup.Namespace,
+		"name", addressGroup.Name,
+		"conditions_before_process", formatConditionsForResourceService(addressGroup.Meta.Conditions))
 
 	// Process conditions with the FRESH AddressGroup from database
 	if s.conditionManager != nil {
@@ -191,6 +211,12 @@ func (s *AddressGroupResourceService) CreateAddressGroup(ctx context.Context, ad
 				addressGroup.Namespace, addressGroup.Name, err)
 			// Don't fail the operation if condition processing fails
 		}
+
+		// LOG 4: After processing conditions
+		klog.InfoS("[DEBUG] CreateAddressGroup: After ProcessAddressGroupConditions",
+			"namespace", addressGroup.Namespace,
+			"name", addressGroup.Name,
+			"conditions_after_process", formatConditionsForResourceService(addressGroup.Meta.Conditions))
 	}
 
 	// Sync with external systems after successful creation
@@ -2545,4 +2571,16 @@ func (s *AddressGroupResourceService) syncHostChangesWithSGroup(ctx context.Cont
 	}
 
 	return nil
+}
+
+// formatConditionsForResourceService formats conditions slice for logging (local helper)
+func formatConditionsForResourceService(conditions []metav1.Condition) string {
+	if len(conditions) == 0 {
+		return "EMPTY"
+	}
+	parts := make([]string, 0, len(conditions))
+	for _, c := range conditions {
+		parts = append(parts, fmt.Sprintf("%s=%s(%s)", c.Type, c.Status, c.Reason))
+	}
+	return strings.Join(parts, ", ")
 }

@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"netguard-pg-backend/internal/domain/models"
 
-	"github.com/pkg/errors"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
+
+	"github.com/pkg/errors"
 )
 
 // ValidateExists checks if a service alias exists

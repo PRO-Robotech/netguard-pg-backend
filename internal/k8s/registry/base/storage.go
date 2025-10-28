@@ -30,6 +30,7 @@ import (
 	"netguard-pg-backend/internal/k8s/registry/base/fieldmanager"
 	"netguard-pg-backend/internal/k8s/registry/base/patch"
 	"netguard-pg-backend/internal/k8s/registry/utils"
+
 	sigyaml "sigs.k8s.io/yaml"
 )
 

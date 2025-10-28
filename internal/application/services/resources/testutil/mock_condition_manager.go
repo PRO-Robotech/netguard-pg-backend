@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"sync"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"netguard-pg-backend/internal/domain/models"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // MockConditionManager implements a test-friendly condition manager

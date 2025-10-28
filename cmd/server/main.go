@@ -14,6 +14,7 @@ import (
 	"netguard-pg-backend/internal/api/netguard"
 	"netguard-pg-backend/internal/app/server"
 	"netguard-pg-backend/internal/application/services"
+	"netguard-pg-backend/internal/application/services/conditions"
 	"netguard-pg-backend/internal/config"
 	"netguard-pg-backend/internal/domain/registry"
 	"netguard-pg-backend/internal/infrastructure/repositories/pg"
@@ -160,7 +161,7 @@ func main() {
 	}
 
 	// Create condition manager (needed for facade)
-	conditionManager := services.NewConditionManager(pgRegistry)
+	conditionManager := conditions.NewConditionManager(pgRegistry)
 
 	// Create facade service (new architecture)
 	netguardFacade := services.NewNetguardFacade(pgRegistry, conditionManager, syncManager)

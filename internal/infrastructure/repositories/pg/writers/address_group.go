@@ -228,9 +228,15 @@ func (w *Writer) upsertAddressGroup(ctx context.Context, ag models.AddressGroup)
 		return errors.Wrapf(err, "failed to upsert address group %s/%s", ag.Namespace, ag.Name)
 	}
 
-	if err := w.createAddressGroupOutboxEntry(ctx, ag); err != nil {
-		return errors.Wrap(err, "failed to create outbox entry for address group")
-	}
+	// Outbox entry is automatically created by PostgreSQL trigger
+	// (trg_address_group_upsert_outbox) which uses UID from k8s_metadata.
+	// Migration 041 fixed the trigger to use real Kubernetes UID instead of UUID v5.
+	// This eliminates duplicate outbox entries.
+	//
+	// Previous code (REMOVED to fix triple outbox bug):
+	// if err := w.createAddressGroupOutboxEntry(ctx, ag); err != nil {
+	//     return errors.Wrap(err, "failed to create outbox entry for address group")
+	// }
 
 	return nil
 }
@@ -922,35 +928,85 @@ func (w *Writer) createAddressGroupDeleteOutboxEntry(ctx context.Context, ag mod
 }
 
 func (w *Writer) updateAddressGroupConditionsOnly(ctx context.Context, ag models.AddressGroup) error {
+	// ДИАГНОСТИКА: Начало обновления conditions
+	klog.InfoS("[DIAG] updateAddressGroupConditionsOnly: ENTRY",
+		"namespace", ag.Namespace,
+		"name", ag.Name,
+		"conditions_count", len(ag.Meta.Conditions))
+
 	var resourceVersion int64
 	getVersionQuery := `SELECT resource_version FROM address_groups WHERE namespace = $1 AND name = $2`
+
+	klog.InfoS("[DIAG] updateAddressGroupConditionsOnly: querying resource_version",
+		"namespace", ag.Namespace,
+		"name", ag.Name,
+		"query", getVersionQuery)
+
 	err := w.tx.QueryRow(ctx, getVersionQuery, ag.Namespace, ag.Name).Scan(&resourceVersion)
 	if err != nil {
 		if err == sql.ErrNoRows {
+			klog.ErrorS(err, "[DIAG] updateAddressGroupConditionsOnly: address group NOT FOUND",
+				"namespace", ag.Namespace,
+				"name", ag.Name)
 			return errors.Errorf("address group %s/%s not found", ag.Namespace, ag.Name)
 		}
+		klog.ErrorS(err, "[DIAG] updateAddressGroupConditionsOnly: query FAILED",
+			"namespace", ag.Namespace,
+			"name", ag.Name)
 		return errors.Wrapf(err, "failed to get resource_version for address group %s/%s", ag.Namespace, ag.Name)
 	}
 
+	klog.InfoS("[DIAG] updateAddressGroupConditionsOnly: resource_version retrieved",
+		"namespace", ag.Namespace,
+		"name", ag.Name,
+		"resource_version", resourceVersion)
+
 	conditionsJSON, err := json.Marshal(ag.Meta.Conditions)
 	if err != nil {
+		klog.ErrorS(err, "[DIAG] updateAddressGroupConditionsOnly: marshal FAILED",
+			"namespace", ag.Namespace,
+			"name", ag.Name)
 		return errors.Wrap(err, "failed to marshal conditions")
 	}
+
+	klog.InfoS("[DIAG] updateAddressGroupConditionsOnly: conditions marshaled",
+		"namespace", ag.Namespace,
+		"name", ag.Name,
+		"json_length", len(conditionsJSON))
 
 	updateQuery := `
 		UPDATE k8s_metadata
 		SET conditions = $1, updated_at = NOW()
 		WHERE resource_version = $2`
 
-	_, err = w.tx.Exec(ctx, updateQuery, conditionsJSON, resourceVersion)
+	klog.InfoS("[DIAG] updateAddressGroupConditionsOnly: executing UPDATE k8s_metadata",
+		"namespace", ag.Namespace,
+		"name", ag.Name,
+		"resource_version", resourceVersion,
+		"query", updateQuery)
+
+	result, err := w.tx.Exec(ctx, updateQuery, conditionsJSON, resourceVersion)
 	if err != nil {
+		klog.ErrorS(err, "[DIAG] updateAddressGroupConditionsOnly: UPDATE FAILED",
+			"namespace", ag.Namespace,
+			"name", ag.Name,
+			"resource_version", resourceVersion)
 		return errors.Wrapf(err, "failed to update conditions for address group %s/%s", ag.Namespace, ag.Name)
 	}
 
-	klog.V(4).InfoS("Updated conditions only for AddressGroup",
+	rowsAffected := result.RowsAffected()
+	klog.InfoS("[DIAG] updateAddressGroupConditionsOnly: UPDATE SUCCESS",
 		"namespace", ag.Namespace,
 		"name", ag.Name,
-		"resource_version", resourceVersion)
+		"resource_version", resourceVersion,
+		"rows_affected", rowsAffected)
+
+	if rowsAffected == 0 {
+		klog.ErrorS(nil, "[DIAG] updateAddressGroupConditionsOnly: WARNING - no rows affected",
+			"namespace", ag.Namespace,
+			"name", ag.Name,
+			"resource_version", resourceVersion)
+	}
 
 	return nil
 }
