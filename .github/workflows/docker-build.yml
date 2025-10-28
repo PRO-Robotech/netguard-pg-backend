@@ -217,7 +217,7 @@ jobs:
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
   docker-multiarch-push:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs:
       - docker-build-arm64
       - docker-build-amd64
