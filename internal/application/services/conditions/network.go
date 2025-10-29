@@ -42,7 +42,13 @@ func (cm *ConditionManager) ProcessNetworkConditions(ctx context.Context, networ
 		klog.V(4).InfoS("ConditionManager: Network is pending SGROUP sync, NOT setting Ready=True",
 			"namespace", network.Namespace, "name", network.Name)
 
-		// Only set Validated condition, leave Ready=False
+		if cm.hasPendingOutboxEntry(ctx, "Network", network.Namespace, network.Name) {
+			klog.InfoS("ConditionManager: Skipping batch update - OutboxWorker is processing",
+				"namespace", network.Namespace,
+				"name", network.Name)
+			return nil
+		}
+
 		validator := validation.NewDependencyValidator(reader)
 		networkValidator := validator.GetNetworkValidator()
 
@@ -55,13 +61,7 @@ func (cm *ConditionManager) ProcessNetworkConditions(ctx context.Context, networ
 		}
 
 		network.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "Network passed validation")
-		// Keep Ready=False (PendingSGROUPSync) - Worker will update after successful sync
-
-		if err := cm.SaveNetworkConditions(ctx, network); err != nil {
-			klog.Errorf("ConditionManager: Failed to save conditions for network %s/%s: %v", network.Namespace, network.Name, err)
-			return nil
-		}
-
+		cm.batchConditionUpdate("Network", network)
 		return nil
 	}
 

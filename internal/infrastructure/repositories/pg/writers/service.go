@@ -7,14 +7,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
 
-	"netguard-pg-backend/internal/domain"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
-	"netguard-pg-backend/internal/infrastructure/repositories"
 )
 
 // addressGroupRefJSON represents the JSON structure for address group references in the database
@@ -209,11 +206,15 @@ func (w *Writer) upsertService(ctx context.Context, service models.Service) erro
 		return errors.Wrapf(err, "failed to upsert service %s/%s", service.Namespace, service.Name)
 	}
 
-	// ========================================
-	// ========================================
-	if err := w.createServiceOutboxEntry(ctx, service); err != nil {
-		return errors.Wrap(err, "failed to create outbox entry for service")
-	}
+	// Outbox entry is automatically created by PostgreSQL trigger
+	// (trg_service_upsert_outbox) which uses UID from k8s_metadata.
+	// Migration 042 will fix the trigger to use real Kubernetes UID instead of UUID v5.
+	// This eliminates duplicate outbox entries.
+	//
+	// Previous code (REMOVED to fix duplicate outbox bug):
+	// if err := w.createServiceOutboxEntry(ctx, service); err != nil {
+	//     return errors.Wrap(err, "failed to create outbox entry for service")
+	// }
 
 	return nil
 }
@@ -575,54 +576,6 @@ func (w *Writer) updateServiceAliasConditionsOnly(ctx context.Context, alias mod
 	if err := w.exec(ctx, conditionUpdateQuery, conditionsJSON, resourceVersion); err != nil {
 		return errors.Wrapf(err, "failed to update conditions for service alias %s/%s", alias.Namespace, alias.Name)
 	}
-
-	return nil
-}
-
-// createServiceOutboxEntry creates an outbox entry for Service resource
-func (w *Writer) createServiceOutboxEntry(ctx context.Context, service models.Service) error {
-	// Build payload
-	payload := map[string]interface{}{
-		"namespace":      service.Namespace,
-		"name":           service.Name,
-		"description":    service.Description,
-		"ingress_ports":  service.IngressPorts,
-		"address_groups": service.AddressGroups,
-	}
-	payloadJSON, err := json.Marshal(payload)
-	if err != nil {
-		return errors.Wrap(err, "failed to marshal service payload")
-	}
-
-	// Parse resource UUID from Meta.UID
-	resourceUUID, err := uuid.Parse(service.Meta.UID)
-	if err != nil {
-		return errors.Wrapf(err, "invalid service UID: %s", service.Meta.UID)
-	}
-
-	// Create outbox entry
-	outboxEntry := &domain.OutboxEntry{
-		ResourceType:      "Service",
-		ResourceID:        resourceUUID,
-		ResourceNamespace: service.Namespace,
-		ResourceName:      service.Name,
-		Operation:         domain.SyncOperationCreate,
-		TargetSystem:      domain.TargetSystemSGROUP,
-		Payload:           payloadJSON,
-		Status:            domain.OutboxStatusPending,
-		MaxRetries:        5,
-	}
-
-	// Use OutboxRepository with existing transaction
-	outboxRepo := repositories.NewOutboxRepository(w.tx)
-	if err := outboxRepo.Create(ctx, outboxEntry); err != nil {
-		return errors.Wrap(err, "failed to persist outbox entry")
-	}
-
-	klog.V(4).InfoS("Created outbox entry for Service",
-		"namespace", service.Namespace,
-		"name", service.Name,
-		"outbox_id", outboxEntry.ID)
 
 	return nil
 }

@@ -347,18 +347,12 @@ func (w *Writer) deleteAddressGroupsByIdentifiers(ctx context.Context, identifie
 		return errors.Wrap(err, "failed to mark address groups as pending deletion")
 	}
 
-	klog.V(4).InfoS("Marked address groups as pending deletion (NOT deleted from DB yet)",
+	klog.V(4).InfoS("Marked address groups as pending deletion (DELETE outbox entries auto-created by trigger)",
 		"count", len(addressGroupsToDelete))
 
-	for i := range addressGroupsToDelete {
-		if err := w.createAddressGroupDeleteOutboxEntry(ctx, addressGroupsToDelete[i]); err != nil {
-			return errors.Wrapf(err, "failed to create DELETE outbox entry for address group %s/%s",
-				addressGroupsToDelete[i].Namespace, addressGroupsToDelete[i].Name)
-		}
-	}
-
-	klog.V(4).InfoS("Created DELETE outbox entries for address groups (resources remain in DB until Worker processes)",
-		"count", len(addressGroupsToDelete))
+	// Outbox entries are automatically created by PostgreSQL BEFORE DELETE trigger
+	// (trg_address_group_before_delete) which uses real Kubernetes UID from k8s_metadata.
+	// This eliminates duplicate DELETE outbox entries.
 
 	return nil
 }

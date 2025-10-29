@@ -230,57 +230,15 @@ func (w *Writer) upsertNetwork(ctx context.Context, network *models.Network) err
 		return errors.Wrapf(err, "failed to upsert network %s/%s", network.Namespace, network.Name)
 	}
 
-	if err := w.createNetworkOutboxEntry(ctx, network); err != nil {
-		return errors.Wrap(err, "failed to create outbox entry for network")
-	}
-
-	return nil
-}
-
-// createNetworkOutboxEntry creates an outbox entry for Network resource (CREATE/UPDATE)
-func (w *Writer) createNetworkOutboxEntry(ctx context.Context, network *models.Network) error {
-	// Build payload
-	payload := map[string]interface{}{
-		"namespace":    network.Namespace,
-		"name":         network.Name,
-		"cidr":         network.CIDR,
-		"network_name": network.NetworkName,
-		"is_bound":     network.IsBound,
-	}
-	payloadJSON, err := json.Marshal(payload)
-	if err != nil {
-		return errors.Wrap(err, "failed to marshal network payload")
-	}
-
-	// Parse resource UUID from Meta.UID
-	resourceUUID, err := uuid.Parse(network.Meta.UID)
-	if err != nil {
-		return errors.Wrapf(err, "invalid network UID: %s", network.Meta.UID)
-	}
-
-	// Create outbox entry
-	outboxEntry := &domain.OutboxEntry{
-		ResourceType:      "Network",
-		ResourceID:        resourceUUID,
-		ResourceNamespace: network.Namespace,
-		ResourceName:      network.Name,
-		Operation:         domain.SyncOperationCreate,
-		TargetSystem:      domain.TargetSystemSGROUP,
-		Payload:           payloadJSON,
-		Status:            domain.OutboxStatusPending,
-		MaxRetries:        5,
-	}
-
-	// Use OutboxRepository with existing transaction
-	outboxRepo := repositories.NewOutboxRepository(w.tx)
-	if err := outboxRepo.Create(ctx, outboxEntry); err != nil {
-		return errors.Wrap(err, "failed to persist outbox entry")
-	}
-
-	klog.V(4).InfoS("Created outbox entry for Network",
-		"namespace", network.Namespace,
-		"name", network.Name,
-		"outbox_id", outboxEntry.ID)
+	// Outbox entry is automatically created by PostgreSQL trigger
+	// (trg_network_upsert_outbox) which uses UID from k8s_metadata.
+	// Migration 042 will fix the trigger to use real Kubernetes UID instead of UUID v5.
+	// This eliminates duplicate outbox entries.
+	//
+	// Previous code (REMOVED to fix duplicate outbox bug):
+	// if err := w.createNetworkOutboxEntry(ctx, network); err != nil {
+	//     return errors.Wrap(err, "failed to create outbox entry for network")
+	// }
 
 	return nil
 }

@@ -209,61 +209,14 @@ func (w *Writer) upsertHost(ctx context.Context, host *models.Host) error {
 		return errors.Wrapf(err, "failed to upsert host %s/%s", host.Namespace, host.Name)
 	}
 
-	// ========================================
-	// ========================================
-	if err := w.createHostOutboxEntry(ctx, host); err != nil {
-		return errors.Wrap(err, "failed to create outbox entry for host")
-	}
-
-	return nil
-}
-
-// createHostOutboxEntry creates an outbox entry for Host resource (CREATE/UPDATE)
-func (w *Writer) createHostOutboxEntry(ctx context.Context, host *models.Host) error {
-	// Build payload
-	payload := map[string]interface{}{
-		"namespace":          host.Namespace,
-		"name":               host.Name,
-		"uuid":               host.UUID,
-		"hostname":           host.HostName,
-		"ip_list":            host.IpList,
-		"address_group_name": host.AddressGroupName,
-		"is_bound":           host.IsBound,
-	}
-	payloadJSON, err := json.Marshal(payload)
-	if err != nil {
-		return errors.Wrap(err, "failed to marshal host payload")
-	}
-
-	// Parse resource UUID
-	resourceUUID, err := uuid.Parse(host.UUID)
-	if err != nil {
-		return errors.Wrapf(err, "invalid host UUID: %s", host.UUID)
-	}
-
-	// Create outbox entry
-	outboxEntry := &domain.OutboxEntry{
-		ResourceType:      "Host",
-		ResourceID:        resourceUUID,
-		ResourceNamespace: host.Namespace,
-		ResourceName:      host.Name,
-		Operation:         domain.SyncOperationCreate, // Always CREATE for upsert pattern
-		TargetSystem:      domain.TargetSystemSGROUP,
-		Payload:           payloadJSON,
-		Status:            domain.OutboxStatusPending,
-		MaxRetries:        5,
-	}
-
-	// Use OutboxRepository with existing transaction
-	outboxRepo := repositories.NewOutboxRepository(w.tx)
-	if err := outboxRepo.Create(ctx, outboxEntry); err != nil {
-		return errors.Wrap(err, "failed to persist outbox entry")
-	}
-
-	klog.V(4).InfoS("Created outbox entry for Host",
-		"namespace", host.Namespace,
-		"name", host.Name,
-		"outbox_id", outboxEntry.ID)
+	// Outbox entry is automatically created by PostgreSQL trigger
+	// (trg_host_upsert_outbox) which uses UUID from spec.
+	// This eliminates duplicate outbox entries.
+	//
+	// Previous code (REMOVED to fix duplicate outbox bug):
+	// if err := w.createHostOutboxEntry(ctx, host); err != nil {
+	//     return errors.Wrap(err, "failed to create outbox entry for host")
+	// }
 
 	return nil
 }

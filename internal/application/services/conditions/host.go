@@ -41,15 +41,15 @@ func (cm *ConditionManager) ProcessHostConditions(ctx context.Context, host *mod
 		klog.V(4).InfoS("ConditionManager: Host is pending SGROUP sync, NOT setting Ready=True",
 			"namespace", host.Namespace, "name", host.Name)
 
-		// Only set Validated condition, leave Ready=False
-		host.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "Host passed validation")
-		// Keep Ready=False (PendingSGROUPSync) - Worker will update after successful sync
-
-		if err := cm.SaveHostConditions(ctx, host); err != nil {
-			klog.Errorf("ConditionManager: Failed to save conditions for host %s/%s: %v", host.Namespace, host.Name, err)
+		if cm.hasPendingOutboxEntry(ctx, "Host", host.Namespace, host.Name) {
+			klog.InfoS("ConditionManager: Skipping batch update - OutboxWorker is processing",
+				"namespace", host.Namespace,
+				"name", host.Name)
 			return nil
 		}
 
+		host.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "Host passed validation")
+		cm.batchConditionUpdate("Host", host)
 		return nil
 	}
 

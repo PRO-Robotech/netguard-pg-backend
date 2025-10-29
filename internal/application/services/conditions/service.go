@@ -66,9 +66,14 @@ func (cm *ConditionManager) ProcessServiceConditions(ctx context.Context, servic
 		existingReady.Reason == "PendingSGROUPSync"
 
 	if isPendingSync {
+		if cm.hasPendingOutboxEntry(ctx, "Service", service.Namespace, service.Name) {
+			klog.InfoS("ConditionManager: Skipping batch update - OutboxWorker is processing",
+				"namespace", service.Namespace,
+				"name", service.Name)
+			return nil
+		}
 		klog.Infof("ConditionManager: Service %s/%s is pending SGROUP sync, NOT overriding Ready=False",
 			service.Namespace, service.Name)
-		// Keep Ready=False (PendingSGROUPSync) - OutboxWorker will set Ready=True after successful sync
 		cm.batchConditionUpdate("Service", service)
 		return nil
 	}
