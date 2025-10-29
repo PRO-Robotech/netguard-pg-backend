@@ -3,15 +3,18 @@ package services
 import (
 	"context"
 	"fmt"
+	"runtime"
+	"sync"
+	"time"
+
 	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
+
 	"netguard-pg-backend/internal/application/services/conditions"
 	"netguard-pg-backend/internal/application/services/resources"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/sync/interfaces"
-	"sync"
-	"time"
 )
 
 type NetguardFacade struct {
@@ -709,11 +712,18 @@ func (f *NetguardFacade) GetNetworkBindingResourceService() *resources.NetworkBi
 	return f.networkBindingResourceService
 }
 func (f *NetguardFacade) MarkForDeletion(ctx context.Context, namespace, name, kind string) error {
-	klog.InfoS("NetguardFacade.MarkForDeletion called",
+	// Get stack trace to see where this was called from
+	buf := make([]byte, 4096)
+	n := runtime.Stack(buf, false)
+	stackTrace := string(buf[:n])
+
+	klog.InfoS("🔍 [MARK_FOR_DELETION] NetguardFacade.MarkForDeletion called",
 		"namespace", namespace,
 		"name", name,
 		"kind", kind)
-	klog.InfoS("NetguardFacade.MarkForDeletion: Getting writer from registry")
+	klog.InfoS("🔍 [MARK_FOR_DELETION] Call stack trace",
+		"stack", stackTrace)
+	klog.InfoS("🔍 [MARK_FOR_DELETION] Getting writer from registry")
 	writer, err := f.registry.Writer(ctx)
 	if err != nil {
 		klog.ErrorS(err, "NetguardFacade.MarkForDeletion: Failed to get writer")
@@ -736,19 +746,25 @@ func (f *NetguardFacade) MarkForDeletion(ctx context.Context, namespace, name, k
 	}
 	klog.InfoS("NetguardFacade.MarkForDeletion: Type assertion SUCCESS")
 	defer pgWriter.Close()
-	klog.InfoS("NetguardFacade.MarkForDeletion: Calling MarkForDeletionWithStatus")
+	klog.InfoS("🔍 [MARK_FOR_DELETION] Calling MarkForDeletionWithStatus",
+		"namespace", namespace, "name", name, "kind", kind)
 	if err := pgWriter.MarkForDeletionWithStatus(namespace, name, kind); err != nil {
-		klog.ErrorS(err, "NetguardFacade.MarkForDeletion: MarkForDeletionWithStatus FAILED")
+		klog.ErrorS(err, "🔍 [MARK_FOR_DELETION] MarkForDeletionWithStatus FAILED",
+			"namespace", namespace, "name", name, "kind", kind)
 		pgWriter.Abort()
 		return err
 	}
-	klog.InfoS("NetguardFacade.MarkForDeletion: MarkForDeletionWithStatus SUCCESS")
-	klog.InfoS("NetguardFacade.MarkForDeletion: Committing transaction")
+	klog.InfoS("🔍 [MARK_FOR_DELETION] MarkForDeletionWithStatus SUCCESS",
+		"namespace", namespace, "name", name, "kind", kind)
+	klog.InfoS("🔍 [MARK_FOR_DELETION] Committing transaction",
+		"namespace", namespace, "name", name, "kind", kind)
 	if err := pgWriter.Commit(); err != nil {
-		klog.ErrorS(err, "NetguardFacade.MarkForDeletion: Commit FAILED")
+		klog.ErrorS(err, "🔍 [MARK_FOR_DELETION] Commit FAILED",
+			"namespace", namespace, "name", name, "kind", kind)
 		return err
 	}
-	klog.InfoS("NetguardFacade.MarkForDeletion: Commit SUCCESS")
+	klog.InfoS("🔍 [MARK_FOR_DELETION] Commit SUCCESS",
+		"namespace", namespace, "name", name, "kind", kind)
 	return nil
 }
 

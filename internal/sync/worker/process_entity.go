@@ -559,6 +559,12 @@ func (a *EntitySyncerAdapter) GetSupportedSubjectType() types.SyncSubjectType {
 	return a.subjectType
 }
 func (w *OutboxWorker) deleteResourceFromDB(ctx context.Context, item *domain.OutboxEntry) error {
+	w.logger.Info("🔥🔥🔥 [DELETE_FROM_DB] deleteResourceFromDB CALLED - ABOUT TO PHYSICALLY DELETE FROM DATABASE",
+		zap.String("resource_type", item.ResourceType),
+		zap.String("namespace", item.ResourceNamespace),
+		zap.String("name", item.ResourceName),
+		zap.String("resource_id", item.ResourceID.String()))
+
 	conn, err := w.pool.Acquire(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to acquire connection: %w", err)
@@ -584,6 +590,13 @@ func (w *OutboxWorker) deleteResourceFromDB(ctx context.Context, item *domain.Ou
 	default:
 		return fmt.Errorf("unknown resource type for deletion: %s", item.ResourceType)
 	}
+
+	w.logger.Info("🗑️ [DELETE_FROM_DB] Executing DELETE query",
+		zap.String("resource_type", item.ResourceType),
+		zap.String("namespace", item.ResourceNamespace),
+		zap.String("name", item.ResourceName),
+		zap.String("query", deleteQuery))
+
 	cmdTag, err := tx.Exec(ctx, deleteQuery, item.ResourceNamespace, item.ResourceName)
 	if err != nil {
 		return fmt.Errorf("failed to delete %s from DB: %w", item.ResourceType, err)

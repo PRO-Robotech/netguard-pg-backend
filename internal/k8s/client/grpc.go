@@ -3,6 +3,9 @@ package client
 import (
 	"context"
 	"fmt"
+	"runtime"
+	"time"
+
 	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -10,12 +13,13 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog/v2"
+
 	"netguard-pg-backend/internal/application/validation"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
-	"time"
 )
 
 type GRPCBackendClient struct {
@@ -1539,6 +1543,9 @@ func convertNetworkFromProto(protoNetwork *netguardpb.Network) models.Network {
 		if protoNetwork.Meta.CreationTs != nil {
 			result.Meta.CreationTS = metav1.NewTime(protoNetwork.Meta.CreationTs.AsTime())
 		}
+		if protoNetwork.Meta.DeletionTs != nil {
+			result.Meta.DeletionTS = &metav1.Time{Time: protoNetwork.Meta.DeletionTs.AsTime()}
+		}
 	}
 	result.IsBound = protoNetwork.IsBound
 	if protoNetwork.BindingRef != nil {
@@ -1800,6 +1807,9 @@ func convertHostFromProto(protoHost *netguardpb.Host) models.Host {
 		if protoHost.Meta.CreationTs != nil {
 			result.Meta.CreationTS = metav1.NewTime(protoHost.Meta.CreationTs.AsTime())
 		}
+		if protoHost.Meta.DeletionTs != nil {
+			result.Meta.DeletionTS = &metav1.Time{Time: protoHost.Meta.DeletionTs.AsTime()}
+		}
 		if protoHost.Meta.Conditions != nil {
 			result.Meta.Conditions = models.ProtoConditionsToK8s(protoHost.Meta.Conditions)
 		}
@@ -1900,6 +1910,9 @@ func convertHostBindingFromProto(protoBinding *netguardpb.HostBinding) models.Ho
 		if protoBinding.Meta.CreationTs != nil {
 			result.Meta.CreationTS = metav1.NewTime(protoBinding.Meta.CreationTs.AsTime())
 		}
+		if protoBinding.Meta.DeletionTs != nil {
+			result.Meta.DeletionTS = &metav1.Time{Time: protoBinding.Meta.DeletionTs.AsTime()}
+		}
 		if protoBinding.Meta.Conditions != nil {
 			result.Meta.Conditions = models.ProtoConditionsToK8s(protoBinding.Meta.Conditions)
 		}
@@ -1993,10 +2006,37 @@ func (c *GRPCBackendClient) UpdateSvcSvcRuleMeta(ctx context.Context, id models.
 	return c.UpdateSvcSvcRule(ctx, rule)
 }
 func (c *GRPCBackendClient) MarkForDeletion(ctx context.Context, namespace, name, kind string) error {
+	// Get stack trace to see where this was called from (API Server)
+	buf := make([]byte, 4096)
+	n := runtime.Stack(buf, false)
+	stackTrace := string(buf[:n])
+
+	klog.InfoS("📡 [GRPC_CLIENT] GRPCBackendClient.MarkForDeletion called - making gRPC call to backend",
+		"namespace", namespace,
+		"name", name,
+		"kind", kind,
+		"call_path", "API_Server → gRPC → Backend")
+	klog.InfoS("📡 [GRPC_CLIENT] Call stack trace",
+		"stack", stackTrace)
+
 	_, err := c.client.MarkForDeletion(ctx, &netguardpb.MarkForDeletionReq{
 		Namespace: namespace,
 		Name:      name,
 		Kind:      kind,
 	})
-	return err
+
+	if err != nil {
+		klog.ErrorS(err, "📡 [GRPC_CLIENT] gRPC MarkForDeletion FAILED",
+			"namespace", namespace,
+			"name", name,
+			"kind", kind)
+		return err
+	}
+
+	klog.InfoS("📡 [GRPC_CLIENT] gRPC MarkForDeletion SUCCESS",
+		"namespace", namespace,
+		"name", name,
+		"kind", kind)
+
+	return nil
 }

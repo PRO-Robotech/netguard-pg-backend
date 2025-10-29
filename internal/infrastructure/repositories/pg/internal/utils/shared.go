@@ -3,13 +3,14 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/pkg/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"log"
-	"netguard-pg-backend/internal/domain/models"
-	"netguard-pg-backend/internal/domain/ports"
 	"strings"
 	"time"
+
+	"netguard-pg-backend/internal/domain/models"
+	"netguard-pg-backend/internal/domain/ports"
+
+	"github.com/pkg/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func BuildScopeFilter(scope ports.Scope, tableAlias string) (string, []interface{}) {
@@ -44,6 +45,7 @@ func BuildScopeFilter(scope ports.Scope, tableAlias string) (string, []interface
 		return "", nil
 	}
 }
+
 func MarshalLabelsAnnotations(labels, annotations map[string]string) ([]byte, []byte, error) {
 	var labelsJSON, annotationsJSON []byte
 	var err error
@@ -65,6 +67,7 @@ func MarshalLabelsAnnotations(labels, annotations map[string]string) ([]byte, []
 	}
 	return labelsJSON, annotationsJSON, nil
 }
+
 func UnmarshalLabelsAnnotations(labelsJSON, annotationsJSON []byte) (map[string]string, map[string]string, error) {
 	var labels, annotations map[string]string
 	if len(labelsJSON) > 0 {
@@ -79,6 +82,7 @@ func UnmarshalLabelsAnnotations(labelsJSON, annotationsJSON []byte) (map[string]
 	}
 	return labels, annotations, nil
 }
+
 func ConvertK8sMetadata(resourceVersionStr string, labelsJSON, annotationsJSON []byte, conditionsJSON []byte, createdAt, updatedAt time.Time, deletionTS *time.Time) (models.Meta, error) {
 	meta := models.Meta{
 		ResourceVersion: resourceVersionStr,
@@ -96,15 +100,15 @@ func ConvertK8sMetadata(resourceVersionStr string, labelsJSON, annotationsJSON [
 		}
 		meta.Conditions = conditions
 	}
+
 	meta.CreationTS = metav1.NewTime(createdAt)
 	if deletionTS != nil {
 		meta.DeletionTS = &metav1.Time{Time: *deletionTS}
-		log.Printf("DEBUG_DELETION_TS: deletionTS is NOT nil: %v", *deletionTS)
-	} else {
-		log.Printf("DEBUG_DELETION_TS: deletionTS IS nil")
 	}
+
 	return meta, nil
 }
+
 func ParseIngressPorts(ingressPortsJSON []byte) ([]models.IngressPort, error) {
 	if len(ingressPortsJSON) == 0 {
 		return nil, nil
@@ -141,6 +145,7 @@ func MarshalIngressPorts(ports []models.IngressPort) ([]byte, error) {
 	}
 	return json.Marshal(jsonPorts)
 }
+
 func ParseNetworkItems(networkItemsJSON []byte) ([]models.NetworkItem, error) {
 	if len(networkItemsJSON) == 0 {
 		return nil, nil
@@ -151,12 +156,14 @@ func ParseNetworkItems(networkItemsJSON []byte) ([]models.NetworkItem, error) {
 	}
 	return items, nil
 }
+
 func MarshalNetworkItems(items []models.NetworkItem) ([]byte, error) {
 	if len(items) == 0 {
 		return []byte("[]"), nil
 	}
 	return json.Marshal(items)
 }
+
 func MarshalAccessPorts(accessPorts map[models.ServiceRef]models.ServicePorts) ([]byte, error) {
 	if len(accessPorts) == 0 {
 		return []byte("{}"), nil
@@ -168,6 +175,7 @@ func MarshalAccessPorts(accessPorts map[models.ServiceRef]models.ServicePorts) (
 	}
 	return json.Marshal(jsonMap)
 }
+
 func UnmarshalAccessPorts(accessPortsJSON []byte) (map[models.ServiceRef]models.ServicePorts, error) {
 	if len(accessPortsJSON) == 0 {
 		return make(map[models.ServiceRef]models.ServicePorts), nil

@@ -1,11 +1,11 @@
 package converters
 
 import (
-	"google.golang.org/protobuf/types/known/timestamppb"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"log"
 	"netguard-pg-backend/internal/domain/models"
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func GetSelfRef(identifier *netguardpb.ResourceIdentifier) models.ResourceIdentifier {
@@ -14,14 +14,10 @@ func GetSelfRef(identifier *netguardpb.ResourceIdentifier) models.ResourceIdenti
 	}
 	return models.NewResourceIdentifier(identifier.GetName(), models.WithNamespace(identifier.GetNamespace()))
 }
+
 func ConvertMeta(metaPB *netguardpb.Meta) models.Meta {
 	if metaPB == nil {
 		return models.Meta{}
-	}
-	if metaPB.DeletionTs != nil {
-		log.Printf("DEBUG_PROTO_FROM_PB: metaPB.DeletionTs is NOT nil: %v", metaPB.DeletionTs)
-	} else {
-		log.Printf("DEBUG_PROTO_FROM_PB: metaPB.DeletionTs IS nil")
 	}
 	meta := models.Meta{
 		UID:                metaPB.Uid,
@@ -37,19 +33,15 @@ func ConvertMeta(metaPB *netguardpb.Meta) models.Meta {
 	if metaPB.DeletionTs != nil {
 		deletionTime := metav1.NewTime(metaPB.DeletionTs.AsTime())
 		meta.DeletionTS = &deletionTime
-		log.Printf("DEBUG_PROTO_FROM_PB: meta.DeletionTS set to: %v", meta.DeletionTS)
 	}
 	if metaPB.Conditions != nil {
 		meta.Conditions = models.ProtoConditionsToK8s(metaPB.Conditions)
 	}
+
 	return meta
 }
+
 func ConvertMetaToPB(meta models.Meta) *netguardpb.Meta {
-	if meta.DeletionTS != nil {
-		log.Printf("DEBUG_PROTO_TO_PB: meta.DeletionTS is NOT nil: %v", meta.DeletionTS)
-	} else {
-		log.Printf("DEBUG_PROTO_TO_PB: meta.DeletionTS IS nil")
-	}
 	result := &netguardpb.Meta{
 		Uid:                meta.UID,
 		ResourceVersion:    meta.ResourceVersion,
@@ -64,8 +56,8 @@ func ConvertMetaToPB(meta models.Meta) *netguardpb.Meta {
 	}
 	if meta.DeletionTS != nil && !meta.DeletionTS.IsZero() {
 		result.DeletionTs = timestamppb.New(meta.DeletionTS.Time)
-		log.Printf("DEBUG_PROTO_TO_PB: result.DeletionTs set to: %v", result.DeletionTs)
 	}
+
 	return result
 }
 func ResourceIdentifierFromPB(id *netguardpb.ResourceIdentifier) models.ResourceIdentifier {
@@ -80,9 +72,11 @@ func ResourceIdentifierToPB(id models.ResourceIdentifier) *netguardpb.ResourceId
 		Namespace: id.Namespace,
 	}
 }
+
 func ConvertSyncOp(protoSyncOp netguardpb.SyncOp) models.SyncOp {
 	return models.ProtoToSyncOp(int32(protoSyncOp))
 }
+
 func ConvertActionToPB(action models.RuleAction) netguardpb.RuleAction {
 	switch action {
 	case models.ActionAccept:
@@ -93,6 +87,7 @@ func ConvertActionToPB(action models.RuleAction) netguardpb.RuleAction {
 		return netguardpb.RuleAction_ACCEPT
 	}
 }
+
 func ConvertActionFromPB(action netguardpb.RuleAction) models.RuleAction {
 	switch action {
 	case netguardpb.RuleAction_ACCEPT:
@@ -103,6 +98,7 @@ func ConvertActionFromPB(action netguardpb.RuleAction) models.RuleAction {
 		return models.ActionAccept
 	}
 }
+
 func ConvertTransportToPB(transport models.TransportProtocol) netguardpb.Networks_NetIP_Transport {
 	switch transport {
 	case models.TCP:
@@ -113,6 +109,7 @@ func ConvertTransportToPB(transport models.TransportProtocol) netguardpb.Network
 		return netguardpb.Networks_NetIP_TCP
 	}
 }
+
 func ConvertTransportFromPB(transport netguardpb.Networks_NetIP_Transport) models.TransportProtocol {
 	switch transport {
 	case netguardpb.Networks_NetIP_TCP:
@@ -123,6 +120,7 @@ func ConvertTransportFromPB(transport netguardpb.Networks_NetIP_Transport) model
 		return models.TCP
 	}
 }
+
 func ConvertTrafficToPB(traffic models.Traffic) netguardpb.Traffic {
 	switch traffic {
 	case models.INGRESS:
@@ -133,6 +131,7 @@ func ConvertTrafficToPB(traffic models.Traffic) netguardpb.Traffic {
 		return netguardpb.Traffic_Ingress
 	}
 }
+
 func ConvertTrafficFromPB(traffic netguardpb.Traffic) models.Traffic {
 	switch traffic {
 	case netguardpb.Traffic_Ingress:

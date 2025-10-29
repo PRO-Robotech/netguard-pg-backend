@@ -56,8 +56,7 @@ func (a *HostConverterAdapter) ToList(ctx context.Context, domainObjs []*models.
 // HostStorage implements REST storage for Host resources using BaseStorage
 type HostStorage struct {
 	*base.BaseStorage[*netguardv1beta1.Host, *models.Host]
-	backendClient client.BackendClient // Direct access to backend for sync operations
-	converter     *HostConverterAdapter
+	converter *HostConverterAdapter
 }
 
 // NewHostStorage creates a new HostStorage using BaseStorage
@@ -82,41 +81,16 @@ func NewHostStorage(backendClient client.BackendClient) *HostStorage {
 	)
 
 	storage := &HostStorage{
-		BaseStorage:   baseStorage,
-		backendClient: backendClient,
-		converter:     converter,
+		BaseStorage: baseStorage,
+		converter:   converter,
 	}
 
 	return storage
 }
 
-func (s *HostStorage) Delete(ctx context.Context, name string, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions) (runtime.Object, bool, error) {
-	obj, err := s.Get(ctx, name, &metav1.GetOptions{})
-	if err != nil {
-		return nil, false, err
-	}
-
-	host, ok := obj.(*netguardv1beta1.Host)
-	if !ok {
-		return s.BaseStorage.Delete(ctx, name, deleteValidation, options)
-	}
-
-	domainObj, err := s.converter.ToDomain(ctx, host)
-	if err != nil {
-		return s.BaseStorage.Delete(ctx, name, deleteValidation, options)
-	}
-
-	deleted, async, err := s.BaseStorage.Delete(ctx, name, deleteValidation, options)
-	if err != nil {
-		return nil, false, err
-	}
-
-	if err := s.handleHostDelete(ctx, host, domainObj); err != nil {
-		return deleted, async, nil
-	}
-
-	return deleted, async, nil
-}
+// Custom Delete() removed - using BaseStorage.Delete() like Network/AddressGroup/Service
+// This fixes premature deletion bug where Host was physically deleted before SGROUP sync
+// See: docs/bugs/2025-10-29-host-storage-custom-delete-bug.md
 
 func (s *HostStorage) handleHostCreate(ctx context.Context, obj *netguardv1beta1.Host, domainObj *models.Host) error {
 	obj.Status.IsBound = false
@@ -130,13 +104,9 @@ func (s *HostStorage) handleHostUpdate(ctx context.Context, obj, oldObj *netguar
 	return nil
 }
 
-func (s *HostStorage) handleHostDelete(ctx context.Context, obj *netguardv1beta1.Host, domainObj *models.Host) error {
-	hosts := []models.Host{*domainObj}
-	if err := s.backendClient.Sync(ctx, models.SyncOpDelete, hosts); err != nil {
-		return fmt.Errorf("failed to sync host deletion to SGROUP: %w", err)
-	}
-	return nil
-}
+// handleHostDelete() removed - deletion now handled by OutboxWorker after soft delete
+// Physical deletion happens only after successful SGROUP sync, not immediately
+// See: docs/bugs/2025-10-29-host-storage-custom-delete-bug.md
 
 // GetSingularName returns the singular name for this resource
 func (s *HostStorage) GetSingularName() string {

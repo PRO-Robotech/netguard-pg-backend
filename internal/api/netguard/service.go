@@ -2,8 +2,12 @@ package netguard
 
 import (
 	"context"
+	"runtime"
+
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"k8s.io/klog/v2"
+
 	"netguard-pg-backend/internal/api/netguard/handlers"
 	"netguard-pg-backend/internal/api/netguard/sync"
 	"netguard-pg-backend/internal/application/services"
@@ -35,6 +39,15 @@ func NewServiceServer(service *services.NetguardFacade) *ServiceServer {
 	}
 }
 func (s *ServiceServer) Sync(ctx context.Context, req *netguardpb.SyncReq) (*emptypb.Empty, error) {
+	// Get stack trace to find WHO is calling Sync() with DELETE operation
+	buf := make([]byte, 8192)
+	n := runtime.Stack(buf, false)
+	stackTrace := string(buf[:n])
+
+	klog.InfoS("🔄 [SYNC_ENDPOINT] ServiceServer.Sync() called")
+	klog.InfoS("🔄 [SYNC_ENDPOINT] Call stack trace",
+		"stack", stackTrace)
+
 	return s.syncDispatcher.Sync(ctx, req)
 }
 func (s *ServiceServer) ListServices(ctx context.Context, req *netguardpb.ListServicesReq) (*netguardpb.ListServicesResp, error) {
@@ -125,9 +138,25 @@ func (s *ServiceServer) SyncStatus(ctx context.Context, _ *emptypb.Empty) (*netg
 	}, nil
 }
 func (s *ServiceServer) MarkForDeletion(ctx context.Context, req *netguardpb.MarkForDeletionReq) (*emptypb.Empty, error) {
+	klog.InfoS("🔌 [GRPC_HANDLER] ServiceServer.MarkForDeletion received gRPC request from API Server",
+		"namespace", req.Namespace,
+		"name", req.Name,
+		"kind", req.Kind,
+		"call_path", "API_Server → gRPC → Backend → NetguardFacade")
+
 	err := s.service.MarkForDeletion(ctx, req.Namespace, req.Name, req.Kind)
 	if err != nil {
+		klog.ErrorS(err, "🔌 [GRPC_HANDLER] NetguardFacade.MarkForDeletion FAILED",
+			"namespace", req.Namespace,
+			"name", req.Name,
+			"kind", req.Kind)
 		return nil, err
 	}
+
+	klog.InfoS("🔌 [GRPC_HANDLER] NetguardFacade.MarkForDeletion SUCCESS, returning to API Server",
+		"namespace", req.Namespace,
+		"name", req.Name,
+		"kind", req.Kind)
+
 	return &emptypb.Empty{}, nil
 }

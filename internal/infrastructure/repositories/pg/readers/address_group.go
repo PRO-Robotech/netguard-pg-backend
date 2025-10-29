@@ -40,6 +40,7 @@ func (r *Reader) ListAddressGroups(ctx context.Context, consume func(models.Addr
 	}
 	return rows.Err()
 }
+
 func (r *Reader) GetAddressGroupByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroup, error) {
 	query := `
 		SELECT ag.namespace, ag.name, ag.default_action, ag.logs, ag.trace, ag.description, ag.networks, ag.hosts, ag.aggregated_hosts,

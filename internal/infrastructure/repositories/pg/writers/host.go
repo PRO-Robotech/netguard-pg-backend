@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -304,7 +305,26 @@ func (w *Writer) deleteHostsInScope(ctx context.Context, scope ports.Scope) erro
 // - DELETE outbox entry creation
 // - Prevention of physical deletion (RETURN NULL) until Worker syncs to SGROUP
 func (w *Writer) DeleteHostsByIDs(ctx context.Context, ids []models.ResourceIdentifier, options ...ports.Option) error {
+	// ===== LOGGING: Get stack trace =====
+	buf := make([]byte, 4096)
+	n := runtime.Stack(buf, false)
+	stackTrace := string(buf[:n])
+
+	klog.InfoS("[DELETE_HOSTS] ===== DeleteHostsByIDs CALLED =====",
+		"count", len(ids))
+
+	for i, id := range ids {
+		klog.InfoS("[DELETE_HOSTS] Host to delete",
+			"index", i,
+			"namespace", id.Namespace,
+			"name", id.Name)
+	}
+
+	klog.InfoS("[DELETE_HOSTS] Call stack trace",
+		"stack", stackTrace)
+
 	if len(ids) == 0 {
+		klog.InfoS("[DELETE_HOSTS] No hosts to delete, returning early")
 		return nil
 	}
 
@@ -329,15 +349,27 @@ func (w *Writer) DeleteHostsByIDs(ctx context.Context, ids []models.ResourceIden
 		WHERE (namespace, name) IN (%s)
 	`, strings.Join(values, ","))
 
+	klog.InfoS("[DELETE_HOSTS] Executing DELETE query",
+		"query", deleteQuery,
+		"args", fmt.Sprintf("%v", args))
+
 	result, err := w.tx.Exec(ctx, deleteQuery, args...)
 	if err != nil {
+		klog.ErrorS(err, "[DELETE_HOSTS] DELETE query FAILED")
 		return errors.Wrap(err, "failed to delete hosts")
 	}
 
 	rowsAffected := result.RowsAffected()
-	klog.V(4).InfoS("Executed DELETE for hosts (BEFORE DELETE trigger handles soft delete + outbox)",
+	klog.InfoS("[DELETE_HOSTS] DELETE query completed",
 		"requested", len(ids),
 		"rows_affected", rowsAffected)
+
+	if rowsAffected == 0 {
+		klog.InfoS("[DELETE_HOSTS] *** NO ROWS AFFECTED *** - Host may have been soft deleted (deletion_timestamp set, physical deletion prevented by trigger)")
+	} else {
+		klog.InfoS("[DELETE_HOSTS] *** ROWS PHYSICALLY DELETED *** - Check if this was expected (should only happen after SGROUP sync)",
+			"rows_deleted", rowsAffected)
+	}
 
 	return nil
 }

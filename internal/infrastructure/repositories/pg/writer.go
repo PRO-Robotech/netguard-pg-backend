@@ -3,14 +3,17 @@ package pg
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync/atomic"
+
 	atm "github.com/H-BF/corlib/pkg/atomic"
 	"github.com/jackc/pgx/v5"
 	"github.com/pkg/errors"
+	"k8s.io/klog/v2"
+
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/infrastructure/repositories/pg/writers"
-	"strings"
-	"sync/atomic"
 )
 
 type writer struct {
@@ -144,6 +147,12 @@ func (w *writer) MarkAsDeletingByName(namespace, name, kind string) error {
 	return err
 }
 func (w *writer) MarkForDeletionWithStatus(namespace, name, kind string) error {
+	klog.InfoS("💾 [WRITER] MarkForDeletionWithStatus called - about to UPDATE k8s_metadata",
+		"namespace", namespace,
+		"name", name,
+		"kind", kind,
+		"action", "UPDATE k8s_metadata SET deletion_timestamp = NOW()")
+
 	query := `
 		UPDATE k8s_metadata
 		SET
@@ -161,8 +170,32 @@ func (w *writer) MarkForDeletionWithStatus(namespace, name, kind string) error {
 				true
 			)
 		WHERE namespace = $1 AND name = $2 AND kind = $3 AND deletion_timestamp IS NULL`
-	_, err := w.tx.Exec(w.ctx, query, namespace, name, kind)
-	return err
+
+	result, err := w.tx.Exec(w.ctx, query, namespace, name, kind)
+	if err != nil {
+		klog.ErrorS(err, "💾 [WRITER] UPDATE k8s_metadata FAILED",
+			"namespace", namespace,
+			"name", name,
+			"kind", kind)
+		return err
+	}
+
+	rowsAffected := result.RowsAffected()
+	klog.InfoS("💾 [WRITER] UPDATE k8s_metadata completed",
+		"namespace", namespace,
+		"name", name,
+		"kind", kind,
+		"rows_affected", rowsAffected,
+		"note", "This should only UPDATE k8s_metadata, NOT delete from resource table")
+
+	if rowsAffected == 0 {
+		klog.InfoS("💾 [WRITER] No rows affected - resource may already have deletion_timestamp set",
+			"namespace", namespace,
+			"name", name,
+			"kind", kind)
+	}
+
+	return nil
 }
 func (w *writer) MarkAsDeletingBatch(resourceVersions []string) error {
 	if len(resourceVersions) == 0 {
