@@ -113,16 +113,72 @@ func (w *Writer) MarkForDeletionWithStatus(namespace, name, kind string) error {
 	if result.RowsAffected() == 0 {
 		return nil
 	}
+	// Step 1: Get resource UID + resource-specific fields
 	var resourceUID string
-	getUIDQuery := fmt.Sprintf(`
-		SELECT m.uid
-		FROM %s r
-		INNER JOIN k8s_metadata m ON r.resource_version = m.resource_version
-		WHERE r.namespace = $1 AND r.name = $2`, tableName)
-	err = w.tx.QueryRow(w.ctx, getUIDQuery, namespace, name).Scan(&resourceUID)
-	if err != nil {
-		return fmt.Errorf("failed to get resource UID: %w", err)
+	var payloadJSON string
+
+	switch kind {
+	case "Network":
+		// For Network: get UID + CIDR
+		getResourceQuery := fmt.Sprintf(`
+			SELECT m.uid, r.cidr::text
+			FROM %s r
+			INNER JOIN k8s_metadata m ON r.resource_version = m.resource_version
+			WHERE r.namespace = $1 AND r.name = $2`, tableName)
+		var cidr string
+		err = w.tx.QueryRow(w.ctx, getResourceQuery, namespace, name).Scan(&resourceUID, &cidr)
+		if err != nil {
+			return fmt.Errorf("failed to get Network UID and CIDR: %w", err)
+		}
+		// Build payload with CIDR
+		payloadJSON = fmt.Sprintf(`{"namespace": "%s", "name": "%s", "cidr": "%s"}`, namespace, name, cidr)
+
+	case "Host":
+		// For Host: get UID + UUID
+		getResourceQuery := fmt.Sprintf(`
+			SELECT m.uid, r.uuid::text
+			FROM %s r
+			INNER JOIN k8s_metadata m ON r.resource_version = m.resource_version
+			WHERE r.namespace = $1 AND r.name = $2`, tableName)
+		var uuid string
+		err = w.tx.QueryRow(w.ctx, getResourceQuery, namespace, name).Scan(&resourceUID, &uuid)
+		if err != nil {
+			return fmt.Errorf("failed to get Host UID and UUID: %w", err)
+		}
+		// Build payload with UUID
+		payloadJSON = fmt.Sprintf(`{"namespace": "%s", "name": "%s", "uuid": "%s"}`, namespace, name, uuid)
+
+	case "AddressGroup":
+		// For AddressGroup: get UID + default_action
+		getResourceQuery := fmt.Sprintf(`
+			SELECT m.uid, r.default_action::text
+			FROM %s r
+			INNER JOIN k8s_metadata m ON r.resource_version = m.resource_version
+			WHERE r.namespace = $1 AND r.name = $2`, tableName)
+		var defaultAction string
+		err = w.tx.QueryRow(w.ctx, getResourceQuery, namespace, name).Scan(&resourceUID, &defaultAction)
+		if err != nil {
+			return fmt.Errorf("failed to get AddressGroup UID and defaultAction: %w", err)
+		}
+		// Build payload with defaultAction
+		payloadJSON = fmt.Sprintf(`{"namespace": "%s", "name": "%s", "defaultAction": "%s"}`, namespace, name, defaultAction)
+
+	default:
+		// For other resources (Service, Bindings, Rules): just get UID
+		getUIDQuery := fmt.Sprintf(`
+			SELECT m.uid
+			FROM %s r
+			INNER JOIN k8s_metadata m ON r.resource_version = m.resource_version
+			WHERE r.namespace = $1 AND r.name = $2`, tableName)
+		err = w.tx.QueryRow(w.ctx, getUIDQuery, namespace, name).Scan(&resourceUID)
+		if err != nil {
+			return fmt.Errorf("failed to get resource UID: %w", err)
+		}
+		// Build basic payload
+		payloadJSON = fmt.Sprintf(`{"namespace": "%s", "name": "%s"}`, namespace, name)
 	}
+
+	// Step 2: Insert DELETE entry into sync_outbox with payload
 	insertOutboxQuery := `
 		INSERT INTO sync_outbox (
 			resource_type,
@@ -146,10 +202,7 @@ func (w *Writer) MarkForDeletionWithStatus(namespace, name, kind string) error {
 			$4::text,
 			'DELETE'::sync_operation,
 			'SGROUP'::target_system,
-			jsonb_build_object(
-				'namespace', $3::text,
-				'name', $4::text
-			),
+			$5::jsonb,
 			'PENDING'::outbox_status,
 			0,
 			5,
@@ -158,7 +211,7 @@ func (w *Writer) MarkForDeletionWithStatus(namespace, name, kind string) error {
 			NOW()
 		)
 		ON CONFLICT (resource_type, resource_id, operation, target_system) DO NOTHING`
-	_, err = w.tx.Exec(w.ctx, insertOutboxQuery, kind, resourceUID, namespace, name)
+	_, err = w.tx.Exec(w.ctx, insertOutboxQuery, kind, resourceUID, namespace, name, payloadJSON)
 	if err != nil {
 		return fmt.Errorf("failed to create DELETE entry in sync_outbox: %w", err)
 	}

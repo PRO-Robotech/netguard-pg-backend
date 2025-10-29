@@ -7,15 +7,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
-
-	"netguard-pg-backend/internal/domain"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
-	"netguard-pg-backend/internal/infrastructure/repositories"
 )
 
 // CIDRAlreadyExistsError represents a CIDR uniqueness violation error
@@ -243,51 +239,9 @@ func (w *Writer) upsertNetwork(ctx context.Context, network *models.Network) err
 	return nil
 }
 
-// createNetworkDeleteOutboxEntry creates an outbox entry for Network DELETE operation
-func (w *Writer) createNetworkDeleteOutboxEntry(ctx context.Context, network *models.Network) error {
-	// Build minimal payload for DELETE (only need identifiers)
-	payload := map[string]interface{}{
-		"namespace": network.Namespace,
-		"name":      network.Name,
-		"cidr":      network.CIDR,
-	}
-	payloadJSON, err := json.Marshal(payload)
-	if err != nil {
-		return errors.Wrap(err, "failed to marshal network DELETE payload")
-	}
-
-	// Parse resource UUID from Meta.UID
-	resourceUUID, err := uuid.Parse(network.Meta.UID)
-	if err != nil {
-		return errors.Wrapf(err, "invalid network UID: %s", network.Meta.UID)
-	}
-
-	// Create DELETE outbox entry
-	outboxEntry := &domain.OutboxEntry{
-		ResourceType:      "Network",
-		ResourceID:        resourceUUID,
-		ResourceNamespace: network.Namespace,
-		ResourceName:      network.Name,
-		Operation:         domain.SyncOperationDelete, // DELETE operation
-		TargetSystem:      domain.TargetSystemSGROUP,
-		Payload:           payloadJSON,
-		Status:            domain.OutboxStatusPending,
-		MaxRetries:        5,
-	}
-
-	// Use OutboxRepository with existing transaction
-	outboxRepo := repositories.NewOutboxRepository(w.tx)
-	if err := outboxRepo.Create(ctx, outboxEntry); err != nil {
-		return errors.Wrap(err, "failed to persist DELETE outbox entry")
-	}
-
-	klog.V(4).InfoS("Created DELETE outbox entry for Network",
-		"namespace", network.Namespace,
-		"name", network.Name,
-		"outbox_id", outboxEntry.ID)
-
-	return nil
-}
+// Removed createNetworkDeleteOutboxEntry - no longer needed!
+// DELETE outbox entries are now automatically created by BEFORE DELETE trigger
+// (migration 026: trigger_network_before_delete)
 
 // deleteNetworksInScope deletes networks that match the provided scope
 // Previous implementation used direct DELETE which bypassed Migration 032 trigger,
@@ -346,7 +300,13 @@ func (w *Writer) deleteNetworksInScope(ctx context.Context, scope ports.Scope) e
 	return nil
 }
 
-// DeleteNetworksByIDs deletes networks by their identifiers
+// DeleteNetworksByIDs deletes networks by their resource identifiers
+//
+// This method triggers the BEFORE DELETE trigger (migration 026: trigger_network_before_delete)
+// which automatically handles:
+// - Soft delete (UPDATE k8s_metadata SET deletion_timestamp = NOW())
+// - DELETE outbox entry creation
+// - Prevention of physical deletion (RETURN NULL) until Worker syncs to SGROUP
 func (w *Writer) DeleteNetworksByIDs(ctx context.Context, ids []models.ResourceIdentifier) error {
 	if len(ids) == 0 {
 		return nil
@@ -358,111 +318,30 @@ func (w *Writer) DeleteNetworksByIDs(ctx context.Context, ids []models.ResourceI
 	argIndex := 1
 
 	for _, id := range ids {
-		conditions = append(conditions, fmt.Sprintf("(n.namespace = $%d AND n.name = $%d)", argIndex, argIndex+1))
+		conditions = append(conditions, fmt.Sprintf("(namespace = $%d AND name = $%d)", argIndex, argIndex+1))
 		args = append(args, id.Namespace, id.Name)
 		argIndex += 2
 	}
 
-	// ========================================================================
-	// ========================================================================
-	// We need Network.Meta.UID and other fields to create DELETE outbox entry
-	// Use text(cidr) to force PostgreSQL to return CIDR as text, not binary
-	fetchQuery := fmt.Sprintf(`
-		SELECT n.namespace, n.name, text(n.cidr), n.network_items, n.is_bound, n.resource_version, m.uid
-		FROM networks n
-		JOIN k8s_metadata m ON n.resource_version = m.resource_version
+	// Execute DELETE FROM networks
+	// This will trigger the BEFORE DELETE trigger which:
+	// 1. Checks if deletion_timestamp is NULL (first delete attempt)
+	// 2. If NULL: soft delete + create DELETE outbox entry + prevent physical deletion
+	// 3. If NOT NULL: allow physical deletion (Worker already synced to SGROUP)
+	deleteQuery := fmt.Sprintf(`
+		DELETE FROM networks
 		WHERE %s
 	`, strings.Join(conditions, " OR "))
 
-	rows, err := w.tx.Query(ctx, fetchQuery, args...)
+	result, err := w.tx.Exec(ctx, deleteQuery, args...)
 	if err != nil {
-		return errors.Wrap(err, "failed to fetch networks before deletion")
-	}
-	defer rows.Close()
-
-	var networksToDelete []models.Network
-	for rows.Next() {
-		var network models.Network
-		var networkItemsJSON []byte
-		var resourceVersion int64
-		var cidrText string // PostgreSQL CIDR as text
-
-		err := rows.Scan(
-			&network.Namespace,
-			&network.Name,
-			&cidrText, // Scan CIDR as string (pgx handles conversion)
-			&networkItemsJSON,
-			&network.IsBound,
-			&resourceVersion,
-			&network.Meta.UID,
-		)
-		if err != nil {
-			return errors.Wrap(err, "failed to scan network data")
-		}
-
-		// Use CIDR as-is (already a string)
-		network.CIDR = cidrText
-
-		// Parse network_items to extract network_name if needed
-		var networkItems []map[string]interface{}
-		if len(networkItemsJSON) > 0 {
-			if err := json.Unmarshal(networkItemsJSON, &networkItems); err == nil {
-				if len(networkItems) > 0 {
-					if name, ok := networkItems[0]["name"].(string); ok {
-						network.NetworkName = name
-					}
-				}
-			}
-		}
-
-		networksToDelete = append(networksToDelete, network)
+		return errors.Wrap(err, "failed to delete networks")
 	}
 
-	if err := rows.Err(); err != nil {
-		return errors.Wrap(err, "error iterating network rows")
-	}
-
-	klog.V(4).InfoS("Fetched networks for deletion",
-		"count", len(networksToDelete),
-		"requested", len(ids))
-
-	// ========================================================================
-	// STEP 2 - Mark as "pending deletion" in k8s_metadata
-	// ========================================================================
-	// SYNC-FIRST PRINCIPLE: We DON'T delete from DB yet!
-	// Worker will sync to SGROUP first, THEN delete from DB
-	markDeleteQuery := `
-		UPDATE k8s_metadata m
-		SET deletion_timestamp = NOW(),
-		    conditions = COALESCE(conditions, '[]'::jsonb) ||
-		        '[{"type":"PendingSync","status":"True","reason":"PendingDeletion","message":"Awaiting SGROUP sync before deletion"}]'::jsonb
-		FROM networks n
-		WHERE n.resource_version = m.resource_version
-		  AND (%s)
-		  AND m.deletion_timestamp IS NULL`
-
-	markQuery := fmt.Sprintf(markDeleteQuery, strings.Join(conditions, " OR "))
-	_, err = w.tx.Exec(ctx, markQuery, args...)
-	if err != nil {
-		return errors.Wrap(err, "failed to mark networks as pending deletion")
-	}
-
-	klog.V(4).InfoS("Marked networks as pending deletion (NOT deleted from DB yet)",
-		"count", len(networksToDelete))
-
-	// ========================================================================
-	// STEP 3 - Create DELETE outbox entries for SGROUP sync
-	// ========================================================================
-	// Worker will process these, sync to SGROUP, THEN delete from DB
-	for i := range networksToDelete {
-		if err := w.createNetworkDeleteOutboxEntry(ctx, &networksToDelete[i]); err != nil {
-			return errors.Wrapf(err, "failed to create DELETE outbox entry for network %s/%s",
-				networksToDelete[i].Namespace, networksToDelete[i].Name)
-		}
-	}
-
-	klog.V(4).InfoS("Created DELETE outbox entries for networks (resources remain in DB until Worker processes)",
-		"count", len(networksToDelete))
+	rowsAffected := result.RowsAffected()
+	klog.V(4).InfoS("Executed DELETE for networks (BEFORE DELETE trigger handles soft delete + outbox)",
+		"requested", len(ids),
+		"rows_affected", rowsAffected)
 
 	return nil
 }

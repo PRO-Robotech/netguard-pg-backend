@@ -262,97 +262,50 @@ func (w *Writer) deleteAddressGroupsInScope(ctx context.Context, scope ports.Sco
 }
 
 // deleteAddressGroupsByIdentifiers deletes specific address groups by their identifiers
+//
+// This method triggers the BEFORE DELETE trigger (migration 026: trigger_address_group_before_delete)
+// which automatically handles:
+// - Soft delete (UPDATE k8s_metadata SET deletion_timestamp = NOW())
+// - DELETE outbox entry creation
+// - Prevention of physical deletion (RETURN NULL) until Worker syncs to SGROUP
 func (w *Writer) deleteAddressGroupsByIdentifiers(ctx context.Context, identifiers []models.ResourceIdentifier) error {
 	if len(identifiers) == 0 {
 		return nil
 	}
 
-	// Build parameter placeholders and collect args
+	// Build DELETE query with parameter placeholders
 	var conditions []string
 	var args []interface{}
 	argIndex := 1
 
 	for _, id := range identifiers {
-		conditions = append(conditions, fmt.Sprintf("(ag.namespace = $%d AND ag.name = $%d)", argIndex, argIndex+1))
+		conditions = append(conditions, fmt.Sprintf("(namespace = $%d AND name = $%d)", argIndex, argIndex+1))
 		args = append(args, id.Namespace, id.Name)
 		argIndex += 2
 	}
 
-	// We need AddressGroup.Meta.UID and other fields to create DELETE outbox entry
-	fetchQuery := fmt.Sprintf(`
-		SELECT ag.namespace, ag.name, ag.default_action, ag.logs, ag.trace,
-		       ag.networks, ag.hosts, m.uid
-		FROM address_groups ag
-		JOIN k8s_metadata m ON ag.resource_version = m.resource_version
+	// Execute DELETE FROM address_groups
+	// This will trigger the BEFORE DELETE trigger which:
+	// 1. Checks if deletion_timestamp is NULL (first delete attempt)
+	// 2. If NULL: soft delete + create DELETE outbox entry + prevent physical deletion
+	// 3. If NOT NULL: allow physical deletion (Worker already synced to SGROUP)
+	deleteQuery := fmt.Sprintf(`
+		DELETE FROM address_groups
 		WHERE %s
 	`, strings.Join(conditions, " OR "))
 
-	rows, err := w.tx.Query(ctx, fetchQuery, args...)
+	result, err := w.tx.Exec(ctx, deleteQuery, args...)
 	if err != nil {
-		return errors.Wrap(err, "failed to fetch address groups before deletion")
-	}
-	defer rows.Close()
-
-	var addressGroupsToDelete []models.AddressGroup
-	for rows.Next() {
-		var ag models.AddressGroup
-		var networksJSON, hostsJSON []byte
-
-		err := rows.Scan(
-			&ag.Namespace,
-			&ag.Name,
-			&ag.DefaultAction,
-			&ag.Logs,
-			&ag.Trace,
-			&networksJSON,
-			&hostsJSON,
-			&ag.Meta.UID,
-		)
-		if err != nil {
-			return errors.Wrap(err, "failed to scan address group data")
-		}
-
-		// Parse networks and hosts from JSON
-		if len(networksJSON) > 0 {
-			json.Unmarshal(networksJSON, &ag.Networks)
-		}
-		if len(hostsJSON) > 0 {
-			json.Unmarshal(hostsJSON, &ag.Hosts)
-		}
-
-		addressGroupsToDelete = append(addressGroupsToDelete, ag)
+		return errors.Wrap(err, "failed to delete address groups")
 	}
 
-	if err := rows.Err(); err != nil {
-		return errors.Wrap(err, "error iterating address group rows")
-	}
+	rowsAffected := result.RowsAffected()
+	klog.V(4).InfoS("Executed DELETE for address groups (BEFORE DELETE trigger handles soft delete + outbox)",
+		"requested", len(identifiers),
+		"rows_affected", rowsAffected)
 
-	klog.V(4).InfoS("Fetched address groups for deletion",
-		"count", len(addressGroupsToDelete),
-		"requested", len(identifiers))
-
-	markDeleteQuery := `
-		UPDATE k8s_metadata m
-		SET deletion_timestamp = NOW(),
-		    conditions = COALESCE(conditions, '[]'::jsonb) ||
-		        '[{"type":"PendingSync","status":"True","reason":"PendingDeletion","message":"Awaiting SGROUP sync before deletion"}]'::jsonb
-		FROM address_groups ag
-		WHERE ag.resource_version = m.resource_version
-		  AND (%s)
-		  AND m.deletion_timestamp IS NULL`
-
-	markQuery := fmt.Sprintf(markDeleteQuery, strings.Join(conditions, " OR "))
-	_, err = w.tx.Exec(ctx, markQuery, args...)
-	if err != nil {
-		return errors.Wrap(err, "failed to mark address groups as pending deletion")
-	}
-
-	klog.V(4).InfoS("Marked address groups as pending deletion (DELETE outbox entries auto-created by trigger)",
-		"count", len(addressGroupsToDelete))
-
-	// Outbox entries are automatically created by PostgreSQL BEFORE DELETE trigger
-	// (trg_address_group_before_delete) which uses real Kubernetes UID from k8s_metadata.
-	// This eliminates duplicate DELETE outbox entries.
+	// Note: rowsAffected will be 0 for first delete attempt (trigger prevents physical deletion)
+	// and > 0 for second delete attempt after Worker synced to SGROUP
 
 	return nil
 }
@@ -876,50 +829,9 @@ func (w *Writer) createAddressGroupOutboxEntry(ctx context.Context, ag models.Ad
 	return nil
 }
 
-// createAddressGroupDeleteOutboxEntry creates an outbox entry for AddressGroup DELETE operation
-func (w *Writer) createAddressGroupDeleteOutboxEntry(ctx context.Context, ag models.AddressGroup) error {
-	// Build minimal payload for DELETE (only need identifiers)
-	payload := map[string]interface{}{
-		"namespace": ag.Namespace,
-		"name":      ag.Name,
-	}
-	payloadJSON, err := json.Marshal(payload)
-	if err != nil {
-		return errors.Wrap(err, "failed to marshal address group DELETE payload")
-	}
-
-	// Parse resource UUID from Meta.UID
-	resourceUUID, err := uuid.Parse(ag.Meta.UID)
-	if err != nil {
-		return errors.Wrapf(err, "invalid address group UID: %s", ag.Meta.UID)
-	}
-
-	// Create DELETE outbox entry
-	outboxEntry := &domain.OutboxEntry{
-		ResourceType:      "AddressGroup",
-		ResourceID:        resourceUUID,
-		ResourceNamespace: ag.Namespace,
-		ResourceName:      ag.Name,
-		Operation:         domain.SyncOperationDelete, // DELETE operation
-		TargetSystem:      domain.TargetSystemSGROUP,
-		Payload:           payloadJSON,
-		Status:            domain.OutboxStatusPending,
-		MaxRetries:        5,
-	}
-
-	// Use OutboxRepository with existing transaction
-	outboxRepo := repositories.NewOutboxRepository(w.tx)
-	if err := outboxRepo.Create(ctx, outboxEntry); err != nil {
-		return errors.Wrap(err, "failed to persist DELETE outbox entry")
-	}
-
-	klog.V(4).InfoS("Created DELETE outbox entry for AddressGroup",
-		"namespace", ag.Namespace,
-		"name", ag.Name,
-		"outbox_id", outboxEntry.ID)
-
-	return nil
-}
+// Removed createAddressGroupDeleteOutboxEntry - no longer needed!
+// DELETE outbox entries are now automatically created by BEFORE DELETE trigger
+// (migration 026: trigger_address_group_before_delete)
 
 func (w *Writer) updateAddressGroupConditionsOnly(ctx context.Context, ag models.AddressGroup) error {
 	// ДИАГНОСТИКА: Начало обновления conditions

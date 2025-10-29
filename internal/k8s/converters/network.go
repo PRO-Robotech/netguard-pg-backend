@@ -80,6 +80,7 @@ func (c *NetworkConverter) FromDomain(ctx context.Context, domainObj *models.Net
 			ResourceVersion:   domainObj.Meta.ResourceVersion,
 			Generation:        domainObj.Meta.Generation,
 			CreationTimestamp: domainObj.Meta.CreationTS,
+			DeletionTimestamp: domainObj.Meta.DeletionTS,
 			Labels:            domainObj.Meta.Labels,
 			Annotations:       domainObj.Meta.Annotations,
 		},
