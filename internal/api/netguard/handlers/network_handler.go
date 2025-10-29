@@ -4,6 +4,7 @@ import (
 	"context"
 	"netguard-pg-backend/internal/api/netguard/converters"
 	"netguard-pg-backend/internal/application/services"
+	"netguard-pg-backend/internal/application/validation"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
@@ -13,17 +14,31 @@ import (
 
 // NetworkHandler handles network-related operations
 type NetworkHandler struct {
-	service *services.NetguardFacade
+	service   *services.NetguardFacade
+	validator *validation.SelectorValidator
 }
 
 // NewNetworkHandler creates a new NetworkHandler
-func NewNetworkHandler(service *services.NetguardFacade) *NetworkHandler {
-	return &NetworkHandler{service: service}
+func NewNetworkHandler(service *services.NetguardFacade, validator *validation.SelectorValidator) *NetworkHandler {
+	return &NetworkHandler{
+		service:   service,
+		validator: validator,
+	}
 }
 
 // ListNetworks gets list of networks
 func (h *NetworkHandler) ListNetworks(ctx context.Context, req *netguardpb.ListNetworksReq) (*netguardpb.ListNetworksResp, error) {
-	scope := h.buildScope(req.Identifiers)
+	// Validate field selectors and label selectors if provided
+	if req.GetOptions() != nil {
+		if err := h.validator.ValidateFieldSelectors("networks", req.GetOptions().FieldSelectors); err != nil {
+			return nil, errors.Wrap(err, "invalid field selectors")
+		}
+		if err := h.validator.ValidateLabelSelectors(req.GetOptions().LabelSelectors); err != nil {
+			return nil, errors.Wrap(err, "invalid label selectors")
+		}
+	}
+
+	scope := h.buildScopeWithFieldSelectors(req.Identifiers, req.GetOptions())
 
 	networks, err := h.service.GetNetworks(ctx, scope)
 	if err != nil {
@@ -103,4 +118,31 @@ func (h *NetworkHandler) buildScope(identifiers []*netguardpb.ResourceIdentifier
 	}
 
 	return ports.NewResourceIdentifierScope(ids...)
+}
+
+// buildScopeWithFieldSelectors creates a scope from identifiers, field selectors, and label selectors
+func (h *NetworkHandler) buildScopeWithFieldSelectors(
+	identifiers []*netguardpb.ResourceIdentifier,
+	options *netguardpb.ListOptions,
+) ports.Scope {
+	// If no options or no field/label selectors, fall back to legacy behavior
+	if options == nil || (len(options.FieldSelectors) == 0 && len(options.LabelSelectors) == 0) {
+		return h.buildScope(identifiers)
+	}
+
+	// Convert identifiers to domain models
+	var ids []models.ResourceIdentifier
+	if len(identifiers) > 0 {
+		ids = make([]models.ResourceIdentifier, 0, len(identifiers))
+		for _, id := range identifiers {
+			ids = append(ids, converters.ResourceIdentifierFromPB(id))
+		}
+	}
+
+	// Create FieldSelectorScope with identifiers, field selectors, and label selectors
+	return ports.FieldSelectorScope{
+		Identifiers:    ids,
+		FieldSelectors: options.FieldSelectors,
+		LabelSelectors: options.LabelSelectors,
+	}
 }

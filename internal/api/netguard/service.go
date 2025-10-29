@@ -7,6 +7,7 @@ import (
 	"netguard-pg-backend/internal/api/netguard/handlers"
 	"netguard-pg-backend/internal/api/netguard/sync"
 	"netguard-pg-backend/internal/application/services"
+	"netguard-pg-backend/internal/application/validation"
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
 )
 
@@ -23,13 +24,14 @@ type ServiceServer struct {
 }
 
 func NewServiceServer(service *services.NetguardFacade) *ServiceServer {
+	validator := validation.NewSelectorValidator()
 	return &ServiceServer{
-		serviceHandler:      handlers.NewServiceHandler(service),
-		addressGroupHandler: handlers.NewAddressGroupHandler(service),
+		serviceHandler:      handlers.NewServiceHandler(service, validator),
+		addressGroupHandler: handlers.NewAddressGroupHandler(service, validator),
 		ruleHandler:         handlers.NewRuleHandler(service),
 		svcSvcRuleHandler:   handlers.NewSvcSvcRuleHandler(service),
-		networkHandler:      handlers.NewNetworkHandler(service),
-		hostHandler:         handlers.NewHostHandler(service),
+		networkHandler:      handlers.NewNetworkHandler(service, validator),
+		hostHandler:         handlers.NewHostHandler(service, validator),
 		syncDispatcher:      sync.NewDispatcher(service),
 		service:             service,
 	}

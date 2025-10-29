@@ -548,6 +548,7 @@ message SyncSvcSvcRules {
 // ListServicesReq - request to list services
 message ListServicesReq {
   repeated ResourceIdentifier identifiers = 1;
+  ListOptions options = 2;
 }
 
 // ListServicesResp - response with list of services
@@ -716,6 +717,7 @@ message GetIEAgAgRuleResp {
 // ListNetworksReq - request to list networks
 message ListNetworksReq {
   repeated ResourceIdentifier identifiers = 1;
+  ListOptions options = 2;
 }
 
 // ListNetworksResp - response with list of networks
@@ -898,12 +900,54 @@ message FieldSelector {
 // FieldOperator defines the comparison operation for field selectors
 enum FieldOperator {
   FIELD_OPERATOR_UNSPECIFIED = 0;
+
+  // Basic comparison operators
   FIELD_OPERATOR_EQUALS = 1;       // = (equality)
   FIELD_OPERATOR_NOT_EQUALS = 2;   // != (inequality)
 
-  // Future extensions:
-  // FIELD_OPERATOR_IN = 3;         // in (set membership)
-  // FIELD_OPERATOR_NOT_IN = 4;     // notin (set non-membership)
+  // Set membership operators
+  FIELD_OPERATOR_IN = 3;           // IN (value in list) - value format: "val1,val2,val3"
+  FIELD_OPERATOR_NOT_IN = 4;       // NOT IN (value not in list) - value format: "val1,val2,val3"
+
+  // String matching operators
+  FIELD_OPERATOR_CONTAINS = 5;     // LIKE %value% (substring match)
+  FIELD_OPERATOR_STARTS_WITH = 6;  // LIKE value% (prefix match)
+  FIELD_OPERATOR_ENDS_WITH = 7;    // LIKE %value (suffix match)
+
+  // Null checking operators
+  FIELD_OPERATOR_EXISTS = 8;       // IS NOT NULL (field has value)
+  FIELD_OPERATOR_NOT_EXISTS = 9;   // IS NULL (field is null)
+}
+
+// LabelSelector describes a label selector for filtering resources by labels
+// Supports Kubernetes-style label matching operations
+message LabelSelector {
+  // Label key to match
+  string key = 1;
+
+  // Operator for label matching
+  LabelOperator operator = 2;
+
+  // Values for the operation (for IN/NOT_IN operators, multiple values; for EQUALS/NOT_EQUALS, single value)
+  // For EXISTS/NOT_EXISTS operators, values are ignored
+  repeated string values = 3;
+}
+
+// LabelOperator defines the operation for label selectors
+enum LabelOperator {
+  LABEL_OPERATOR_UNSPECIFIED = 0;
+
+  // Equality-based selectors
+  LABEL_OPERATOR_EQUALS = 1;       // key=value (label key equals value)
+  LABEL_OPERATOR_NOT_EQUALS = 2;   // key!=value (label key not equals value)
+
+  // Set-based selectors
+  LABEL_OPERATOR_IN = 3;           // key in (value1, value2, ...) (label key's value is in the set)
+  LABEL_OPERATOR_NOT_IN = 4;       // key notin (value1, value2, ...) (label key's value is not in the set)
+
+  // Existence selectors
+  LABEL_OPERATOR_EXISTS = 5;       // key exists (label key is present, any value)
+  LABEL_OPERATOR_NOT_EXISTS = 6;   // !key (label key is not present)
 }
 
 // ListOptions contains common filtering and pagination options for List operations
@@ -918,9 +962,11 @@ message ListOptions {
   //           {field: "status.isBound", operator: EQUALS, value: "true"}]
   repeated FieldSelector field_selectors = 2;
 
-  // Label selectors (for future use)
-  // Will support Kubernetes-style label matching
-  map<string, string> label_selectors = 3;
+  // Label selectors for filtering by labels (AND logic between multiple selectors)
+  // Returns all resources matching ALL specified label conditions
+  // Example: [{key: "env", operator: EQUALS, values: ["prod"]},
+  //           {key: "tier", operator: IN, values: ["frontend", "backend"]}]
+  repeated LabelSelector label_selectors = 3;
 
   // Pagination token for retrieving next page of results
   string continue_token = 4;

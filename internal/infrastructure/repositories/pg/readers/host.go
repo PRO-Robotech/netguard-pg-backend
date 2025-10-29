@@ -24,11 +24,16 @@ func (r *Reader) ListHosts(ctx context.Context, consume func(models.Host) error,
 		       m.created_at, m.updated_at, m.deletion_timestamp
 		FROM hosts h
 		INNER JOIN k8s_metadata m ON h.resource_version = m.resource_version`
-	whereClause, args := utils.BuildScopeFilter(scope, "h")
+
+	whereClause, args, err := utils.BuildScopeFilterWithTable(scope, "hosts", "h")
+	if err != nil {
+		return errors.Wrap(err, "failed to build scope filter")
+	}
+
 	if whereClause != "" {
 		query += " WHERE " + whereClause
-	} else {
 	}
+
 	query += " ORDER BY h.namespace, h.name"
 	rows, err := r.query(ctx, query, args...)
 	if err != nil {

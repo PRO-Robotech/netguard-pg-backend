@@ -5,6 +5,7 @@ import (
 
 	"netguard-pg-backend/internal/api/netguard/converters"
 	"netguard-pg-backend/internal/application/services"
+	"netguard-pg-backend/internal/application/validation"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
@@ -14,17 +15,31 @@ import (
 
 // AddressGroupHandler handles address group-related operations
 type AddressGroupHandler struct {
-	service *services.NetguardFacade
+	service   *services.NetguardFacade
+	validator *validation.SelectorValidator
 }
 
 // NewAddressGroupHandler creates a new AddressGroupHandler
-func NewAddressGroupHandler(service *services.NetguardFacade) *AddressGroupHandler {
-	return &AddressGroupHandler{service: service}
+func NewAddressGroupHandler(service *services.NetguardFacade, validator *validation.SelectorValidator) *AddressGroupHandler {
+	return &AddressGroupHandler{
+		service:   service,
+		validator: validator,
+	}
 }
 
 // ListAddressGroups gets list of address groups
 func (h *AddressGroupHandler) ListAddressGroups(ctx context.Context, req *netguardpb.ListAddressGroupsReq) (*netguardpb.ListAddressGroupsResp, error) {
-	scope := h.buildScope(req.GetIdentifiers())
+	// Validate field selectors and label selectors if provided
+	if req.Options != nil {
+		if err := h.validator.ValidateFieldSelectors("address_groups", req.Options.FieldSelectors); err != nil {
+			return nil, errors.Wrap(err, "invalid field selectors")
+		}
+		if err := h.validator.ValidateLabelSelectors(req.Options.LabelSelectors); err != nil {
+			return nil, errors.Wrap(err, "invalid label selectors")
+		}
+	}
+
+	scope := h.buildScopeWithFieldSelectors(req.GetIdentifiers(), req.Options)
 
 	addressGroups, err := h.service.GetAddressGroups(ctx, scope)
 	if err != nil {
@@ -158,4 +173,45 @@ func (h *AddressGroupHandler) buildScope(identifiers []*netguardpb.ResourceIdent
 	}
 
 	return ports.NewResourceIdentifierScope(ids...)
+}
+
+// buildScopeWithFieldSelectors creates a scope from resource identifiers, field selectors, and label selectors
+func (h *AddressGroupHandler) buildScopeWithFieldSelectors(identifiers []*netguardpb.ResourceIdentifier, options *netguardpb.ListOptions) ports.Scope {
+	// Extract field selectors and label selectors from options
+	var fieldSelectors []*netguardpb.FieldSelector
+	var labelSelectors []*netguardpb.LabelSelector
+	if options != nil {
+		if len(options.FieldSelectors) > 0 {
+			fieldSelectors = options.FieldSelectors
+		}
+		if len(options.LabelSelectors) > 0 {
+			labelSelectors = options.LabelSelectors
+		}
+	}
+
+	// If we have no identifiers, field selectors, and label selectors, return empty scope
+	if len(identifiers) == 0 && len(fieldSelectors) == 0 && len(labelSelectors) == 0 {
+		return ports.EmptyScope{}
+	}
+
+	// If we only have identifiers (no field or label selectors), use ResourceIdentifierScope for backward compatibility
+	if len(fieldSelectors) == 0 && len(labelSelectors) == 0 {
+		ids := make([]models.ResourceIdentifier, 0, len(identifiers))
+		for _, id := range identifiers {
+			ids = append(ids, converters.ResourceIdentifierFromPB(id))
+		}
+		return ports.NewResourceIdentifierScope(ids...)
+	}
+
+	// If we have field or label selectors (with or without identifiers), use FieldSelectorScope
+	ids := make([]models.ResourceIdentifier, 0, len(identifiers))
+	for _, id := range identifiers {
+		ids = append(ids, converters.ResourceIdentifierFromPB(id))
+	}
+
+	return ports.FieldSelectorScope{
+		Identifiers:    ids,
+		FieldSelectors: fieldSelectors,
+		LabelSelectors: labelSelectors,
+	}
 }

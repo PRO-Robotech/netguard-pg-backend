@@ -33,14 +33,16 @@ func (r *Reader) ListServices(ctx context.Context, consume func(models.Service) 
 		       m.created_at, m.updated_at, m.deletion_timestamp
 		FROM services s
 		INNER JOIN k8s_metadata m ON s.resource_version = m.resource_version`
-	whereClause, args := utils.BuildScopeFilter(scope, "s")
+	whereClause, args, err := utils.BuildScopeFilterWithTable(scope, "services", "s")
+	if err != nil {
+		return errors.Wrap(err, "failed to build scope filter")
+	}
 	if whereClause != "" {
 		query += " WHERE " + whereClause
-	} else {
 	}
 	query += " ORDER BY s.namespace, s.name"
+
 	var rows pgx.Rows
-	var err error
 	maxRetries := 3
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		rows, err = r.query(ctx, query, args...)
