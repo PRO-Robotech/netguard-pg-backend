@@ -567,7 +567,15 @@ message GetServiceResp {
 
 // ListAddressGroupsReq - request to list address groups
 message ListAddressGroupsReq {
+  // Get specific resources by exact identifiers (OR logic between identifiers)
+  // Returns only address groups matching these exact namespace/name combinations
+  // Example: [{ns: "prod", name: "ag-1"}, {ns: "dev", name: "ag-2"}]
   repeated ResourceIdentifier identifiers = 1;
+
+  // Filter resources by field values (AND logic between field_selectors)
+  // Returns all address groups matching the filter criteria
+  // Can be combined with identifiers for additional filtering
+  ListOptions options = 2;
 }
 
 // ListAddressGroupsResp - response with list of address groups
@@ -747,7 +755,15 @@ message GetNetworkBindingResp {
 
 // ListHostsReq - request to list hosts
 message ListHostsReq {
+  // Get specific resources by exact identifiers (OR logic between identifiers)
+  // Returns only hosts matching these exact namespace/name combinations
+  // Example: [{ns: "prod", name: "host-1"}, {ns: "dev", name: "host-2"}]
   repeated ResourceIdentifier identifiers = 1;
+
+  // Filter resources by field values (AND logic between field_selectors)
+  // Returns all hosts matching the filter criteria
+  // Can be combined with identifiers for additional filtering
+  ListOptions options = 2;
 }
 
 // ListHostsResp - response with list of hosts
@@ -863,6 +879,54 @@ message MarkForDeletionReq {
 
   // Kind of the resource (e.g., "AddressGroup", "Host", "Network")
   string kind = 3;
+}
+
+// FieldSelector describes a field selector for filtering resources
+// Enables filtering List operations by field values, similar to Kubernetes field selectors
+message FieldSelector {
+  // Field path in Kubernetes style
+  // Examples: "metadata.name", "status.addressGroupRef.name"
+  string field = 1;
+
+  // Comparison operator
+  FieldOperator operator = 2;
+
+  // Value to compare (string representation, backend will cast if needed)
+  string value = 3;
+}
+
+// FieldOperator defines the comparison operation for field selectors
+enum FieldOperator {
+  FIELD_OPERATOR_UNSPECIFIED = 0;
+  FIELD_OPERATOR_EQUALS = 1;       // = (equality)
+  FIELD_OPERATOR_NOT_EQUALS = 2;   // != (inequality)
+
+  // Future extensions:
+  // FIELD_OPERATOR_IN = 3;         // in (set membership)
+  // FIELD_OPERATOR_NOT_IN = 4;     // notin (set non-membership)
+}
+
+// ListOptions contains common filtering and pagination options for List operations
+message ListOptions {
+  // Namespace filter (empty = all namespaces)
+  // DEPRECATED: Use field_selectors with "metadata.namespace" instead for consistency
+  string namespace = 1;
+
+  // Field selectors for filtering (AND logic between multiple selectors)
+  // Returns all resources matching ALL specified field conditions
+  // Example: [{field: "metadata.namespace", operator: EQUALS, value: "prod"},
+  //           {field: "status.isBound", operator: EQUALS, value: "true"}]
+  repeated FieldSelector field_selectors = 2;
+
+  // Label selectors (for future use)
+  // Will support Kubernetes-style label matching
+  map<string, string> label_selectors = 3;
+
+  // Pagination token for retrieving next page of results
+  string continue_token = 4;
+
+  // Limit number of results (0 = no limit)
+  int32 limit = 5;
 }
 
 // Service definition
