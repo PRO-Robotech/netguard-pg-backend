@@ -112,6 +112,10 @@ func (r *Reader) scanHostBinding(rows pgx.Rows) (models.HostBinding, error) {
 		return models.HostBinding{}, errors.Wrap(err, "failed to parse host binding metadata")
 	}
 	hostBinding.Meta.UID = uid
+
+	// Deduplicate conditions loaded from database to prevent duplicate Ready/Validated/etc conditions
+	hostBinding.Meta.DeduplicateConditions()
+
 	return hostBinding, nil
 }
 func (r *Reader) scanHostBindingRow(row pgx.Row) (*models.HostBinding, error) {
@@ -163,5 +167,9 @@ func (r *Reader) scanHostBindingRow(row pgx.Row) (*models.HostBinding, error) {
 		return nil, errors.Wrap(err, "failed to parse host binding metadata")
 	}
 	hostBinding.Meta.UID = uid
+
+	// Deduplicate conditions loaded from database to prevent duplicate Ready/Validated/etc conditions
+	hostBinding.Meta.DeduplicateConditions()
+
 	return &hostBinding, nil
 }

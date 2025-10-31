@@ -73,14 +73,15 @@ func (w *Writer) GetTx() pgx.Tx {
 }
 func (w *Writer) MarkForDeletionWithStatus(namespace, name, kind string) error {
 	tableMap := map[string]string{
-		"AddressGroup":   "address_groups",
-		"Host":           "hosts",
-		"Network":        "networks",
-		"Service":        "services",
-		"HostBinding":    "host_bindings",
-		"NetworkBinding": "network_bindings",
-		"RuleS2S":        "rule_s2s",
-		"IEAgAgRule":     "ie_ag_ag_rules",
+		"AddressGroup":        "address_groups",
+		"Host":                "hosts",
+		"Network":             "networks",
+		"Service":             "services",
+		"HostBinding":         "host_bindings",
+		"NetworkBinding":      "network_bindings",
+		"AddressGroupBinding": "address_group_bindings",
+		"RuleS2S":             "rule_s2s",
+		"IEAgAgRule":          "ie_ag_ag_rules",
 	}
 	tableName, ok := tableMap[kind]
 	if !ok {
@@ -178,7 +179,18 @@ func (w *Writer) MarkForDeletionWithStatus(namespace, name, kind string) error {
 		payloadJSON = fmt.Sprintf(`{"namespace": "%s", "name": "%s"}`, namespace, name)
 	}
 
-	// Step 2: Insert DELETE entry into sync_outbox with payload
+	// Step 2: Determine target_system based on resource type
+	// PROCESS resources (all *Binding types) use INTERNAL - they don't sync to SGROUP directly
+	// ENTITY resources (Host, Network, AddressGroup, Service, etc.) use SGROUP
+	var targetSystem string
+	switch kind {
+	case "HostBinding", "NetworkBinding", "AddressGroupBinding":
+		targetSystem = "INTERNAL"
+	default:
+		targetSystem = "SGROUP"
+	}
+
+	// Step 3: Insert DELETE entry into sync_outbox with payload
 	insertOutboxQuery := `
 		INSERT INTO sync_outbox (
 			resource_type,
@@ -201,8 +213,8 @@ func (w *Writer) MarkForDeletionWithStatus(namespace, name, kind string) error {
 			$3::text,
 			$4::text,
 			'DELETE'::sync_operation,
-			'SGROUP'::target_system,
-			$5::jsonb,
+			$5::target_system,
+			$6::jsonb,
 			'PENDING'::outbox_status,
 			0,
 			5,
@@ -211,7 +223,7 @@ func (w *Writer) MarkForDeletionWithStatus(namespace, name, kind string) error {
 			NOW()
 		)
 		ON CONFLICT (resource_type, resource_id, operation, target_system) DO NOTHING`
-	_, err = w.tx.Exec(w.ctx, insertOutboxQuery, kind, resourceUID, namespace, name, payloadJSON)
+	_, err = w.tx.Exec(w.ctx, insertOutboxQuery, kind, resourceUID, namespace, name, targetSystem, payloadJSON)
 	if err != nil {
 		return fmt.Errorf("failed to create DELETE entry in sync_outbox: %w", err)
 	}

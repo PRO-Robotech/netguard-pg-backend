@@ -119,7 +119,29 @@ func (w *OutboxWorker) processEntityResource(
 		w.logger.Debug("all entity dependencies ready, proceeding with sync",
 			zap.String("resource_type", item.ResourceType))
 	} else {
-		w.logger.Debug("no entity dependency check for DELETE operation",
+		w.logger.Debug("DELETE operation detected, checking for binding coordination",
+			zap.String("resource_type", item.ResourceType))
+
+		// Case 2: Coordinate binding deletion BEFORE syncing entity DELETE to SGROUP
+		// This ensures bindings are deleted first, preventing CASCADE from bypassing triggers
+		if err := w.coordinateEntityDeleteWithBindings(ctx, item); err != nil {
+			// If waiting for bindings to be deleted, don't treat as error
+			if IsWaitingForSync(err) {
+				w.logger.Debug("waiting for bindings to be deleted before entity deletion",
+					zap.String("resource_type", item.ResourceType),
+					zap.String("namespace", item.ResourceNamespace),
+					zap.String("name", item.ResourceName))
+				duration := time.Since(startTime)
+				RecordProcessingFailure(item.ResourceType, operation, "waiting_for_bindings", duration)
+				return ErrWaitingForSync
+			}
+			// Other errors are failures
+			duration := time.Since(startTime)
+			RecordProcessingFailure(item.ResourceType, operation, "binding_coordination_error", duration)
+			return fmt.Errorf("failed to coordinate binding deletion: %w", err)
+		}
+
+		w.logger.Debug("binding coordination complete or not needed, proceeding with entity DELETE",
 			zap.String("resource_type", item.ResourceType))
 	}
 	syncer, err := w.getSyncerForEntity(item.ResourceType)
@@ -234,6 +256,17 @@ func (w *OutboxWorker) reconstructResourceFromPayload(item *domain.OutboxEntry) 
 			},
 			ServiceFromRef: serviceFromRef,
 			ServiceToRef:   serviceToRef,
+		}, nil
+	case string(registry.TypeHostBinding):
+		// For DELETE operations on HostBinding (process resource), we only need basic identification
+		// The coordinated deletion handler will load the full resource if needed
+		return &models.HostBinding{
+			SelfRef: models.SelfRef{
+				ResourceIdentifier: models.ResourceIdentifier{
+					Namespace: namespace,
+					Name:      name,
+				},
+			},
 		}, nil
 	default:
 		return nil, fmt.Errorf("unknown resource type: %s", item.ResourceType)
@@ -678,4 +711,245 @@ func getStringFromMap(m map[string]interface{}, key string) string {
 		return val
 	}
 	return ""
+}
+
+// coordinateEntityDeleteWithBindings handles Case 2 (DELETE Entity → CASCADE bindings)
+// for resource types that have binding relationships:
+//   - Host → HostBinding
+//   - Network → NetworkBinding
+//   - AddressGroup → HostBinding + NetworkBinding
+//   - Service → AddressGroupBinding (stub for future)
+//
+// Algorithm:
+//  1. Find all bindings for this entity
+//  2. If no bindings → return nil (proceed with sync)
+//  3. If bindings exist:
+//     a. Mark each binding with deletion_timestamp (soft delete)
+//     b. Check if all bindings are physically deleted
+//     c. If not → return ErrWaitingForSync (wait for next poll)
+//     d. If yes → return nil (proceed with sync)
+//
+// See: docs/architecture/COORDINATED_BINDING_DELETION.md - Case 2
+func (w *OutboxWorker) coordinateEntityDeleteWithBindings(
+	ctx context.Context,
+	item *domain.OutboxEntry,
+) error {
+	// Dispatch to specific handler based on resource type
+	switch item.ResourceType {
+	case string(registry.TypeHost):
+		return w.coordinateHostDelete(ctx, item)
+
+	case string(registry.TypeNetwork):
+		return w.coordinateNetworkDelete(ctx, item)
+
+	case string(registry.TypeAddressGroup):
+		return w.coordinateAddressGroupDelete(ctx, item)
+
+	case string(registry.TypeService):
+		return w.coordinateServiceDelete(ctx, item)
+
+	default:
+		// No binding coordination needed for other types
+		return nil
+	}
+}
+
+// coordinateHostDelete handles Case 2 for Host deletion
+// See: docs/architecture/COORDINATED_BINDING_DELETION.md - Case 2
+func (w *OutboxWorker) coordinateHostDelete(
+	ctx context.Context,
+	item *domain.OutboxEntry,
+) error {
+	w.logger.Info("coordinating Host DELETE with HostBinding CASCADE",
+		zap.String("namespace", item.ResourceNamespace),
+		zap.String("name", item.ResourceName))
+
+	// Step 1: Find all HostBindings for this Host
+	bindings, err := w.findHostBindingsForHost(ctx, item.ResourceNamespace, item.ResourceName)
+	if err != nil {
+		return fmt.Errorf("finding host bindings: %w", err)
+	}
+
+	if len(bindings) == 0 {
+		w.logger.Debug("no HostBindings found, proceeding with Host DELETE",
+			zap.String("namespace", item.ResourceNamespace),
+			zap.String("name", item.ResourceName))
+		return nil // No bindings to coordinate
+	}
+
+	w.logger.Info("found HostBindings that need coordination",
+		zap.String("namespace", item.ResourceNamespace),
+		zap.String("name", item.ResourceName),
+		zap.Int("binding_count", len(bindings)))
+
+	// Step 2: Mark all bindings for deletion (soft delete)
+	for _, binding := range bindings {
+		if err := w.markBindingForDeletion(ctx, binding); err != nil {
+			return fmt.Errorf("marking binding for deletion: %w", err)
+		}
+	}
+
+	// Step 3: Check if all bindings are physically deleted
+	allDeleted, err := w.checkAllHostBindingsDeleted(ctx, bindings)
+	if err != nil {
+		return fmt.Errorf("checking binding deletion status: %w", err)
+	}
+
+	if !allDeleted {
+		w.logger.Debug("HostBindings not yet physically deleted, waiting",
+			zap.String("namespace", item.ResourceNamespace),
+			zap.String("name", item.ResourceName),
+			zap.Int("binding_count", len(bindings)))
+		return ErrWaitingForSync // Don't increment attempts
+	}
+
+	w.logger.Info("all HostBindings deleted, proceeding with Host DELETE",
+		zap.String("namespace", item.ResourceNamespace),
+		zap.String("name", item.ResourceName))
+
+	return nil // Ready to proceed with Host deletion
+}
+
+// coordinateNetworkDelete handles Case 2 for Network deletion
+// See: docs/architecture/COORDINATED_BINDING_DELETION.md - Case 2
+func (w *OutboxWorker) coordinateNetworkDelete(
+	ctx context.Context,
+	item *domain.OutboxEntry,
+) error {
+	w.logger.Info("coordinating Network DELETE with NetworkBinding CASCADE",
+		zap.String("namespace", item.ResourceNamespace),
+		zap.String("name", item.ResourceName))
+
+	// Step 1: Find all NetworkBindings for this Network
+	bindings, err := w.findNetworkBindingsForNetwork(ctx, item.ResourceNamespace, item.ResourceName)
+	if err != nil {
+		return fmt.Errorf("finding network bindings: %w", err)
+	}
+
+	if len(bindings) == 0 {
+		w.logger.Debug("no NetworkBindings found, proceeding with Network DELETE",
+			zap.String("namespace", item.ResourceNamespace),
+			zap.String("name", item.ResourceName))
+		return nil // No bindings to coordinate
+	}
+
+	w.logger.Info("found NetworkBindings that need coordination",
+		zap.String("namespace", item.ResourceNamespace),
+		zap.String("name", item.ResourceName),
+		zap.Int("binding_count", len(bindings)))
+
+	// Step 2: Mark all bindings for deletion (soft delete)
+	for _, binding := range bindings {
+		if err := w.markBindingForDeletion(ctx, binding); err != nil {
+			return fmt.Errorf("marking binding for deletion: %w", err)
+		}
+	}
+
+	// Step 3: Check if all bindings are physically deleted
+	allDeleted, err := w.checkAllNetworkBindingsDeleted(ctx, bindings)
+	if err != nil {
+		return fmt.Errorf("checking binding deletion status: %w", err)
+	}
+
+	if !allDeleted {
+		w.logger.Debug("NetworkBindings not yet physically deleted, waiting",
+			zap.String("namespace", item.ResourceNamespace),
+			zap.String("name", item.ResourceName),
+			zap.Int("binding_count", len(bindings)))
+		return ErrWaitingForSync // Don't increment attempts
+	}
+
+	w.logger.Info("all NetworkBindings deleted, proceeding with Network DELETE",
+		zap.String("namespace", item.ResourceNamespace),
+		zap.String("name", item.ResourceName))
+
+	return nil // Ready to proceed with Network deletion
+}
+
+// coordinateAddressGroupDelete handles Case 4 for AddressGroup deletion
+// AddressGroup can have BOTH HostBindings AND NetworkBindings
+// See: docs/architecture/COORDINATED_BINDING_DELETION.md - Case 4
+func (w *OutboxWorker) coordinateAddressGroupDelete(
+	ctx context.Context,
+	item *domain.OutboxEntry,
+) error {
+	w.logger.Info("coordinating AddressGroup DELETE with binding CASCADE",
+		zap.String("namespace", item.ResourceNamespace),
+		zap.String("name", item.ResourceName))
+
+	// Step 1: Find HostBindings
+	hostBindings, err := w.findHostBindingsForAddressGroup(ctx,
+		item.ResourceNamespace, item.ResourceName)
+	if err != nil {
+		return fmt.Errorf("finding host bindings: %w", err)
+	}
+
+	// Step 2: Find NetworkBindings
+	netBindings, err := w.findNetworkBindingsForAddressGroup(ctx,
+		item.ResourceNamespace, item.ResourceName)
+	if err != nil {
+		return fmt.Errorf("finding network bindings: %w", err)
+	}
+
+	totalBindings := len(hostBindings) + len(netBindings)
+	if totalBindings == 0 {
+		w.logger.Debug("no bindings found, proceeding with AddressGroup DELETE",
+			zap.String("namespace", item.ResourceNamespace),
+			zap.String("name", item.ResourceName))
+		return nil // No bindings
+	}
+
+	w.logger.Info("found bindings for AddressGroup",
+		zap.String("namespace", item.ResourceNamespace),
+		zap.String("name", item.ResourceName),
+		zap.Int("host_bindings", len(hostBindings)),
+		zap.Int("network_bindings", len(netBindings)))
+
+	// Step 3: Mark all for deletion
+	for _, binding := range hostBindings {
+		if err := w.markBindingForDeletion(ctx, binding); err != nil {
+			return fmt.Errorf("marking host binding for deletion: %w", err)
+		}
+	}
+	for _, binding := range netBindings {
+		if err := w.markBindingForDeletion(ctx, binding); err != nil {
+			return fmt.Errorf("marking network binding for deletion: %w", err)
+		}
+	}
+
+	// Step 4: Check all deleted
+	hostDeleted, err := w.checkAllHostBindingsDeleted(ctx, hostBindings)
+	if err != nil {
+		return fmt.Errorf("checking host binding deletion: %w", err)
+	}
+	netDeleted, err := w.checkAllNetworkBindingsDeleted(ctx, netBindings)
+	if err != nil {
+		return fmt.Errorf("checking network binding deletion: %w", err)
+	}
+
+	if !hostDeleted || !netDeleted {
+		w.logger.Debug("bindings not yet physically deleted, waiting",
+			zap.String("namespace", item.ResourceNamespace),
+			zap.String("name", item.ResourceName),
+			zap.Bool("host_deleted", hostDeleted),
+			zap.Bool("net_deleted", netDeleted))
+		return ErrWaitingForSync
+	}
+
+	w.logger.Info("all bindings deleted for AddressGroup",
+		zap.String("namespace", item.ResourceNamespace),
+		zap.String("name", item.ResourceName))
+	return nil
+}
+
+// coordinateServiceDelete handles Case 4 for Service deletion
+// Service can have AddressGroupBindings
+// TODO: Implement when AddressGroupBinding coordination is added
+func (w *OutboxWorker) coordinateServiceDelete(
+	ctx context.Context,
+	item *domain.OutboxEntry,
+) error {
+	// For now, return nil (no coordination)
+	// Future implementation will find and coordinate AddressGroupBindings
+	return nil
 }

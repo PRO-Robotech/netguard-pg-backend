@@ -9,14 +9,15 @@ func (cm *ConditionManager) hasPendingOutboxEntry(ctx context.Context, resourceT
 	if cm.outboxRepo == nil {
 		return false
 	}
-	count, err := cm.outboxRepo.CountPending(ctx)
+	// FIX: Use per-resource check instead of global count to avoid blocking ALL resources
+	count, err := cm.outboxRepo.CountPendingForResource(ctx, resourceType, namespace, name)
 	if err != nil {
-		klog.ErrorS(err, "hasPendingOutboxEntry: failed to count pending entries",
+		klog.ErrorS(err, "hasPendingOutboxEntry: failed to count pending entries for resource",
 			"resource_type", resourceType, "namespace", namespace, "name", name)
 		return false
 	}
 	if count > 0 {
-		klog.V(2).InfoS("hasPendingOutboxEntry: found pending outbox entries, skipping batch update",
+		klog.V(2).InfoS("hasPendingOutboxEntry: found pending outbox entry for THIS resource, skipping batch update",
 			"resource_type", resourceType,
 			"namespace", namespace,
 			"name", name,

@@ -208,6 +208,23 @@ func (r *PgxOutboxRepository) CountPending(ctx context.Context) (int, error) {
 	}
 	return count, nil
 }
+func (r *PgxOutboxRepository) CountPendingForResource(ctx context.Context, resourceType, namespace, name string) (int, error) {
+	query := `
+		SELECT COUNT(*)
+		FROM sync_outbox
+		WHERE resource_type = $1
+		  AND resource_namespace = $2
+		  AND resource_name = $3
+		  AND status IN ('PENDING', 'FAILED_RETRYABLE')
+		  AND (next_retry_at IS NULL OR next_retry_at <= NOW())
+	`
+	var count int
+	err := r.executor.QueryRow(ctx, query, resourceType, namespace, name).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count pending entries for resource: %w", err)
+	}
+	return count, nil
+}
 func (r *PgxOutboxRepository) UpdateStatus(
 	ctx context.Context,
 	id uuid.UUID,

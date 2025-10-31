@@ -114,67 +114,10 @@ func (w *Writer) upsertAddressGroup(ctx context.Context, ag models.AddressGroup)
 		return errors.Wrap(err, "failed to marshal hosts")
 	}
 
-	var aggregatedHostsJSON []byte
-	if len(ag.Hosts) > 0 {
-		// Build aggregated_hosts from spec.hosts
-		aggregatedHosts := make([]map[string]interface{}, 0, len(ag.Hosts))
-		for _, hostRef := range ag.Hosts {
-			// Fetch Host UUID from database
-			var hostUUID string
-			hostQuery := `SELECT uuid FROM hosts WHERE namespace = $1 AND name = $2`
-			err := w.tx.QueryRow(ctx, hostQuery, ag.Namespace, hostRef.Name).Scan(&hostUUID)
-			if err != nil {
-				klog.V(4).InfoS("Failed to fetch Host UUID for AG.Spec.Hosts",
-					"ag_namespace", ag.Namespace, "ag_name", ag.Name,
-					"host_name", hostRef.Name, "error", err.Error())
-				// Skip this host if not found - validation will catch this
-				continue
-			}
-
-			aggregatedHost := map[string]interface{}{
-				"uuid":   hostUUID,
-				"source": "spec", // Distinguish from "binding" source
-				"ref": map[string]interface{}{
-					"apiVersion": hostRef.APIVersion,
-					"kind":       hostRef.Kind,
-					"name":       hostRef.Name,
-					"namespace":  ag.Namespace, // Same namespace as AG
-				},
-			}
-			aggregatedHosts = append(aggregatedHosts, aggregatedHost)
-		}
-
-		aggregatedHostsJSON, err = json.Marshal(aggregatedHosts)
-		if err != nil {
-			return errors.Wrap(err, "failed to marshal aggregated hosts")
-		}
-	} else {
-		// No spec.hosts - check if we should preserve existing aggregated_hosts from bindings
-		// Get existing aggregated_hosts
-		var existingAggregatedHosts []byte
-		existingAggQuery := `SELECT aggregated_hosts FROM address_groups WHERE namespace = $1 AND name = $2`
-		err := w.tx.QueryRow(ctx, existingAggQuery, ag.Namespace, ag.Name).Scan(&existingAggregatedHosts)
-		if err == nil && len(existingAggregatedHosts) > 0 {
-			// Parse and filter: keep only binding-sourced hosts
-			var existing []map[string]interface{}
-			if err := json.Unmarshal(existingAggregatedHosts, &existing); err == nil {
-				bindingHosts := make([]map[string]interface{}, 0)
-				for _, h := range existing {
-					if source, ok := h["source"].(string); ok && source == "binding" {
-						bindingHosts = append(bindingHosts, h)
-					}
-				}
-				if len(bindingHosts) > 0 {
-					aggregatedHostsJSON, _ = json.Marshal(bindingHosts)
-				}
-			}
-		}
-	}
-
-	// If still empty, use empty array
-	if len(aggregatedHostsJSON) == 0 {
-		aggregatedHostsJSON = []byte("[]")
-	}
+	// Migration 044: aggregated_hosts is now fully managed by database triggers
+	// The trigger_update_aggregated_hosts_on_spec_change trigger automatically
+	// calculates aggregated_hosts from spec.hosts + HostBindings.
+	// No manual calculation needed in Go code.
 
 	var resourceVersion int64
 	if existingResourceVersion.Valid {
@@ -201,17 +144,18 @@ func (w *Writer) upsertAddressGroup(ctx context.Context, ag models.AddressGroup)
 	}
 
 	// Upsert address group
+	// Note: aggregated_hosts is calculated by database trigger after INSERT/UPDATE
+	// We omit aggregated_hosts from the query and let the trigger handle it
 	addressGroupQuery := `
-		INSERT INTO address_groups (namespace, name, default_action, logs, trace, description, networks, hosts, aggregated_hosts, resource_version)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO address_groups (namespace, name, default_action, logs, trace, description, networks, hosts, resource_version)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		ON CONFLICT (namespace, name) DO UPDATE SET
 			default_action = $3,
 			logs = $4,
 			trace = $5,
 			description = $6,
 			hosts = $8,
-			aggregated_hosts = $9,
-			resource_version = $10`
+			resource_version = $9`
 
 	if err := w.exec(ctx, addressGroupQuery,
 		ag.Namespace,
@@ -222,7 +166,6 @@ func (w *Writer) upsertAddressGroup(ctx context.Context, ag models.AddressGroup)
 		"",
 		networksJSON,
 		hostsJSON,
-		aggregatedHostsJSON,
 		resourceVersion,
 	); err != nil {
 		return errors.Wrapf(err, "failed to upsert address group %s/%s", ag.Namespace, ag.Name)

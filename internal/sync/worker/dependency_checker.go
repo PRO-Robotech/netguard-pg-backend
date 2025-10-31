@@ -411,34 +411,40 @@ func (w *OutboxWorker) extractSvcSvcRuleDependencies(
 	return deps, nil
 }
 
-// extractAddressGroupDependencies extracts Host dependencies from AddressGroup
-// AddressGroup depends on all Hosts in AggregatedHosts field
+// extractAddressGroupDependencies extracts dependencies for AddressGroup
+// IMPORTANT: AddressGroup does NOT depend on Hosts!
+//
+// Architecture rationale:
+// - AggregatedHosts is a payload field for K8s API status display, NOT a dependency
+// - AddressGroup.ToSGroupsProto() does NOT include Hosts in the SGROUP sync payload
+// - SGROUP architecture uses ONE-WAY dependency: Host → AddressGroup (via SgName)
+// - Hosts synchronize independently and reference their AddressGroup
+// - Making AG depend on Hosts creates CIRCULAR DEPENDENCY deadlock:
+//   - Host waits for AG.Ready=True
+//   - AG waits for Host.Ready=True
+//   - → Deadlock! All operations (CREATE/UPDATE/DELETE) hang forever
+//
+// Therefore: AddressGroup has NO dependencies (or optionally depends only on Networks)
 func (w *OutboxWorker) extractAddressGroupDependencies(
 	resource interface{},
 ) ([]EntityDependency, error) {
 	// Type assert to *models.AddressGroup
-	// The resource is loaded by loadEntityResource() in process_entity.go
 	ag, ok := resource.(*models.AddressGroup)
 	if !ok {
 		return nil, fmt.Errorf("invalid resource type for AddressGroup extraction: %T (expected *models.AddressGroup)", resource)
 	}
 
-	// AddressGroup depends on all Hosts in AggregatedHosts
-	// Each Host must be Ready before AddressGroup can be synced to SGROUP
+	// AddressGroup has NO dependencies on Hosts (see comment above)
+	// AggregatedHosts is for status display only, not for SGROUP sync
+
+	// Future: Could add dependency on Networks if AG.Networks is used in sync
+	// For now, AddressGroup is independent
 	var deps []EntityDependency
-	for _, hostRef := range ag.AggregatedHosts {
-		deps = append(deps, EntityDependency{
-			Type:      string(registry.TypeHost),
-			Name:      hostRef.GetName(),
-			Namespace: ag.Namespace, // Hosts are in same namespace as AG
-			Reason:    fmt.Sprintf("Host referenced in AddressGroup.AggregatedHosts (source: %s)", hostRef.Source),
-		})
-	}
 
 	w.logger.Debug("extracted AddressGroup dependencies",
 		zap.String("ag_namespace", ag.Namespace),
 		zap.String("ag_name", ag.Name),
-		zap.Int("host_count", len(deps)))
+		zap.Int("dependency_count", len(deps))) // Should be 0
 
 	return deps, nil
 }

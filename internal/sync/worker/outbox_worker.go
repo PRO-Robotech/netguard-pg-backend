@@ -224,6 +224,14 @@ func (w *OutboxWorker) processBatch(ctx context.Context) error {
 	// Process each entry
 	for _, entry := range entries {
 		if err := w.processEntry(ctx, entry); err != nil {
+			// Special handling for ErrWaitingForSync - don't count as failure, just skip
+			if IsWaitingForSync(err) {
+				w.logger.Debug("entry waiting for SGROUP sync, will retry in next batch",
+					zap.String("resource_type", entry.ResourceType),
+					zap.String("resource_id", entry.ResourceID.String()))
+				continue
+			}
+
 			w.logger.Error("failed to process entry",
 				zap.String("resource_type", entry.ResourceType),
 				zap.String("resource_id", entry.ResourceID.String()),

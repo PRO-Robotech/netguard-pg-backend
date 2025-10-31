@@ -13,6 +13,7 @@ type OutboxRepository interface {
 	FindByResource(ctx context.Context, resourceType string, resourceID uuid.UUID) ([]*domain.OutboxEntry, error)
 	FindPending(ctx context.Context, limit int) ([]*domain.OutboxEntry, error)
 	CountPending(ctx context.Context) (int, error)
+	CountPendingForResource(ctx context.Context, resourceType, namespace, name string) (int, error)
 	UpdateStatus(ctx context.Context, id uuid.UUID, status domain.OutboxStatus,
 		processedAt *time.Time, lastError *string, errorCategory *string) error
 	IncrementAttempts(ctx context.Context, id uuid.UUID, nextRetryAt *time.Time) error

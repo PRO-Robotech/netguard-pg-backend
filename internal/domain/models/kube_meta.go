@@ -86,6 +86,31 @@ func (m *Meta) SetConditions(conditions []metav1.Condition) {
 	}
 	m.Conditions = conditions
 }
+
+// DeduplicateConditions removes duplicate conditions by Type, keeping only the latest one.
+// This is necessary because conditions loaded from database may contain duplicates
+// from previous buggy updates. We keep the condition with the latest LastTransitionTime.
+func (m *Meta) DeduplicateConditions() {
+	if m == nil || m.Conditions == nil || len(m.Conditions) == 0 {
+		return
+	}
+
+	// Use map to track latest condition by Type
+	condMap := make(map[string]metav1.Condition)
+	for _, cond := range m.Conditions {
+		// Keep the condition with the latest lastTransitionTime
+		if existing, ok := condMap[cond.Type]; !ok || cond.LastTransitionTime.After(existing.LastTransitionTime.Time) {
+			condMap[cond.Type] = cond
+		}
+	}
+
+	// Rebuild conditions array without duplicates
+	newConditions := make([]metav1.Condition, 0, len(condMap))
+	for _, cond := range condMap {
+		newConditions = append(newConditions, cond)
+	}
+	m.Conditions = newConditions
+}
 func (m *Meta) GetManagedFields() []metav1.ManagedFieldsEntry {
 	if m == nil {
 		return nil
