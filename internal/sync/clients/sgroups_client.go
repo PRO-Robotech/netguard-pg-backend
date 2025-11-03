@@ -327,6 +327,24 @@ func (c *sgroupsClient) convertSyncRequestToProto(req *types.SyncRequest) (*pb.S
 			for i, svc := range services.Services {
 				fmt.Printf("🔍 [SGROUP_CLIENT_DEBUG] Sending Service to SGROUP gRPC: index=%d, name=%s, sgNames=%v, operation=%s\n",
 					i, svc.Name, svc.SgNames, req.Operation)
+				if svc.Protocols != nil {
+					if svc.Protocols.Tcp != nil {
+						for idx, port := range svc.Protocols.Tcp.Ports {
+							fmt.Printf("    TCP[%d]: s=%q d=%q\n", idx, port.S, port.D)
+						}
+					} else {
+						fmt.Printf("    TCP ports: <nil>\n")
+					}
+					if svc.Protocols.Udp != nil {
+						for idx, port := range svc.Protocols.Udp.Ports {
+							fmt.Printf("    UDP[%d]: s=%q d=%q\n", idx, port.S, port.D)
+						}
+					} else {
+						fmt.Printf("    UDP ports: <nil>\n")
+					}
+				} else {
+					fmt.Printf("    Protocols: <nil>\n")
+				}
 			}
 			pbReq.Subject = &pb.SyncReq_Services{Services: services}
 		} else {

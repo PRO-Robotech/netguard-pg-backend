@@ -393,17 +393,111 @@ func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item 
 		}
 		return ag, nil
 	case string(registry.TypeService):
-		// Extract aggregated_address_groups from payload (Migration 076 fix)
-		var aggregatedAGs []models.AddressGroupReference
-		if agsRaw, ok := payload["aggregated_address_groups"]; ok {
-			if agsArray, ok := agsRaw.([]interface{}); ok {
-				aggregatedAGs = make([]models.AddressGroupReference, 0, len(agsArray))
-				for _, item := range agsArray {
-					if agMap, ok := item.(map[string]interface{}); ok {
-						// Parse AddressGroupReference structure
-						var agRef models.AddressGroupReference
+		var base *models.Service
+		if item.Operation != domain.SyncOperationCreate {
+			if existing, err := w.loadEntityResource(ctx, item.ResourceType, namespace, name); err == nil {
+				if existingSvc, ok := existing.(*models.Service); ok {
+					copySvc := *existingSvc
+					base = &copySvc
+				}
+			} else {
+				w.logger.Debug("failed to load existing service state",
+					zap.String("namespace", namespace),
+					zap.String("name", name),
+					zap.Error(err))
+			}
+		}
 
-						// Parse "ref" field (NamespacedObjectReference)
+		w.logger.Debug("service payload snapshot",
+			zap.String("namespace", namespace),
+			zap.String("name", name),
+			zap.String("operation", string(item.Operation)),
+			zap.Any("payload", payload))
+
+		svc := &models.Service{
+			SelfRef: models.SelfRef{
+				ResourceIdentifier: models.ResourceIdentifier{
+					Namespace: namespace,
+					Name:      name,
+				},
+			},
+		}
+
+		if base != nil {
+			w.logger.Debug("service base state before merge",
+				zap.String("namespace", namespace),
+				zap.String("name", name),
+				zap.Int("base_ingress_port_count", len(base.IngressPorts)),
+				zap.Any("base_ingress_ports", base.IngressPorts),
+				zap.Int("base_address_group_spec_count", len(base.AddressGroups)),
+				zap.Int("base_aggregated_address_group_count", len(base.AggregatedAddressGroups)),
+				zap.Any("base_aggregated_address_groups", base.AggregatedAddressGroups))
+			svc.Description = base.Description
+			svc.IngressPorts = base.IngressPorts
+			svc.AddressGroups = base.AddressGroups
+			svc.AggregatedAddressGroups = base.AggregatedAddressGroups
+		} else {
+			w.logger.Debug("service base state missing (treating as fresh payload)",
+				zap.String("namespace", namespace),
+				zap.String("name", name))
+		}
+
+		if desc, ok := payload["description"].(string); ok {
+			svc.Description = desc
+		}
+
+		if portsRaw, ok := payload["ingress_ports"]; ok {
+			w.logger.Debug("service payload ingress_ports raw",
+				zap.String("namespace", namespace),
+				zap.String("name", name),
+				zap.String("raw_type", fmt.Sprintf("%T", portsRaw)),
+				zap.Any("raw", portsRaw))
+			svc.IngressPorts = parseIngressPorts(portsRaw)
+			w.logger.Debug("service ingress_ports parsed",
+				zap.String("namespace", namespace),
+				zap.String("name", name),
+				zap.Int("parsed_count", len(svc.IngressPorts)),
+				zap.Any("parsed_ports", svc.IngressPorts))
+			if len(svc.IngressPorts) == 0 {
+				w.logger.Warn("service ingress_ports parsed empty",
+					zap.String("namespace", namespace),
+					zap.String("name", name))
+			}
+		} else {
+			w.logger.Debug("service payload ingress_ports missing",
+				zap.String("namespace", namespace),
+				zap.String("name", name))
+		}
+
+		if agSpecRaw, ok := payload["address_groups"]; ok {
+			w.logger.Debug("service payload address_groups raw",
+				zap.String("namespace", namespace),
+				zap.String("name", name),
+				zap.String("raw_type", fmt.Sprintf("%T", agSpecRaw)),
+				zap.Any("raw", agSpecRaw))
+			svc.AddressGroups = parseServiceAddressGroups(agSpecRaw)
+			w.logger.Debug("service address_groups parsed",
+				zap.String("namespace", namespace),
+				zap.String("name", name),
+				zap.Int("parsed_count", len(svc.AddressGroups)),
+				zap.Any("parsed_address_groups", svc.AddressGroups))
+		} else {
+			w.logger.Debug("service payload address_groups missing",
+				zap.String("namespace", namespace),
+				zap.String("name", name))
+		}
+
+		if agsRaw, ok := payload["aggregated_address_groups"]; ok {
+			w.logger.Debug("service payload aggregated_address_groups raw",
+				zap.String("namespace", namespace),
+				zap.String("name", name),
+				zap.String("raw_type", fmt.Sprintf("%T", agsRaw)),
+				zap.Any("raw", agsRaw))
+			if agsArray, ok := agsRaw.([]interface{}); ok {
+				aggregatedAGs := make([]models.AddressGroupReference, 0, len(agsArray))
+				for _, entry := range agsArray {
+					if agMap, ok := entry.(map[string]interface{}); ok {
+						var agRef models.AddressGroupReference
 						if refMap, ok := agMap["ref"].(map[string]interface{}); ok {
 							agRef.Ref = v1beta1.NamespacedObjectReference{
 								ObjectReference: v1beta1.ObjectReference{
@@ -414,26 +508,38 @@ func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item 
 								Namespace: getStringFromMap(refMap, "namespace"),
 							}
 						}
-
-						// Parse "source" field
 						if source, ok := agMap["source"].(string); ok {
 							agRef.Source = models.AddressGroupRegistrationSource(source)
 						}
-
 						aggregatedAGs = append(aggregatedAGs, agRef)
 					}
 				}
+				svc.AggregatedAddressGroups = aggregatedAGs
+				w.logger.Debug("service aggregated_address_groups parsed",
+					zap.String("namespace", namespace),
+					zap.String("name", name),
+					zap.Int("parsed_count", len(svc.AggregatedAddressGroups)),
+					zap.Any("parsed_aggregated_address_groups", svc.AggregatedAddressGroups))
 			}
+		} else {
+			w.logger.Debug("service payload aggregated_address_groups missing",
+				zap.String("namespace", namespace),
+				zap.String("name", name))
 		}
-		return &models.Service{
-			SelfRef: models.SelfRef{
-				ResourceIdentifier: models.ResourceIdentifier{
-					Namespace: namespace,
-					Name:      name,
-				},
-			},
-			AggregatedAddressGroups: aggregatedAGs,
-		}, nil
+
+		w.logger.Debug("service reconstruction complete",
+			zap.String("namespace", namespace),
+			zap.String("name", name),
+			zap.String("operation", string(item.Operation)),
+			zap.String("description", svc.Description),
+			zap.Int("final_ingress_port_count", len(svc.IngressPorts)),
+			zap.Any("final_ingress_ports", svc.IngressPorts),
+			zap.Int("final_address_group_spec_count", len(svc.AddressGroups)),
+			zap.Any("final_address_groups_spec", svc.AddressGroups),
+			zap.Int("final_aggregated_address_group_count", len(svc.AggregatedAddressGroups)),
+			zap.Any("final_aggregated_address_groups", svc.AggregatedAddressGroups))
+
+		return svc, nil
 	case string(registry.TypeSvcSvcRule):
 		var serviceFromRef v1beta1.NamespacedObjectReference
 		var serviceToRef v1beta1.NamespacedObjectReference
@@ -944,6 +1050,54 @@ func getBoolFromMap(m map[string]interface{}, key string) bool {
 		return val
 	}
 	return false
+}
+
+func parseIngressPorts(raw interface{}) []models.IngressPort {
+	arr, ok := raw.([]interface{})
+	if !ok {
+		return nil
+	}
+	result := make([]models.IngressPort, 0, len(arr))
+	for _, entry := range arr {
+		if portMap, ok := entry.(map[string]interface{}); ok {
+			result = append(result, models.IngressPort{
+				Protocol:    models.TransportProtocol(getStringFromMap(portMap, "protocol")),
+				Port:        getStringFromMap(portMap, "port"),
+				Description: getStringFromMap(portMap, "description"),
+			})
+		}
+	}
+	return result
+}
+
+func parseServiceAddressGroups(raw interface{}) []models.AddressGroupRef {
+	arr, ok := raw.([]interface{})
+	if !ok {
+		return nil
+	}
+	result := make([]models.AddressGroupRef, 0, len(arr))
+	for _, entry := range arr {
+		if agMap, ok := entry.(map[string]interface{}); ok {
+			ref := v1beta1.NamespacedObjectReference{
+				ObjectReference: v1beta1.ObjectReference{
+					APIVersion: getStringFromMap(agMap, "apiVersion"),
+					Kind:       getStringFromMap(agMap, "kind"),
+					Name:       getStringFromMap(agMap, "name"),
+				},
+				Namespace: getStringFromMap(agMap, "namespace"),
+			}
+			if ref.ObjectReference.APIVersion == "" {
+				ref.ObjectReference.APIVersion = "netguard.sgroups.io/v1beta1"
+			}
+			if ref.ObjectReference.Kind == "" {
+				ref.ObjectReference.Kind = "AddressGroup"
+			}
+			if ref.ObjectReference.Name != "" {
+				result = append(result, models.AddressGroupRef(ref))
+			}
+		}
+	}
+	return result
 }
 
 // coordinateEntityDeleteWithBindings handles Case 2 (DELETE Entity → CASCADE bindings)
