@@ -274,7 +274,7 @@ func (w *MutationWebhook) mutateSvcSvcRule(ctx context.Context, req *admissionv1
 	// Normalize namespace in ServiceFrom if empty
 	if rule.Spec.ServiceFrom.Namespace == "" {
 		patches = append(patches, map[string]interface{}{
-			"op":    "replace",
+			"op":    "add",
 			"path":  "/spec/serviceFrom/namespace",
 			"value": rule.Namespace,
 		})
@@ -283,7 +283,7 @@ func (w *MutationWebhook) mutateSvcSvcRule(ctx context.Context, req *admissionv1
 	// Normalize namespace in ServiceTo if empty
 	if rule.Spec.ServiceTo.Namespace == "" {
 		patches = append(patches, map[string]interface{}{
-			"op":    "replace",
+			"op":    "add",
 			"path":  "/spec/serviceTo/namespace",
 			"value": rule.Namespace,
 		})

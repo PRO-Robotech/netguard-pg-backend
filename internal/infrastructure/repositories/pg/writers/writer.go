@@ -81,6 +81,7 @@ func (w *Writer) MarkForDeletionWithStatus(namespace, name, kind string) error {
 		"NetworkBinding":      "network_bindings",
 		"AddressGroupBinding": "address_group_bindings",
 		"RuleS2S":             "rule_s2s",
+		"SvcSvcRule":          "svc_svc_rules",
 		"IEAgAgRule":          "ie_ag_ag_rules",
 	}
 	tableName, ok := tableMap[kind]
@@ -92,7 +93,10 @@ func (w *Writer) MarkForDeletionWithStatus(namespace, name, kind string) error {
 		SET
 			deletion_timestamp = NOW(),
 			conditions = jsonb_set(
-				COALESCE(conditions, '[]'::jsonb),
+				CASE
+					WHEN conditions IS NULL OR jsonb_typeof(conditions) = 'array' THEN COALESCE(conditions, '[]'::jsonb)
+					ELSE '[]'::jsonb
+				END,
 				'{0}',
 				jsonb_build_object(
 					'type', 'Ready',

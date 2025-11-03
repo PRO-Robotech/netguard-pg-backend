@@ -568,6 +568,24 @@ func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValid
 			"name", name,
 			"namespace", namespace,
 			"error", err.Error())
+		if isNotFoundError(err) {
+			klog.InfoS("🧹 DELETE: Resource hidden after soft delete — synthesizing deletion response",
+				"resource", s.resourceName,
+				"name", name,
+				"namespace", namespace)
+			if accessor, accessorErr := meta.Accessor(k8sObj); accessorErr == nil {
+				now := metav1.Now()
+				accessor.SetDeletionTimestamp(&now)
+			} else {
+				klog.InfoS("⚠️ DELETE: Failed to set synthetic deletionTimestamp",
+					"resource", s.resourceName,
+					"name", name,
+					"namespace", namespace,
+					"error", accessorErr.Error())
+			}
+			s.broadcastWatchEvent(watch.Modified, k8sObj)
+			return k8sObj, true, nil
+		}
 		return nil, false, err
 	}
 	updatedK8sObj, err := s.converter.FromDomain(ctx, *updatedDomainObj)

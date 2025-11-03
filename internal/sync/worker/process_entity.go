@@ -541,10 +541,37 @@ func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item 
 
 		return svc, nil
 	case string(registry.TypeSvcSvcRule):
-		var serviceFromRef v1beta1.NamespacedObjectReference
-		var serviceToRef v1beta1.NamespacedObjectReference
-		if serviceFromData, ok := payload["service_from_ref"].(map[string]interface{}); ok {
-			serviceFromRef = v1beta1.NamespacedObjectReference{
+		var base *models.SvcSvcRule
+		if item.Operation != domain.SyncOperationCreate {
+			if existing, err := w.loadEntityResource(ctx, item.ResourceType, namespace, name); err == nil {
+				if existingRule, ok := existing.(*models.SvcSvcRule); ok {
+					temp := *existingRule
+					base = &temp
+				}
+			}
+		}
+		rule := &models.SvcSvcRule{
+			SelfRef: models.SelfRef{
+				ResourceIdentifier: models.ResourceIdentifier{
+					Namespace: namespace,
+					Name:      name,
+				},
+			},
+		}
+		if base != nil {
+			rule.ServiceFromRef = base.ServiceFromRef
+			rule.ServiceToRef = base.ServiceToRef
+			rule.Action = base.Action
+			rule.Priority = base.Priority
+			rule.Logs = base.Logs
+			rule.Trace = base.Trace
+		}
+		serviceFromData, hasFrom := payload["service_from_ref"].(map[string]interface{})
+		if !hasFrom {
+			serviceFromData, hasFrom = payload["service_from"].(map[string]interface{})
+		}
+		if hasFrom {
+			rule.ServiceFromRef = v1beta1.NamespacedObjectReference{
 				ObjectReference: v1beta1.ObjectReference{
 					APIVersion: getStringFromMap(serviceFromData, "apiVersion"),
 					Kind:       getStringFromMap(serviceFromData, "kind"),
@@ -553,8 +580,12 @@ func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item 
 				Namespace: getStringFromMap(serviceFromData, "namespace"),
 			}
 		}
-		if serviceToData, ok := payload["service_to_ref"].(map[string]interface{}); ok {
-			serviceToRef = v1beta1.NamespacedObjectReference{
+		serviceToData, hasTo := payload["service_to_ref"].(map[string]interface{})
+		if !hasTo {
+			serviceToData, hasTo = payload["service_to"].(map[string]interface{})
+		}
+		if hasTo {
+			rule.ServiceToRef = v1beta1.NamespacedObjectReference{
 				ObjectReference: v1beta1.ObjectReference{
 					APIVersion: getStringFromMap(serviceToData, "apiVersion"),
 					Kind:       getStringFromMap(serviceToData, "kind"),
@@ -563,16 +594,31 @@ func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item 
 				Namespace: getStringFromMap(serviceToData, "namespace"),
 			}
 		}
-		return &models.SvcSvcRule{
-			SelfRef: models.SelfRef{
-				ResourceIdentifier: models.ResourceIdentifier{
-					Namespace: namespace,
-					Name:      name,
-				},
-			},
-			ServiceFromRef: serviceFromRef,
-			ServiceToRef:   serviceToRef,
-		}, nil
+		if actionRaw, ok := payload["action"].(string); ok && actionRaw != "" {
+			rule.Action = models.RuleAction(actionRaw)
+		}
+		if priorityRaw, ok := payload["priority"]; ok {
+			switch v := priorityRaw.(type) {
+			case float64:
+				rule.Priority = int32(v)
+			case int:
+				rule.Priority = int32(v)
+			case int32:
+				rule.Priority = v
+			case int64:
+				rule.Priority = int32(v)
+			}
+		}
+		if logsRaw, ok := payload["logs"].(bool); ok {
+			rule.Logs = logsRaw
+		}
+		if traceRaw, ok := payload["trace"].(bool); ok {
+			rule.Trace = traceRaw
+		}
+		if rule.ServiceFromRef.Namespace == "" && rule.ServiceFromRef.Name != "" {
+			rule.ServiceFromRef.Namespace = namespace
+		}
+		return rule, nil
 	case string(registry.TypeHostBinding):
 		// For DELETE operations on HostBinding (process resource), we only need basic identification
 		// The coordinated deletion handler will load the full resource if needed
