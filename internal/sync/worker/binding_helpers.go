@@ -304,3 +304,82 @@ func (w *OutboxWorker) checkAllNetworkBindingsDeleted(
 		zap.Int("count", len(bindings)))
 	return true, nil
 }
+
+// findAddressGroupBindingsForService finds all AddressGroupBindings that reference a specific Service
+// Used in Case 2: DELETE Service → CASCADE AddressGroupBinding
+func (w *OutboxWorker) findAddressGroupBindingsForService(
+	ctx context.Context,
+	serviceNamespace string,
+	serviceName string,
+) ([]BindingInfo, error) {
+	query := `
+		SELECT
+			agb.namespace,
+			agb.name,
+			agb.resource_version,
+			m.deletion_timestamp
+		FROM address_group_bindings agb
+		JOIN k8s_metadata m ON m.resource_version = agb.resource_version
+		WHERE agb.service_namespace = $1 AND agb.service_name = $2
+	`
+
+	rows, err := w.pool.Query(ctx, query, serviceNamespace, serviceName)
+	if err != nil {
+		return nil, fmt.Errorf("query failed: %w", err)
+	}
+	defer rows.Close()
+
+	var bindings []BindingInfo
+	for rows.Next() {
+		var binding BindingInfo
+		if err := rows.Scan(
+			&binding.Namespace,
+			&binding.Name,
+			&binding.ResourceVersion,
+			&binding.DeletionTimestamp,
+		); err != nil {
+			return nil, fmt.Errorf("scan failed: %w", err)
+		}
+		bindings = append(bindings, binding)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+
+	return bindings, nil
+}
+
+// checkAllAddressGroupBindingsDeleted checks if all specified AddressGroupBindings have been physically deleted
+// Returns true if ALL bindings are gone from database
+func (w *OutboxWorker) checkAllAddressGroupBindingsDeleted(
+	ctx context.Context,
+	bindings []BindingInfo,
+) (bool, error) {
+	if len(bindings) == 0 {
+		return true, nil
+	}
+
+	// Check each binding
+	for _, binding := range bindings {
+		var count int
+		query := `SELECT COUNT(*) FROM address_group_bindings WHERE namespace = $1 AND name = $2`
+		err := w.pool.QueryRow(ctx, query, binding.Namespace, binding.Name).Scan(&count)
+		if err != nil {
+			return false, fmt.Errorf("query failed for %s/%s: %w", binding.Namespace, binding.Name, err)
+		}
+
+		if count > 0 {
+			// Binding still exists - not yet deleted
+			w.logger.Debug("AddressGroupBinding still exists (not physically deleted)",
+				zap.String("namespace", binding.Namespace),
+				zap.String("name", binding.Name))
+			return false, nil
+		}
+	}
+
+	// All bindings physically deleted!
+	w.logger.Info("all AddressGroupBindings physically deleted",
+		zap.Int("count", len(bindings)))
+	return true, nil
+}

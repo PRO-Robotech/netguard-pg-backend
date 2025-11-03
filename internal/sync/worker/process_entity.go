@@ -6,9 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"go.uber.org/zap"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"netguard-pg-backend/internal/domain"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -18,6 +15,10 @@ import (
 	"netguard-pg-backend/internal/sync/syncers"
 	"netguard-pg-backend/internal/sync/types"
 	"time"
+
+	"github.com/google/uuid"
+	"go.uber.org/zap"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func (w *OutboxWorker) processEntityResource(
@@ -36,18 +37,38 @@ func (w *OutboxWorker) processEntityResource(
 	}
 	var resource interface{}
 	var err error
-	if item.Operation == domain.SyncOperationDelete {
-		w.logger.Debug("DELETE operation detected, reconstructing resource from payload",
+
+	// CRITICAL FIX: Always prefer payload when available (for deterministic sync)
+	// This ensures we use the exact snapshot captured at trigger execution time,
+	// preventing race conditions where database state changes between trigger and worker processing.
+	// See: migrations/076_PROBLEM_EXPLANATION.md
+	if item.Payload != nil && len(item.Payload) > 0 {
+		w.logger.Debug("reconstructing resource from payload (deterministic sync)",
 			zap.String("resource_type", item.ResourceType),
 			zap.String("namespace", item.ResourceNamespace),
-			zap.String("name", item.ResourceName))
-		resource, err = w.reconstructResourceFromPayload(item)
+			zap.String("name", item.ResourceName),
+			zap.String("operation", operation))
+		resource, err = w.reconstructResourceFromPayload(ctx, item)
 		if err != nil {
 			duration := time.Since(startTime)
 			RecordProcessingFailure(item.ResourceType, operation, "payload_reconstruction_error", duration)
 			return fmt.Errorf("failed to reconstruct resource from payload: %w", err)
 		}
+
+		// 🔍 DEBUG POINT 1: Log reconstructed Service from payload
+		if service, ok := resource.(*models.Service); ok {
+			w.logger.Info("🔍 [PAYLOAD_DEBUG] Reconstructed Service from payload",
+				zap.String("namespace", service.Namespace),
+				zap.String("name", service.Name),
+				zap.Int("aggregated_ags_count", len(service.AggregatedAddressGroups)),
+				zap.Any("aggregated_ags", service.AggregatedAddressGroups))
+		}
 	} else {
+		// Fallback to database (for legacy entries or empty payloads)
+		w.logger.Debug("no payload available, loading from database (fallback)",
+			zap.String("resource_type", item.ResourceType),
+			zap.String("namespace", item.ResourceNamespace),
+			zap.String("name", item.ResourceName))
 		resource, err = w.loadEntityResource(ctx, item.ResourceType, item.ResourceNamespace, item.ResourceName)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) || errors.Is(err, ports.ErrNotFound) {
@@ -62,6 +83,38 @@ func (w *OutboxWorker) processEntityResource(
 			duration := time.Since(startTime)
 			RecordProcessingFailure(item.ResourceType, operation, "load_error", duration)
 			return fmt.Errorf("failed to load resource: %w", err)
+		}
+	}
+	if item.Operation == domain.SyncOperationUpdate {
+		exists, err := w.entityExists(ctx, item.ResourceType, item.ResourceNamespace, item.ResourceName)
+		if err != nil {
+			w.logger.Error("failed to verify entity existence",
+				zap.String("resource_type", item.ResourceType),
+				zap.String("namespace", item.ResourceNamespace),
+				zap.String("name", item.ResourceName),
+				zap.Error(err))
+			duration := time.Since(startTime)
+			RecordProcessingFailure(item.ResourceType, operation, "existence_check_error", duration)
+			return fmt.Errorf("failed to verify resource existence: %w", err)
+		}
+		if !exists {
+			w.logger.Info("skipping UPDATE for deleted resource",
+				zap.String("resource_type", item.ResourceType),
+				zap.String("namespace", item.ResourceNamespace),
+				zap.String("name", item.ResourceName))
+			if err := w.outboxRepo.MarkCompleted(ctx, item.ID); err != nil {
+				w.logger.Error("failed to mark outbox entry completed while skipping deleted resource",
+					zap.String("resource_type", item.ResourceType),
+					zap.String("namespace", item.ResourceNamespace),
+					zap.String("name", item.ResourceName),
+					zap.Error(err))
+				duration := time.Since(startTime)
+				RecordProcessingFailure(item.ResourceType, operation, "mark_completed_error", duration)
+				return fmt.Errorf("failed to mark outbox entry completed: %w", err)
+			}
+			duration := time.Since(startTime)
+			RecordProcessingSuccess(item.ResourceType, operation, duration)
+			return nil
 		}
 	}
 	if item.Delta != nil && len(item.Delta) > 0 {
@@ -176,7 +229,7 @@ func (w *OutboxWorker) processEntityResource(
 		zap.Duration("duration", duration))
 	return nil
 }
-func (w *OutboxWorker) reconstructResourceFromPayload(item *domain.OutboxEntry) (interface{}, error) {
+func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item *domain.OutboxEntry) (interface{}, error) {
 	var payload map[string]interface{}
 	if err := json.Unmarshal(item.Payload, &payload); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal payload: %w", err)
@@ -185,16 +238,53 @@ func (w *OutboxWorker) reconstructResourceFromPayload(item *domain.OutboxEntry) 
 	name, _ := payload["name"].(string)
 	switch item.ResourceType {
 	case string(registry.TypeHost):
-		uuid, _ := payload["uuid"].(string)
-		return &models.Host{
-			SelfRef: models.SelfRef{
-				ResourceIdentifier: models.ResourceIdentifier{
-					Namespace: namespace,
-					Name:      name,
+		uuid := getStringFromMap(payload, "uuid")
+		host := models.NewHost(name, namespace, uuid)
+
+		host.HostName = getStringFromMap(payload, "host_name_sync")
+		host.AddressGroupName = getStringFromMap(payload, "address_group_name")
+		host.IsBound = getBoolFromMap(payload, "is_bound")
+
+		agNs := getStringFromMap(payload, "address_group_ref_namespace")
+		agName := getStringFromMap(payload, "address_group_ref_name")
+		if agName == "" {
+			agName = host.AddressGroupName
+		}
+		if agName != "" {
+			host.AddressGroupRef = &v1beta1.NamespacedObjectReference{
+				ObjectReference: v1beta1.ObjectReference{
+					APIVersion: "netguard.sgroups.io/v1beta1",
+					Kind:       "AddressGroup",
+					Name:       agName,
 				},
-			},
-			UUID: uuid,
-		}, nil
+				Namespace: agNs,
+			}
+		}
+
+		bindNs := getStringFromMap(payload, "binding_ref_namespace")
+		bindName := getStringFromMap(payload, "binding_ref_name")
+		if bindName != "" {
+			host.BindingRef = &v1beta1.NamespacedObjectReference{
+				ObjectReference: v1beta1.ObjectReference{
+					APIVersion: "netguard.sgroups.io/v1beta1",
+					Kind:       "HostBinding",
+					Name:       bindName,
+				},
+				Namespace: bindNs,
+			}
+		}
+
+		if ipRaw, ok := payload["ip_list"].([]interface{}); ok {
+			ips := make([]string, 0, len(ipRaw))
+			for _, ipVal := range ipRaw {
+				if ipStr, ok := ipVal.(string); ok {
+					ips = append(ips, ipStr)
+				}
+			}
+			host.SetIpList(ips)
+		}
+
+		return host, nil
 	case string(registry.TypeNetwork):
 		cidr, _ := payload["cidr"].(string)
 		return &models.Network{
@@ -207,15 +297,134 @@ func (w *OutboxWorker) reconstructResourceFromPayload(item *domain.OutboxEntry) 
 			CIDR: cidr,
 		}, nil
 	case string(registry.TypeAddressGroup):
-		return &models.AddressGroup{
+		var base *models.AddressGroup
+		if item.Operation != domain.SyncOperationCreate {
+			if existing, err := w.loadEntityResource(ctx, item.ResourceType, namespace, name); err == nil {
+				if existingAG, ok := existing.(*models.AddressGroup); ok {
+					if copyRes := existingAG.DeepCopy(); copyRes != nil {
+						if copyAG, ok := copyRes.(*models.AddressGroup); ok {
+							base = copyAG
+						}
+					}
+				}
+			}
+		}
+
+		ag := &models.AddressGroup{
 			SelfRef: models.SelfRef{
 				ResourceIdentifier: models.ResourceIdentifier{
 					Namespace: namespace,
 					Name:      name,
 				},
 			},
-		}, nil
+		}
+
+		if base != nil {
+			ag.DefaultAction = base.DefaultAction
+			ag.Logs = base.Logs
+			ag.Trace = base.Trace
+			ag.Networks = base.Networks
+			ag.AggregatedHosts = base.AggregatedHosts
+		}
+
+		if actionRaw, ok := payload["defaultAction"]; ok {
+			if actionStr, ok := actionRaw.(string); ok && actionStr != "" {
+				switch models.RuleAction(actionStr) {
+				case models.ActionDrop:
+					ag.DefaultAction = models.ActionDrop
+				default:
+					ag.DefaultAction = models.ActionAccept
+				}
+			}
+		}
+
+		if logsRaw, ok := payload["logs"]; ok {
+			if val, ok := logsRaw.(bool); ok {
+				ag.Logs = val
+			}
+		}
+		if traceRaw, ok := payload["trace"]; ok {
+			if val, ok := traceRaw.(bool); ok {
+				ag.Trace = val
+			}
+		}
+
+		if networksRaw, ok := payload["networks"]; ok {
+			switch typed := networksRaw.(type) {
+			case []interface{}:
+				networkItems := make([]models.NetworkItem, 0, len(typed))
+				for _, entry := range typed {
+					switch netVal := entry.(type) {
+					case map[string]interface{}:
+						item := models.NetworkItem{
+							Name:       getStringFromMap(netVal, "name"),
+							Namespace:  getStringFromMap(netVal, "namespace"),
+							CIDR:       getStringFromMap(netVal, "cidr"),
+							ApiVersion: getStringFromMap(netVal, "apiVersion"),
+							Kind:       getStringFromMap(netVal, "kind"),
+						}
+						if item.ApiVersion == "" {
+							item.ApiVersion = "netguard.sgroups.io/v1beta1"
+						}
+						if item.Kind == "" {
+							item.Kind = "Network"
+						}
+						if item.Name != "" {
+							networkItems = append(networkItems, item)
+						}
+					case string:
+						// legacy payloads may store networks as []string
+						if netVal != "" {
+							networkItems = append(networkItems, models.NetworkItem{Name: netVal})
+						}
+					}
+				}
+				ag.Networks = networkItems
+			case []string:
+				networkItems := make([]models.NetworkItem, 0, len(typed))
+				for _, netName := range typed {
+					if netName == "" {
+						continue
+					}
+					networkItems = append(networkItems, models.NetworkItem{Name: netName})
+				}
+				ag.Networks = networkItems
+			}
+		}
+		return ag, nil
 	case string(registry.TypeService):
+		// Extract aggregated_address_groups from payload (Migration 076 fix)
+		var aggregatedAGs []models.AddressGroupReference
+		if agsRaw, ok := payload["aggregated_address_groups"]; ok {
+			if agsArray, ok := agsRaw.([]interface{}); ok {
+				aggregatedAGs = make([]models.AddressGroupReference, 0, len(agsArray))
+				for _, item := range agsArray {
+					if agMap, ok := item.(map[string]interface{}); ok {
+						// Parse AddressGroupReference structure
+						var agRef models.AddressGroupReference
+
+						// Parse "ref" field (NamespacedObjectReference)
+						if refMap, ok := agMap["ref"].(map[string]interface{}); ok {
+							agRef.Ref = v1beta1.NamespacedObjectReference{
+								ObjectReference: v1beta1.ObjectReference{
+									APIVersion: getStringFromMap(refMap, "apiVersion"),
+									Kind:       getStringFromMap(refMap, "kind"),
+									Name:       getStringFromMap(refMap, "name"),
+								},
+								Namespace: getStringFromMap(refMap, "namespace"),
+							}
+						}
+
+						// Parse "source" field
+						if source, ok := agMap["source"].(string); ok {
+							agRef.Source = models.AddressGroupRegistrationSource(source)
+						}
+
+						aggregatedAGs = append(aggregatedAGs, agRef)
+					}
+				}
+			}
+		}
 		return &models.Service{
 			SelfRef: models.SelfRef{
 				ResourceIdentifier: models.ResourceIdentifier{
@@ -223,6 +432,7 @@ func (w *OutboxWorker) reconstructResourceFromPayload(item *domain.OutboxEntry) 
 					Name:      name,
 				},
 			},
+			AggregatedAddressGroups: aggregatedAGs,
 		}, nil
 	case string(registry.TypeSvcSvcRule):
 		var serviceFromRef v1beta1.NamespacedObjectReference
@@ -367,6 +577,22 @@ func (w *OutboxWorker) loadEntityResource(
 	default:
 		return nil, fmt.Errorf("unknown resource type: %s", resourceType)
 	}
+}
+
+func (w *OutboxWorker) entityExists(
+	ctx context.Context,
+	resourceType string,
+	namespace string,
+	name string,
+) (bool, error) {
+	_, err := w.loadEntityResource(ctx, resourceType, namespace, name)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, ports.ErrNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 func (w *OutboxWorker) getSyncerForEntity(resourceType string) (interfaces.EntitySyncer[interfaces.SyncableEntity], error) {
 	switch resourceType {
@@ -639,7 +865,7 @@ func (w *OutboxWorker) deleteResourceFromDB(ctx context.Context, item *domain.Ou
 		zap.String("namespace", item.ResourceNamespace),
 		zap.String("name", item.ResourceName),
 		zap.Int64("rows_affected", cmdTag.RowsAffected()))
-	updateOutboxQuery := `UPDATE sync_outbox SET status = 'SUCCESS', updated_at = NOW() WHERE id = $1`
+	updateOutboxQuery := `UPDATE sync_outbox SET status = 'SUCCESS', processed_at = NOW(), updated_at = NOW() WHERE id = $1`
 	_, err = tx.Exec(ctx, updateOutboxQuery, item.ID)
 	if err != nil {
 		return fmt.Errorf("failed to mark outbox entry as completed: %w", err)
@@ -711,6 +937,13 @@ func getStringFromMap(m map[string]interface{}, key string) string {
 		return val
 	}
 	return ""
+}
+
+func getBoolFromMap(m map[string]interface{}, key string) bool {
+	if val, ok := m[key].(bool); ok {
+		return val
+	}
+	return false
 }
 
 // coordinateEntityDeleteWithBindings handles Case 2 (DELETE Entity → CASCADE bindings)
@@ -949,7 +1182,91 @@ func (w *OutboxWorker) coordinateServiceDelete(
 	ctx context.Context,
 	item *domain.OutboxEntry,
 ) error {
-	// For now, return nil (no coordination)
-	// Future implementation will find and coordinate AddressGroupBindings
+	w.logger.Info("coordinating Service DELETE with dependency cascade",
+		zap.String("namespace", item.ResourceNamespace),
+		zap.String("name", item.ResourceName))
+
+	pending := false
+
+	// Step 1: AddressGroupBindings
+	bindings, err := w.findAddressGroupBindingsForService(ctx, item.ResourceNamespace, item.ResourceName)
+	if err != nil {
+		return fmt.Errorf("finding address group bindings: %w", err)
+	}
+
+	if len(bindings) == 0 {
+		w.logger.Debug("no AddressGroupBindings found for Service",
+			zap.String("namespace", item.ResourceNamespace),
+			zap.String("name", item.ResourceName))
+	} else {
+		w.logger.Info("found AddressGroupBindings that need coordination",
+			zap.String("namespace", item.ResourceNamespace),
+			zap.String("name", item.ResourceName),
+			zap.Int("binding_count", len(bindings)))
+
+		for _, binding := range bindings {
+			if err := w.markBindingForDeletion(ctx, binding); err != nil {
+				return fmt.Errorf("marking binding for deletion: %w", err)
+			}
+		}
+
+		allBindingsDeleted, err := w.checkAllAddressGroupBindingsDeleted(ctx, bindings)
+		if err != nil {
+			return fmt.Errorf("checking binding deletion status: %w", err)
+		}
+
+		if !allBindingsDeleted {
+			w.logger.Debug("AddressGroupBindings not yet physically deleted, waiting",
+				zap.String("namespace", item.ResourceNamespace),
+				zap.String("name", item.ResourceName),
+				zap.Int("binding_count", len(bindings)))
+			pending = true
+		}
+	}
+
+	// Step 2: SvcSvcRule dependencies
+	rules, err := w.findSvcSvcRulesForService(ctx, item.ResourceNamespace, item.ResourceName)
+	if err != nil {
+		return fmt.Errorf("finding SvcSvcRule dependencies: %w", err)
+	}
+
+	if len(rules) == 0 {
+		w.logger.Debug("no SvcSvcRules referencing Service",
+			zap.String("namespace", item.ResourceNamespace),
+			zap.String("name", item.ResourceName))
+	} else {
+		w.logger.Info("found SvcSvcRules that need coordination",
+			zap.String("namespace", item.ResourceNamespace),
+			zap.String("name", item.ResourceName),
+			zap.Int("rule_count", len(rules)))
+
+		for _, rule := range rules {
+			if err := w.markSvcSvcRuleForDeletion(ctx, rule); err != nil {
+				return fmt.Errorf("marking SvcSvcRule for deletion: %w", err)
+			}
+		}
+
+		allRulesDeleted, err := w.checkAllSvcSvcRulesDeleted(ctx, rules)
+		if err != nil {
+			return fmt.Errorf("checking SvcSvcRule deletion status: %w", err)
+		}
+
+		if !allRulesDeleted {
+			w.logger.Debug("SvcSvcRules not yet physically deleted, waiting",
+				zap.String("namespace", item.ResourceNamespace),
+				zap.String("name", item.ResourceName),
+				zap.Int("rule_count", len(rules)))
+			pending = true
+		}
+	}
+
+	if pending {
+		return ErrWaitingForSync
+	}
+
+	w.logger.Info("all dependent resources deleted, proceeding with Service DELETE",
+		zap.String("namespace", item.ResourceNamespace),
+		zap.String("name", item.ResourceName))
+
 	return nil
 }

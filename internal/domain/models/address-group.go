@@ -160,12 +160,15 @@ func (ag *AddressGroup) ToSGroupsProto() (interface{}, error) {
 	}
 
 	var networkNames []string
-	for _, network := range ag.Networks {
-		networkName := network.Name
-		if network.Namespace != "" {
-			networkName = fmt.Sprintf("%s/%s", network.Namespace, network.Name)
+	if len(ag.Networks) > 0 {
+		networkNames = make([]string, 0, len(ag.Networks))
+		for _, network := range ag.Networks {
+			networkName := network.Name
+			if network.Namespace != "" {
+				networkName = fmt.Sprintf("%s/%s", network.Namespace, network.Name)
+			}
+			networkNames = append(networkNames, networkName)
 		}
-		networkNames = append(networkNames, networkName)
 	}
 
 	protoName := ag.AddressGroupName
@@ -176,6 +179,9 @@ func (ag *AddressGroup) ToSGroupsProto() (interface{}, error) {
 			protoName = ag.Name
 		}
 	}
+
+	// Hosts поле в SGROUP не заполняем: связывание хоста делается через SyncHosts,
+	// а попытка передать список ведёт к ошибкам cname_validity из-за формата namespace/name.
 
 	protoGroup := &pb.SecGroup{
 		Name:          protoName,

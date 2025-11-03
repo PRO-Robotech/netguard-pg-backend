@@ -3,9 +3,11 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 
 	"netguard-pg-backend/internal/domain"
@@ -46,30 +48,40 @@ func (w *OutboxWorker) isResourceReady(
 	// Query k8s_metadata via the resource table's resource_version foreign key
 	// Check if conditions contains a Ready condition with status True
 	query := fmt.Sprintf(`
-		SELECT EXISTS(
-			SELECT 1
-			FROM %s r
-			JOIN k8s_metadata km ON r.resource_version = km.resource_version
-			WHERE r.namespace = $1
-			  AND r.name = $2
-			  AND km.conditions @> '[{"type":"Ready","status":"True"}]'::jsonb
-		)
-	`, tableName)
+        SELECT
+            km.conditions @> '[{"type":"Ready","status":"True"}]'::jsonb AS ready,
+            km.deletion_timestamp IS NOT NULL AS deleting
+        FROM %s r
+        JOIN k8s_metadata km ON r.resource_version = km.resource_version
+        WHERE r.namespace = $1
+          AND r.name = $2
+    `, tableName)
 
-	var ready bool
-	err := w.pool.QueryRow(ctx, query, namespace, name).Scan(&ready)
+	var ready, deleting bool
+	err := w.pool.QueryRow(ctx, query, namespace, name).Scan(&ready, &deleting)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
 		return false, fmt.Errorf("failed to check resource readiness for %s/%s/%s: %w",
 			resourceType, namespace, name, err)
 	}
+
+	logicalReady := computeResourceReadinessFlag(ready, deleting)
 
 	w.logger.Debug("checked resource readiness",
 		zap.String("resource_type", resourceType),
 		zap.String("namespace", namespace),
 		zap.String("name", name),
-		zap.Bool("ready", ready))
+		zap.Bool("ready_condition", ready),
+		zap.Bool("marked_for_deletion", deleting),
+		zap.Bool("ready", logicalReady))
 
-	return ready, nil
+	return logicalReady, nil
+}
+
+func computeResourceReadinessFlag(ready, deleting bool) bool {
+	return ready || deleting
 }
 
 // ensureOutboxEntryExists creates an Outbox entry for a pending dependency if it doesn't exist
@@ -108,13 +120,15 @@ func (w *OutboxWorker) ensureOutboxEntryExists(
 	// Create outbox entry using the repository
 	// The repository handles ON CONFLICT logic (UPSERT)
 	entry := &domain.OutboxEntry{
-		ResourceType: resource.Type,
-		ResourceID:   resourceUID,
-		Operation:    domain.SyncOperationUpdate,
-		TargetSystem: targetSystem,
-		Payload:      []byte(fmt.Sprintf(`{"metadata":{"namespace":"%s","name":"%s"}}`, resource.Namespace, resource.Name)),
-		Status:       domain.OutboxStatusPending,
-		MaxRetries:   20, // Standard retry count
+		ResourceType:      resource.Type,
+		ResourceID:        resourceUID,
+		ResourceNamespace: resource.Namespace,
+		ResourceName:      resource.Name,
+		Operation:         domain.SyncOperationUpdate,
+		TargetSystem:      targetSystem,
+		Payload:           []byte(fmt.Sprintf(`{"metadata":{"namespace":"%s","name":"%s"}}`, resource.Namespace, resource.Name)),
+		Status:            domain.OutboxStatusPending,
+		MaxRetries:        20, // Standard retry count
 	}
 
 	// Validate before creating

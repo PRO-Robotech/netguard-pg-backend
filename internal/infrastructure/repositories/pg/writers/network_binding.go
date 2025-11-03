@@ -180,11 +180,6 @@ func (w *Writer) createNetworkBindingOutboxEntry(ctx context.Context, binding *m
 			"namespace": binding.NetworkRef.Namespace,
 			"name":      binding.NetworkRef.Name,
 		},
-		{
-			"type":      "AddressGroup",
-			"namespace": binding.AddressGroupRef.Namespace,
-			"name":      binding.AddressGroupRef.Name,
-		},
 	}
 	affectedResourcesJSON, err := json.Marshal(affectedResources)
 	if err != nil {

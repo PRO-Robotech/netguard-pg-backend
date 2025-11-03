@@ -79,7 +79,7 @@ type ResourceDefinition struct {
 	SupportsDelete bool
 
 	// AffectsResources lists resource types affected by this Process resource
-	// Only populated for Process resources (e.g., HostBinding affects [AddressGroup])
+	// Only populated for Process resources (e.g., HostBinding affects [Host])
 	// Empty for Entity resources
 	AffectsResources []ResourceType
 }
@@ -155,8 +155,8 @@ func init() {
 		SupportsCreate: true,
 		SupportsUpdate: false, // HostBinding only supports CREATE/DELETE
 		SupportsDelete: true,
-		// HostBinding affects AddressGroup (updates aggregated_hosts)
-		AffectsResources: []ResourceType{TypeAddressGroup},
+		// HostBinding now coordinates Host readiness only (AddressGroup handled via triggers)
+		AffectsResources: []ResourceType{TypeHost},
 	}
 
 	resourceRegistry[TypeNetworkBinding] = ResourceDefinition{
@@ -166,8 +166,8 @@ func init() {
 		SupportsCreate: true,
 		SupportsUpdate: false, // NetworkBinding only supports CREATE/DELETE
 		SupportsDelete: true,
-		// NetworkBinding affects AddressGroup (updates aggregated_networks)
-		AffectsResources: []ResourceType{TypeAddressGroup},
+		// NetworkBinding now coordinates Network readiness only (AddressGroup handled via triggers)
+		AffectsResources: []ResourceType{TypeNetwork},
 	}
 
 	resourceRegistry[TypeAddressGroupBinding] = ResourceDefinition{

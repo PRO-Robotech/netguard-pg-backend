@@ -273,7 +273,7 @@ func (r *PgxOutboxRepository) IncrementAttempts(ctx context.Context, id uuid.UUI
 func (r *PgxOutboxRepository) MarkCompleted(ctx context.Context, id uuid.UUID) error {
 	query := `
 		UPDATE sync_outbox
-		SET status = 'SUCCESS', updated_at = NOW()
+		SET status = 'SUCCESS', processed_at = NOW(), updated_at = NOW()
 		WHERE id = $1
 	`
 	result, err := r.executor.Exec(ctx, query, id)

@@ -1,0 +1,191 @@
+-- +goose Up
+-- +goose StatementBegin
+
+-- =====================================================
+-- Migration 056: AddressGroup Coordinated Deletion for AddressGroupBindings
+-- =====================================================
+-- Purpose: Create DELETE outbox entries when AddressGroup is marked for deletion
+-- Pattern: Identical to Migration 052 (AG → NetworkBinding) and 054 (Network → NetworkBinding)
+--
+-- Problem:
+--   When AddressGroup is deleted, AddressGroupBindings were CASCADE deleted
+--   WITHOUT creating DELETE outbox entries for SGROUP synchronization.
+--   Migration 055 changed FK to RESTRICT, now we need coordination trigger.
+--
+-- Solution:
+--   Add AFTER UPDATE trigger on k8s_metadata.deletion_timestamp for AddressGroup resources.
+--   When deletion_timestamp is set (NULL → timestamp):
+--   1. Find all AddressGroupBindings referencing this AG
+--   2. For each binding: create DELETE outbox entry (target=INTERNAL)
+--   3. Rebuild Service.aggregated_address_groups immediately (remove deleted AG)
+--   4. OutboxWorker processes DELETE entries
+--   5. Physical deletion happens after SGROUP sync
+--
+-- Flow:
+--   User → Delete AddressGroup
+--     ↓
+--   BEFORE DELETE trigger: address_group_before_delete
+--     ↓
+--   SET deletion_timestamp in k8s_metadata
+--     ↓
+--   AFTER UPDATE trigger: addressgroup_on_deletion_mark (THIS MIGRATION)
+--     ↓
+--   For each AddressGroupBinding:
+--     - Create DELETE outbox entry (target=INTERNAL)
+--     - Rebuild Service.aggregated_address_groups (remove this AG)
+--     ↓
+--   OutboxWorker processes AddressGroupBinding DELETE entries
+--     ↓
+--   Physical DELETE AddressGroupBinding from database
+--     ↓
+--   AddressGroup physical deletion after SGROUP sync
+--
+-- Related Migrations:
+--   - Migration 055: Changed AG FK to RESTRICT (prerequisite)
+--   - Migration 052: Same pattern for AG → NetworkBinding
+--   - Migration 054: Same pattern for Network → NetworkBinding
+--
+-- Date: 2025-10-31
+-- =====================================================
+
+-- Function: Create DELETE outbox entries for AddressGroupBindings when AG is marked for deletion
+CREATE OR REPLACE FUNCTION trigger_addressgroup_on_deletion_mark_for_ag_bindings()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_ag_namespace namespace_name;
+    v_ag_name resource_name;
+    binding_rec RECORD;
+    v_binding_uid UUID;
+    v_service_uid UUID;
+    v_service_rv BIGINT;
+BEGIN
+    -- Only act when deletion_timestamp is being set (NULL → timestamp)
+    IF NEW.deletion_timestamp IS NOT NULL AND OLD.deletion_timestamp IS NULL THEN
+        -- Find AddressGroup by resource_version
+        SELECT namespace, name
+        INTO v_ag_namespace, v_ag_name
+        FROM address_groups
+        WHERE resource_version = NEW.resource_version;
+
+        IF FOUND THEN
+            RAISE NOTICE '[Migration 056] AddressGroup %.% marked for deletion, processing AddressGroupBindings',
+                v_ag_namespace, v_ag_name;
+
+            -- Process all AddressGroupBindings referencing this AddressGroup
+            FOR binding_rec IN
+                SELECT agb.namespace, agb.name,
+                       agb.service_namespace, agb.service_name,
+                       agb.resource_version
+                FROM address_group_bindings agb
+                WHERE agb.address_group_namespace = v_ag_namespace
+                  AND agb.address_group_name = v_ag_name
+            LOOP
+                RAISE NOTICE '[Migration 056] Processing AddressGroupBinding %.%',
+                    binding_rec.namespace, binding_rec.name;
+
+                -- Get UID for AddressGroupBinding
+                SELECT m.uid INTO v_binding_uid
+                FROM k8s_metadata m
+                WHERE m.resource_version = binding_rec.resource_version;
+
+                -- Get Service UID and resource_version for affects_resources
+                SELECT m.uid, s.resource_version
+                INTO v_service_uid, v_service_rv
+                FROM services s
+                JOIN k8s_metadata m ON m.resource_version = s.resource_version
+                WHERE s.namespace = binding_rec.service_namespace
+                  AND s.name = binding_rec.service_name;
+
+                -- Create DELETE outbox entry for AddressGroupBinding (target=INTERNAL)
+                INSERT INTO sync_outbox (
+                    resource_type,
+                    resource_id,
+                    resource_namespace,
+                    resource_name,
+                    operation,
+                    target_system,
+                    payload,
+                    status,
+                    affects_resources,
+                    created_at,
+                    updated_at,
+                    next_retry_at
+                ) VALUES (
+                    'AddressGroupBinding',
+                    v_binding_uid,
+                    binding_rec.namespace,
+                    binding_rec.name,
+                    'DELETE'::sync_operation,
+                    'INTERNAL'::target_system,
+                    jsonb_build_object(
+                        'addressGroupBinding', jsonb_build_object(
+                            'namespace', binding_rec.namespace,
+                            'name', binding_rec.name,
+                            'serviceRef', jsonb_build_object(
+                                'namespace', binding_rec.service_namespace,
+                                'name', binding_rec.service_name
+                            ),
+                            'addressGroupRef', jsonb_build_object(
+                                'namespace', v_ag_namespace,
+                                'name', v_ag_name
+                            )
+                        ),
+                        'reason', 'AddressGroup deletion (coordinated)',
+                        'deletionTimestamp', NEW.deletion_timestamp::text
+                    ),
+                    'PENDING'::outbox_status,
+                    jsonb_build_array(
+                        jsonb_build_object(
+                            'type', 'Service',
+                            'uid', v_service_uid,
+                            'namespace', binding_rec.service_namespace,
+                            'name', binding_rec.service_name,
+                            'resourceVersion', v_service_rv
+                        )
+                    ),
+                    NOW(),
+                    NOW(),
+                    NOW()
+                ) ON CONFLICT DO NOTHING;
+
+                RAISE NOTICE '[Migration 056] Created DELETE outbox entry for AddressGroupBinding %.%',
+                    binding_rec.namespace, binding_rec.name;
+
+                -- Rebuild Service.aggregated_address_groups immediately (remove deleted AG)
+                PERFORM aggregate_service_address_groups(
+                    binding_rec.service_namespace,
+                    binding_rec.service_name
+                );
+
+                RAISE NOTICE '[Migration 056] Rebuilt Service %.% aggregated_address_groups',
+                    binding_rec.service_namespace, binding_rec.service_name;
+            END LOOP;
+
+            RAISE NOTICE '[Migration 056] Finished processing AddressGroupBindings for AddressGroup %.%',
+                v_ag_namespace, v_ag_name;
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger: Fire on deletion_timestamp UPDATE for AddressGroup resources
+-- Note: WHEN clause cannot use subqueries (PostgreSQL limitation)
+--       Condition check moved inside function
+CREATE TRIGGER addressgroup_on_deletion_mark_for_ag_bindings
+AFTER UPDATE OF deletion_timestamp ON k8s_metadata
+FOR EACH ROW
+WHEN (NEW.deletion_timestamp IS NOT NULL AND OLD.deletion_timestamp IS NULL)
+EXECUTE FUNCTION trigger_addressgroup_on_deletion_mark_for_ag_bindings();
+
+-- +goose StatementEnd
+
+-- +goose Down
+-- +goose StatementBegin
+
+-- Drop trigger and function
+DROP TRIGGER IF EXISTS addressgroup_on_deletion_mark_for_ag_bindings ON k8s_metadata;
+DROP FUNCTION IF EXISTS trigger_addressgroup_on_deletion_mark_for_ag_bindings();
+
+-- +goose StatementEnd

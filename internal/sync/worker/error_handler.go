@@ -95,6 +95,17 @@ func (w *OutboxWorker) categorizeError(err error) ErrorCategory {
 		}
 	}
 
+	// Check for "Binding not found" errors
+	// These occur when UPDATE/DELETE operations reference non-existent bindings
+	// Should fail fast (3 attempts) instead of retrying 20 times
+	errMsg := err.Error()
+	if strings.Contains(errMsg, "Binding not found") ||
+		strings.Contains(errMsg, "HostBinding not found") ||
+		strings.Contains(errMsg, "NetworkBinding not found") ||
+		strings.Contains(errMsg, "AddressGroupBinding not found") {
+		return ErrorCategoryValidation // Fail fast - binding was already deleted
+	}
+
 	// Check network errors
 	if isNetworkError(err) {
 		return ErrorCategoryNetwork

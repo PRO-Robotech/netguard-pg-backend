@@ -14,6 +14,7 @@ import (
 func (cm *ConditionManager) ProcessHostConditions(ctx context.Context, host *models.Host, syncResult error) error {
 	host.Meta.ClearErrorCondition()
 	host.Meta.TouchOnWrite("v1")
+	host.Meta.DeduplicateConditions()
 
 	reader, err := cm.registry.Reader(ctx)
 	if err != nil {
@@ -32,35 +33,39 @@ func (cm *ConditionManager) ProcessHostConditions(ctx context.Context, host *mod
 		return nil
 	}
 
-	existingReady := host.Meta.GetCondition("Ready")
-	isPendingSync := existingReady != nil &&
-		existingReady.Status == metav1.ConditionFalse &&
-		existingReady.Reason == "PendingSGROUPSync"
+	pendingSyncCond := host.Meta.GetCondition("PendingSync")
+	isPendingSync := pendingSyncCond != nil && pendingSyncCond.Status == metav1.ConditionTrue
 
-	if isPendingSync {
-		klog.V(4).InfoS("ConditionManager: Host is pending SGROUP sync, NOT setting Ready=True",
+	existingReady := host.Meta.GetCondition("Ready")
+	readyReasonPending := existingReady != nil &&
+		existingReady.Status == metav1.ConditionFalse &&
+		(existingReady.Reason == "PendingSGROUPSync" || existingReady.Reason == "BindingDeleting")
+
+	if isPendingSync || readyReasonPending {
+		klog.V(4).InfoS("ConditionManager: Host is pending sync, keeping Ready=False",
 			"namespace", host.Namespace, "name", host.Name)
 
 		if cm.hasPendingOutboxEntry(ctx, "Host", host.Namespace, host.Name) {
-			klog.InfoS("ConditionManager: Skipping batch update - OutboxWorker is processing",
+			klog.InfoS("ConditionManager: Pending outbox entry for host, skip update",
 				"namespace", host.Namespace,
 				"name", host.Name)
 			return nil
 		}
-
-		host.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "Host passed validation")
-		cm.batchConditionUpdate("Host", host)
-		return nil
 	}
 
-	// OLD BEHAVIOR: For existing resources, set Ready=True
 	host.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Host committed to backend and synced with sgroups successfully")
 	host.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "Host passed validation")
 	host.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Host is ready for use")
+	host.Meta.SetCondition(metav1.Condition{
+		Type:               "PendingSync",
+		Status:             metav1.ConditionFalse,
+		Reason:             "SyncComplete",
+		Message:            "All synchronization operations completed",
+		LastTransitionTime: metav1.Now(),
+	})
 
 	if err := cm.SaveHostConditions(ctx, host); err != nil {
 		klog.Errorf("ConditionManager: Failed to save conditions for host %s/%s: %v", host.Namespace, host.Name, err)
-		return nil
 	}
 
 	return nil

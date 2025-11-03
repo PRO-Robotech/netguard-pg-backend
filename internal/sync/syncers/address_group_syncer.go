@@ -6,9 +6,10 @@ import (
 
 	"github.com/go-logr/logr"
 
-	pb "github.com/PRO-Robotech/protos/pkg/api/sgroups"
 	"netguard-pg-backend/internal/sync/interfaces"
 	"netguard-pg-backend/internal/sync/types"
+
+	pb "github.com/PRO-Robotech/protos/pkg/api/sgroups"
 )
 
 // AddressGroupSyncer implements EntitySyncer for AddressGroup entities
@@ -48,7 +49,8 @@ func (s *AddressGroupSyncer) Sync(ctx context.Context, entity interfaces.Syncabl
 		return fmt.Errorf("invalid proto data type for entity %s, expected *pb.SecGroup, got %T", entity.GetSyncKey(), protoData)
 	}
 
-	// Create single-entity batch structure for backward compatibility
+	// AddressGroup больше не передаёт hosts в SGROUP. Выполняем обычный upsert.
+	// Создаём batch c одной сущностью для обратной совместимости.
 	singleEntityBatch := &pb.SyncSecurityGroups{
 		Groups: []*pb.SecGroup{protoGroup},
 	}
@@ -99,12 +101,13 @@ func (s *AddressGroupSyncer) SyncBatch(ctx context.Context, entities []interface
 		}
 
 		// Cast to *pb.SecGroup
-		if protoGroup, ok := protoData.(*pb.SecGroup); ok {
-			protoGroups = append(protoGroups, protoGroup)
-			entityKeys = append(entityKeys, entity.GetSyncKey())
-		} else {
+		protoGroup, ok := protoData.(*pb.SecGroup)
+		if !ok {
 			return fmt.Errorf("invalid proto data type for entity %s, expected *pb.SecGroup, got %T", entity.GetSyncKey(), protoData)
 		}
+
+		protoGroups = append(protoGroups, protoGroup)
+		entityKeys = append(entityKeys, entity.GetSyncKey())
 	}
 
 	if len(protoGroups) == 0 {

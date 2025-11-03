@@ -26,6 +26,9 @@ type OutboxWorker struct {
 	// In-memory registry for loading resources
 	registry ports.Registry
 
+	// Condition management (injected)
+	conditionManager ports.ConditionManager
+
 	// Syncers for entity resources
 	hostSyncer         *syncers.HostSyncer
 	addressGroupSyncer *syncers.AddressGroupSyncer
@@ -65,6 +68,7 @@ func NewOutboxWorker(
 	networkSyncer *syncers.NetworkSyncer,
 	serviceSyncer *syncers.ServiceSyncer,
 	svcSvcRuleSyncer *syncers.SvcSvcRuleSyncer,
+	conditionManager ports.ConditionManager,
 	logger *zap.Logger,
 	config *WorkerConfig,
 	connectionMonitor *monitor.SGroupConnectionMonitor,
@@ -85,6 +89,7 @@ func NewOutboxWorker(
 		pool:               pool,
 		outboxRepo:         repositories.NewOutboxRepository(pool),
 		registry:           registry,
+		conditionManager:   conditionManager,
 		hostSyncer:         hostSyncer,
 		addressGroupSyncer: addressGroupSyncer,
 		networkSyncer:      networkSyncer,

@@ -257,21 +257,34 @@ func (w *Writer) deleteAddressGroupsByIdentifiers(ctx context.Context, identifie
 func (w *Writer) SyncAddressGroupBindings(ctx context.Context, bindings []models.AddressGroupBinding, scope ports.Scope, opts ...ports.Option) error {
 	// Extract sync operation from options
 	syncOp := models.SyncOpUpsert // Default operation
+	var conditionOnly bool
 	for _, opt := range opts {
 		if syncOption, ok := opt.(ports.SyncOption); ok {
 			syncOp = syncOption.Operation
 			break
 		}
+		if _, ok := opt.(ports.ConditionOnlyOperation); ok {
+			conditionOnly = true
+			break
+		}
+	}
+
+	if conditionOnly {
+		return w.updateAddressGroupBindingConditionsOnly(ctx, bindings)
 	}
 
 	switch syncOp {
 	case models.SyncOpDelete:
+		// CRITICAL FIX: Use soft delete (set deletion_timestamp only) instead of physical deletion
+		// Physical deletion will happen via OutboxWorker AFTER triggers process deletion_timestamp
+		// This fixes the bug where binding was deleted before AFTER UPDATE trigger could read it
+		// See: docs/bindings/service-addressgroup/SERVICE_ADDRESSGROUP_DELETION_BUG.md
 		var identifiers []models.ResourceIdentifier
 		for _, binding := range bindings {
 			identifiers = append(identifiers, binding.SelfRef.ResourceIdentifier)
 		}
-		if err := w.deleteAddressGroupBindingsByIdentifiers(ctx, identifiers); err != nil {
-			return errors.Wrap(err, "failed to delete address group bindings")
+		if err := w.markAddressGroupBindingsForDeletion(ctx, identifiers); err != nil {
+			return errors.Wrap(err, "failed to mark address group bindings for deletion")
 		}
 	case models.SyncOpUpsert, models.SyncOpFullSync:
 		for i := range bindings {
@@ -386,6 +399,86 @@ func (w *Writer) deleteAddressGroupBindingsByIdentifiers(ctx context.Context, id
 
 	if err := w.exec(ctx, query, args...); err != nil {
 		return errors.Wrap(err, "failed to delete address group bindings by identifiers")
+	}
+
+	return nil
+}
+
+// markAddressGroupBindingsForDeletion marks address group bindings for deletion (soft delete)
+// by setting deletion_timestamp in k8s_metadata.
+// Physical deletion will happen via OutboxWorker after AFTER UPDATE trigger processes the change.
+// This ensures the trigger can read binding details before they are physically removed.
+func (w *Writer) markAddressGroupBindingsForDeletion(ctx context.Context, identifiers []models.ResourceIdentifier) error {
+	if len(identifiers) == 0 {
+		return nil
+	}
+
+	// Build parameter placeholders and collect args
+	var conditions []string
+	var args []interface{}
+	argIndex := 1
+
+	for _, id := range identifiers {
+		conditions = append(conditions, fmt.Sprintf("(agb.namespace = $%d AND agb.name = $%d)", argIndex, argIndex+1))
+		args = append(args, id.Namespace, id.Name)
+		argIndex += 2
+	}
+
+	// Set deletion_timestamp in k8s_metadata for matching bindings
+	// This triggers the AFTER UPDATE trigger (migration 066/072) which:
+	// 1. Reads binding details (binding still exists at this point!)
+	// 2. Updates Service.aggregated_address_groups
+	// 3. Service UPDATE trigger creates SGROUP outbox entry
+	// Physical deletion happens later via OutboxWorker
+	markDeleteQuery := fmt.Sprintf(`
+		UPDATE k8s_metadata m
+		SET deletion_timestamp = NOW()
+		FROM address_group_bindings agb
+		WHERE agb.resource_version = m.resource_version
+		  AND (%s)
+		  AND m.deletion_timestamp IS NULL`, strings.Join(conditions, " OR "))
+
+	_, err := w.tx.Exec(ctx, markDeleteQuery, args...)
+	if err != nil {
+		return errors.Wrap(err, "failed to mark address group bindings for deletion in k8s_metadata")
+	}
+
+	klog.InfoS("Marked AddressGroupBindings for deletion (soft delete)",
+		"count", len(identifiers))
+
+	return nil
+}
+
+// updateAddressGroupBindingConditionsOnly updates only conditions without creating Outbox entries
+// Used by ConditionManager to update Ready/PendingSync status
+func (w *Writer) updateAddressGroupBindingConditionsOnly(ctx context.Context, bindings []models.AddressGroupBinding) error {
+	for i := range bindings {
+		binding := &bindings[i]
+
+		// Marshal conditions
+		conditionsJSON, err := json.Marshal(binding.Meta.Conditions)
+		if err != nil {
+			return errors.Wrap(err, "failed to marshal conditions")
+		}
+
+		// Find existing resource_version
+		var existingResourceVersion int64
+		query := `SELECT resource_version FROM address_group_bindings WHERE namespace = $1 AND name = $2`
+		err = w.tx.QueryRow(ctx, query, binding.Namespace, binding.Name).Scan(&existingResourceVersion)
+		if err != nil {
+			return errors.Wrapf(err, "failed to find existing AddressGroupBinding %s/%s", binding.Namespace, binding.Name)
+		}
+
+		// Update only conditions in k8s_metadata (no new resource_version)
+		updateQuery := `UPDATE k8s_metadata SET conditions = $1 WHERE resource_version = $2`
+		if err := w.exec(ctx, updateQuery, conditionsJSON, existingResourceVersion); err != nil {
+			return errors.Wrapf(err, "failed to update conditions for AddressGroupBinding %s/%s", binding.Namespace, binding.Name)
+		}
+
+		klog.V(4).InfoS("Updated AddressGroupBinding conditions only",
+			"namespace", binding.Namespace,
+			"name", binding.Name,
+			"resource_version", existingResourceVersion)
 	}
 
 	return nil
@@ -671,7 +764,7 @@ func (w *Writer) DeleteAddressGroupsByIDs(ctx context.Context, ids []models.Reso
 }
 
 func (w *Writer) DeleteAddressGroupBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
-	return w.deleteAddressGroupBindingsByIdentifiers(ctx, ids)
+	return w.markAddressGroupBindingsForDeletion(ctx, ids)
 }
 
 func (w *Writer) DeleteAddressGroupPortMappingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {

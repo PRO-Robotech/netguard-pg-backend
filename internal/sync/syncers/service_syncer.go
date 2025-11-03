@@ -49,6 +49,72 @@ func (s *ServiceSyncer) Sync(ctx context.Context, entity interfaces.SyncableEnti
 		return fmt.Errorf("invalid proto data type for entity %s, expected *pb.Service, got %T", entity.GetSyncKey(), protoData)
 	}
 
+	// 🔍 DEBUG POINT 4: Log before sending to SGROUP
+	s.logger.Info("🔍 [SYNCER_DEBUG] Sending Service to SGROUP",
+		"name", protoService.Name,
+		"sgNames", protoService.SgNames,
+		"sgNames_count", len(protoService.SgNames),
+		"operation", operation)
+
+	// ✨ CRITICAL FIX: Protobuf doesn't serialize empty slices, and SGROUP uses
+	// partial update semantics - both cause empty sgNames updates to be ignored.
+	//
+	// Problem: When sgNames is empty (len=0):
+	//   1. Protobuf omits the field from binary message
+	//   2. SGROUP interprets missing/empty field as "don't update" (partial update semantics)
+	//   3. Result: SGROUP retains old sgNames values
+	//
+	// Solution: Use DELETE+UPSERT sequence to force SGROUP to clear sgNames.
+	// This is the ONLY reliable way to clear the field when it becomes empty.
+	// NOTE: This temporarily removes the Service, but immediately recreates it,
+	// which is acceptable since Service deletion is idempotent and fast.
+	if len(protoService.SgNames) == 0 && operation == types.SyncOperationUpsert {
+		s.logger.Info("Empty sgNames detected - using DELETE+UPSERT to force field clear",
+			"name", protoService.Name,
+			"reason", "SGROUP partial update semantics ignore empty arrays")
+
+		// Step 1: DELETE Service to clear all fields including sgNames
+		deleteService := &pb.Service{
+			Name:      protoService.Name,
+			Protocols: protoService.Protocols,
+		}
+		deleteBatch := &pb.SyncServices{
+			Services: []*pb.Service{deleteService},
+		}
+		deleteReq := &types.SyncRequest{
+			Operation:   types.SyncOperationDelete,
+			SubjectType: types.SyncSubjectTypeServices,
+			Data:        deleteBatch,
+		}
+		if err := s.gateway.Sync(ctx, deleteReq); err != nil {
+			s.logger.Error(err, "Failed to DELETE Service to clear empty sgNames",
+				"name", protoService.Name)
+			return fmt.Errorf("failed to delete Service to clear sgNames: %w", err)
+		}
+
+		// Step 2: UPSERT Service without sgNames (correct state)
+		// Field will be omitted in protobuf, which is correct for empty array
+		createService := &pb.Service{
+			Name:      protoService.Name,
+			Protocols: protoService.Protocols,
+		}
+		createBatch := &pb.SyncServices{
+			Services: []*pb.Service{createService},
+		}
+		createReq := &types.SyncRequest{
+			Operation:   types.SyncOperationUpsert,
+			SubjectType: types.SyncSubjectTypeServices,
+			Data:        createBatch,
+		}
+		if err := s.gateway.Sync(ctx, createReq); err != nil {
+			return fmt.Errorf("failed to recreate Service without sgNames: %w", err)
+		}
+		s.logger.Info("Successfully cleared sgNames using DELETE+UPSERT workaround",
+			"name", protoService.Name)
+		return nil
+	}
+
+	// Normal case: Service has sgNames or operation is not UPDATE
 	// Create single-entity batch structure for backward compatibility
 	singleEntityBatch := &pb.SyncServices{
 		Services: []*pb.Service{protoService},

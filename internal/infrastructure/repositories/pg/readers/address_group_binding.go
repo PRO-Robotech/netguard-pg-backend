@@ -93,7 +93,7 @@ func (r *Reader) scanAddressGroupBinding(rows pgx.Rows) (models.AddressGroupBind
 		&annotationsJSON,
 		&conditionsJSON,
 		&createdAt,
-		&updatedAt, updatedAt,
+		&updatedAt,
 		&deletionTS,
 	)
 	if err != nil {
@@ -131,7 +131,7 @@ func (r *Reader) scanAddressGroupBindingRow(row pgx.Row) (*models.AddressGroupBi
 		&annotationsJSON,
 		&conditionsJSON,
 		&createdAt,
-		&updatedAt, updatedAt,
+		&updatedAt,
 		&deletionTS,
 	)
 	if err != nil {

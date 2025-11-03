@@ -3,12 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"github.com/go-logr/stdr"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"go.uber.org/zap"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/health"
-	"google.golang.org/grpc/health/grpc_health_v1"
 	"log"
 	"net"
 	"net/http"
@@ -17,6 +11,7 @@ import (
 	"netguard-pg-backend/internal/application/services"
 	"netguard-pg-backend/internal/application/services/conditions"
 	"netguard-pg-backend/internal/config"
+	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/domain/registry"
 	"netguard-pg-backend/internal/infrastructure/repositories"
 	"netguard-pg-backend/internal/infrastructure/repositories/pg"
@@ -35,6 +30,13 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/go-logr/stdr"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
 var (
@@ -124,12 +126,12 @@ func main() {
 	}
 	syncManager := setupSyncManager(ctx, cfg, sgroupsClient, zapLogger)
 	reverseSyncSystem := setupReverseSyncSystem(ctx, cfg, pgRegistry, sgroupsClient, connMonitor, zapLogger)
-	var outboxWorker *worker.OutboxWorker
-	if syncManager != nil {
-		outboxWorker = setupOutboxWorker(ctx, cfg, pgRegistry, syncManager, connMonitor, zapLogger)
-	}
 	outboxRepo := repositories.NewOutboxRepository(pgRegistry.Pool())
 	conditionManager := conditions.NewConditionManager(pgRegistry, outboxRepo)
+	var outboxWorker *worker.OutboxWorker
+	if syncManager != nil {
+		outboxWorker = setupOutboxWorker(ctx, cfg, pgRegistry, syncManager, conditionManager, connMonitor, zapLogger)
+	}
 	netguardFacade := services.NewNetguardFacade(pgRegistry, conditionManager, syncManager)
 	grpcServer := grpc.NewServer()
 	netguardServer := netguard.NewServiceServer(netguardFacade)
@@ -317,6 +319,7 @@ func setupOutboxWorker(
 	cfg *config.Config,
 	pgRegistry *pg.Registry,
 	syncManager interfaces.SyncManager,
+	conditionManager ports.ConditionManager,
 	connMonitor *monitor.SGroupConnectionMonitor,
 	logger *zap.Logger,
 ) *worker.OutboxWorker {
@@ -349,6 +352,7 @@ func setupOutboxWorker(
 		networkSyncer,
 		serviceSyncer,
 		svcSvcRuleSyncer,
+		conditionManager,
 		logger,
 		workerConfig,
 		connMonitor,

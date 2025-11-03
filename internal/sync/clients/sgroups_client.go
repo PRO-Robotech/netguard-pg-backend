@@ -133,7 +133,16 @@ func (c *sgroupsClient) Sync(ctx context.Context, req *types.SyncRequest) error 
 		return fmt.Errorf("failed to convert sync request to proto: %w", err)
 	}
 
-	_, err = c.client.Sync(ctx, pbReq)
+	// 🔍 DEBUG POINT 5b: Call SGROUP gRPC and log response
+	resp, err := c.client.Sync(ctx, pbReq)
+	if err == nil {
+		fmt.Printf("🔍 [SGROUP_RESPONSE_DEBUG] SGROUP accepted sync: subject_type=%s, operation=%s\n",
+			req.SubjectType, req.Operation)
+	} else {
+		fmt.Printf("🔍 [SGROUP_RESPONSE_DEBUG] SGROUP rejected sync: subject_type=%s, operation=%s, error=%v\n",
+			req.SubjectType, req.Operation, err)
+	}
+	_ = resp // Suppress unused variable warning
 	return err
 }
 
@@ -314,6 +323,11 @@ func (c *sgroupsClient) convertSyncRequestToProto(req *types.SyncRequest) (*pb.S
 	case types.SyncSubjectTypeServices:
 		// Support batch SyncServices
 		if services, ok := req.Data.(*pb.SyncServices); ok {
+			// 🔍 DEBUG POINT 5a: Log each service being sent to SGROUP
+			for i, svc := range services.Services {
+				fmt.Printf("🔍 [SGROUP_CLIENT_DEBUG] Sending Service to SGROUP gRPC: index=%d, name=%s, sgNames=%v, operation=%s\n",
+					i, svc.Name, svc.SgNames, req.Operation)
+			}
 			pbReq.Subject = &pb.SyncReq_Services{Services: services}
 		} else {
 			return nil, fmt.Errorf("invalid data type for Services subject, expected *pb.SyncServices, got %T", req.Data)

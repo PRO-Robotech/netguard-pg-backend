@@ -3,11 +3,12 @@ package conditions
 import (
 	"context"
 	"fmt"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/klog/v2"
 	"netguard-pg-backend/internal/application/validation"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog/v2"
 )
 
 func (cm *ConditionManager) ProcessAddressGroupConditions(ctx context.Context, ag *models.AddressGroup) error {
@@ -17,6 +18,7 @@ func (cm *ConditionManager) ProcessAddressGroupConditions(ctx context.Context, a
 		"conditions", formatConditions(ag.Meta.Conditions))
 	ag.Meta.ClearErrorCondition()
 	ag.Meta.TouchOnWrite("v1")
+	ag.Meta.DeduplicateConditions()
 	reader, err := cm.registry.Reader(ctx)
 	if err != nil {
 		klog.Errorf("Failed to get reader for AddressGroup %s/%s: %v", ag.Namespace, ag.Name, err)
@@ -33,42 +35,43 @@ func (cm *ConditionManager) ProcessAddressGroupConditions(ctx context.Context, a
 		ag.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Address group validation failed")
 		return err
 	}
+	pendingSyncCond := ag.Meta.GetCondition("PendingSync")
+	isPendingSync := pendingSyncCond != nil && pendingSyncCond.Status == metav1.ConditionTrue
+
 	existingReady := ag.Meta.GetCondition("Ready")
-	klog.InfoS("[DEBUG] ConditionManager: Checking Ready condition",
-		"namespace", ag.Namespace,
-		"name", ag.Name,
-		"ready_exists", existingReady != nil,
-		"ready_status", getConditionStatus(existingReady),
-		"ready_reason", getConditionReason(existingReady))
-	isPendingSync := existingReady != nil &&
+	readyReasonPending := existingReady != nil &&
 		existingReady.Status == metav1.ConditionFalse &&
-		existingReady.Reason == "PendingSGROUPSync"
-	klog.InfoS("ConditionManager: isPendingSync decision",
-		"namespace", ag.Namespace,
-		"name", ag.Name,
-		"isPendingSync", isPendingSync,
-		"action", map[bool]string{true: "KEEP_PENDING", false: "SET_READY_TRUE"}[isPendingSync])
-	if isPendingSync {
-		klog.InfoS("ConditionManager: KEEPING PendingSGROUPSync",
+		(existingReady.Reason == "PendingSGROUPSync" ||
+			existingReady.Reason == "BindingDeleting" ||
+			existingReady.Reason == "AggregationUpdate")
+
+	if isPendingSync || readyReasonPending {
+		klog.InfoS("ConditionManager: resource is pending sync",
 			"namespace", ag.Namespace,
-			"name", ag.Name)
+			"name", ag.Name,
+			"pending_sync_flag", isPendingSync,
+			"ready_reason", getConditionReason(existingReady))
+
 		if cm.hasPendingOutboxEntry(ctx, "AddressGroup", ag.Namespace, ag.Name) {
-			klog.InfoS("ConditionManager: Skipping batch update - OutboxWorker is processing",
+			klog.InfoS("ConditionManager: pending outbox entry detected, keeping Ready=False",
 				"namespace", ag.Namespace,
 				"name", ag.Name)
 			return nil
 		}
-		ag.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "Address group passed all validations")
-		cm.batchConditionUpdate("AddressGroup", ag)
-		return nil
 	}
-	klog.InfoS("ConditionManager: ⚠️ Setting Ready=True (OLD BEHAVIOR - potential bug)",
-		"namespace", ag.Namespace,
-		"name", ag.Name,
-		"reason", "isPendingSync was false")
+
+	// All sync operations completed, set healthy conditions
 	ag.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Address group is ready and operational")
 	ag.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Address group successfully synced to backend and SGROUP")
 	ag.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "Address group passed all validations")
+	ag.Meta.SetCondition(metav1.Condition{
+		Type:               "PendingSync",
+		Status:             metav1.ConditionFalse,
+		Reason:             "SyncComplete",
+		Message:            "All synchronization operations completed",
+		LastTransitionTime: metav1.Now(),
+	})
+
 	cm.batchConditionUpdate("AddressGroup", ag)
 	return nil
 }

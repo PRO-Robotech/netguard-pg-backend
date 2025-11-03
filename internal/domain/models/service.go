@@ -118,8 +118,17 @@ func (s *Service) ToSGroupsProto() (interface{}, error) {
 		protoSpec.Udp = &pb.ProtoSpec_Ports{Ports: udpPorts}
 	}
 
+	// 🔍 DEBUG POINT 2: Log before building sgNames
+	fmt.Printf("🔍 [TOSGROUPS_DEBUG] Service.ToSGroupsProto: name=%s, AggregatedAddressGroups count=%d\n",
+		serviceName, len(s.AggregatedAddressGroups))
+	for i, ag := range s.AggregatedAddressGroups {
+		fmt.Printf("  [%d] AG: %s/%s (source: %s)\n", i, ag.Ref.Namespace, ag.Ref.Name, ag.Source)
+	}
+
 	// Build sg_names from AggregatedAddressGroups
-	var sgNames []string
+	// NOTE: SGROUP API interprets sg_names = [""] as an explicit request to clear bindings.
+	// If we send an empty slice, SGROUP treats it as "no change" and keeps stale data.
+	sgNames := make([]string, 0)
 	for _, agRef := range s.AggregatedAddressGroups {
 		agName := agRef.Ref.Name
 		if agRef.Ref.Namespace != "" {
@@ -128,12 +137,21 @@ func (s *Service) ToSGroupsProto() (interface{}, error) {
 		sgNames = append(sgNames, agName)
 	}
 
+	if len(sgNames) == 0 {
+		// Use sentinel value recognized by SGROUP to remove all bindings.
+		sgNames = []string{""}
+	}
+
 	// Convert to sgroups protobuf element
 	protoService := &pb.Service{
 		Name:      serviceName,
 		Protocols: protoSpec,
 		SgNames:   sgNames,
 	}
+
+	// 🔍 DEBUG POINT 3: Log final proto
+	fmt.Printf("🔍 [TOSGROUPS_DEBUG] Final proto.Service: name=%s, sgNames=%v\n",
+		protoService.Name, protoService.SgNames)
 
 	return protoService, nil
 }

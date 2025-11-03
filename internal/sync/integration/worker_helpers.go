@@ -15,12 +15,14 @@ import (
 	"go.uber.org/zap/zaptest"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	pb "github.com/PRO-Robotech/protos/pkg/api/sgroups"
 	"netguard-pg-backend/internal/infrastructure/repositories/pg"
 	"netguard-pg-backend/internal/sync/interfaces"
+	"netguard-pg-backend/internal/sync/monitor"
 	"netguard-pg-backend/internal/sync/syncers"
 	"netguard-pg-backend/internal/sync/types"
 	"netguard-pg-backend/internal/sync/worker"
+
+	pb "github.com/PRO-Robotech/protos/pkg/api/sgroups"
 )
 
 // HTTPSGroupGateway implements SGroupGateway using HTTP client (for E2E tests with MockSGROUPServer)
@@ -215,6 +217,8 @@ func TCCreateTestWorker(t *testing.T, tc *TestContainer) *worker.OutboxWorker {
 	addressGroupSyncer := syncers.NewAddressGroupSyncer(gateway, logrLogger)
 	networkSyncer := syncers.NewNetworkSyncer(gateway, logrLogger)
 	serviceSyncer := syncers.NewServiceSyncer(gateway, logrLogger)
+	svcSvcRuleSyncer := syncers.NewSvcSvcRuleSyncer(gateway, logrLogger)
+	connMonitor := monitor.NewSGroupConnectionMonitor(gateway, monitor.DefaultConfig(), logger)
 
 	// Create worker configuration optimized for testing
 	config := &worker.WorkerConfig{
@@ -238,8 +242,11 @@ func TCCreateTestWorker(t *testing.T, tc *TestContainer) *worker.OutboxWorker {
 		addressGroupSyncer,
 		networkSyncer,
 		serviceSyncer,
+		svcSvcRuleSyncer,
+		nil,
 		logger,
 		config,
+		connMonitor,
 	)
 
 	t.Logf("  🏗️  Created OutboxWorker for E2E testing")
