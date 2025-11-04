@@ -5,6 +5,7 @@ package v1beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	schema "k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // TransportProtocol represents protocols for transport layer
@@ -417,19 +418,33 @@ type ServicePortsRef struct {
 // AccessPortsSpec defines the services and their ports that are allowed access
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type AccessPortsSpec struct {
-	metav1.TypeMeta `json:",inline"`
+	// MappingName optionally identifies the parent AddressGroupPortMapping (used by subresource responses)
 	// +optional
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	MappingName string `json:"mappingName,omitempty"`
+
+	// MappingNamespace optionally identifies the parent AddressGroupPortMapping namespace (used by subresource responses)
+	// +optional
+	MappingNamespace string `json:"mappingNamespace,omitempty"`
+
 	// Items contains the list of service ports references
 	Items []ServicePortsRef `json:"items,omitempty"`
 }
 
-// AccessPortsSpecList contains a list of AccessPortsSpec
+// AccessPortsSpecList contains a list of AccessPortsSpec entries
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type AccessPortsSpecList struct {
-	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []AccessPortsSpec `json:"items"`
+}
+
+// GetObjectKind implements runtime.Object without inlining TypeMeta in JSON responses
+func (AccessPortsSpec) GetObjectKind() schema.ObjectKind {
+	return schema.EmptyObjectKind
+}
+
+// GetObjectKind implements runtime.Object for the list variant without extra JSON fields
+func (AccessPortsSpecList) GetObjectKind() schema.ObjectKind {
+	return schema.EmptyObjectKind
 }
 
 // AddressGroupBindingStatus defines the observed state of AddressGroupBinding

@@ -575,8 +575,9 @@ func (s *ServiceResourceService) DeleteServicesByIDs(ctx context.Context, ids []
 		}
 	}
 
-	// 3. For each service to be deleted, get it for external sync and regenerate port mappings
+	// 3. For each service to be deleted, get it for external sync and collect affected AddressGroups
 	var servicesToDelete []models.Service
+	affectedAddressGroups := make(map[string]models.ResourceIdentifier)
 	for _, id := range ids {
 		service, err := reader.GetServiceByID(ctx, id)
 		if err != nil {
@@ -588,9 +589,9 @@ func (s *ServiceResourceService) DeleteServicesByIDs(ctx context.Context, ids []
 
 		servicesToDelete = append(servicesToDelete, *service)
 
-		// Regenerate port mappings for all AddressGroups to remove this service
-		if err := s.syncPortMappingsForServiceSpecAGs(ctx, service); err != nil {
-			return errors.Wrapf(err, "failed to sync port mappings before deleting service %s", id.Key())
+		for _, agRef := range service.AddressGroups {
+			agKey := fmt.Sprintf("%s/%s", agRef.Namespace, agRef.Name)
+			affectedAddressGroups[agKey] = models.NewResourceIdentifier(agRef.Name, models.WithNamespace(agRef.Namespace))
 		}
 	}
 
@@ -611,6 +612,14 @@ func (s *ServiceResourceService) DeleteServicesByIDs(ctx context.Context, ids []
 
 	if err = writer.Commit(); err != nil {
 		return errors.Wrap(err, "failed to commit transaction")
+	}
+
+	if s.portMappingRegenerator != nil {
+		for _, agID := range affectedAddressGroups {
+			if err := s.portMappingRegenerator.RegeneratePortMappingsForAddressGroup(ctx, agID); err != nil {
+				return errors.Wrapf(err, "failed to regenerate port mappings for address group %s after service deletion", agID.Key())
+			}
+		}
 	}
 
 	return nil

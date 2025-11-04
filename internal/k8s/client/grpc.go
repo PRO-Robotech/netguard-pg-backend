@@ -8,8 +8,10 @@ import (
 
 	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -361,6 +363,9 @@ func (c *GRPCBackendClient) GetAddressGroupPortMapping(ctx context.Context, id m
 	}
 	resp, err := c.client.GetAddressGroupPortMapping(ctx, req)
 	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil, ports.ErrNotFound
+		}
 		return nil, fmt.Errorf("failed to get address group port mapping: %w", err)
 	}
 	mapping := convertAddressGroupPortMappingFromProto(resp.AddressGroupPortMapping)

@@ -36,22 +36,12 @@ var _ rest.TableConvertor = &AccessPortsREST{}
 
 // New returns a new AccessPortsSpec object
 func (r *AccessPortsREST) New() runtime.Object {
-	return &netguardv1beta1.AccessPortsSpec{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "AccessPortsSpec",
-		},
-	}
+	return &netguardv1beta1.AccessPortsSpec{}
 }
 
 // NewList returns a new AccessPortsSpecList object
 func (r *AccessPortsREST) NewList() runtime.Object {
-	return &netguardv1beta1.AccessPortsSpecList{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "AccessPortsSpecList",
-		},
-	}
+	return &netguardv1beta1.AccessPortsSpecList{}
 }
 
 // Destroy cleans up resources
@@ -74,11 +64,9 @@ func (r *AccessPortsREST) Get(ctx context.Context, name string, options *metav1.
 		return nil, err
 	}
 
-	// Set metadata for identification
-	accessPortsSpec.ObjectMeta = metav1.ObjectMeta{
-		Name:      mapping.Name,
-		Namespace: mapping.Namespace,
-	}
+	// Populate mapping identification
+	accessPortsSpec.MappingName = mapping.Name
+	accessPortsSpec.MappingNamespace = mapping.Namespace
 
 	return accessPortsSpec, nil
 }
@@ -95,10 +83,6 @@ func (r *AccessPortsREST) List(ctx context.Context, options *metainternalversion
 
 	// Build list response
 	accessPortsSpecList := &netguardv1beta1.AccessPortsSpecList{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "AccessPortsSpecList",
-		},
 		Items: []netguardv1beta1.AccessPortsSpec{},
 	}
 
@@ -110,11 +94,8 @@ func (r *AccessPortsREST) List(ctx context.Context, options *metainternalversion
 			continue
 		}
 
-		// Set mapping name in metadata for identification
-		accessPortsSpec.ObjectMeta = metav1.ObjectMeta{
-			Name:      mapping.Name,
-			Namespace: mapping.Namespace,
-		}
+		accessPortsSpec.MappingName = mapping.Name
+		accessPortsSpec.MappingNamespace = mapping.Namespace
 
 		accessPortsSpecList.Items = append(accessPortsSpecList.Items, *accessPortsSpec)
 	}
@@ -125,8 +106,8 @@ func (r *AccessPortsREST) List(ctx context.Context, options *metainternalversion
 		// idFn для извлечения ResourceIdentifier
 		func(item netguardv1beta1.AccessPortsSpec) models.ResourceIdentifier {
 			return models.ResourceIdentifier{
-				Name:      item.ObjectMeta.Name,
-				Namespace: item.ObjectMeta.Namespace,
+				Name:      item.MappingName,
+				Namespace: item.MappingNamespace,
 			}
 		},
 		// k8sObjectFn для конвертации в Kubernetes объект
@@ -156,8 +137,8 @@ func (r *AccessPortsREST) ConvertToTable(ctx context.Context, obj runtime.Object
 		table.Rows = []metav1.TableRow{
 			{
 				Cells: []interface{}{
-					t.ObjectMeta.Name,
-					t.ObjectMeta.Namespace,
+					t.MappingName,
+					t.MappingNamespace,
 					len(t.Items),
 				},
 				Object: runtime.RawExtension{Object: t},
@@ -167,8 +148,8 @@ func (r *AccessPortsREST) ConvertToTable(ctx context.Context, obj runtime.Object
 		for _, item := range t.Items {
 			table.Rows = append(table.Rows, metav1.TableRow{
 				Cells: []interface{}{
-					item.ObjectMeta.Name,
-					item.ObjectMeta.Namespace,
+					item.MappingName,
+					item.MappingNamespace,
 					len(item.Items),
 				},
 				Object: runtime.RawExtension{Object: &item},
@@ -185,11 +166,9 @@ func (r *AccessPortsREST) ConvertToTable(ctx context.Context, obj runtime.Object
 func (r *AccessPortsREST) getAccessPortsForMapping(ctx context.Context, mapping *models.AddressGroupPortMapping) (*netguardv1beta1.AccessPortsSpec, error) {
 	// Build AccessPortsSpec from mapping.AccessPorts
 	accessPortsSpec := &netguardv1beta1.AccessPortsSpec{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "AccessPortsSpec",
-		},
-		Items: []netguardv1beta1.ServicePortsRef{},
+		MappingName:      mapping.Name,
+		MappingNamespace: mapping.Namespace,
+		Items:            []netguardv1beta1.ServicePortsRef{},
 	}
 
 	// Convert AccessPorts map to ServicePortsRef slice

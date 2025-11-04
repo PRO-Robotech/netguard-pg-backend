@@ -163,6 +163,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcSvcRuleList":                  schema_k8s_apis_netguard_v1beta1_SvcSvcRuleList(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcSvcRuleSpec":                  schema_k8s_apis_netguard_v1beta1_SvcSvcRuleSpec(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcSvcRuleStatus":                schema_k8s_apis_netguard_v1beta1_SvcSvcRuleStatus(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.XSvcFqdnRules":                   schema_k8s_apis_netguard_v1beta1_XSvcFqdnRules(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.XSvcSvcRules":                    schema_k8s_apis_netguard_v1beta1_XSvcSvcRules(ref),
 	}
 }
@@ -2848,24 +2849,18 @@ func schema_k8s_apis_netguard_v1beta1_AccessPortsSpec(ref common.ReferenceCallba
 				Description: "AccessPortsSpec defines the services and their ports that are allowed access",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"kind": {
+					"mappingName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Description: "MappingName optionally identifies the parent AddressGroupPortMapping (used by subresource responses)",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
-					"apiVersion": {
+					"mappingNamespace": {
 						SchemaProps: spec.SchemaProps{
-							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Description: "MappingNamespace optionally identifies the parent AddressGroupPortMapping namespace (used by subresource responses)",
 							Type:        []string{"string"},
 							Format:      "",
-						},
-					},
-					"metadata": {
-						SchemaProps: spec.SchemaProps{
-							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
 						},
 					},
 					"items": {
@@ -2886,7 +2881,7 @@ func schema_k8s_apis_netguard_v1beta1_AccessPortsSpec(ref common.ReferenceCallba
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ServicePortsRef"},
+			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ServicePortsRef"},
 	}
 }
 
@@ -2894,23 +2889,9 @@ func schema_k8s_apis_netguard_v1beta1_AccessPortsSpecList(ref common.ReferenceCa
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "AccessPortsSpecList contains a list of AccessPortsSpec",
+				Description: "AccessPortsSpecList contains a list of AccessPortsSpec entries",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"kind": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"apiVersion": {
-						SchemaProps: spec.SchemaProps{
-							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
@@ -5555,11 +5536,17 @@ func schema_k8s_apis_netguard_v1beta1_Service(ref common.ReferenceCallback) comm
 							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.XSvcSvcRules"),
 						},
 					},
+					"xSvcFqdnRules": {
+						SchemaProps: spec.SchemaProps{
+							Description: "xSvcFqdnRules contains references to all SvcFqdnRule resources where this Service is the source. This field is automatically populated by PostgreSQL triggers and is READ-ONLY. Users should NOT modify this field directly - changes will be ignored.",
+							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.XSvcFqdnRules"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupReference", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ServiceSpec", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ServiceStatus", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.XSvcSvcRules"},
+			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupReference", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ServiceSpec", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ServiceStatus", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.XSvcFqdnRules", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.XSvcSvcRules"},
 	}
 }
 
@@ -5911,26 +5898,19 @@ func schema_k8s_apis_netguard_v1beta1_SvcFqdnPortSpec(ref common.ReferenceCallba
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "SvcFqdnPortSpec represents source/destination port expressions for FQDN rule",
+				Description: "SvcFqdnPortSpec represents a single port specification for FQDN rule",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"source": {
+					"port": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Source port expression (single port or range). Empty string means any source port.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"destination": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Destination port expression (single port or range). Required.",
+							Description: "Port - single port or port range (e.g., \"80\", \"1000-2000\", \"443,8080\") Can specify multiple ports/ranges separated by commas.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 				},
-				Required: []string{"destination"},
+				Required: []string{"port"},
 			},
 		},
 	}
@@ -6065,7 +6045,7 @@ func schema_k8s_apis_netguard_v1beta1_SvcFqdnRuleSpec(ref common.ReferenceCallba
 					},
 					"ports": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Ports - optional list of port expressions. Each entry defines source/destination ports.",
+							Description: "Ports - list of port expressions. Each entry defines allowed ports.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -6116,7 +6096,7 @@ func schema_k8s_apis_netguard_v1beta1_SvcFqdnRuleSpec(ref common.ReferenceCallba
 						},
 					},
 				},
-				Required: []string{"serviceFrom", "fqdn", "transport", "action"},
+				Required: []string{"serviceFrom", "fqdn", "transport", "ports", "action"},
 			},
 		},
 		Dependencies: []string{
@@ -6365,6 +6345,35 @@ func schema_k8s_apis_netguard_v1beta1_SvcSvcRuleStatus(ref common.ReferenceCallb
 		},
 		Dependencies: []string{
 			"k8s.io/apimachinery/pkg/apis/meta/v1.Condition"},
+	}
+}
+
+func schema_k8s_apis_netguard_v1beta1_XSvcFqdnRules(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "XSvcFqdnRules - READ-ONLY field for Service resource Contains references to all FQDN rules where this Service is the source Populated automatically by PostgreSQL triggers",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"rules": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Rules contains the list of FQDN rules where this Service is the source Full NamespacedObjectReference for each FQDN rule",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"},
 	}
 }
 

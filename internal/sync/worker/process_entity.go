@@ -19,6 +19,7 @@ import (
 	"netguard-pg-backend/internal/sync/types"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -1125,6 +1126,9 @@ func (w *OutboxWorker) deleteResourceFromDB(ctx context.Context, item *domain.Ou
 	case string(registry.TypeNetwork):
 		deleteQuery = `DELETE FROM networks WHERE namespace = $1 AND name = $2`
 	case string(registry.TypeAddressGroup):
+		if err := w.deleteAddressGroupPortMapping(ctx, tx, item.ResourceNamespace, item.ResourceName); err != nil {
+			return fmt.Errorf("failed to delete address group port mapping: %w", err)
+		}
 		deleteQuery = `DELETE FROM address_groups WHERE namespace = $1 AND name = $2`
 	case string(registry.TypeService):
 		deleteQuery = `DELETE FROM services WHERE namespace = $1 AND name = $2`
@@ -1163,6 +1167,18 @@ func (w *OutboxWorker) deleteResourceFromDB(ctx context.Context, item *domain.Ou
 		zap.String("resource_type", item.ResourceType),
 		zap.String("namespace", item.ResourceNamespace),
 		zap.String("name", item.ResourceName))
+	return nil
+}
+
+func (w *OutboxWorker) deleteAddressGroupPortMapping(ctx context.Context, tx pgx.Tx, namespace, name string) error {
+	w.logger.Debug("🗑️ [DELETE_FROM_DB] Deleting AddressGroupPortMapping prior to AddressGroup removal",
+		zap.String("namespace", namespace),
+		zap.String("name", name))
+
+	if _, err := tx.Exec(ctx, `DELETE FROM address_group_port_mappings WHERE namespace = $1 AND name = $2`, namespace, name); err != nil {
+		return err
+	}
+
 	return nil
 }
 func (w *OutboxWorker) syncAndUpdateStatusAtomic(

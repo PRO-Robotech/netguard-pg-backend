@@ -42,6 +42,7 @@ func (c *AddressGroupPortMappingConverter) ToDomain(ctx context.Context, k8sObj 
 
 	// Convert access ports from AccessPortsSpec
 	if len(k8sObj.AccessPorts.Items) > 0 {
+		serviceItems := make([]models.ServicePortsItem, 0, len(k8sObj.AccessPorts.Items))
 		for _, servicePortsRef := range k8sObj.AccessPorts.Items {
 			serviceRef := servicePortsRef.NamespacedObjectReference
 
@@ -76,7 +77,13 @@ func (c *AddressGroupPortMappingConverter) ToDomain(ctx context.Context, k8sObj 
 			}
 
 			domainMapping.AccessPorts[serviceRef] = servicePorts
+			serviceItems = append(serviceItems, models.ServicePortsItem{
+				ServiceRef: serviceRef,
+				Ports:      servicePorts.Ports,
+			})
 		}
+		models.SortServicePortsItems(serviceItems)
+		domainMapping.AccessPortsWithRefs = serviceItems
 	}
 
 	return domainMapping, nil
@@ -92,25 +99,24 @@ func (c *AddressGroupPortMappingConverter) FromDomain(ctx context.Context, domai
 	k8sMapping := &netguardv1beta1.AddressGroupPortMapping{
 		TypeMeta:   CreateStandardTypeMetaForResource("AddressGroupPortMapping"),
 		ObjectMeta: ConvertMetadataFromDomain(domainObj.Meta, domainObj.ResourceIdentifier.Name, domainObj.ResourceIdentifier.Namespace),
-		Spec:       netguardv1beta1.AddressGroupPortMappingSpec{
-			// Empty spec as in controller
-		},
+		Spec:       netguardv1beta1.AddressGroupPortMappingSpec{},
 		AccessPorts: netguardv1beta1.AccessPortsSpec{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: APIVersionV1Beta1,
-				Kind:       "AccessPortsSpec",
-			},
 			Items: make([]netguardv1beta1.ServicePortsRef, 0, len(domainObj.AccessPorts)),
 		},
 	}
 
 	// Convert access ports to AccessPortsSpec in deterministic order
-	serviceItems := make([]models.ServicePortsItem, 0, len(domainObj.AccessPorts))
-	for serviceRef, servicePorts := range domainObj.AccessPorts {
-		serviceItems = append(serviceItems, models.ServicePortsItem{
-			ServiceRef: serviceRef,
-			Ports:      servicePorts.Ports,
-		})
+	serviceItems := domainObj.AccessPortsWithRefs
+	if len(serviceItems) == 0 && len(domainObj.AccessPorts) > 0 {
+		serviceItems = make([]models.ServicePortsItem, 0, len(domainObj.AccessPorts))
+		for serviceRef, servicePorts := range domainObj.AccessPorts {
+			serviceItems = append(serviceItems, models.ServicePortsItem{
+				ServiceRef: serviceRef,
+				Ports:      servicePorts.Ports,
+			})
+		}
+	} else {
+		serviceItems = append([]models.ServicePortsItem(nil), serviceItems...)
 	}
 	models.SortServicePortsItems(serviceItems)
 

@@ -17,12 +17,13 @@ func (r *Reader) ListAddressGroupBindings(ctx context.Context, consume func(mode
 		SELECT agb.namespace, agb.name, agb.service_namespace, agb.service_name,
 			   agb.address_group_namespace, agb.address_group_name,
 			   m.resource_version, m.uid::text, m.labels, m.annotations, m.conditions,
-			   m.created_at, m.updated_at, m.deletion_timestamp
+		       m.created_at, m.updated_at, m.deletion_timestamp
 		FROM address_group_bindings agb
-		INNER JOIN k8s_metadata m ON agb.resource_version = m.resource_version`
+		INNER JOIN k8s_metadata m ON agb.resource_version = m.resource_version
+		WHERE m.deletion_timestamp IS NULL`
 	whereClause, args := utils.BuildScopeFilter(scope, "agb")
 	if whereClause != "" {
-		query += " WHERE " + whereClause
+		query += " AND " + whereClause
 	} else {
 	}
 	query += " ORDER BY agb.namespace, agb.name"
