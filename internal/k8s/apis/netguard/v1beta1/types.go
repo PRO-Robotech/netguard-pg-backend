@@ -64,6 +64,12 @@ type Service struct {
 	// Users should NOT modify this field directly - changes will be ignored.
 	// +optional
 	XSvcSvcRules *XSvcSvcRules `json:"xSvcSvcRules,omitempty"`
+
+	// xSvcFqdnRules contains references to all SvcFqdnRule resources where this Service is the source.
+	// This field is automatically populated by PostgreSQL triggers and is READ-ONLY.
+	// Users should NOT modify this field directly - changes will be ignored.
+	// +optional
+	XSvcFqdnRules *XSvcFqdnRules `json:"xSvcFqdnRules,omitempty"`
 }
 
 // ServiceSpec defines the desired state of Service
@@ -132,6 +138,16 @@ type XSvcSvcRules struct {
 	// Full NamespacedObjectReference for each rule
 	// +optional
 	AsServiceTo []NamespacedObjectReference `json:"asServiceTo,omitempty"`
+}
+
+// XSvcFqdnRules - READ-ONLY field for Service resource
+// Contains references to all FQDN rules where this Service is the source
+// Populated automatically by PostgreSQL triggers
+type XSvcFqdnRules struct {
+	// Rules contains the list of FQDN rules where this Service is the source
+	// Full NamespacedObjectReference for each FQDN rule
+	// +optional
+	Rules []NamespacedObjectReference `json:"rules,omitempty"`
 }
 
 // AddressGroupsSpec defines the address groups associated with a Service
