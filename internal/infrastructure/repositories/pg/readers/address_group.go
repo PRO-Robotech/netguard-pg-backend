@@ -100,16 +100,19 @@ func (r *Reader) scanAddressGroup(rows pgx.Rows) (models.AddressGroup, error) {
 			}
 		}
 	}
+	models.SortNetworkItems(addressGroup.Networks)
 	if len(hostsJSON) > 0 {
 		if err := json.Unmarshal(hostsJSON, &addressGroup.Hosts); err != nil {
 			return addressGroup, errors.Wrap(err, "failed to unmarshal hosts")
 		}
 	}
+	models.SortNamespacedObjectReferences(addressGroup.Hosts)
 	if len(aggregatedHostsJSON) > 0 {
 		if err := json.Unmarshal(aggregatedHostsJSON, &addressGroup.AggregatedHosts); err != nil {
 			return addressGroup, errors.Wrap(err, "failed to unmarshal aggregated_hosts")
 		}
 	}
+	models.SortHostReferences(addressGroup.AggregatedHosts)
 	addressGroup.Meta, err = utils.ConvertK8sMetadata(fmt.Sprintf("%d", resourceVersion), labelsJSON, annotationsJSON, conditionsJSON, createdAt, updatedAt, deletionTS)
 	if err != nil {
 		return addressGroup, err
@@ -163,16 +166,19 @@ func (r *Reader) scanAddressGroupRow(row pgx.Row) (*models.AddressGroup, error) 
 			}
 		}
 	}
+	models.SortNetworkItems(addressGroup.Networks)
 	if len(hostsJSON) > 0 {
 		if err := json.Unmarshal(hostsJSON, &addressGroup.Hosts); err != nil {
 			return nil, errors.Wrap(err, "failed to unmarshal hosts")
 		}
 	}
+	models.SortNamespacedObjectReferences(addressGroup.Hosts)
 	if len(aggregatedHostsJSON) > 0 {
 		if err := json.Unmarshal(aggregatedHostsJSON, &addressGroup.AggregatedHosts); err != nil {
 			return nil, errors.Wrap(err, "failed to unmarshal aggregated_hosts")
 		}
 	}
+	models.SortHostReferences(addressGroup.AggregatedHosts)
 	addressGroup.Meta, err = utils.ConvertK8sMetadata(fmt.Sprintf("%d", resourceVersion), labelsJSON, annotationsJSON, conditionsJSON, createdAt, updatedAt, deletionTS)
 	if err != nil {
 		return nil, err

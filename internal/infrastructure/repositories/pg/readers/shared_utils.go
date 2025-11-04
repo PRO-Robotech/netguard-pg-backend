@@ -70,6 +70,7 @@ func (r *Reader) parseIngressPorts(ingressPortsJSON []byte) ([]models.IngressPor
 			Description: p.Description,
 		}
 	}
+	models.SortIngressPorts(result)
 
 	return result, nil
 }
@@ -133,6 +134,7 @@ func (r *Reader) parseNetworkItems(networkItemsJSON []byte) ([]models.NetworkIte
 	if err := json.Unmarshal(networkItemsJSON, &items); err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal network items")
 	}
+	models.SortNetworkItems(items)
 
 	return items, nil
 }

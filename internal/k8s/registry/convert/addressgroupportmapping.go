@@ -104,35 +104,34 @@ func (c *AddressGroupPortMappingConverter) FromDomain(ctx context.Context, domai
 		},
 	}
 
-	// Metadata already converted by ConvertMetadataFromDomain helper
-
-	// Convert access ports to AccessPortsSpec
+	// Convert access ports to AccessPortsSpec in deterministic order
+	serviceItems := make([]models.ServicePortsItem, 0, len(domainObj.AccessPorts))
 	for serviceRef, servicePorts := range domainObj.AccessPorts {
+		serviceItems = append(serviceItems, models.ServicePortsItem{
+			ServiceRef: serviceRef,
+			Ports:      servicePorts.Ports,
+		})
+	}
+	models.SortServicePortsItems(serviceItems)
+
+	for _, item := range serviceItems {
 		servicePortsRef := netguardv1beta1.ServicePortsRef{
-			NamespacedObjectReference: serviceRef,
+			NamespacedObjectReference: item.ServiceRef,
 			Ports:                     netguardv1beta1.ProtocolPorts{},
 		}
 
-		// Convert TCP ports
-		if tcpRanges, exists := servicePorts.Ports[models.TCP]; exists {
+		if tcpRanges, exists := item.Ports[models.TCP]; exists {
 			tcpConfigs := make([]netguardv1beta1.PortConfig, 0, len(tcpRanges))
 			for _, portRange := range tcpRanges {
-				portConfig := netguardv1beta1.PortConfig{
-					Port: c.formatPortRange(portRange),
-				}
-				tcpConfigs = append(tcpConfigs, portConfig)
+				tcpConfigs = append(tcpConfigs, netguardv1beta1.PortConfig{Port: c.formatPortRange(portRange)})
 			}
 			servicePortsRef.Ports.TCP = tcpConfigs
 		}
 
-		// Convert UDP ports
-		if udpRanges, exists := servicePorts.Ports[models.UDP]; exists {
+		if udpRanges, exists := item.Ports[models.UDP]; exists {
 			udpConfigs := make([]netguardv1beta1.PortConfig, 0, len(udpRanges))
 			for _, portRange := range udpRanges {
-				portConfig := netguardv1beta1.PortConfig{
-					Port: c.formatPortRange(portRange),
-				}
-				udpConfigs = append(udpConfigs, portConfig)
+				udpConfigs = append(udpConfigs, netguardv1beta1.PortConfig{Port: c.formatPortRange(portRange)})
 			}
 			servicePortsRef.Ports.UDP = udpConfigs
 		}

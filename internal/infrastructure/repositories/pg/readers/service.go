@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/jackc/pgx/v5"
-	"github.com/pkg/errors"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/infrastructure/repositories/pg/internal/utils"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/pkg/errors"
 )
 
 type addressGroupRefJSON struct {
@@ -128,7 +129,8 @@ func (r *Reader) scanService(rows pgx.Rows) (models.Service, error) {
 	if err != nil {
 		return service, err
 	}
-	if addressGroupsJSON != nil && len(addressGroupsJSON) > 0 && string(addressGroupsJSON) != "null" {
+	models.SortIngressPorts(service.IngressPorts)
+	if len(addressGroupsJSON) > 0 && string(addressGroupsJSON) != "null" {
 		var agRefs []addressGroupRefJSON
 		if err := json.Unmarshal(addressGroupsJSON, &agRefs); err != nil {
 			return service, errors.Wrap(err, "failed to parse address_groups JSON")
@@ -138,7 +140,8 @@ func (r *Reader) scanService(rows pgx.Rows) (models.Service, error) {
 			service.AddressGroups[i] = models.NewAddressGroupRef(ref.Name, models.WithNamespace(ref.Namespace))
 		}
 	}
-	if aggregatedAddressGroupsJSON != nil && len(aggregatedAddressGroupsJSON) > 0 && string(aggregatedAddressGroupsJSON) != "null" {
+	models.SortAddressGroupRefs(service.AddressGroups)
+	if len(aggregatedAddressGroupsJSON) > 0 && string(aggregatedAddressGroupsJSON) != "null" {
 		var aggregatedRefs []aggregatedAddressGroupRefJSON
 		if err := json.Unmarshal(aggregatedAddressGroupsJSON, &aggregatedRefs); err != nil {
 			return service, errors.Wrap(err, "failed to parse aggregated_address_groups JSON")
@@ -152,19 +155,22 @@ func (r *Reader) scanService(rows pgx.Rows) (models.Service, error) {
 			}
 		}
 	}
-	if (xsvcsvcRulesAsFromJSON != nil && len(xsvcsvcRulesAsFromJSON) > 0 && string(xsvcsvcRulesAsFromJSON) != "null") ||
-		(xsvcsvcRulesAsToJSON != nil && len(xsvcsvcRulesAsToJSON) > 0 && string(xsvcsvcRulesAsToJSON) != "null") {
+	models.SortAggregatedAddressGroupRefs(service.AggregatedAddressGroups)
+	if (len(xsvcsvcRulesAsFromJSON) > 0 && string(xsvcsvcRulesAsFromJSON) != "null") ||
+		(len(xsvcsvcRulesAsToJSON) > 0 && string(xsvcsvcRulesAsToJSON) != "null") {
 		service.XSvcSvcRules = &models.XSvcSvcRules{}
-		if xsvcsvcRulesAsFromJSON != nil && len(xsvcsvcRulesAsFromJSON) > 0 && string(xsvcsvcRulesAsFromJSON) != "null" {
+		if len(xsvcsvcRulesAsFromJSON) > 0 && string(xsvcsvcRulesAsFromJSON) != "null" {
 			if err := json.Unmarshal(xsvcsvcRulesAsFromJSON, &service.XSvcSvcRules.AsServiceFrom); err != nil {
 				return service, errors.Wrap(err, "failed to parse xsvcsvc_rules_as_from JSON")
 			}
 		}
-		if xsvcsvcRulesAsToJSON != nil && len(xsvcsvcRulesAsToJSON) > 0 && string(xsvcsvcRulesAsToJSON) != "null" {
+		if len(xsvcsvcRulesAsToJSON) > 0 && string(xsvcsvcRulesAsToJSON) != "null" {
 			if err := json.Unmarshal(xsvcsvcRulesAsToJSON, &service.XSvcSvcRules.AsServiceTo); err != nil {
 				return service, errors.Wrap(err, "failed to parse xsvcsvc_rules_as_to JSON")
 			}
 		}
+		models.SortNamespacedObjectReferences(service.XSvcSvcRules.AsServiceFrom)
+		models.SortNamespacedObjectReferences(service.XSvcSvcRules.AsServiceTo)
 	}
 	service.Meta, err = utils.ConvertK8sMetadata(fmt.Sprintf("%d", resourceVersion), labelsJSON, annotationsJSON, conditionsJSON, createdAt, updatedAt, deletionTS)
 	if err != nil {
@@ -206,7 +212,8 @@ func (r *Reader) scanServiceRow(row pgx.Row) (*models.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	if addressGroupsJSON != nil && len(addressGroupsJSON) > 0 && string(addressGroupsJSON) != "null" {
+	models.SortIngressPorts(service.IngressPorts)
+	if len(addressGroupsJSON) > 0 && string(addressGroupsJSON) != "null" {
 		var agRefs []addressGroupRefJSON
 		if err := json.Unmarshal(addressGroupsJSON, &agRefs); err != nil {
 			return nil, errors.Wrap(err, "failed to parse address_groups JSON")
@@ -216,7 +223,8 @@ func (r *Reader) scanServiceRow(row pgx.Row) (*models.Service, error) {
 			service.AddressGroups[i] = models.NewAddressGroupRef(ref.Name, models.WithNamespace(ref.Namespace))
 		}
 	}
-	if aggregatedAddressGroupsJSON != nil && len(aggregatedAddressGroupsJSON) > 0 && string(aggregatedAddressGroupsJSON) != "null" {
+	models.SortAddressGroupRefs(service.AddressGroups)
+	if len(aggregatedAddressGroupsJSON) > 0 && string(aggregatedAddressGroupsJSON) != "null" {
 		var aggregatedRefs []aggregatedAddressGroupRefJSON
 		if err := json.Unmarshal(aggregatedAddressGroupsJSON, &aggregatedRefs); err != nil {
 			return nil, errors.Wrap(err, "failed to parse aggregated_address_groups JSON")
@@ -230,19 +238,22 @@ func (r *Reader) scanServiceRow(row pgx.Row) (*models.Service, error) {
 			}
 		}
 	}
-	if (xsvcsvcRulesAsFromJSON != nil && len(xsvcsvcRulesAsFromJSON) > 0 && string(xsvcsvcRulesAsFromJSON) != "null") ||
-		(xsvcsvcRulesAsToJSON != nil && len(xsvcsvcRulesAsToJSON) > 0 && string(xsvcsvcRulesAsToJSON) != "null") {
+	models.SortAggregatedAddressGroupRefs(service.AggregatedAddressGroups)
+	if (len(xsvcsvcRulesAsFromJSON) > 0 && string(xsvcsvcRulesAsFromJSON) != "null") ||
+		(len(xsvcsvcRulesAsToJSON) > 0 && string(xsvcsvcRulesAsToJSON) != "null") {
 		service.XSvcSvcRules = &models.XSvcSvcRules{}
-		if xsvcsvcRulesAsFromJSON != nil && len(xsvcsvcRulesAsFromJSON) > 0 && string(xsvcsvcRulesAsFromJSON) != "null" {
+		if len(xsvcsvcRulesAsFromJSON) > 0 && string(xsvcsvcRulesAsFromJSON) != "null" {
 			if err := json.Unmarshal(xsvcsvcRulesAsFromJSON, &service.XSvcSvcRules.AsServiceFrom); err != nil {
 				return nil, errors.Wrap(err, "failed to parse xsvcsvc_rules_as_from JSON")
 			}
 		}
-		if xsvcsvcRulesAsToJSON != nil && len(xsvcsvcRulesAsToJSON) > 0 && string(xsvcsvcRulesAsToJSON) != "null" {
+		if len(xsvcsvcRulesAsToJSON) > 0 && string(xsvcsvcRulesAsToJSON) != "null" {
 			if err := json.Unmarshal(xsvcsvcRulesAsToJSON, &service.XSvcSvcRules.AsServiceTo); err != nil {
 				return nil, errors.Wrap(err, "failed to parse xsvcsvc_rules_as_to JSON")
 			}
 		}
+		models.SortNamespacedObjectReferences(service.XSvcSvcRules.AsServiceFrom)
+		models.SortNamespacedObjectReferences(service.XSvcSvcRules.AsServiceTo)
 	}
 	service.Meta, err = utils.ConvertK8sMetadata(fmt.Sprintf("%d", resourceVersion), labelsJSON, annotationsJSON, conditionsJSON, createdAt, updatedAt, deletionTS)
 	if err != nil {

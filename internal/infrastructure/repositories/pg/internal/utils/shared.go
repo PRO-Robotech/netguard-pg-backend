@@ -102,6 +102,8 @@ func ConvertK8sMetadata(resourceVersionStr string, labelsJSON, annotationsJSON [
 	}
 
 	meta.DeduplicateConditions()
+	models.SortConditions(meta.Conditions)
+	models.SortFinalizers(meta.Finalizers)
 
 	meta.CreationTS = metav1.NewTime(createdAt)
 	if deletionTS != nil {
@@ -131,6 +133,8 @@ func ParseIngressPorts(ingressPortsJSON []byte) ([]models.IngressPort, error) {
 			Description: p.Description,
 		}
 	}
+
+	models.SortIngressPorts(result)
 	return result, nil
 }
 func MarshalIngressPorts(ports []models.IngressPort) ([]byte, error) {
@@ -156,6 +160,8 @@ func ParseNetworkItems(networkItemsJSON []byte) ([]models.NetworkItem, error) {
 	if err := json.Unmarshal(networkItemsJSON, &items); err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal network items")
 	}
+
+	models.SortNetworkItems(items)
 	return items, nil
 }
 
@@ -202,6 +208,7 @@ func UnmarshalAccessPorts(accessPortsJSON []byte) (map[models.ServiceRef]models.
 			return nil, errors.Wrapf(err, "failed to unmarshal service ports for key %s", key)
 		}
 		result[serviceRef] = servicePorts
+		models.NormalizeProtocolPorts(servicePorts.Ports)
 	}
 	return result, nil
 }

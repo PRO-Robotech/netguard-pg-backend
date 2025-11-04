@@ -138,6 +138,7 @@ func (r *Reader) scanHost(rows pgx.Rows) (models.Host, error) {
 		}
 		host.IpList = ipItems
 	}
+	models.SortIPItems(host.IpList)
 	host.Meta, err = utils.ConvertK8sMetadata(fmt.Sprintf("%d", resourceVersion), labelsJSON, annotationsJSON, conditionsJSON, createdAt, updatedAt, deletionTS)
 	if err != nil {
 		return models.Host{}, errors.Wrap(err, "failed to parse host metadata")
@@ -214,6 +215,7 @@ func (r *Reader) scanHostRow(row pgx.Row) (*models.Host, error) {
 		}
 		host.IpList = ipItems
 	}
+	models.SortIPItems(host.IpList)
 	host.Meta, err = utils.ConvertK8sMetadata(fmt.Sprintf("%d", resourceVersion), labelsJSON, annotationsJSON, conditionsJSON, createdAt, updatedAt, deletionTS)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to parse host metadata")
