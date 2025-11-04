@@ -151,6 +151,7 @@ func TestNewOutboxWorker(t *testing.T) {
 		logger,
 		nil, // uses default config
 		mockMonitor,
+		nil, // portMappingRegenerator
 	)
 
 	require.NotNil(t, worker)
@@ -187,6 +188,7 @@ func TestNewOutboxWorker_WithCustomConfig(t *testing.T) {
 		logger,
 		config,
 		mockMonitor,
+		nil, // portMappingRegenerator
 	)
 
 	require.NotNil(t, worker)

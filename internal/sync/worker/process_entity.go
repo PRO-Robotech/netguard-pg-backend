@@ -1216,6 +1216,7 @@ func (w *OutboxWorker) syncAndUpdateStatusAtomic(
 			RecordProcessingFailure(item.ResourceType, operation, "db_delete_error", duration)
 			return fmt.Errorf("failed to delete resource from DB: %w", err)
 		}
+		w.handlePostDeleteRegeneration(ctx, item, syncableEntity)
 		w.logger.Info("DELETE operation complete - resource deleted from DB",
 			zap.String("resource_type", item.ResourceType),
 			zap.String("namespace", item.ResourceNamespace),
@@ -1233,6 +1234,57 @@ func (w *OutboxWorker) syncAndUpdateStatusAtomic(
 		}
 	}
 	return nil
+}
+
+func (w *OutboxWorker) handlePostDeleteRegeneration(ctx context.Context, item *domain.OutboxEntry, entity interfaces.SyncableEntity) {
+	if w.portMappingRegenerator == nil {
+		return
+	}
+
+	switch item.ResourceType {
+	case string(registry.TypeService):
+		service, ok := entity.(*models.Service)
+		if !ok || service == nil {
+			return
+		}
+		w.regeneratePortMappingsAfterServiceDeletion(ctx, service)
+	}
+}
+
+func (w *OutboxWorker) regeneratePortMappingsAfterServiceDeletion(ctx context.Context, service *models.Service) {
+	if w.portMappingRegenerator == nil || service == nil {
+		return
+	}
+
+	serviceID := models.NewResourceIdentifier(service.Name, models.WithNamespace(service.Namespace))
+	if err := w.portMappingRegenerator.RegeneratePortMappingsForService(ctx, serviceID); err != nil {
+		w.logger.Error("failed to regenerate service port mappings after deletion",
+			zap.String("service", serviceID.Key()),
+			zap.Error(err))
+	}
+
+	seen := make(map[string]struct{})
+	for _, ag := range service.AddressGroups {
+		name := ag.Name
+		if name == "" {
+			continue
+		}
+		namespace := ag.Namespace
+		if namespace == "" {
+			namespace = service.Namespace
+		}
+		agID := models.NewResourceIdentifier(name, models.WithNamespace(namespace))
+		key := agID.Key()
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		if err := w.portMappingRegenerator.RegeneratePortMappingsForAddressGroup(ctx, agID); err != nil {
+			w.logger.Error("failed to regenerate address group port mapping after service deletion",
+				zap.String("address_group", key),
+				zap.Error(err))
+		}
+	}
 }
 func getStringFromMap(m map[string]interface{}, key string) string {
 	if val, ok := m[key].(string); ok {

@@ -120,6 +120,7 @@ func CreateTestWorker(
 		zapLogger,
 		config,
 		connMonitor,
+		nil,
 	)
 
 	t.Logf("✅ Created test worker (PollInterval=%v, BatchSize=%d)", config.PollInterval, config.BatchSize)

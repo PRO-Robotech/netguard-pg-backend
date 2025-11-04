@@ -86,6 +86,10 @@ func NewNetguardFacade(
 	addressGroupResourceService.SetRuleS2SRegenerator(ruleS2SResourceService)
 	return facade
 }
+
+func (f *NetguardFacade) AddressGroupResourceService() *resources.AddressGroupResourceService {
+	return f.addressGroupResourceService
+}
 func (f *NetguardFacade) GetServices(ctx context.Context, scope ports.Scope) ([]models.Service, error) {
 	return f.serviceResourceService.GetServices(ctx, scope)
 }

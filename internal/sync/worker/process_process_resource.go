@@ -449,7 +449,29 @@ func (w *OutboxWorker) processProcessResourceDelete(
 		return ErrWaitingForSync
 	}
 
-	// Step 2: All affected resources synced - physically delete the binding
+	// Step 2: All affected resources synced - prepare regeneration snapshot if needed
+	var bindingSnapshot *models.AddressGroupBinding
+	if item.ResourceType == string(registry.TypeAddressGroupBinding) && w.portMappingRegenerator != nil {
+		snapshot, snapErr := w.snapshotAddressGroupBinding(ctx, item)
+		if snapErr != nil {
+			if errors.Is(snapErr, ports.ErrNotFound) {
+				w.logger.Info("address group binding already removed before regeneration snapshot",
+					zap.String("resource_type", item.ResourceType),
+					zap.String("resource_namespace", item.ResourceNamespace),
+					zap.String("resource_name", item.ResourceName))
+			} else {
+				w.logger.Warn("failed to capture binding snapshot before deletion",
+					zap.String("resource_type", item.ResourceType),
+					zap.String("resource_namespace", item.ResourceNamespace),
+					zap.String("resource_name", item.ResourceName),
+					zap.Error(snapErr))
+			}
+		} else {
+			bindingSnapshot = snapshot
+		}
+	}
+
+	// Step 3: All affected resources synced - physically delete the binding
 	w.logger.Info("all affected resources synced, proceeding with physical deletion",
 		zap.String("resource_type", item.ResourceType),
 		zap.String("resource_id", item.ResourceID.String()))
@@ -458,7 +480,12 @@ func (w *OutboxWorker) processProcessResourceDelete(
 		return fmt.Errorf("deleting binding from DB: %w", err)
 	}
 
-	// Step 3: Delete outbox entry
+	// Step 4: Rebuild port mappings impacted by this binding removal
+	if bindingSnapshot != nil {
+		w.regeneratePortMappingsAfterBindingDeletion(ctx, bindingSnapshot)
+	}
+
+	// Step 5: Delete outbox entry
 	if err := w.outboxRepo.Delete(ctx, item.ID); err != nil {
 		return fmt.Errorf("deleting outbox entry: %w", err)
 	}
@@ -945,4 +972,58 @@ func (w *OutboxWorker) deleteBindingFromDB(
 		zap.Int64("rows_affected", rowsAffected))
 
 	return nil
+}
+
+func (w *OutboxWorker) snapshotAddressGroupBinding(
+	ctx context.Context,
+	item *domain.OutboxEntry,
+) (*models.AddressGroupBinding, error) {
+	reader, err := w.registry.Reader(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get registry reader: %w", err)
+	}
+	defer reader.Close()
+
+	id := models.NewResourceIdentifier(item.ResourceName, models.WithNamespace(item.ResourceNamespace))
+	binding, err := reader.GetAddressGroupBindingByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	copyBinding := *binding
+	return &copyBinding, nil
+}
+
+func (w *OutboxWorker) regeneratePortMappingsAfterBindingDeletion(
+	ctx context.Context,
+	binding *models.AddressGroupBinding,
+) {
+	if w.portMappingRegenerator == nil || binding == nil {
+		return
+	}
+
+	agNamespace := binding.AddressGroupRef.Namespace
+	if agNamespace == "" {
+		agNamespace = binding.Namespace
+	}
+	if binding.AddressGroupRef.Name != "" {
+		agID := models.NewResourceIdentifier(binding.AddressGroupRef.Name, models.WithNamespace(agNamespace))
+		if err := w.portMappingRegenerator.RegeneratePortMappingsForAddressGroup(ctx, agID); err != nil {
+			w.logger.Error("failed to regenerate address group port mapping after binding deletion",
+				zap.String("address_group", agID.Key()),
+				zap.Error(err))
+		}
+	}
+
+	serviceNamespace := binding.ServiceRef.Namespace
+	if serviceNamespace == "" {
+		serviceNamespace = binding.Namespace
+	}
+	if binding.ServiceRef.Name != "" {
+		serviceID := models.NewResourceIdentifier(binding.ServiceRef.Name, models.WithNamespace(serviceNamespace))
+		if err := w.portMappingRegenerator.RegeneratePortMappingsForService(ctx, serviceID); err != nil {
+			w.logger.Error("failed to regenerate service port mappings after binding deletion",
+				zap.String("service", serviceID.Key()),
+				zap.Error(err))
+		}
+	}
 }

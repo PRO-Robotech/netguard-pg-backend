@@ -11,11 +11,18 @@ import (
 	"go.uber.org/zap"
 
 	"netguard-pg-backend/internal/domain"
+	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/infrastructure/repositories"
 	"netguard-pg-backend/internal/sync/monitor"
 	"netguard-pg-backend/internal/sync/syncers"
 )
+
+// PortMappingRegenerator encapsulates AddressGroupPortMapping regeneration hooks
+type PortMappingRegenerator interface {
+	RegeneratePortMappingsForService(ctx context.Context, serviceID models.ResourceIdentifier) error
+	RegeneratePortMappingsForAddressGroup(ctx context.Context, addressGroupID models.ResourceIdentifier) error
+}
 
 // OutboxWorker polls sync_outbox table and processes pending entries
 type OutboxWorker struct {
@@ -36,6 +43,9 @@ type OutboxWorker struct {
 	serviceSyncer      *syncers.ServiceSyncer
 	svcSvcRuleSyncer   *syncers.SvcSvcRuleSyncer
 	svcFqdnRuleSyncer  *syncers.SvcFqdnRuleSyncer
+
+	// Port mapping maintenance (optional)
+	portMappingRegenerator PortMappingRegenerator
 
 	// Configuration
 	config *WorkerConfig
@@ -74,6 +84,7 @@ func NewOutboxWorker(
 	logger *zap.Logger,
 	config *WorkerConfig,
 	connectionMonitor *monitor.SGroupConnectionMonitor,
+	portMappingRegenerator PortMappingRegenerator,
 ) *OutboxWorker {
 	if config == nil {
 		config = DefaultConfig()
@@ -88,22 +99,23 @@ func NewOutboxWorker(
 	}
 
 	return &OutboxWorker{
-		pool:               pool,
-		outboxRepo:         repositories.NewOutboxRepository(pool),
-		registry:           registry,
-		conditionManager:   conditionManager,
-		hostSyncer:         hostSyncer,
-		addressGroupSyncer: addressGroupSyncer,
-		networkSyncer:      networkSyncer,
-		serviceSyncer:      serviceSyncer,
-		svcSvcRuleSyncer:   svcSvcRuleSyncer,
-		svcFqdnRuleSyncer:  svcFqdnRuleSyncer,
-		config:             config,
-		logger:             logger.With(zap.String("component", "outbox-worker")),
-		connectionMonitor:  connectionMonitor,
-		isPaused:           false,
-		stopCh:             make(chan struct{}),
-		doneCh:             make(chan struct{}),
+		pool:                   pool,
+		outboxRepo:             repositories.NewOutboxRepository(pool),
+		registry:               registry,
+		conditionManager:       conditionManager,
+		hostSyncer:             hostSyncer,
+		addressGroupSyncer:     addressGroupSyncer,
+		networkSyncer:          networkSyncer,
+		serviceSyncer:          serviceSyncer,
+		svcSvcRuleSyncer:       svcSvcRuleSyncer,
+		svcFqdnRuleSyncer:      svcFqdnRuleSyncer,
+		portMappingRegenerator: portMappingRegenerator,
+		config:                 config,
+		logger:                 logger.With(zap.String("component", "outbox-worker")),
+		connectionMonitor:      connectionMonitor,
+		isPaused:               false,
+		stopCh:                 make(chan struct{}),
+		doneCh:                 make(chan struct{}),
 	}
 }
 

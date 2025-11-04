@@ -249,6 +249,7 @@ func TCCreateTestWorker(t *testing.T, tc *TestContainer) *worker.OutboxWorker {
 		logger,
 		config,
 		connMonitor,
+		nil,
 	)
 
 	t.Logf("  🏗️  Created OutboxWorker for E2E testing")

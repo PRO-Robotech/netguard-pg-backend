@@ -128,11 +128,11 @@ func main() {
 	reverseSyncSystem := setupReverseSyncSystem(ctx, cfg, pgRegistry, sgroupsClient, connMonitor, zapLogger)
 	outboxRepo := repositories.NewOutboxRepository(pgRegistry.Pool())
 	conditionManager := conditions.NewConditionManager(pgRegistry, outboxRepo)
+	netguardFacade := services.NewNetguardFacade(pgRegistry, conditionManager, syncManager)
 	var outboxWorker *worker.OutboxWorker
 	if syncManager != nil {
-		outboxWorker = setupOutboxWorker(ctx, cfg, pgRegistry, syncManager, conditionManager, connMonitor, zapLogger)
+		outboxWorker = setupOutboxWorker(ctx, cfg, pgRegistry, syncManager, conditionManager, connMonitor, netguardFacade.AddressGroupResourceService(), zapLogger)
 	}
-	netguardFacade := services.NewNetguardFacade(pgRegistry, conditionManager, syncManager)
 	grpcServer := grpc.NewServer()
 	netguardServer := netguard.NewServiceServer(netguardFacade)
 	netguardpb.RegisterNetguardServiceServer(grpcServer, netguardServer)
@@ -326,6 +326,7 @@ func setupOutboxWorker(
 	syncManager interfaces.SyncManager,
 	conditionManager ports.ConditionManager,
 	connMonitor *monitor.SGroupConnectionMonitor,
+	portMappingRegenerator worker.PortMappingRegenerator,
 	logger *zap.Logger,
 ) *worker.OutboxWorker {
 	workerConfig := worker.LoadFromEnv()
@@ -363,6 +364,7 @@ func setupOutboxWorker(
 		logger,
 		workerConfig,
 		connMonitor,
+		portMappingRegenerator,
 	)
 	go func() {
 		if err := outboxWorker.Start(ctx); err != nil {
