@@ -101,6 +101,8 @@ func ConvertK8sMetadata(resourceVersionStr string, labelsJSON, annotationsJSON [
 		meta.Conditions = conditions
 	}
 
+	meta.DeduplicateConditions()
+
 	meta.CreationTS = metav1.NewTime(createdAt)
 	if deletionTS != nil {
 		meta.DeletionTS = &metav1.Time{Time: *deletionTS}
