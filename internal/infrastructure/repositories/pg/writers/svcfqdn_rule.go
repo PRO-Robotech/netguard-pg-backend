@@ -22,8 +22,7 @@ type svcFqdnRuleServiceRefJSON struct {
 }
 
 type svcFqdnRulePortJSON struct {
-	Source      string `json:"source"`
-	Destination string `json:"destination"`
+	Port string `json:"port"`
 }
 
 // SyncSvcFqdnRules synchronizes service-to-FQDN rules with PostgreSQL storage
@@ -140,7 +139,7 @@ func (w *Writer) upsertSvcFqdnRule(ctx context.Context, rule models.SvcFqdnRule)
 
 	portsJSON := make([]svcFqdnRulePortJSON, 0, len(rule.Ports))
 	for _, port := range rule.Ports {
-		portsJSON = append(portsJSON, svcFqdnRulePortJSON{Source: port.Source, Destination: port.Destination})
+		portsJSON = append(portsJSON, svcFqdnRulePortJSON{Port: port.Port})
 	}
 	portsBytes, err := json.Marshal(portsJSON)
 	if err != nil {

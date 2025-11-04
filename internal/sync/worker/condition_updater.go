@@ -59,15 +59,18 @@ func (w *OutboxWorker) updatePendingSyncCondition(
 		return fmt.Errorf("failed to marshal condition: %w", err)
 	}
 
+	safeConditionsExpr := "COALESCE(NULLIF(conditions, 'null'::jsonb), '[]'::jsonb)"
+	conditionsNullCheck := "conditions IS NULL OR conditions = 'null'::jsonb"
+
 	// Build entity-specific query with JOIN to entity table
 	// This fixes P0-1: Uses (namespace, name) instead of non-existent resource_id column
 	var query string
 	switch resourceType {
 	case "Host":
-		query = `
+		query = fmt.Sprintf(`
 			UPDATE k8s_metadata km
 			SET conditions = CASE
-				WHEN conditions IS NULL THEN jsonb_build_array($1::jsonb)
+				WHEN %s THEN jsonb_build_array($1::jsonb)
 				ELSE (
 					SELECT jsonb_agg(
 						CASE
@@ -75,10 +78,10 @@ func (w *OutboxWorker) updatePendingSyncCondition(
 							ELSE elem
 						END
 					)
-					FROM jsonb_array_elements(conditions) AS elem
+					FROM jsonb_array_elements(%s) AS elem
 				) || CASE
 					WHEN NOT EXISTS (
-						SELECT 1 FROM jsonb_array_elements(conditions) AS elem
+						SELECT 1 FROM jsonb_array_elements(%s) AS elem
 						WHERE elem->>'type' = 'PendingSync'
 					) THEN jsonb_build_array($1::jsonb)
 					ELSE '[]'::jsonb
@@ -88,12 +91,12 @@ func (w *OutboxWorker) updatePendingSyncCondition(
 			FROM hosts h
 			WHERE h.namespace = $2 AND h.name = $3
 			  AND h.resource_version = km.resource_version
-		`
+		`, conditionsNullCheck, safeConditionsExpr, safeConditionsExpr)
 	case "Network":
-		query = `
+		query = fmt.Sprintf(`
 			UPDATE k8s_metadata km
 			SET conditions = CASE
-				WHEN conditions IS NULL THEN jsonb_build_array($1::jsonb)
+				WHEN %s THEN jsonb_build_array($1::jsonb)
 				ELSE (
 					SELECT jsonb_agg(
 						CASE
@@ -101,10 +104,10 @@ func (w *OutboxWorker) updatePendingSyncCondition(
 							ELSE elem
 						END
 					)
-					FROM jsonb_array_elements(conditions) AS elem
+					FROM jsonb_array_elements(%s) AS elem
 				) || CASE
 					WHEN NOT EXISTS (
-						SELECT 1 FROM jsonb_array_elements(conditions) AS elem
+						SELECT 1 FROM jsonb_array_elements(%s) AS elem
 						WHERE elem->>'type' = 'PendingSync'
 					) THEN jsonb_build_array($1::jsonb)
 					ELSE '[]'::jsonb
@@ -114,12 +117,12 @@ func (w *OutboxWorker) updatePendingSyncCondition(
 			FROM networks n
 			WHERE n.namespace = $2 AND n.name = $3
 			  AND n.resource_version = km.resource_version
-		`
+		`, conditionsNullCheck, safeConditionsExpr, safeConditionsExpr)
 	case "AddressGroup":
-		query = `
+		query = fmt.Sprintf(`
 			UPDATE k8s_metadata km
 			SET conditions = CASE
-				WHEN conditions IS NULL THEN jsonb_build_array($1::jsonb)
+				WHEN %s THEN jsonb_build_array($1::jsonb)
 				ELSE (
 					SELECT jsonb_agg(
 						CASE
@@ -127,10 +130,10 @@ func (w *OutboxWorker) updatePendingSyncCondition(
 							ELSE elem
 						END
 					)
-					FROM jsonb_array_elements(conditions) AS elem
+					FROM jsonb_array_elements(%s) AS elem
 				) || CASE
 					WHEN NOT EXISTS (
-						SELECT 1 FROM jsonb_array_elements(conditions) AS elem
+						SELECT 1 FROM jsonb_array_elements(%s) AS elem
 						WHERE elem->>'type' = 'PendingSync'
 					) THEN jsonb_build_array($1::jsonb)
 					ELSE '[]'::jsonb
@@ -140,12 +143,12 @@ func (w *OutboxWorker) updatePendingSyncCondition(
 			FROM address_groups ag
 			WHERE ag.namespace = $2 AND ag.name = $3
 			  AND ag.resource_version = km.resource_version
-		`
+		`, conditionsNullCheck, safeConditionsExpr, safeConditionsExpr)
 	case "Service":
-		query = `
+		query = fmt.Sprintf(`
 			UPDATE k8s_metadata km
 			SET conditions = CASE
-				WHEN conditions IS NULL THEN jsonb_build_array($1::jsonb)
+				WHEN %s THEN jsonb_build_array($1::jsonb)
 				ELSE (
 					SELECT jsonb_agg(
 						CASE
@@ -153,10 +156,10 @@ func (w *OutboxWorker) updatePendingSyncCondition(
 							ELSE elem
 						END
 					)
-					FROM jsonb_array_elements(conditions) AS elem
+					FROM jsonb_array_elements(%s) AS elem
 				) || CASE
 					WHEN NOT EXISTS (
-						SELECT 1 FROM jsonb_array_elements(conditions) AS elem
+						SELECT 1 FROM jsonb_array_elements(%s) AS elem
 						WHERE elem->>'type' = 'PendingSync'
 					) THEN jsonb_build_array($1::jsonb)
 					ELSE '[]'::jsonb
@@ -166,13 +169,13 @@ func (w *OutboxWorker) updatePendingSyncCondition(
 			FROM services s
 			WHERE s.namespace = $2 AND s.name = $3
 			  AND s.resource_version = km.resource_version
-		`
+		`, conditionsNullCheck, safeConditionsExpr, safeConditionsExpr)
 	case "SvcSvcRule":
 		// Use Service pattern: check NULL at outer level to avoid scalar extraction
-		query = `
+		query = fmt.Sprintf(`
 			UPDATE k8s_metadata km
 			SET conditions = CASE
-				WHEN conditions IS NULL THEN jsonb_build_array($1::jsonb)
+				WHEN %s THEN jsonb_build_array($1::jsonb)
 				ELSE (
 					SELECT jsonb_agg(
 						CASE
@@ -180,10 +183,10 @@ func (w *OutboxWorker) updatePendingSyncCondition(
 							ELSE elem
 						END
 					)
-					FROM jsonb_array_elements(conditions) AS elem
+					FROM jsonb_array_elements(%s) AS elem
 				) || CASE
 					WHEN NOT EXISTS (
-						SELECT 1 FROM jsonb_array_elements(conditions) AS elem
+						SELECT 1 FROM jsonb_array_elements(%s) AS elem
 						WHERE elem->>'type' = 'PendingSync'
 					) THEN jsonb_build_array($1::jsonb)
 					ELSE '[]'::jsonb
@@ -193,12 +196,12 @@ func (w *OutboxWorker) updatePendingSyncCondition(
 			FROM svc_svc_rules sr
 			WHERE sr.namespace = $2 AND sr.name = $3
 			  AND sr.resource_version = km.resource_version
-		`
+		`, conditionsNullCheck, safeConditionsExpr, safeConditionsExpr)
 	case "SvcFqdnRule":
-		query = `
+		query = fmt.Sprintf(`
 			UPDATE k8s_metadata km
 			SET conditions = CASE
-				WHEN conditions IS NULL THEN jsonb_build_array($1::jsonb)
+				WHEN %s THEN jsonb_build_array($1::jsonb)
 				ELSE (
 					SELECT jsonb_agg(
 						CASE
@@ -206,10 +209,10 @@ func (w *OutboxWorker) updatePendingSyncCondition(
 							ELSE elem
 						END
 					)
-					FROM jsonb_array_elements(conditions) AS elem
+					FROM jsonb_array_elements(%s) AS elem
 				) || CASE
 					WHEN NOT EXISTS (
-						SELECT 1 FROM jsonb_array_elements(conditions) AS elem
+						SELECT 1 FROM jsonb_array_elements(%s) AS elem
 						WHERE elem->>'type' = 'PendingSync'
 					) THEN jsonb_build_array($1::jsonb)
 					ELSE '[]'::jsonb
@@ -219,7 +222,7 @@ func (w *OutboxWorker) updatePendingSyncCondition(
 			FROM svc_fqdn_rules fr
 			WHERE fr.namespace = $2 AND fr.name = $3
 			  AND fr.resource_version = km.resource_version
-		`
+		`, conditionsNullCheck, safeConditionsExpr, safeConditionsExpr)
 	default:
 		return fmt.Errorf("unsupported resource type for condition update: %s", resourceType)
 	}

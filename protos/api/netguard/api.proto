@@ -469,8 +469,7 @@ message SvcSvcRule {
 
 // FqdnPortSpec - port specification for service-to-FQDN rules
 message FqdnPortSpec {
-  string source = 1;      // Optional source ports expression ("", "443", "1000-2000")
-  string destination = 2; // Destination ports expression (comma-separated single ports or ranges)
+  string port = 1;  // Single port or port range (e.g., "80", "1000-2000", "443,8080")
 }
 
 // SvcFqdnRule - service-to-FQDN firewall rule

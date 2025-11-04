@@ -681,23 +681,21 @@ func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item 
 				for _, entry := range typed {
 					if entryMap, ok := entry.(map[string]interface{}); ok {
 						parsedPorts = append(parsedPorts, models.FqdnPortSpec{
-							Source:      getStringFromMap(entryMap, "source"),
-							Destination: getStringFromMap(entryMap, "destination"),
+							Port: getStringFromMap(entryMap, "port"),
 						})
 					} else if entryStr, ok := entry.(string); ok {
-						parsedPorts = append(parsedPorts, models.FqdnPortSpec{Destination: entryStr})
+						parsedPorts = append(parsedPorts, models.FqdnPortSpec{Port: entryStr})
 					}
 				}
 			case []map[string]interface{}:
 				for _, entryMap := range typed {
 					parsedPorts = append(parsedPorts, models.FqdnPortSpec{
-						Source:      getStringFromMap(entryMap, "source"),
-						Destination: getStringFromMap(entryMap, "destination"),
+						Port: getStringFromMap(entryMap, "port"),
 					})
 				}
 			case string:
 				if typed != "" {
-					parsedPorts = append(parsedPorts, models.FqdnPortSpec{Destination: typed})
+					parsedPorts = append(parsedPorts, models.FqdnPortSpec{Port: typed})
 				}
 			}
 			rule.Ports = parsedPorts
@@ -1046,7 +1044,7 @@ func convertToSyncOperation(op domain.SyncOperation) types.SyncOperation {
 	case domain.SyncOperationCreate:
 		return types.SyncOperationUpsert
 	case domain.SyncOperationUpdate:
-		return types.SyncOperationUpdate
+		return types.SyncOperationUpsert
 	case domain.SyncOperationDelete:
 		return types.SyncOperationDelete
 	default:

@@ -512,17 +512,6 @@ func (r *reader) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdenti
 	return nil, ports.ErrNotFound
 }
 
-// Stub methods for SvcSvcRule - not implemented in memory repository yet
-func (r *reader) ListSvcSvcRules(ctx context.Context, consume func(models.SvcSvcRule) error, scope ports.Scope) error {
-	// Stub implementation - return empty list
-	return nil
-}
-
-func (r *reader) GetSvcSvcRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcSvcRule, error) {
-	// Stub implementation - always return not found
-	return nil, ports.ErrNotFound
-}
-
 func (r *reader) ListSvcFqdnRules(ctx context.Context, consume func(models.SvcFqdnRule) error, scope ports.Scope) error {
 	// Stub implementation - return empty list
 	return nil

@@ -1232,13 +1232,9 @@
     "v1FqdnPortSpec": {
       "type": "object",
       "properties": {
-        "source": {
+        "port": {
           "type": "string",
-          "title": "Optional source ports expression (\"\", \"443\", \"1000-2000\")"
-        },
-        "destination": {
-          "type": "string",
-          "title": "Destination ports expression (comma-separated single ports or ranges)"
+          "title": "Single port or port range (e.g., \"80\", \"1000-2000\", \"443,8080\")"
         }
       },
       "title": "FqdnPortSpec - port specification for service-to-FQDN rules"

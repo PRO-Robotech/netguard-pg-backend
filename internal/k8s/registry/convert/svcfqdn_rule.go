@@ -40,8 +40,7 @@ func (c *SvcFqdnRuleConverter) ToDomain(ctx context.Context, k8sObj *netguardv1b
 	ports := make([]models.FqdnPortSpec, 0, len(k8sObj.Spec.Ports))
 	for _, port := range k8sObj.Spec.Ports {
 		ports = append(ports, models.FqdnPortSpec{
-			Source:      port.Source,
-			Destination: port.Destination,
+			Port: port.Port,
 		})
 	}
 
@@ -84,8 +83,7 @@ func (c *SvcFqdnRuleConverter) FromDomain(ctx context.Context, domainObj *models
 	ports := make([]netguardv1beta1.SvcFqdnPortSpec, 0, len(domainObj.Ports))
 	for _, port := range domainObj.Ports {
 		ports = append(ports, netguardv1beta1.SvcFqdnPortSpec{
-			Source:      port.Source,
-			Destination: port.Destination,
+			Port: port.Port,
 		})
 	}
 

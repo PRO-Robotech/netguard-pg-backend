@@ -118,34 +118,31 @@ func (v *SvcFqdnRuleValidator) validateSpec(obj *netguardv1beta1.SvcFqdnRule, fl
 func (v *SvcFqdnRuleValidator) validatePorts(ports []netguardv1beta1.SvcFqdnPortSpec, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 	if len(ports) == 0 {
+		allErrs = append(allErrs, field.Required(fldPath, "ports must contain at least one entry"))
 		return allErrs
 	}
 
-	var destinationRanges []models.PortRange
+	var allPortRanges []models.PortRange
 	for i, port := range ports {
 		portPath := fldPath.Index(i)
-		if errList := v.helpers.ValidateRequiredString(port.Destination, portPath.Child("destination"), "destination"); len(errList) > 0 {
+		if errList := v.helpers.ValidateRequiredString(port.Port, portPath.Child("port"), "port"); len(errList) > 0 {
 			allErrs = append(allErrs, errList...)
 			continue
 		}
 
-		ranges, err := appvalidation.ParsePortRanges(port.Destination)
+		// Parse the port string (e.g., "80", "1000-2000", "443,8080")
+		ranges, err := appvalidation.ParsePortRanges(port.Port)
 		if err != nil {
-			allErrs = append(allErrs, field.Invalid(portPath.Child("destination"), port.Destination, err.Error()))
+			allErrs = append(allErrs, field.Invalid(portPath.Child("port"), port.Port, err.Error()))
 			continue
 		}
-		destinationRanges = append(destinationRanges, ranges...)
-
-		if port.Source != "" {
-			if _, err := appvalidation.ParsePortRanges(port.Source); err != nil {
-				allErrs = append(allErrs, field.Invalid(portPath.Child("source"), port.Source, err.Error()))
-			}
-		}
+		allPortRanges = append(allPortRanges, ranges...)
 	}
 
-	if len(destinationRanges) > 0 {
-		if err := appvalidation.CheckPortRangeOverlapsOptimized(destinationRanges, "destination"); err != nil {
-			allErrs = append(allErrs, field.Invalid(fldPath, "destination", err.Error()))
+	// Check for overlaps across all port entries
+	if len(allPortRanges) > 0 {
+		if err := appvalidation.CheckPortRangeOverlapsOptimized(allPortRanges, "port"); err != nil {
+			allErrs = append(allErrs, field.Invalid(fldPath, "port", err.Error()))
 		}
 	}
 

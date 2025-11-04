@@ -10,10 +10,9 @@ import (
 	"netguard-pg-backend/internal/sync/types"
 )
 
-// FqdnPortSpec represents a pair of source/destination port expressions for SvcFqdnRule
+// FqdnPortSpec represents a single port or port range for SvcFqdnRule
 type FqdnPortSpec struct {
-	Source      string
-	Destination string
+	Port string // Single port or port range (e.g., "80", "1000-2000", "443,8080")
 }
 
 // SvcFqdnRule - domain model for service-to-FQDN firewall rule
@@ -96,9 +95,28 @@ func (r *SvcFqdnRule) ToSGroupsProto() (interface{}, error) {
 	}
 
 	// Convert ports to protobuf AccPorts list
-	ports := make([]*sgpb.AccPorts, 0, len(r.Ports))
+	// Concatenate all port entries into a single destination string (leave source empty)
+	portParts := make([]string, 0, len(r.Ports))
 	for _, p := range r.Ports {
-		ports = append(ports, &sgpb.AccPorts{S: p.Source, D: p.Destination})
+		if p.Port != "" {
+			portParts = append(portParts, p.Port)
+		}
+	}
+
+	ports := make([]*sgpb.AccPorts, 0)
+	if len(portParts) > 0 {
+		// Create a single AccPorts entry with all ports concatenated in destination
+		destinationPorts := ""
+		for i, part := range portParts {
+			if i > 0 {
+				destinationPorts += ","
+			}
+			destinationPorts += part
+		}
+		ports = append(ports, &sgpb.AccPorts{
+			S: "",               // Source empty
+			D: destinationPorts, // Comma-separated ports
+		})
 	}
 
 	// Convert action to protobuf enum

@@ -1006,9 +1006,10 @@ type SvcFqdnRuleSpec struct {
 	// +kubebuilder:validation:Enum=TCP;UDP
 	Transport TransportProtocol `json:"transport"`
 
-	// Ports - optional list of port expressions. Each entry defines source/destination ports.
-	// +optional
-	Ports []SvcFqdnPortSpec `json:"ports,omitempty"`
+	// Ports - list of port expressions. Each entry defines allowed ports.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinItems=1
+	Ports []SvcFqdnPortSpec `json:"ports"`
 
 	// Logs - enable traffic logging
 	// +optional
@@ -1033,15 +1034,14 @@ type SvcFqdnRuleSpec struct {
 	Description string `json:"description,omitempty"`
 }
 
-// SvcFqdnPortSpec represents source/destination port expressions for FQDN rule
+// SvcFqdnPortSpec represents a single port specification for FQDN rule
 type SvcFqdnPortSpec struct {
-	// Source port expression (single port or range). Empty string means any source port.
-	// +optional
-	Source string `json:"source,omitempty"`
-
-	// Destination port expression (single port or range). Required.
+	// Port - single port or port range (e.g., "80", "1000-2000", "443,8080")
+	// Can specify multiple ports/ranges separated by commas.
 	// +kubebuilder:validation:Required
-	Destination string `json:"destination"`
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=255
+	Port string `json:"port"`
 }
 
 // SvcFqdnRuleStatus defines the observed state of SvcFqdnRule

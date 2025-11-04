@@ -39,8 +39,7 @@ func ConvertSvcFqdnRule(rule *netguardpb.SvcFqdnRule) models.SvcFqdnRule {
 		result.Ports = make([]models.FqdnPortSpec, len(rule.Ports))
 		for i, p := range rule.Ports {
 			result.Ports[i] = models.FqdnPortSpec{
-				Source:      p.GetSource(),
-				Destination: p.GetDestination(),
+				Port: p.GetPort(),
 			}
 		}
 	}
@@ -74,7 +73,7 @@ func ConvertSvcFqdnRuleToPB(rule models.SvcFqdnRule) *netguardpb.SvcFqdnRule {
 	if len(rule.Ports) > 0 {
 		pb.Ports = make([]*netguardpb.FqdnPortSpec, len(rule.Ports))
 		for i, p := range rule.Ports {
-			pb.Ports[i] = &netguardpb.FqdnPortSpec{Source: p.Source, Destination: p.Destination}
+			pb.Ports[i] = &netguardpb.FqdnPortSpec{Port: p.Port}
 		}
 	}
 

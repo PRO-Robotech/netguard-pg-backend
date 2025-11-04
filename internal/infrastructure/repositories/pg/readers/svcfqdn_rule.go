@@ -24,8 +24,10 @@ type svcFqdnRuleServiceRefJSON struct {
 }
 
 type svcFqdnRulePortJSON struct {
-	Source      string `json:"source"`
-	Destination string `json:"destination"`
+	// Support both old format (source/destination) and new format (port)
+	Source      string `json:"source,omitempty"`      // Legacy field (ignored in new format)
+	Destination string `json:"destination,omitempty"` // Legacy field (ignored in new format)
+	Port        string `json:"port,omitempty"`        // New field
 }
 
 // ListSvcFqdnRules iterates SvcFqdnRule rows within optional scope
@@ -81,7 +83,7 @@ func (r *Reader) GetSvcFqdnRuleByID(ctx context.Context, id models.ResourceIdent
                m.created_at, m.updated_at, m.deletion_timestamp
         FROM svc_fqdn_rules fr
         INNER JOIN k8s_metadata m ON fr.resource_version = m.resource_version
-        WHERE fr.namespace = $1 AND fr.name = $2 AND m.deletion_timestamp IS NULL`
+        WHERE fr.namespace = $1 AND fr.name = $2`
 
 	var rule *models.SvcFqdnRule
 	var err error
@@ -113,8 +115,7 @@ func (r *Reader) FindSvcFqdnRulesByService(ctx context.Context, namespace, servi
                m.created_at, m.updated_at, m.deletion_timestamp
         FROM svc_fqdn_rules fr
         INNER JOIN k8s_metadata m ON fr.resource_version = m.resource_version
-        WHERE m.deletion_timestamp IS NULL
-          AND fr.service_from_ref->>'namespace' = $1
+        WHERE fr.service_from_ref->>'namespace' = $1
           AND fr.service_from_ref->>'name' = $2
         ORDER BY fr.namespace, fr.name`
 
@@ -254,9 +255,13 @@ func (r *Reader) populateSvcFqdnRule(
 		if len(ports) > 0 {
 			rule.Ports = make([]models.FqdnPortSpec, len(ports))
 			for i, p := range ports {
+				// Use new Port field if available, otherwise fallback to Destination (legacy)
+				portValue := p.Port
+				if portValue == "" && p.Destination != "" {
+					portValue = p.Destination
+				}
 				rule.Ports[i] = models.FqdnPortSpec{
-					Source:      p.Source,
-					Destination: p.Destination,
+					Port: portValue,
 				}
 			}
 		}
