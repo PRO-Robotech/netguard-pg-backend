@@ -1,0 +1,14 @@
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Service
+metadata:
+  name: test-service-web
+  namespace: incloud-sgroups
+spec:
+  description: "Test web service for SvcSvcRule testing"
+  ingressPorts:
+    - protocol: TCP
+      port: "80"
+      description: "HTTP"
+    - protocol: TCP
+      port: "443"
+      description: "HTTPS"

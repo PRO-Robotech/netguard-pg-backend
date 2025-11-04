@@ -408,6 +408,37 @@ func (s *SvcSvcRuleBackendOperations) Update(ctx context.Context, obj *models.Sv
 func (s *SvcSvcRuleBackendOperations) Delete(ctx context.Context, id models.ResourceIdentifier) error {
 	return s.client.DeleteSvcSvcRule(ctx, id)
 }
+
+type SvcFqdnRuleBackendOperations struct {
+	client client.BackendClient
+}
+
+func NewSvcFqdnRuleBackendOperations(client client.BackendClient) BackendOperations[models.SvcFqdnRule] {
+	return &SvcFqdnRuleBackendOperations{client: client}
+}
+
+func (s *SvcFqdnRuleBackendOperations) Get(ctx context.Context, id models.ResourceIdentifier) (*models.SvcFqdnRule, error) {
+	return s.client.GetSvcFqdnRule(ctx, id)
+}
+
+func (s *SvcFqdnRuleBackendOperations) List(ctx context.Context, scope ports.Scope) ([]models.SvcFqdnRule, error) {
+	return s.client.ListSvcFqdnRules(ctx, scope)
+}
+
+func (s *SvcFqdnRuleBackendOperations) Create(ctx context.Context, obj *models.SvcFqdnRule) error {
+	return s.client.CreateSvcFqdnRule(ctx, obj)
+}
+
+func (s *SvcFqdnRuleBackendOperations) Update(ctx context.Context, obj *models.SvcFqdnRule) error {
+	return s.client.UpdateSvcFqdnRule(ctx, obj)
+}
+
+func (s *SvcFqdnRuleBackendOperations) Delete(ctx context.Context, id models.ResourceIdentifier) error {
+	return s.client.DeleteSvcFqdnRule(ctx, id)
+}
+func (s *SvcFqdnRuleBackendOperations) MarkForDeletion(ctx context.Context, namespace, name, kind string) error {
+	return s.client.MarkForDeletion(ctx, namespace, name, kind)
+}
 func (s *SvcSvcRuleBackendOperations) MarkForDeletion(ctx context.Context, namespace, name, kind string) error {
 	return s.client.MarkForDeletion(ctx, namespace, name, kind)
 }

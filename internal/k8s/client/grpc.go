@@ -1010,6 +1010,114 @@ func (c *GRPCBackendClient) ListSvcSvcRules(ctx context.Context, scope ports.Sco
 	}
 	return rules, nil
 }
+
+func (c *GRPCBackendClient) GetSvcFqdnRule(ctx context.Context, id models.ResourceIdentifier) (*models.SvcFqdnRule, error) {
+	if !c.limiter.Allow() {
+		return nil, fmt.Errorf("rate limit exceeded")
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+	req := &netguardpb.GetSvcFqdnRuleReq{
+		Identifier: &netguardpb.ResourceIdentifier{
+			Namespace: id.Namespace,
+			Name:      id.Name,
+		},
+	}
+	resp, err := c.client.GetSvcFqdnRule(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get SvcFqdnRule: %w", err)
+	}
+	rule := convertSvcFqdnRuleFromProto(resp.SvcfqdnRule)
+	return &rule, nil
+}
+
+func (c *GRPCBackendClient) ListSvcFqdnRules(ctx context.Context, scope ports.Scope) ([]models.SvcFqdnRule, error) {
+	if !c.limiter.Allow() {
+		return nil, fmt.Errorf("rate limit exceeded")
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+	var identifiers []*netguardpb.ResourceIdentifier
+	if resourceScope, ok := scope.(ports.ResourceIdentifierScope); ok {
+		for _, identifier := range resourceScope.Identifiers {
+			identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
+				Namespace: identifier.Namespace,
+				Name:      identifier.Name,
+			})
+		}
+	}
+	req := &netguardpb.ListSvcFqdnRulesReq{
+		Identifiers: identifiers,
+	}
+	resp, err := c.client.ListSvcFqdnRules(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list SvcFqdnRules: %w", err)
+	}
+	rules := make([]models.SvcFqdnRule, 0, len(resp.Items))
+	for _, protoRule := range resp.Items {
+		rules = append(rules, convertSvcFqdnRuleFromProto(protoRule))
+	}
+	return rules, nil
+}
+
+func (c *GRPCBackendClient) CreateSvcFqdnRule(ctx context.Context, rule *models.SvcFqdnRule) error {
+	return c.syncSvcFqdnRule(ctx, models.SyncOpUpsert, []*models.SvcFqdnRule{rule})
+}
+
+func (c *GRPCBackendClient) UpdateSvcFqdnRule(ctx context.Context, rule *models.SvcFqdnRule) error {
+	return c.syncSvcFqdnRule(ctx, models.SyncOpUpsert, []*models.SvcFqdnRule{rule})
+}
+
+func (c *GRPCBackendClient) DeleteSvcFqdnRule(ctx context.Context, id models.ResourceIdentifier) error {
+	rule := &models.SvcFqdnRule{
+		SelfRef: models.SelfRef{ResourceIdentifier: id},
+	}
+	return c.syncSvcFqdnRule(ctx, models.SyncOpDelete, []*models.SvcFqdnRule{rule})
+}
+
+func (c *GRPCBackendClient) syncSvcFqdnRule(ctx context.Context, syncOp models.SyncOp, rules []*models.SvcFqdnRule) error {
+	if !c.limiter.Allow() {
+		return fmt.Errorf("rate limit exceeded")
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+	protoRules := make([]*netguardpb.SvcFqdnRule, 0, len(rules))
+	for _, rule := range rules {
+		protoRules = append(protoRules, convertSvcFqdnRuleToProto(*rule))
+	}
+	var protoSyncOp netguardpb.SyncOp
+	switch syncOp {
+	case models.SyncOpUpsert:
+		protoSyncOp = netguardpb.SyncOp_Upsert
+	case models.SyncOpDelete:
+		protoSyncOp = netguardpb.SyncOp_Delete
+	case models.SyncOpFullSync:
+		protoSyncOp = netguardpb.SyncOp_FullSync
+	default:
+		protoSyncOp = netguardpb.SyncOp_NoOp
+	}
+	req := &netguardpb.SyncReq{
+		SyncOp: protoSyncOp,
+		Subject: &netguardpb.SyncReq_SvcfqdnRules{
+			SvcfqdnRules: &netguardpb.SyncSvcFqdnRules{
+				SvcfqdnRules: protoRules,
+			},
+		},
+	}
+	if _, err := c.client.Sync(ctx, req); err != nil {
+		return fmt.Errorf("failed to sync SvcFqdnRules: %w", err)
+	}
+	return nil
+}
+
+func (c *GRPCBackendClient) UpdateSvcFqdnRuleMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	rule, err := c.GetSvcFqdnRule(ctx, id)
+	if err != nil {
+		return err
+	}
+	rule.Meta = meta
+	return c.UpdateSvcFqdnRule(ctx, rule)
+}
 func (c *GRPCBackendClient) syncNetwork(ctx context.Context, syncOp models.SyncOp, networks []*models.Network) error {
 	if !c.limiter.Allow() {
 		return fmt.Errorf("rate limit exceeded")

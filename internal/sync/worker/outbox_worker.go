@@ -35,6 +35,7 @@ type OutboxWorker struct {
 	networkSyncer      *syncers.NetworkSyncer
 	serviceSyncer      *syncers.ServiceSyncer
 	svcSvcRuleSyncer   *syncers.SvcSvcRuleSyncer
+	svcFqdnRuleSyncer  *syncers.SvcFqdnRuleSyncer
 
 	// Configuration
 	config *WorkerConfig
@@ -68,6 +69,7 @@ func NewOutboxWorker(
 	networkSyncer *syncers.NetworkSyncer,
 	serviceSyncer *syncers.ServiceSyncer,
 	svcSvcRuleSyncer *syncers.SvcSvcRuleSyncer,
+	svcFqdnRuleSyncer *syncers.SvcFqdnRuleSyncer,
 	conditionManager ports.ConditionManager,
 	logger *zap.Logger,
 	config *WorkerConfig,
@@ -95,6 +97,7 @@ func NewOutboxWorker(
 		networkSyncer:      networkSyncer,
 		serviceSyncer:      serviceSyncer,
 		svcSvcRuleSyncer:   svcSvcRuleSyncer,
+		svcFqdnRuleSyncer:  svcFqdnRuleSyncer,
 		config:             config,
 		logger:             logger.With(zap.String("component", "outbox-worker")),
 		connectionMonitor:  connectionMonitor,

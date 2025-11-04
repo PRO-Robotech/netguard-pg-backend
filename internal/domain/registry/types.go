@@ -32,6 +32,9 @@ const (
 	// TypeService represents a network service with port mappings
 	TypeService ResourceType = "Service"
 
+	// TypeSvcFqdnRule represents a service-to-FQDN firewall rule
+	TypeSvcFqdnRule ResourceType = "SvcFqdnRule"
+
 	// TypeSvcSvcRule represents a service-to-service firewall rule
 	TypeSvcSvcRule ResourceType = "SvcSvcRule"
 
@@ -136,6 +139,16 @@ func init() {
 
 	resourceRegistry[TypeSvcSvcRule] = ResourceDefinition{
 		Type:             TypeSvcSvcRule,
+		Category:         CategoryEntity,
+		TargetSystem:     TargetSGROUP,
+		SupportsCreate:   true,
+		SupportsUpdate:   true,
+		SupportsDelete:   true,
+		AffectsResources: nil,
+	}
+
+	resourceRegistry[TypeSvcFqdnRule] = ResourceDefinition{
+		Type:             TypeSvcFqdnRule,
 		Category:         CategoryEntity,
 		TargetSystem:     TargetSGROUP,
 		SupportsCreate:   true,
@@ -266,9 +279,9 @@ func ValidateRegistry() error {
 		return fmt.Errorf("registry is empty")
 	}
 
-	// Check expected count (6 resource types: 4 entities + 2 processes)
+	// Check expected count (7 resource types: 5 entities + 2 processes)
 	requiredTypes := []ResourceType{
-		TypeHost, TypeAddressGroup, TypeNetwork, TypeService,
+		TypeHost, TypeAddressGroup, TypeNetwork, TypeService, TypeSvcFqdnRule,
 		TypeHostBinding, TypeNetworkBinding,
 	}
 

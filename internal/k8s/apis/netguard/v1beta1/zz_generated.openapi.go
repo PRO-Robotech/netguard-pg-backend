@@ -154,6 +154,11 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ServicePortsRef":                 schema_k8s_apis_netguard_v1beta1_ServicePortsRef(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ServiceSpec":                     schema_k8s_apis_netguard_v1beta1_ServiceSpec(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ServiceStatus":                   schema_k8s_apis_netguard_v1beta1_ServiceStatus(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcFqdnPortSpec":                 schema_k8s_apis_netguard_v1beta1_SvcFqdnPortSpec(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcFqdnRule":                     schema_k8s_apis_netguard_v1beta1_SvcFqdnRule(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcFqdnRuleList":                 schema_k8s_apis_netguard_v1beta1_SvcFqdnRuleList(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcFqdnRuleSpec":                 schema_k8s_apis_netguard_v1beta1_SvcFqdnRuleSpec(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcFqdnRuleStatus":               schema_k8s_apis_netguard_v1beta1_SvcFqdnRuleStatus(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcSvcRule":                      schema_k8s_apis_netguard_v1beta1_SvcSvcRule(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcSvcRuleList":                  schema_k8s_apis_netguard_v1beta1_SvcSvcRuleList(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcSvcRuleSpec":                  schema_k8s_apis_netguard_v1beta1_SvcSvcRuleSpec(ref),
@@ -5892,6 +5897,266 @@ func schema_k8s_apis_netguard_v1beta1_ServiceStatus(ref common.ReferenceCallback
 							Description: "ObservedGeneration is the most recent generation observed by the controller",
 							Type:        []string{"integer"},
 							Format:      "int64",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Condition"},
+	}
+}
+
+func schema_k8s_apis_netguard_v1beta1_SvcFqdnPortSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "SvcFqdnPortSpec represents source/destination port expressions for FQDN rule",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"source": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Source port expression (single port or range). Empty string means any source port.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"destination": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Destination port expression (single port or range). Required.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"destination"},
+			},
+		},
+	}
+}
+
+func schema_k8s_apis_netguard_v1beta1_SvcFqdnRule(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "SvcFqdnRule represents a service-to-FQDN firewall rule",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcFqdnRuleSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcFqdnRuleStatus"),
+						},
+					},
+				},
+				Required: []string{"spec"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcFqdnRuleSpec", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcFqdnRuleStatus"},
+	}
+}
+
+func schema_k8s_apis_netguard_v1beta1_SvcFqdnRuleList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "SvcFqdnRuleList contains a list of SvcFqdnRule",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcFqdnRule"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcFqdnRule"},
+	}
+}
+
+func schema_k8s_apis_netguard_v1beta1_SvcFqdnRuleSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "SvcFqdnRuleSpec defines the desired state of SvcFqdnRule",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"serviceFrom": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ServiceFrom - source service reference (NamespacedObjectReference)",
+							Default:     map[string]interface{}{},
+							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"),
+						},
+					},
+					"fqdn": {
+						SchemaProps: spec.SchemaProps{
+							Description: "FQDN - fully qualified domain name",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"transport": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Transport protocol (TCP or UDP)",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"ports": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Ports - optional list of port expressions. Each entry defines source/destination ports.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcFqdnPortSpec"),
+									},
+								},
+							},
+						},
+					},
+					"logs": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Logs - enable traffic logging",
+							Default:     false,
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"trace": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Trace - enable detailed tracing",
+							Default:     false,
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"action": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Action - firewall action (ACCEPT or DROP)",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"priority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Priority - rule priority (0-1000, lower = higher priority)",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"description": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Description - optional human-readable description",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"serviceFrom", "fqdn", "transport", "action"},
+			},
+		},
+		Dependencies: []string{
+			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcFqdnPortSpec"},
+	}
+}
+
+func schema_k8s_apis_netguard_v1beta1_SvcFqdnRuleStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "SvcFqdnRuleStatus defines the observed state of SvcFqdnRule",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"conditions": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Conditions represent the latest available observations of the rule's current state",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Condition"),
+									},
+								},
+							},
+						},
+					},
+					"observedGeneration": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ObservedGeneration is the most recent generation observed by the controller",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"syncReady": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SyncReady indicates if the rule is ready for SGROUP synchronization",
+							Type:        []string{"boolean"},
+							Format:      "",
 						},
 					},
 				},

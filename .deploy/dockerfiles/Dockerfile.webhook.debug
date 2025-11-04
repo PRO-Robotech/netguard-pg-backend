@@ -1,0 +1,50 @@
+# Debug version of webhook Dockerfile with Delve debugger
+# Based on Dockerfile.webhook but with debug capabilities
+
+FROM golang:1.24-alpine AS builder
+ARG TARGETOS
+ARG TARGETARCH
+
+WORKDIR /app
+
+# Install git and delve
+RUN apk add --no-cache git && \
+    go install github.com/go-delve/delve/cmd/dlv@latest
+
+# Copy dependencies first for caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY cmd/ cmd/
+COPY internal/ internal/
+COPY pkg/ pkg/
+COPY protos/ protos/
+
+# Build with debug symbols (NO optimization)
+# -gcflags="all=-N -l" disables optimizations and inlining for better debugging
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
+    go build -gcflags="all=-N -l" -o /app/netguard-webhook ./cmd/webhook-server
+
+# Debug stage - use alpine for shell access
+FROM alpine:latest
+
+# Install ca-certificates and debugging tools
+RUN apk add --no-cache ca-certificates bash netcat-openbsd
+
+WORKDIR /app
+
+# Copy delve from builder
+COPY --from=builder /go/bin/dlv /usr/local/bin/dlv
+
+# Copy binary with debug symbols
+COPY --from=builder /app/netguard-webhook /app/netguard-webhook
+
+# Expose application ports
+EXPOSE 9443
+# Expose Delve debug port
+EXPOSE 2347
+
+# Default to running with Delve in headless mode
+ENTRYPOINT ["/usr/local/bin/dlv"]
+CMD ["--listen=:2347", "--headless=true", "--api-version=2", "--accept-multiclient", "--continue", "exec", "/app/netguard-webhook", "--"]

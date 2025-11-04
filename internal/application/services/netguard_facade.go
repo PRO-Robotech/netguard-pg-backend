@@ -22,6 +22,7 @@ type NetguardFacade struct {
 	addressGroupResourceService   *resources.AddressGroupResourceService
 	ruleS2SResourceService        *resources.RuleS2SResourceService
 	svcSvcRuleResourceService     *resources.SvcSvcRuleResourceService
+	svcFqdnRuleResourceService    *resources.SvcFqdnRuleResourceService
 	validationService             *resources.ValidationService
 	networkResourceService        *resources.NetworkResourceService
 	networkBindingResourceService *resources.NetworkBindingResourceService
@@ -58,11 +59,13 @@ func NewNetguardFacade(
 		addressGroupResourceService, syncManager, hostBindingConditionAdapter)
 	ruleS2SResourceService := resources.NewRuleS2SResourceService(registry, syncManager, ruleConditionAdapter)
 	svcSvcRuleResourceService := resources.NewSvcSvcRuleResourceService(registry, syncManager, svcSvcRuleConditionAdapter)
+	svcFqdnRuleResourceService := resources.NewSvcFqdnRuleResourceService(registry)
 	facade := &NetguardFacade{
 		serviceResourceService:        serviceResourceService,
 		addressGroupResourceService:   addressGroupResourceService,
 		ruleS2SResourceService:        ruleS2SResourceService,
 		svcSvcRuleResourceService:     svcSvcRuleResourceService,
+		svcFqdnRuleResourceService:    svcFqdnRuleResourceService,
 		validationService:             validationService,
 		networkResourceService:        networkResourceService,
 		networkBindingResourceService: networkBindingResourceService,
@@ -355,6 +358,26 @@ func (f *NetguardFacade) SyncSvcSvcRules(ctx context.Context, rules []models.Svc
 func (f *NetguardFacade) DeleteSvcSvcRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier) error {
 	return f.svcSvcRuleResourceService.DeleteSvcSvcRulesByIDs(ctx, ids)
 }
+func (f *NetguardFacade) GetSvcFqdnRules(ctx context.Context, scope ports.Scope) ([]models.SvcFqdnRule, error) {
+	return f.svcFqdnRuleResourceService.GetSvcFqdnRules(ctx, scope)
+}
+
+func (f *NetguardFacade) GetSvcFqdnRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcFqdnRule, error) {
+	return f.svcFqdnRuleResourceService.GetSvcFqdnRuleByID(ctx, id)
+}
+
+func (f *NetguardFacade) CreateSvcFqdnRule(ctx context.Context, rule models.SvcFqdnRule) error {
+	return f.svcFqdnRuleResourceService.CreateSvcFqdnRule(ctx, rule)
+}
+
+func (f *NetguardFacade) UpdateSvcFqdnRule(ctx context.Context, rule models.SvcFqdnRule) error {
+	return f.svcFqdnRuleResourceService.UpdateSvcFqdnRule(ctx, rule)
+}
+
+func (f *NetguardFacade) DeleteSvcFqdnRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier) error {
+	return f.svcFqdnRuleResourceService.DeleteSvcFqdnRulesByIDs(ctx, ids)
+}
+
 func (f *NetguardFacade) GetNetworks(ctx context.Context, scope ports.Scope) ([]models.Network, error) {
 	return f.networkResourceService.ListNetworks(ctx, scope)
 }
@@ -530,6 +553,8 @@ func (f *NetguardFacade) Sync(ctx context.Context, syncOp models.SyncOp, resourc
 		return f.hostBindingResourceService.SyncHostBindings(ctx, typedResources, ports.EmptyScope{}, syncOp)
 	case []models.SvcSvcRule:
 		return f.svcSvcRuleResourceService.SyncSvcSvcRules(ctx, typedResources, ports.EmptyScope{}, syncOp)
+	case []models.SvcFqdnRule:
+		return f.svcFqdnRuleResourceService.SyncSvcFqdnRules(ctx, typedResources, ports.EmptyScope{}, syncOp)
 	default:
 		return errors.New(fmt.Sprintf("unsupported resource type: %T", resources))
 	}

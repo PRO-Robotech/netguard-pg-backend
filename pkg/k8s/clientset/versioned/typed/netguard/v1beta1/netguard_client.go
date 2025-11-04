@@ -39,6 +39,7 @@ type NetguardV1beta1Interface interface {
 	RuleS2SsGetter
 	ServicesGetter
 	ServiceAliasesGetter
+	SvcFqdnRulesGetter
 	SvcSvcRulesGetter
 }
 
@@ -89,6 +90,10 @@ func (c *NetguardV1beta1Client) Services(namespace string) ServiceInterface {
 
 func (c *NetguardV1beta1Client) ServiceAliases(namespace string) ServiceAliasInterface {
 	return newServiceAliases(c, namespace)
+}
+
+func (c *NetguardV1beta1Client) SvcFqdnRules(namespace string) SvcFqdnRuleInterface {
+	return newSvcFqdnRules(c, namespace)
 }
 
 func (c *NetguardV1beta1Client) SvcSvcRules(namespace string) SvcSvcRuleInterface {

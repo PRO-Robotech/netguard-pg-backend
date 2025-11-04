@@ -85,3 +85,6 @@ func NewHostBindingPtrOps(client client.BackendClient) BackendOperations[*models
 func NewSvcSvcRulePtrOps(client client.BackendClient) BackendOperations[*models.SvcSvcRule] {
 	return NewPtrBackendOperations(NewSvcSvcRuleBackendOperations(client))
 }
+func NewSvcFqdnRulePtrOps(client client.BackendClient) BackendOperations[*models.SvcFqdnRule] {
+	return NewPtrBackendOperations(NewSvcFqdnRuleBackendOperations(client))
+}

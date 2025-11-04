@@ -194,6 +194,32 @@ func (w *OutboxWorker) updatePendingSyncCondition(
 			WHERE sr.namespace = $2 AND sr.name = $3
 			  AND sr.resource_version = km.resource_version
 		`
+	case "SvcFqdnRule":
+		query = `
+			UPDATE k8s_metadata km
+			SET conditions = CASE
+				WHEN conditions IS NULL THEN jsonb_build_array($1::jsonb)
+				ELSE (
+					SELECT jsonb_agg(
+						CASE
+							WHEN elem->>'type' = 'PendingSync' THEN $1::jsonb
+							ELSE elem
+						END
+					)
+					FROM jsonb_array_elements(conditions) AS elem
+				) || CASE
+					WHEN NOT EXISTS (
+						SELECT 1 FROM jsonb_array_elements(conditions) AS elem
+						WHERE elem->>'type' = 'PendingSync'
+					) THEN jsonb_build_array($1::jsonb)
+					ELSE '[]'::jsonb
+				END
+			END,
+			updated_at = NOW()
+			FROM svc_fqdn_rules fr
+			WHERE fr.namespace = $2 AND fr.name = $3
+			  AND fr.resource_version = km.resource_version
+		`
 	default:
 		return fmt.Errorf("unsupported resource type for condition update: %s", resourceType)
 	}

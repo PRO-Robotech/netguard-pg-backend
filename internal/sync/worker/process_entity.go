@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
+
 	"netguard-pg-backend/internal/domain"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -14,7 +17,6 @@ import (
 	"netguard-pg-backend/internal/sync/interfaces"
 	"netguard-pg-backend/internal/sync/syncers"
 	"netguard-pg-backend/internal/sync/types"
-	"time"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -619,6 +621,115 @@ func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item 
 			rule.ServiceFromRef.Namespace = namespace
 		}
 		return rule, nil
+	case string(registry.TypeSvcFqdnRule):
+		var base *models.SvcFqdnRule
+		if item.Operation != domain.SyncOperationCreate {
+			if existing, err := w.loadEntityResource(ctx, item.ResourceType, namespace, name); err == nil {
+				if existingRule, ok := existing.(*models.SvcFqdnRule); ok {
+					temp := *existingRule
+					base = &temp
+				}
+			}
+		}
+		rule := &models.SvcFqdnRule{
+			SelfRef: models.SelfRef{
+				ResourceIdentifier: models.ResourceIdentifier{
+					Namespace: namespace,
+					Name:      name,
+				},
+			},
+		}
+		if base != nil {
+			rule.ServiceFromRef = base.ServiceFromRef
+			rule.FQDN = base.FQDN
+			rule.Transport = base.Transport
+			rule.Ports = append([]models.FqdnPortSpec(nil), base.Ports...)
+			rule.Logs = base.Logs
+			rule.Trace = base.Trace
+			rule.Action = base.Action
+			rule.Priority = base.Priority
+			rule.Description = base.Description
+		}
+		if refData, ok := payload["service_from_ref"].(map[string]interface{}); ok {
+			rule.ServiceFromRef = v1beta1.NamespacedObjectReference{
+				ObjectReference: v1beta1.ObjectReference{
+					APIVersion: getStringFromMap(refData, "apiVersion"),
+					Kind:       getStringFromMap(refData, "kind"),
+					Name:       getStringFromMap(refData, "name"),
+				},
+				Namespace: getStringFromMap(refData, "namespace"),
+			}
+		}
+		if rule.ServiceFromRef.Namespace == "" && rule.ServiceFromRef.Name != "" {
+			rule.ServiceFromRef.Namespace = namespace
+		}
+		if fqdn, ok := payload["fqdn"].(string); ok && fqdn != "" {
+			rule.FQDN = fqdn
+		}
+		if transportRaw, ok := payload["transport"].(string); ok && transportRaw != "" {
+			switch strings.ToUpper(transportRaw) {
+			case string(models.UDP):
+				rule.Transport = models.UDP
+			default:
+				rule.Transport = models.TCP
+			}
+		}
+		if portsRaw, ok := payload["ports"]; ok {
+			parsedPorts := make([]models.FqdnPortSpec, 0)
+			switch typed := portsRaw.(type) {
+			case []interface{}:
+				for _, entry := range typed {
+					if entryMap, ok := entry.(map[string]interface{}); ok {
+						parsedPorts = append(parsedPorts, models.FqdnPortSpec{
+							Source:      getStringFromMap(entryMap, "source"),
+							Destination: getStringFromMap(entryMap, "destination"),
+						})
+					} else if entryStr, ok := entry.(string); ok {
+						parsedPorts = append(parsedPorts, models.FqdnPortSpec{Destination: entryStr})
+					}
+				}
+			case []map[string]interface{}:
+				for _, entryMap := range typed {
+					parsedPorts = append(parsedPorts, models.FqdnPortSpec{
+						Source:      getStringFromMap(entryMap, "source"),
+						Destination: getStringFromMap(entryMap, "destination"),
+					})
+				}
+			case string:
+				if typed != "" {
+					parsedPorts = append(parsedPorts, models.FqdnPortSpec{Destination: typed})
+				}
+			}
+			rule.Ports = parsedPorts
+		}
+		if logsRaw, ok := payload["logs"].(bool); ok {
+			rule.Logs = logsRaw
+		}
+		if traceRaw, ok := payload["trace"].(bool); ok {
+			rule.Trace = traceRaw
+		}
+		if actionRaw, ok := payload["action"].(string); ok && actionRaw != "" {
+			rule.Action = models.RuleAction(actionRaw)
+		}
+		if priorityRaw, ok := payload["priority"]; ok {
+			switch v := priorityRaw.(type) {
+			case float64:
+				rule.Priority = int32(v)
+			case int:
+				rule.Priority = int32(v)
+			case int32:
+				rule.Priority = v
+			case int64:
+				rule.Priority = int32(v)
+			}
+		}
+		if desc, ok := payload["description"].(string); ok {
+			rule.Description = desc
+		}
+		if rule.Transport == "" {
+			rule.Transport = models.TCP
+		}
+		return rule, nil
 	case string(registry.TypeHostBinding):
 		// For DELETE operations on HostBinding (process resource), we only need basic identification
 		// The coordinated deletion handler will load the full resource if needed
@@ -726,6 +837,12 @@ func (w *OutboxWorker) loadEntityResource(
 			return nil, ports.ErrNotFound
 		}
 		return foundRule, nil
+	case string(registry.TypeSvcFqdnRule):
+		rule, err := reader.GetSvcFqdnRuleByID(ctx, models.ResourceIdentifier{Namespace: namespace, Name: name})
+		if err != nil {
+			return nil, err
+		}
+		return rule, nil
 	default:
 		return nil, fmt.Errorf("unknown resource type: %s", resourceType)
 	}
@@ -758,6 +875,8 @@ func (w *OutboxWorker) getSyncerForEntity(resourceType string) (interfaces.Entit
 		return w.serviceSyncer, nil
 	case string(registry.TypeSvcSvcRule):
 		return w.svcSvcRuleSyncer, nil
+	case string(registry.TypeSvcFqdnRule):
+		return w.svcFqdnRuleSyncer, nil
 	default:
 		return nil, fmt.Errorf("no syncer registered for type: %s", resourceType)
 	}
@@ -878,6 +997,16 @@ func (w *OutboxWorker) markEntityResourceReady(
 		if err := writer.SyncSvcSvcRules(ctx, []models.SvcSvcRule{*r}, resourceScope, ports.ConditionOnlyOperation{}); err != nil {
 			return fmt.Errorf("failed to update svcsvc rule: %w", err)
 		}
+	case *models.SvcFqdnRule:
+		r.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
+		r.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced")
+		resourceScope = ports.NewResourceIdentifierScope(models.ResourceIdentifier{
+			Name:      r.Name,
+			Namespace: r.Namespace,
+		})
+		if err := writer.SyncSvcFqdnRules(ctx, []models.SvcFqdnRule{*r}, resourceScope, ports.ConditionOnlyOperation{}); err != nil {
+			return fmt.Errorf("failed to update svcfqdn rule: %w", err)
+		}
 	default:
 		return fmt.Errorf("unknown resource type for update: %T", resource)
 	}
@@ -917,7 +1046,7 @@ func convertToSyncOperation(op domain.SyncOperation) types.SyncOperation {
 	case domain.SyncOperationCreate:
 		return types.SyncOperationUpsert
 	case domain.SyncOperationUpdate:
-		return types.SyncOperationUpsert
+		return types.SyncOperationUpdate
 	case domain.SyncOperationDelete:
 		return types.SyncOperationDelete
 	default:
@@ -931,6 +1060,7 @@ type EntitySyncerAdapter struct {
 	networkSyncer      *syncers.NetworkSyncer
 	serviceSyncer      *syncers.ServiceSyncer
 	svcSvcRuleSyncer   *syncers.SvcSvcRuleSyncer
+	svcFqdnRuleSyncer  *syncers.SvcFqdnRuleSyncer
 	subjectType        types.SyncSubjectType
 }
 
@@ -946,6 +1076,8 @@ func (a *EntitySyncerAdapter) Sync(ctx context.Context, entity interfaces.Syncab
 		return a.serviceSyncer.Sync(ctx, entity, operation)
 	case types.SyncSubjectTypeSvcSvcRules:
 		return a.svcSvcRuleSyncer.Sync(ctx, entity, operation)
+	case types.SyncSubjectTypeSvcFqdnRules:
+		return a.svcFqdnRuleSyncer.Sync(ctx, entity, operation)
 	default:
 		return fmt.Errorf("unsupported subject type: %s", a.subjectType)
 	}
@@ -962,6 +1094,8 @@ func (a *EntitySyncerAdapter) SyncBatch(ctx context.Context, entities []interfac
 		return a.serviceSyncer.SyncBatch(ctx, entities, operation)
 	case types.SyncSubjectTypeSvcSvcRules:
 		return a.svcSvcRuleSyncer.SyncBatch(ctx, entities, operation)
+	case types.SyncSubjectTypeSvcFqdnRules:
+		return a.svcFqdnRuleSyncer.SyncBatch(ctx, entities, operation)
 	default:
 		return fmt.Errorf("unsupported subject type: %s", a.subjectType)
 	}
@@ -998,6 +1132,8 @@ func (w *OutboxWorker) deleteResourceFromDB(ctx context.Context, item *domain.Ou
 		deleteQuery = `DELETE FROM services WHERE namespace = $1 AND name = $2`
 	case string(registry.TypeSvcSvcRule):
 		deleteQuery = `DELETE FROM svc_svc_rules WHERE namespace = $1 AND name = $2`
+	case string(registry.TypeSvcFqdnRule):
+		deleteQuery = `DELETE FROM svc_fqdn_rules WHERE namespace = $1 AND name = $2`
 	default:
 		return fmt.Errorf("unknown resource type for deletion: %s", item.ResourceType)
 	}
@@ -1456,6 +1592,42 @@ func (w *OutboxWorker) coordinateServiceDelete(
 				zap.String("namespace", item.ResourceNamespace),
 				zap.String("name", item.ResourceName),
 				zap.Int("rule_count", len(rules)))
+			pending = true
+		}
+	}
+
+	// Step 3: SvcFqdnRule dependencies
+	fqdnRules, err := w.findSvcFqdnRulesForService(ctx, item.ResourceNamespace, item.ResourceName)
+	if err != nil {
+		return fmt.Errorf("finding SvcFqdnRule dependencies: %w", err)
+	}
+
+	if len(fqdnRules) == 0 {
+		w.logger.Debug("no SvcFqdnRules referencing Service",
+			zap.String("namespace", item.ResourceNamespace),
+			zap.String("name", item.ResourceName))
+	} else {
+		w.logger.Info("found SvcFqdnRules that need coordination",
+			zap.String("namespace", item.ResourceNamespace),
+			zap.String("name", item.ResourceName),
+			zap.Int("rule_count", len(fqdnRules)))
+
+		for _, rule := range fqdnRules {
+			if err := w.markSvcFqdnRuleForDeletion(ctx, rule); err != nil {
+				return fmt.Errorf("marking SvcFqdnRule for deletion: %w", err)
+			}
+		}
+
+		allFqdnRulesDeleted, err := w.checkAllSvcFqdnRulesDeleted(ctx, fqdnRules)
+		if err != nil {
+			return fmt.Errorf("checking SvcFqdnRule deletion status: %w", err)
+		}
+
+		if !allFqdnRulesDeleted {
+			w.logger.Debug("SvcFqdnRules not yet physically deleted, waiting",
+				zap.String("namespace", item.ResourceNamespace),
+				zap.String("name", item.ResourceName),
+				zap.Int("rule_count", len(fqdnRules)))
 			pending = true
 		}
 	}

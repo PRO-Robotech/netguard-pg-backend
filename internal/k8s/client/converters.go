@@ -1113,3 +1113,129 @@ func convertSvcSvcRuleToProto(m models.SvcSvcRule) *netguardpb.SvcSvcRule {
 	}
 	return proto
 }
+
+func convertSvcFqdnRuleFromProto(proto *netguardpb.SvcFqdnRule) models.SvcFqdnRule {
+	var transport models.TransportProtocol
+	switch proto.Transport {
+	case netguardpb.Networks_NetIP_TCP:
+		transport = models.TCP
+	case netguardpb.Networks_NetIP_UDP:
+		transport = models.UDP
+	default:
+		transport = models.TCP
+	}
+	rule := models.SvcFqdnRule{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: models.NewResourceIdentifier(
+				proto.SelfRef.Name,
+				models.WithNamespace(proto.SelfRef.Namespace),
+			),
+		},
+		FQDN:        proto.Fqdn,
+		Transport:   transport,
+		Action:      models.RuleAction(proto.Action.String()),
+		Priority:    proto.Priority,
+		Logs:        proto.Logs,
+		Trace:       proto.Trace,
+		Description: proto.Description,
+	}
+	if proto.ServiceFrom != nil {
+		rule.ServiceFromRef = v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: proto.ServiceFrom.ApiVersion,
+				Kind:       proto.ServiceFrom.Kind,
+				Name:       proto.ServiceFrom.Name,
+			},
+			Namespace: proto.ServiceFrom.Namespace,
+		}
+	}
+	if len(proto.Ports) > 0 {
+		rule.Ports = make([]models.FqdnPortSpec, len(proto.Ports))
+		for i, port := range proto.Ports {
+			rule.Ports[i] = models.FqdnPortSpec{
+				Source:      port.GetSource(),
+				Destination: port.GetDestination(),
+			}
+		}
+	}
+	if proto.Meta != nil {
+		rule.Meta = models.Meta{
+			UID:                proto.Meta.Uid,
+			ResourceVersion:    proto.Meta.ResourceVersion,
+			Generation:         proto.Meta.Generation,
+			Labels:             proto.Meta.Labels,
+			Annotations:        proto.Meta.Annotations,
+			GeneratedName:      proto.Meta.GeneratedName,
+			Conditions:         models.ProtoConditionsToK8s(proto.Meta.Conditions),
+			ObservedGeneration: proto.Meta.ObservedGeneration,
+			ManagedFields:      convertManagedFieldsFromProto(proto.Meta.ManagedFields),
+		}
+		if proto.Meta.CreationTs != nil {
+			rule.Meta.CreationTS = metav1.NewTime(proto.Meta.CreationTs.AsTime())
+		}
+		if proto.Meta.DeletionTs != nil {
+			rule.Meta.DeletionTS = &metav1.Time{Time: proto.Meta.DeletionTs.AsTime()}
+		}
+	}
+	return rule
+}
+
+func convertSvcFqdnRuleToProto(rule models.SvcFqdnRule) *netguardpb.SvcFqdnRule {
+	var transportProto netguardpb.Networks_NetIP_Transport
+	switch rule.Transport {
+	case models.UDP:
+		transportProto = netguardpb.Networks_NetIP_UDP
+	case models.TCP:
+		transportProto = netguardpb.Networks_NetIP_TCP
+	default:
+		transportProto = netguardpb.Networks_NetIP_TCP
+	}
+	proto := &netguardpb.SvcFqdnRule{
+		SelfRef: &netguardpb.ResourceIdentifier{
+			Name:      rule.ResourceIdentifier.Name,
+			Namespace: rule.ResourceIdentifier.Namespace,
+		},
+		Fqdn:        rule.FQDN,
+		Transport:   transportProto,
+		Action:      netguardpb.RuleAction(netguardpb.RuleAction_value[string(rule.Action)]),
+		Priority:    rule.Priority,
+		Logs:        rule.Logs,
+		Trace:       rule.Trace,
+		Description: rule.Description,
+	}
+	if rule.ServiceFromRef.Name != "" {
+		proto.ServiceFrom = &netguardpb.NamespacedObjectReference{
+			ApiVersion: rule.ServiceFromRef.APIVersion,
+			Kind:       rule.ServiceFromRef.Kind,
+			Name:       rule.ServiceFromRef.Name,
+			Namespace:  rule.ServiceFromRef.Namespace,
+		}
+	}
+	if len(rule.Ports) > 0 {
+		proto.Ports = make([]*netguardpb.FqdnPortSpec, len(rule.Ports))
+		for i, port := range rule.Ports {
+			proto.Ports[i] = &netguardpb.FqdnPortSpec{
+				Source:      port.Source,
+				Destination: port.Destination,
+			}
+		}
+	}
+	if !rule.Meta.CreationTS.IsZero() || rule.Meta.UID != "" {
+		proto.Meta = &netguardpb.Meta{
+			Uid:             rule.Meta.UID,
+			ResourceVersion: rule.Meta.ResourceVersion,
+			Generation:      rule.Meta.Generation,
+			Labels:          rule.Meta.Labels,
+			Annotations:     rule.Meta.Annotations,
+			GeneratedName:   rule.Meta.GeneratedName,
+			ManagedFields:   convertManagedFieldsToProto(rule.Meta.ManagedFields),
+		}
+		if !rule.Meta.CreationTS.IsZero() {
+			proto.Meta.CreationTs = timestamppb.New(rule.Meta.CreationTS.Time)
+		}
+		if rule.Meta.DeletionTS != nil {
+			proto.Meta.DeletionTs = timestamppb.New(rule.Meta.DeletionTS.Time)
+		}
+	}
+	return proto
+}

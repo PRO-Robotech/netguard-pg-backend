@@ -74,6 +74,11 @@ type BackendClient interface {
 	CreateSvcSvcRule(ctx context.Context, rule *models.SvcSvcRule) error
 	UpdateSvcSvcRule(ctx context.Context, rule *models.SvcSvcRule) error
 	DeleteSvcSvcRule(ctx context.Context, id models.ResourceIdentifier) error
+	GetSvcFqdnRule(ctx context.Context, id models.ResourceIdentifier) (*models.SvcFqdnRule, error)
+	ListSvcFqdnRules(ctx context.Context, scope ports.Scope) ([]models.SvcFqdnRule, error)
+	CreateSvcFqdnRule(ctx context.Context, rule *models.SvcFqdnRule) error
+	UpdateSvcFqdnRule(ctx context.Context, rule *models.SvcFqdnRule) error
+	DeleteSvcFqdnRule(ctx context.Context, id models.ResourceIdentifier) error
 	Sync(ctx context.Context, syncOp models.SyncOp, resources interface{}) error
 	GetSyncStatus(ctx context.Context) (*models.SyncStatus, error)
 	GetDependencyValidator() *validation.DependencyValidator
@@ -93,6 +98,7 @@ type BackendClient interface {
 	UpdateHostMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
 	UpdateHostBindingMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
 	UpdateSvcSvcRuleMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
+	UpdateSvcFqdnRuleMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
 	ListAddressGroupsForService(ctx context.Context, serviceID models.ResourceIdentifier) ([]models.AddressGroup, error)
 	ListRuleS2SDstOwnRef(ctx context.Context, serviceID models.ResourceIdentifier) ([]models.RuleS2S, error)
 	ListAccessPorts(ctx context.Context, mappingID models.ResourceIdentifier) ([]models.ServicePortsRef, error)

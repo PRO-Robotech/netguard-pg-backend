@@ -82,6 +82,7 @@ func (w *Writer) MarkForDeletionWithStatus(namespace, name, kind string) error {
 		"AddressGroupBinding": "address_group_bindings",
 		"RuleS2S":             "rule_s2s",
 		"SvcSvcRule":          "svc_svc_rules",
+		"SvcFqdnRule":         "svc_fqdn_rules",
 		"IEAgAgRule":          "ie_ag_ag_rules",
 	}
 	tableName, ok := tableMap[kind]

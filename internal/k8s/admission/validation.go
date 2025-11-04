@@ -44,6 +44,8 @@ func (w *ValidationWebhook) ValidateAdmissionReview(ctx context.Context, req *ad
 		response = w.validateRuleS2S(ctx, req)
 	case "SvcSvcRule":
 		response = w.validateSvcSvcRule(ctx, req)
+	case "SvcFqdnRule":
+		response = w.validateSvcFqdnRule(ctx, req)
 	case "ServiceAlias":
 		response = w.validateServiceAlias(ctx, req)
 	case "AddressGroupBindingPolicy":
@@ -440,6 +442,35 @@ func (w *ValidationWebhook) validateSvcSvcRule(ctx context.Context, req *admissi
 	}
 
 	return w.allowResponse(req.UID, "SvcSvcRule validation passed")
+}
+
+func (w *ValidationWebhook) validateSvcFqdnRule(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
+	var rule netguardv1beta1.SvcFqdnRule
+	if err := json.Unmarshal(req.Object.Raw, &rule); err != nil {
+		return w.errorResponse(req.UID, fmt.Sprintf("Failed to unmarshal SvcFqdnRule: %v", err))
+	}
+
+	switch req.Operation {
+	case admissionv1.Create:
+		k8sValidator := k8svalidation.NewSvcFqdnRuleValidator()
+		if errs := k8sValidator.ValidateCreate(ctx, &rule); len(errs) > 0 {
+			return w.errorResponse(req.UID, fmt.Sprintf("SvcFqdnRule K8s validation failed: %v", errs.ToAggregate()))
+		}
+	case admissionv1.Update:
+		var oldRule netguardv1beta1.SvcFqdnRule
+		if err := json.Unmarshal(req.OldObject.Raw, &oldRule); err != nil {
+			return w.errorResponse(req.UID, fmt.Sprintf("Failed to unmarshal old SvcFqdnRule: %v", err))
+		}
+
+		k8sValidator := k8svalidation.NewSvcFqdnRuleValidator()
+		if errs := k8sValidator.ValidateUpdate(ctx, &rule, &oldRule); len(errs) > 0 {
+			return w.errorResponse(req.UID, fmt.Sprintf("SvcFqdnRule K8s validation failed: %v", errs.ToAggregate()))
+		}
+	case admissionv1.Delete:
+		// No additional validation for deletes.
+	}
+
+	return w.allowResponse(req.UID, "SvcFqdnRule validation passed")
 }
 
 func (w *ValidationWebhook) validateServiceAlias(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {

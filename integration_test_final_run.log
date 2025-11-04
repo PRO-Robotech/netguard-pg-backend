@@ -1,0 +1,1081 @@
+=== RUN   TestAddressGroupUpdate_ViaHostBinding
+    addressgroup_integration_test.go:20: 🚀 Starting test environment setup...
+    addressgroup_integration_test.go:20:   📦 Starting PostgreSQL container...
+2025/10/15 03:13:42 github.com/testcontainers/testcontainers-go - Connected to docker: 
+  Server Version: 28.4.0
+  API Version: 1.51
+  Operating System: Docker Desktop
+  Total Memory: 7837 MB
+  Labels:
+    com.docker.desktop.address=unix:///Users/zhd/Library/Containers/com.docker.docker/Data/docker-cli.sock
+  Testcontainers for Go Version: v0.39.0
+  Resolved Docker Host: unix:///var/run/docker.sock
+  Resolved Docker Socket Path: /var/run/docker.sock
+  Test SessionID: fd4119714d6ea3860ab1a18c2edec9578b59e175a6240e3895e73117d199cb81
+  Test ProcessID: 9cd40399-b4a1-4df7-8cbb-001e9c1e1e9e
+2025/10/15 03:13:42 🐳 Creating container for image postgres:16-alpine
+2025/10/15 03:13:42 🐳 Creating container for image testcontainers/ryuk:0.13.0
+2025/10/15 03:13:42 ✅ Container created: 34d362f0645c
+2025/10/15 03:13:42 🐳 Starting container: 34d362f0645c
+2025/10/15 03:13:42 ✅ Container started: 34d362f0645c
+2025/10/15 03:13:42 ⏳ Waiting for container id 34d362f0645c image: testcontainers/ryuk:0.13.0. Waiting for: &{Port:8080/tcp timeout:<nil> PollInterval:100ms skipInternalCheck:false skipExternalCheck:false}
+2025/10/15 03:13:42 Shell not found in container
+2025/10/15 03:13:42 🔔 Container is ready: 34d362f0645c
+2025/10/15 03:13:42 ✅ Container created: 162a8cd69eb2
+2025/10/15 03:13:42 🐳 Starting container: 162a8cd69eb2
+2025/10/15 03:13:42 ✅ Container started: 162a8cd69eb2
+2025/10/15 03:13:42 ⏳ Waiting for container id 162a8cd69eb2 image: postgres:16-alpine. Waiting for: &{timeout:<nil> deadline:0x14000330b18 Strategies:[0x14000119da0]}
+2025/10/15 03:13:43 🔔 Container is ready: 162a8cd69eb2
+    addressgroup_integration_test.go:20:   ✅ PostgreSQL container started
+    addressgroup_integration_test.go:20:   🔌 Connecting to database...
+    addressgroup_integration_test.go:20:   ✅ Database connection established
+    addressgroup_integration_test.go:20:   📜 Applying migrations...
+    addressgroup_integration_test.go:20:     📂 Found migrations directory: /Users/zhd/Projects/newPro/netguard-pg-backend/migrations
+    addressgroup_integration_test.go:20:     📜 Applying ALL migrations (001-030) using goose...
+2025/10/15 03:13:43 OK   001_initial_schema.sql (29.53ms)
+2025/10/15 03:13:43 OK   002_fix_network_binding_constraint.sql (2.93ms)
+2025/10/15 03:13:43 OK   003_add_address_group_networks_field.sql (1.78ms)
+2025/10/15 03:13:43 OK   004_fix_binding_cascade_deletion.sql (3.56ms)
+2025/10/15 03:13:43 OK   005_add_policy_reference_columns.sql (2.97ms)
+2025/10/15 03:13:43 OK   006_add_kubernetes_metadata_fields.sql (6.32ms)
+2025/10/15 03:13:43 OK   007_fix_rule_s2s_jsonb_schema.sql (4.4ms)
+2025/10/15 03:13:43 OK   008_optimize_k8s_metadata_conditions.sql (3.04ms)
+2025/10/15 03:13:43 OK   009_add_cidr_uniqueness_constraint.sql (2.54ms)
+2025/10/15 03:13:43 OK   010_add_hosts_and_host_bindings.sql (7.53ms)
+2025/10/15 03:13:43 OK   011_remove_hostname_column.sql (1.05ms)
+2025/10/15 03:13:43 OK   012_add_hosts_to_address_group_spec.sql (3.77ms)
+2025/10/15 03:13:43 OK   013_fix_cascade_host_deletion.sql (1.6ms)
+2025/10/15 03:13:43 OK   014_add_aggregated_hosts_with_triggers.sql (3.23ms)
+2025/10/15 03:13:43 OK   015_add_host_binding_triggers.sql (1.91ms)
+2025/10/15 03:13:43 OK   016_add_host_ip_list.sql (1.68ms)
+2025/10/15 03:13:43 OK   017_add_trace_to_ieagag_rules.sql (1.22ms)
+2025/10/15 03:13:43 OK   018_add_service_ag_dual_registration.sql (2.67ms)
+2025/10/15 03:13:43 OK   019_add_deletion_timestamp.sql (1.52ms)
+2025/10/15 03:13:43 OK   020_add_network_binding_triggers.sql (2.13ms)
+2025/10/15 03:13:43 OK   021_validate_service_spec_ag_conflicts.sql (1.11ms)
+2025/10/15 03:13:43 OK   022_fix_host_deletion_trigger_timing.sql (3.43ms)
+2025/10/15 03:13:43 OK   023_fix_host_aggregation_validation.sql (6.22ms)
+2025/10/15 03:13:44 OK   024_add_cidr_overlap_constraint.sql (9.85ms)
+2025/10/15 03:13:44 OK   025_create_sync_outbox_table.sql (9.14ms)
+2025/10/15 03:13:44 OK   026_modify_host_triggers.sql (10.7ms)
+2025/10/15 03:13:44 OK   027_modify_network_triggers.sql (7.68ms)
+2025/10/15 03:13:44 OK   028_add_outbox_to_spec_triggers.sql (1.67ms)
+2025/10/15 03:13:44 OK   029_auto_sync_ready_from_conditions.sql (3.9ms)
+2025/10/15 03:13:44 OK   030_add_namespace_name_to_outbox.sql (9.04ms)
+2025/10/15 03:13:44 OK   031_fix_trigger_namespace_name.sql (3.15ms)
+2025/10/15 03:13:44 OK   032_add_delete_triggers_for_sync_first.sql (3.29ms)
+2025/10/15 03:13:44 goose: successfully migrated database to version: 32
+    addressgroup_integration_test.go:20:     ✅ All migrations applied successfully via goose
+    addressgroup_integration_test.go:20:     ✅ Schema validation passed
+    addressgroup_integration_test.go:20:   ✅ Migrations applied
+    addressgroup_integration_test.go:20:   🎭 Starting mock SGROUP server...
+    mock_sgroup_server.go:201:   🎭 Mock SGROUP server listening at: http://127.0.0.1:50659
+    addressgroup_integration_test.go:20:   ✅ Mock SGROUP server started at http://127.0.0.1:50659
+    addressgroup_integration_test.go:20: ✅ Test environment setup complete
+    addressgroup_integration_test.go:28: Created test Host: test-ns/host-1 (uuid=550e8400-e29b-41d4-a716-446655440101, ready=true)
+    addressgroup_integration_test.go:34: Created test AddressGroup: test-ns/test-ag
+    addressgroup_integration_test.go:36: Created Host test-ns/host-1 and AddressGroup test-ns/test-ag
+    addressgroup_integration_test.go:44: Created host_binding: test-ns/binding-1 → Host(test-ns/host-1) → AG(test-ns/test-ag)
+    addressgroup_integration_test.go:46: Created host_binding: Host(test-ns/host-1) → AG(test-ns/test-ag)
+    addressgroup_integration_test.go:52: Timeout waiting for outbox entry: type=AddressGroup, operation=UPDATE, timeout=5s
+    setup_testcontainer.go:91: 🧹 Cleaning up test environment...
+    mock_sgroup_server.go:208:   🛑 Mock SGROUP server stopped
+2025/10/15 03:13:49 🐳 Stopping container: 162a8cd69eb2
+2025/10/15 03:13:49 ✅ Container stopped: 162a8cd69eb2
+2025/10/15 03:13:49 🐳 Terminating container: 162a8cd69eb2
+2025/10/15 03:13:49 🚫 Container terminated: 162a8cd69eb2
+    setup_testcontainer.go:97: ✅ Test environment cleanup complete
+--- FAIL: TestAddressGroupUpdate_ViaHostBinding (7.08s)
+=== RUN   TestAddressGroupUpdate_ViaSpecHosts
+    addressgroup_integration_test.go:71: 🚀 Starting test environment setup...
+    addressgroup_integration_test.go:71:   📦 Starting PostgreSQL container...
+2025/10/15 03:13:49 🐳 Creating container for image postgres:16-alpine
+2025/10/15 03:13:49 ✅ Container created: db16414beeba
+2025/10/15 03:13:49 🐳 Starting container: db16414beeba
+2025/10/15 03:13:49 ✅ Container started: db16414beeba
+2025/10/15 03:13:49 ⏳ Waiting for container id db16414beeba image: postgres:16-alpine. Waiting for: &{timeout:<nil> deadline:0x1400067d278 Strategies:[0x1400059b440]}
+2025/10/15 03:13:50 🔔 Container is ready: db16414beeba
+    addressgroup_integration_test.go:71:   ✅ PostgreSQL container started
+    addressgroup_integration_test.go:71:   🔌 Connecting to database...
+    addressgroup_integration_test.go:71:   ✅ Database connection established
+    addressgroup_integration_test.go:71:   📜 Applying migrations...
+    addressgroup_integration_test.go:71:     📂 Found migrations directory: /Users/zhd/Projects/newPro/netguard-pg-backend/migrations
+    addressgroup_integration_test.go:71:     📜 Applying ALL migrations (001-030) using goose...
+2025/10/15 03:13:50 OK   001_initial_schema.sql (23.86ms)
+2025/10/15 03:13:50 OK   002_fix_network_binding_constraint.sql (2.68ms)
+2025/10/15 03:13:50 OK   003_add_address_group_networks_field.sql (1.77ms)
+2025/10/15 03:13:50 OK   004_fix_binding_cascade_deletion.sql (4.41ms)
+2025/10/15 03:13:50 OK   005_add_policy_reference_columns.sql (2.51ms)
+2025/10/15 03:13:50 OK   006_add_kubernetes_metadata_fields.sql (6.29ms)
+2025/10/15 03:13:50 OK   007_fix_rule_s2s_jsonb_schema.sql (3.95ms)
+2025/10/15 03:13:50 OK   008_optimize_k8s_metadata_conditions.sql (2.58ms)
+2025/10/15 03:13:50 OK   009_add_cidr_uniqueness_constraint.sql (1.98ms)
+2025/10/15 03:13:50 OK   010_add_hosts_and_host_bindings.sql (7.45ms)
+2025/10/15 03:13:50 OK   011_remove_hostname_column.sql (1.06ms)
+2025/10/15 03:13:50 OK   012_add_hosts_to_address_group_spec.sql (3.43ms)
+2025/10/15 03:13:50 OK   013_fix_cascade_host_deletion.sql (1.34ms)
+2025/10/15 03:13:50 OK   014_add_aggregated_hosts_with_triggers.sql (2.23ms)
+2025/10/15 03:13:50 OK   015_add_host_binding_triggers.sql (1.19ms)
+2025/10/15 03:13:50 OK   016_add_host_ip_list.sql (2.54ms)
+2025/10/15 03:13:50 OK   017_add_trace_to_ieagag_rules.sql (1.39ms)
+2025/10/15 03:13:50 OK   018_add_service_ag_dual_registration.sql (3.17ms)
+2025/10/15 03:13:50 OK   019_add_deletion_timestamp.sql (1.45ms)
+2025/10/15 03:13:50 OK   020_add_network_binding_triggers.sql (2.51ms)
+2025/10/15 03:13:50 OK   021_validate_service_spec_ag_conflicts.sql (949.71µs)
+2025/10/15 03:13:50 OK   022_fix_host_deletion_trigger_timing.sql (917.42µs)
+2025/10/15 03:13:50 OK   023_fix_host_aggregation_validation.sql (2.15ms)
+2025/10/15 03:13:50 OK   024_add_cidr_overlap_constraint.sql (2.02ms)
+2025/10/15 03:13:50 OK   025_create_sync_outbox_table.sql (5.18ms)
+2025/10/15 03:13:50 OK   026_modify_host_triggers.sql (7.77ms)
+2025/10/15 03:13:50 OK   027_modify_network_triggers.sql (4.66ms)
+2025/10/15 03:13:50 OK   028_add_outbox_to_spec_triggers.sql (1.11ms)
+2025/10/15 03:13:50 OK   029_auto_sync_ready_from_conditions.sql (2.66ms)
+2025/10/15 03:13:50 OK   030_add_namespace_name_to_outbox.sql (5.71ms)
+2025/10/15 03:13:50 OK   031_fix_trigger_namespace_name.sql (2.02ms)
+2025/10/15 03:13:50 OK   032_add_delete_triggers_for_sync_first.sql (1.99ms)
+2025/10/15 03:13:50 goose: successfully migrated database to version: 32
+    addressgroup_integration_test.go:71:     ✅ All migrations applied successfully via goose
+    addressgroup_integration_test.go:71:     ✅ Schema validation passed
+    addressgroup_integration_test.go:71:   ✅ Migrations applied
+    addressgroup_integration_test.go:71:   🎭 Starting mock SGROUP server...
+    mock_sgroup_server.go:201:   🎭 Mock SGROUP server listening at: http://127.0.0.1:50704
+    addressgroup_integration_test.go:71:   ✅ Mock SGROUP server started at http://127.0.0.1:50704
+    addressgroup_integration_test.go:71: ✅ Test environment setup complete
+    addressgroup_integration_test.go:78: Created test AddressGroup: test-ns/test-ag-spec
+    addressgroup_integration_test.go:80: Created AddressGroup test-ns/test-ag-spec
+    addressgroup_integration_test.go:91: 
+        	Error Trace:	/Users/zhd/Projects/newPro/netguard-pg-backend/internal/sync/integration/addressgroup_integration_test.go:91
+        	Error:      	Received unexpected error:
+        	            	ERROR: column "spec_hosts" of relation "address_groups" does not exist (SQLSTATE 42703)
+        	Test:       	TestAddressGroupUpdate_ViaSpecHosts
+    setup_testcontainer.go:91: 🧹 Cleaning up test environment...
+    mock_sgroup_server.go:208:   🛑 Mock SGROUP server stopped
+2025/10/15 03:13:50 🐳 Stopping container: db16414beeba
+2025/10/15 03:13:50 ✅ Container stopped: db16414beeba
+2025/10/15 03:13:50 🐳 Terminating container: db16414beeba
+2025/10/15 03:13:50 🚫 Container terminated: db16414beeba
+    setup_testcontainer.go:97: ✅ Test environment cleanup complete
+--- FAIL: TestAddressGroupUpdate_ViaSpecHosts (1.37s)
+=== RUN   TestAddressGroupUpdate_DualBinding
+    addressgroup_integration_test.go:114: 🚀 Starting test environment setup...
+    addressgroup_integration_test.go:114:   📦 Starting PostgreSQL container...
+2025/10/15 03:13:50 🐳 Creating container for image postgres:16-alpine
+2025/10/15 03:13:50 ✅ Container created: d88ad09b023b
+2025/10/15 03:13:50 🐳 Starting container: d88ad09b023b
+2025/10/15 03:13:50 ✅ Container started: d88ad09b023b
+2025/10/15 03:13:50 ⏳ Waiting for container id d88ad09b023b image: postgres:16-alpine. Waiting for: &{timeout:<nil> deadline:0x140006dd738 Strategies:[0x14000300a80]}
+2025/10/15 03:13:51 🔔 Container is ready: d88ad09b023b
+    addressgroup_integration_test.go:114:   ✅ PostgreSQL container started
+    addressgroup_integration_test.go:114:   🔌 Connecting to database...
+    addressgroup_integration_test.go:114:   ✅ Database connection established
+    addressgroup_integration_test.go:114:   📜 Applying migrations...
+    addressgroup_integration_test.go:114:     📂 Found migrations directory: /Users/zhd/Projects/newPro/netguard-pg-backend/migrations
+    addressgroup_integration_test.go:114:     📜 Applying ALL migrations (001-030) using goose...
+2025/10/15 03:13:51 OK   001_initial_schema.sql (29.99ms)
+2025/10/15 03:13:51 OK   002_fix_network_binding_constraint.sql (2.5ms)
+2025/10/15 03:13:51 OK   003_add_address_group_networks_field.sql (1.67ms)
+2025/10/15 03:13:51 OK   004_fix_binding_cascade_deletion.sql (3.36ms)
+2025/10/15 03:13:51 OK   005_add_policy_reference_columns.sql (3ms)
+2025/10/15 03:13:51 OK   006_add_kubernetes_metadata_fields.sql (6.25ms)
+2025/10/15 03:13:51 OK   007_fix_rule_s2s_jsonb_schema.sql (5.77ms)
+2025/10/15 03:13:51 OK   008_optimize_k8s_metadata_conditions.sql (3.11ms)
+2025/10/15 03:13:51 OK   009_add_cidr_uniqueness_constraint.sql (2.6ms)
+2025/10/15 03:13:51 OK   010_add_hosts_and_host_bindings.sql (7.89ms)
+2025/10/15 03:13:51 OK   011_remove_hostname_column.sql (1.11ms)
+2025/10/15 03:13:51 OK   012_add_hosts_to_address_group_spec.sql (3.25ms)
+2025/10/15 03:13:51 OK   013_fix_cascade_host_deletion.sql (1.78ms)
+2025/10/15 03:13:51 OK   014_add_aggregated_hosts_with_triggers.sql (2.73ms)
+2025/10/15 03:13:51 OK   015_add_host_binding_triggers.sql (1.67ms)
+2025/10/15 03:13:51 OK   016_add_host_ip_list.sql (2.05ms)
+2025/10/15 03:13:51 OK   017_add_trace_to_ieagag_rules.sql (1.97ms)
+2025/10/15 03:13:51 OK   018_add_service_ag_dual_registration.sql (2.71ms)
+2025/10/15 03:13:51 OK   019_add_deletion_timestamp.sql (1.75ms)
+2025/10/15 03:13:51 OK   020_add_network_binding_triggers.sql (2.41ms)
+2025/10/15 03:13:51 OK   021_validate_service_spec_ag_conflicts.sql (1.03ms)
+2025/10/15 03:13:51 OK   022_fix_host_deletion_trigger_timing.sql (1.1ms)
+2025/10/15 03:13:51 OK   023_fix_host_aggregation_validation.sql (2.44ms)
+2025/10/15 03:13:51 OK   024_add_cidr_overlap_constraint.sql (2.12ms)
+2025/10/15 03:13:51 OK   025_create_sync_outbox_table.sql (4.78ms)
+2025/10/15 03:13:51 OK   026_modify_host_triggers.sql (7.36ms)
+2025/10/15 03:13:51 OK   027_modify_network_triggers.sql (4.86ms)
+2025/10/15 03:13:51 OK   028_add_outbox_to_spec_triggers.sql (1.36ms)
+2025/10/15 03:13:51 OK   029_auto_sync_ready_from_conditions.sql (2.41ms)
+2025/10/15 03:13:52 OK   030_add_namespace_name_to_outbox.sql (5.32ms)
+2025/10/15 03:13:52 OK   031_fix_trigger_namespace_name.sql (2.07ms)
+2025/10/15 03:13:52 OK   032_add_delete_triggers_for_sync_first.sql (1.92ms)
+2025/10/15 03:13:52 goose: successfully migrated database to version: 32
+    addressgroup_integration_test.go:114:     ✅ All migrations applied successfully via goose
+    addressgroup_integration_test.go:114:     ✅ Schema validation passed
+    addressgroup_integration_test.go:114:   ✅ Migrations applied
+    addressgroup_integration_test.go:114:   🎭 Starting mock SGROUP server...
+    mock_sgroup_server.go:201:   🎭 Mock SGROUP server listening at: http://127.0.0.1:50712
+    addressgroup_integration_test.go:114:   ✅ Mock SGROUP server started at http://127.0.0.1:50712
+    addressgroup_integration_test.go:114: ✅ Test environment setup complete
+    addressgroup_integration_test.go:119: Created test Host: test-ns/host-1 (uuid=uuid-1, ready=true)
+    addressgroup_integration_test.go:131: 
+        	Error Trace:	/Users/zhd/Projects/newPro/netguard-pg-backend/internal/sync/integration/addressgroup_integration_test.go:131
+        	Error:      	Received unexpected error:
+        	            	ERROR: column "spec_hosts" of relation "address_groups" does not exist (SQLSTATE 42703)
+        	Test:       	TestAddressGroupUpdate_DualBinding
+    setup_testcontainer.go:91: 🧹 Cleaning up test environment...
+    mock_sgroup_server.go:208:   🛑 Mock SGROUP server stopped
+2025/10/15 03:13:52 🐳 Stopping container: d88ad09b023b
+2025/10/15 03:13:52 ✅ Container stopped: d88ad09b023b
+2025/10/15 03:13:52 🐳 Terminating container: d88ad09b023b
+2025/10/15 03:13:52 🚫 Container terminated: d88ad09b023b
+    setup_testcontainer.go:97: ✅ Test environment cleanup complete
+--- FAIL: TestAddressGroupUpdate_DualBinding (1.40s)
+=== RUN   TestAddressGroupUpdate_MultipleHosts
+    addressgroup_integration_test.go:167: 🚀 Starting test environment setup...
+    addressgroup_integration_test.go:167:   📦 Starting PostgreSQL container...
+2025/10/15 03:13:52 🐳 Creating container for image postgres:16-alpine
+2025/10/15 03:13:52 ✅ Container created: 49b730c52691
+2025/10/15 03:13:52 🐳 Starting container: 49b730c52691
+2025/10/15 03:13:52 ✅ Container started: 49b730c52691
+2025/10/15 03:13:52 ⏳ Waiting for container id 49b730c52691 image: postgres:16-alpine. Waiting for: &{timeout:<nil> deadline:0x1400222da98 Strategies:[0x1400005a960]}
+2025/10/15 03:13:53 🔔 Container is ready: 49b730c52691
+    addressgroup_integration_test.go:167:   ✅ PostgreSQL container started
+    addressgroup_integration_test.go:167:   🔌 Connecting to database...
+    addressgroup_integration_test.go:167:   ✅ Database connection established
+    addressgroup_integration_test.go:167:   📜 Applying migrations...
+    addressgroup_integration_test.go:167:     📂 Found migrations directory: /Users/zhd/Projects/newPro/netguard-pg-backend/migrations
+    addressgroup_integration_test.go:167:     📜 Applying ALL migrations (001-030) using goose...
+2025/10/15 03:13:53 OK   001_initial_schema.sql (29.22ms)
+2025/10/15 03:13:53 OK   002_fix_network_binding_constraint.sql (2.86ms)
+2025/10/15 03:13:53 OK   003_add_address_group_networks_field.sql (1.86ms)
+2025/10/15 03:13:53 OK   004_fix_binding_cascade_deletion.sql (3.55ms)
+2025/10/15 03:13:53 OK   005_add_policy_reference_columns.sql (3.43ms)
+2025/10/15 03:13:53 OK   006_add_kubernetes_metadata_fields.sql (6.62ms)
+2025/10/15 03:13:53 OK   007_fix_rule_s2s_jsonb_schema.sql (5.94ms)
+2025/10/15 03:13:53 OK   008_optimize_k8s_metadata_conditions.sql (3.37ms)
+2025/10/15 03:13:53 OK   009_add_cidr_uniqueness_constraint.sql (2.75ms)
+2025/10/15 03:13:53 OK   010_add_hosts_and_host_bindings.sql (7.55ms)
+2025/10/15 03:13:53 OK   011_remove_hostname_column.sql (1.68ms)
+2025/10/15 03:13:53 OK   012_add_hosts_to_address_group_spec.sql (3.97ms)
+2025/10/15 03:13:53 OK   013_fix_cascade_host_deletion.sql (1.45ms)
+2025/10/15 03:13:53 OK   014_add_aggregated_hosts_with_triggers.sql (3.02ms)
+2025/10/15 03:13:53 OK   015_add_host_binding_triggers.sql (1.54ms)
+2025/10/15 03:13:53 OK   016_add_host_ip_list.sql (1.77ms)
+2025/10/15 03:13:53 OK   017_add_trace_to_ieagag_rules.sql (1.43ms)
+2025/10/15 03:13:53 OK   018_add_service_ag_dual_registration.sql (2.78ms)
+2025/10/15 03:13:53 OK   019_add_deletion_timestamp.sql (1.61ms)
+2025/10/15 03:13:53 OK   020_add_network_binding_triggers.sql (2.33ms)
+2025/10/15 03:13:53 OK   021_validate_service_spec_ag_conflicts.sql (1.06ms)
+2025/10/15 03:13:53 OK   022_fix_host_deletion_trigger_timing.sql (1.16ms)
+2025/10/15 03:13:53 OK   023_fix_host_aggregation_validation.sql (2.06ms)
+2025/10/15 03:13:53 OK   024_add_cidr_overlap_constraint.sql (2.3ms)
+2025/10/15 03:13:53 OK   025_create_sync_outbox_table.sql (5.01ms)
+2025/10/15 03:13:53 OK   026_modify_host_triggers.sql (7.94ms)
+2025/10/15 03:13:53 OK   027_modify_network_triggers.sql (5.06ms)
+2025/10/15 03:13:53 OK   028_add_outbox_to_spec_triggers.sql (1.69ms)
+2025/10/15 03:13:53 OK   029_auto_sync_ready_from_conditions.sql (3.01ms)
+2025/10/15 03:13:53 OK   030_add_namespace_name_to_outbox.sql (6.5ms)
+2025/10/15 03:13:53 OK   031_fix_trigger_namespace_name.sql (2.32ms)
+2025/10/15 03:13:53 OK   032_add_delete_triggers_for_sync_first.sql (1.87ms)
+2025/10/15 03:13:53 goose: successfully migrated database to version: 32
+    addressgroup_integration_test.go:167:     ✅ All migrations applied successfully via goose
+    addressgroup_integration_test.go:167:     ✅ Schema validation passed
+    addressgroup_integration_test.go:167:   ✅ Migrations applied
+    addressgroup_integration_test.go:167:   🎭 Starting mock SGROUP server...
+    mock_sgroup_server.go:201:   🎭 Mock SGROUP server listening at: http://127.0.0.1:50725
+    addressgroup_integration_test.go:167:   ✅ Mock SGROUP server started at http://127.0.0.1:50725
+    addressgroup_integration_test.go:167: ✅ Test environment setup complete
+    addressgroup_integration_test.go:172: Created test AddressGroup: test-ns/test-ag-multi
+    addressgroup_integration_test.go:178: Created test Host: test-ns/host-a (uuid=uuid-1, ready=true)
+    addressgroup_integration_test.go:178: Created test Host: test-ns/host-b (uuid=uuid-2, ready=true)
+    addressgroup_integration_test.go:178: Created test Host: test-ns/host-c (uuid=uuid-3, ready=true)
+    addressgroup_integration_test.go:185: Created AddressGroup test-ns/test-ag-multi and 3 Hosts
+    addressgroup_integration_test.go:193: Created host_binding: test-ns/binding-a → Host(test-ns/host-a) → AG(test-ns/test-ag-multi)
+    addressgroup_integration_test.go:194: Bound host 1: test-ns/host-a
+    addressgroup_integration_test.go:193: Created host_binding: test-ns/binding-b → Host(test-ns/host-b) → AG(test-ns/test-ag-multi)
+    addressgroup_integration_test.go:194: Bound host 2: test-ns/host-b
+    addressgroup_integration_test.go:193: Created host_binding: test-ns/binding-c → Host(test-ns/host-c) → AG(test-ns/test-ag-multi)
+    addressgroup_integration_test.go:194: Bound host 3: test-ns/host-c
+    addressgroup_integration_test.go:204: 
+        	Error Trace:	/Users/zhd/Projects/newPro/netguard-pg-backend/internal/sync/integration/addressgroup_integration_test.go:204
+        	Error:      	"0" is not greater than or equal to "3"
+        	Test:       	TestAddressGroupUpdate_MultipleHosts
+        	Messages:   	At least 3 outbox entries should be created for 3 host bindings
+    addressgroup_integration_test.go:206: ✅ Test PASSED: Multiple host bindings create outbox entries (count=0)
+    setup_testcontainer.go:91: 🧹 Cleaning up test environment...
+    mock_sgroup_server.go:208:   🛑 Mock SGROUP server stopped
+2025/10/15 03:13:53 🐳 Stopping container: 49b730c52691
+2025/10/15 03:13:53 ✅ Container stopped: 49b730c52691
+2025/10/15 03:13:53 🐳 Terminating container: 49b730c52691
+2025/10/15 03:13:53 🚫 Container terminated: 49b730c52691
+    setup_testcontainer.go:97: ✅ Test environment cleanup complete
+--- FAIL: TestAddressGroupUpdate_MultipleHosts (1.67s)
+=== RUN   TestAddressGroupUpdate_HostRemoval
+    addressgroup_integration_test.go:215: 🚀 Starting test environment setup...
+    addressgroup_integration_test.go:215:   📦 Starting PostgreSQL container...
+2025/10/15 03:13:53 🐳 Creating container for image postgres:16-alpine
+2025/10/15 03:13:53 ✅ Container created: 48e54814609d
+2025/10/15 03:13:53 🐳 Starting container: 48e54814609d
+2025/10/15 03:13:54 ✅ Container started: 48e54814609d
+2025/10/15 03:13:54 ⏳ Waiting for container id 48e54814609d image: postgres:16-alpine. Waiting for: &{timeout:<nil> deadline:0x14001d6b7e8 Strategies:[0x1400059a900]}
+2025/10/15 03:13:54 🔔 Container is ready: 48e54814609d
+    addressgroup_integration_test.go:215:   ✅ PostgreSQL container started
+    addressgroup_integration_test.go:215:   🔌 Connecting to database...
+    addressgroup_integration_test.go:215:   ✅ Database connection established
+    addressgroup_integration_test.go:215:   📜 Applying migrations...
+    addressgroup_integration_test.go:215:     📂 Found migrations directory: /Users/zhd/Projects/newPro/netguard-pg-backend/migrations
+    addressgroup_integration_test.go:215:     📜 Applying ALL migrations (001-030) using goose...
+2025/10/15 03:13:54 OK   001_initial_schema.sql (26.3ms)
+2025/10/15 03:13:54 OK   002_fix_network_binding_constraint.sql (3.21ms)
+2025/10/15 03:13:55 OK   003_add_address_group_networks_field.sql (2.37ms)
+2025/10/15 03:13:55 OK   004_fix_binding_cascade_deletion.sql (3.15ms)
+2025/10/15 03:13:55 OK   005_add_policy_reference_columns.sql (4.09ms)
+2025/10/15 03:13:55 OK   006_add_kubernetes_metadata_fields.sql (7.63ms)
+2025/10/15 03:13:55 OK   007_fix_rule_s2s_jsonb_schema.sql (4.82ms)
+2025/10/15 03:13:55 OK   008_optimize_k8s_metadata_conditions.sql (3.38ms)
+2025/10/15 03:13:55 OK   009_add_cidr_uniqueness_constraint.sql (2.75ms)
+2025/10/15 03:13:55 OK   010_add_hosts_and_host_bindings.sql (7.91ms)
+2025/10/15 03:13:55 OK   011_remove_hostname_column.sql (1.19ms)
+2025/10/15 03:13:55 OK   012_add_hosts_to_address_group_spec.sql (4.41ms)
+2025/10/15 03:13:55 OK   013_fix_cascade_host_deletion.sql (1.83ms)
+2025/10/15 03:13:55 OK   014_add_aggregated_hosts_with_triggers.sql (2.66ms)
+2025/10/15 03:13:55 OK   015_add_host_binding_triggers.sql (1.38ms)
+2025/10/15 03:13:55 OK   016_add_host_ip_list.sql (1.47ms)
+2025/10/15 03:13:55 OK   017_add_trace_to_ieagag_rules.sql (1.21ms)
+2025/10/15 03:13:55 OK   018_add_service_ag_dual_registration.sql (2.48ms)
+2025/10/15 03:13:55 OK   019_add_deletion_timestamp.sql (1.49ms)
+2025/10/15 03:13:55 OK   020_add_network_binding_triggers.sql (2.46ms)
+2025/10/15 03:13:55 OK   021_validate_service_spec_ag_conflicts.sql (1.05ms)
+2025/10/15 03:13:55 OK   022_fix_host_deletion_trigger_timing.sql (1.05ms)
+2025/10/15 03:13:55 OK   023_fix_host_aggregation_validation.sql (2.62ms)
+2025/10/15 03:13:55 OK   024_add_cidr_overlap_constraint.sql (1.92ms)
+2025/10/15 03:13:55 OK   025_create_sync_outbox_table.sql (4.55ms)
+2025/10/15 03:13:55 OK   026_modify_host_triggers.sql (7.54ms)
+2025/10/15 03:13:55 OK   027_modify_network_triggers.sql (5.28ms)
+2025/10/15 03:13:55 OK   028_add_outbox_to_spec_triggers.sql (1.6ms)
+2025/10/15 03:13:55 OK   029_auto_sync_ready_from_conditions.sql (2.61ms)
+2025/10/15 03:13:55 OK   030_add_namespace_name_to_outbox.sql (8.58ms)
+2025/10/15 03:13:55 OK   031_fix_trigger_namespace_name.sql (2.67ms)
+2025/10/15 03:13:55 OK   032_add_delete_triggers_for_sync_first.sql (2.17ms)
+2025/10/15 03:13:55 goose: successfully migrated database to version: 32
+    addressgroup_integration_test.go:215:     ✅ All migrations applied successfully via goose
+    addressgroup_integration_test.go:215:     ✅ Schema validation passed
+    addressgroup_integration_test.go:215:   ✅ Migrations applied
+    addressgroup_integration_test.go:215:   🎭 Starting mock SGROUP server...
+    mock_sgroup_server.go:201:   🎭 Mock SGROUP server listening at: http://127.0.0.1:50738
+    addressgroup_integration_test.go:215:   ✅ Mock SGROUP server started at http://127.0.0.1:50738
+    addressgroup_integration_test.go:215: ✅ Test environment setup complete
+    addressgroup_integration_test.go:220: Created test Host: test-ns/host-1 (uuid=uuid-1, ready=true)
+    addressgroup_integration_test.go:224: Created test AddressGroup: test-ns/test-ag-removal
+    addressgroup_integration_test.go:228: Created host_binding: test-ns/binding-removal → Host(test-ns/host-1) → AG(test-ns/test-ag-removal)
+    addressgroup_integration_test.go:234: Initial state: host bound to AG, outbox entries=0
+    addressgroup_integration_test.go:247: Deleted host_binding
+    addressgroup_integration_test.go:256: 
+        	Error Trace:	/Users/zhd/Projects/newPro/netguard-pg-backend/internal/sync/integration/addressgroup_integration_test.go:256
+        	Error:      	"0" is not greater than "0"
+        	Test:       	TestAddressGroupUpdate_HostRemoval
+        	Messages:   	Outbox entry should be created on host removal
+    addressgroup_integration_test.go:258: ✅ Test PASSED: Host removal triggers AddressGroup outbox entry (before=0, after=0)
+    setup_testcontainer.go:91: 🧹 Cleaning up test environment...
+    mock_sgroup_server.go:208:   🛑 Mock SGROUP server stopped
+2025/10/15 03:13:55 🐳 Stopping container: 48e54814609d
+2025/10/15 03:13:55 ✅ Container stopped: 48e54814609d
+2025/10/15 03:13:55 🐳 Terminating container: 48e54814609d
+2025/10/15 03:13:55 🚫 Container terminated: 48e54814609d
+    setup_testcontainer.go:97: ✅ Test environment cleanup complete
+--- FAIL: TestAddressGroupUpdate_HostRemoval (1.92s)
+=== RUN   TestAddressGroupUpdate_CreatesOutboxEntry
+    addressgroup_integration_test.go:267: 🚀 Starting test environment setup...
+    addressgroup_integration_test.go:267:   📦 Starting PostgreSQL container...
+2025/10/15 03:13:55 🐳 Creating container for image postgres:16-alpine
+2025/10/15 03:13:55 ✅ Container created: 73a418027e59
+2025/10/15 03:13:55 🐳 Starting container: 73a418027e59
+2025/10/15 03:13:55 ✅ Container started: 73a418027e59
+2025/10/15 03:13:55 ⏳ Waiting for container id 73a418027e59 image: postgres:16-alpine. Waiting for: &{timeout:<nil> deadline:0x1400091c5a8 Strategies:[0x1400005ba40]}
+2025/10/15 03:13:56 🔔 Container is ready: 73a418027e59
+    addressgroup_integration_test.go:267:   ✅ PostgreSQL container started
+    addressgroup_integration_test.go:267:   🔌 Connecting to database...
+    addressgroup_integration_test.go:267:   ✅ Database connection established
+    addressgroup_integration_test.go:267:   📜 Applying migrations...
+    addressgroup_integration_test.go:267:     📂 Found migrations directory: /Users/zhd/Projects/newPro/netguard-pg-backend/migrations
+    addressgroup_integration_test.go:267:     📜 Applying ALL migrations (001-030) using goose...
+2025/10/15 03:13:56 OK   001_initial_schema.sql (28.44ms)
+2025/10/15 03:13:56 OK   002_fix_network_binding_constraint.sql (3.21ms)
+2025/10/15 03:13:56 OK   003_add_address_group_networks_field.sql (2.64ms)
+2025/10/15 03:13:56 OK   004_fix_binding_cascade_deletion.sql (4.75ms)
+2025/10/15 03:13:56 OK   005_add_policy_reference_columns.sql (4.14ms)
+2025/10/15 03:13:56 OK   006_add_kubernetes_metadata_fields.sql (6.45ms)
+2025/10/15 03:13:56 OK   007_fix_rule_s2s_jsonb_schema.sql (4.61ms)
+2025/10/15 03:13:56 OK   008_optimize_k8s_metadata_conditions.sql (3.04ms)
+2025/10/15 03:13:56 OK   009_add_cidr_uniqueness_constraint.sql (2.5ms)
+2025/10/15 03:13:56 OK   010_add_hosts_and_host_bindings.sql (7.33ms)
+2025/10/15 03:13:56 OK   011_remove_hostname_column.sql (1.14ms)
+2025/10/15 03:13:56 OK   012_add_hosts_to_address_group_spec.sql (3.27ms)
+2025/10/15 03:13:56 OK   013_fix_cascade_host_deletion.sql (1.77ms)
+2025/10/15 03:13:56 OK   014_add_aggregated_hosts_with_triggers.sql (2.53ms)
+2025/10/15 03:13:56 OK   015_add_host_binding_triggers.sql (1.4ms)
+2025/10/15 03:13:56 OK   016_add_host_ip_list.sql (1.35ms)
+2025/10/15 03:13:56 OK   017_add_trace_to_ieagag_rules.sql (1.15ms)
+2025/10/15 03:13:56 OK   018_add_service_ag_dual_registration.sql (2.81ms)
+2025/10/15 03:13:56 OK   019_add_deletion_timestamp.sql (1.5ms)
+2025/10/15 03:13:56 OK   020_add_network_binding_triggers.sql (2.47ms)
+2025/10/15 03:13:56 OK   021_validate_service_spec_ag_conflicts.sql (1.35ms)
+2025/10/15 03:13:56 OK   022_fix_host_deletion_trigger_timing.sql (1.12ms)
+2025/10/15 03:13:56 OK   023_fix_host_aggregation_validation.sql (2.51ms)
+2025/10/15 03:13:56 OK   024_add_cidr_overlap_constraint.sql (1.98ms)
+2025/10/15 03:13:56 OK   025_create_sync_outbox_table.sql (4.73ms)
+2025/10/15 03:13:56 OK   026_modify_host_triggers.sql (8.3ms)
+2025/10/15 03:13:56 OK   027_modify_network_triggers.sql (5.87ms)
+2025/10/15 03:13:56 OK   028_add_outbox_to_spec_triggers.sql (2.01ms)
+2025/10/15 03:13:56 OK   029_auto_sync_ready_from_conditions.sql (3.1ms)
+2025/10/15 03:13:56 OK   030_add_namespace_name_to_outbox.sql (6.61ms)
+2025/10/15 03:13:56 OK   031_fix_trigger_namespace_name.sql (2.54ms)
+2025/10/15 03:13:56 OK   032_add_delete_triggers_for_sync_first.sql (2.37ms)
+2025/10/15 03:13:56 goose: successfully migrated database to version: 32
+    addressgroup_integration_test.go:267:     ✅ All migrations applied successfully via goose
+    addressgroup_integration_test.go:267:     ✅ Schema validation passed
+    addressgroup_integration_test.go:267:   ✅ Migrations applied
+    addressgroup_integration_test.go:267:   🎭 Starting mock SGROUP server...
+    mock_sgroup_server.go:201:   🎭 Mock SGROUP server listening at: http://127.0.0.1:50747
+    addressgroup_integration_test.go:267:   ✅ Mock SGROUP server started at http://127.0.0.1:50747
+    addressgroup_integration_test.go:267: ✅ Test environment setup complete
+    addressgroup_integration_test.go:272: Created test AddressGroup: test-ns/test-ag-direct
+    addressgroup_integration_test.go:274: Created AddressGroup test-ns/test-ag-direct
+    addressgroup_integration_test.go:290: Updated aggregated_hosts for AddressGroup
+    addressgroup_integration_test.go:296: Timeout waiting for outbox entry: type=AddressGroup, operation=UPDATE, timeout=5s
+    setup_testcontainer.go:91: 🧹 Cleaning up test environment...
+    mock_sgroup_server.go:208:   🛑 Mock SGROUP server stopped
+2025/10/15 03:14:02 🐳 Stopping container: 73a418027e59
+2025/10/15 03:14:02 ✅ Container stopped: 73a418027e59
+2025/10/15 03:14:02 🐳 Terminating container: 73a418027e59
+2025/10/15 03:14:02 🚫 Container terminated: 73a418027e59
+    setup_testcontainer.go:97: ✅ Test environment cleanup complete
+--- FAIL: TestAddressGroupUpdate_CreatesOutboxEntry (6.63s)
+=== RUN   TestAddressGroupUpdate_Idempotency
+    addressgroup_integration_test.go:311: 🚀 Starting test environment setup...
+    addressgroup_integration_test.go:311:   📦 Starting PostgreSQL container...
+2025/10/15 03:14:02 🐳 Creating container for image postgres:16-alpine
+2025/10/15 03:14:02 ✅ Container created: cad807cf142b
+2025/10/15 03:14:02 🐳 Starting container: cad807cf142b
+2025/10/15 03:14:02 ✅ Container started: cad807cf142b
+2025/10/15 03:14:02 ⏳ Waiting for container id cad807cf142b image: postgres:16-alpine. Waiting for: &{timeout:<nil> deadline:0x14001b911d8 Strategies:[0x14000ab2b40]}
+2025/10/15 03:14:03 🔔 Container is ready: cad807cf142b
+    addressgroup_integration_test.go:311:   ✅ PostgreSQL container started
+    addressgroup_integration_test.go:311:   🔌 Connecting to database...
+    addressgroup_integration_test.go:311:   ✅ Database connection established
+    addressgroup_integration_test.go:311:   📜 Applying migrations...
+    addressgroup_integration_test.go:311:     📂 Found migrations directory: /Users/zhd/Projects/newPro/netguard-pg-backend/migrations
+    addressgroup_integration_test.go:311:     📜 Applying ALL migrations (001-030) using goose...
+2025/10/15 03:14:03 OK   001_initial_schema.sql (22.48ms)
+2025/10/15 03:14:03 OK   002_fix_network_binding_constraint.sql (2.24ms)
+2025/10/15 03:14:03 OK   003_add_address_group_networks_field.sql (1.37ms)
+2025/10/15 03:14:03 OK   004_fix_binding_cascade_deletion.sql (2.82ms)
+2025/10/15 03:14:03 OK   005_add_policy_reference_columns.sql (2.43ms)
+2025/10/15 03:14:03 OK   006_add_kubernetes_metadata_fields.sql (6.19ms)
+2025/10/15 03:14:03 OK   007_fix_rule_s2s_jsonb_schema.sql (4.07ms)
+2025/10/15 03:14:03 OK   008_optimize_k8s_metadata_conditions.sql (2.67ms)
+2025/10/15 03:14:03 OK   009_add_cidr_uniqueness_constraint.sql (2.54ms)
+2025/10/15 03:14:03 OK   010_add_hosts_and_host_bindings.sql (6.48ms)
+2025/10/15 03:14:03 OK   011_remove_hostname_column.sql (827.08µs)
+2025/10/15 03:14:03 OK   012_add_hosts_to_address_group_spec.sql (3.02ms)
+2025/10/15 03:14:03 OK   013_fix_cascade_host_deletion.sql (1.23ms)
+2025/10/15 03:14:03 OK   014_add_aggregated_hosts_with_triggers.sql (2.21ms)
+2025/10/15 03:14:03 OK   015_add_host_binding_triggers.sql (1.37ms)
+2025/10/15 03:14:03 OK   016_add_host_ip_list.sql (1.18ms)
+2025/10/15 03:14:03 OK   017_add_trace_to_ieagag_rules.sql (1.05ms)
+2025/10/15 03:14:03 OK   018_add_service_ag_dual_registration.sql (2.64ms)
+2025/10/15 03:14:03 OK   019_add_deletion_timestamp.sql (1.27ms)
+2025/10/15 03:14:03 OK   020_add_network_binding_triggers.sql (1.97ms)
+2025/10/15 03:14:03 OK   021_validate_service_spec_ag_conflicts.sql (818.04µs)
+2025/10/15 03:14:03 OK   022_fix_host_deletion_trigger_timing.sql (832.96µs)
+2025/10/15 03:14:03 OK   023_fix_host_aggregation_validation.sql (2.2ms)
+2025/10/15 03:14:03 OK   024_add_cidr_overlap_constraint.sql (1.41ms)
+2025/10/15 03:14:03 OK   025_create_sync_outbox_table.sql (3.97ms)
+2025/10/15 03:14:03 OK   026_modify_host_triggers.sql (6.73ms)
+2025/10/15 03:14:03 OK   027_modify_network_triggers.sql (4.77ms)
+2025/10/15 03:14:03 OK   028_add_outbox_to_spec_triggers.sql (1.37ms)
+2025/10/15 03:14:03 OK   029_auto_sync_ready_from_conditions.sql (2.44ms)
+2025/10/15 03:14:03 OK   030_add_namespace_name_to_outbox.sql (5.08ms)
+2025/10/15 03:14:03 OK   031_fix_trigger_namespace_name.sql (2.48ms)
+2025/10/15 03:14:03 OK   032_add_delete_triggers_for_sync_first.sql (2.18ms)
+2025/10/15 03:14:03 goose: successfully migrated database to version: 32
+    addressgroup_integration_test.go:311:     ✅ All migrations applied successfully via goose
+    addressgroup_integration_test.go:311:     ✅ Schema validation passed
+    addressgroup_integration_test.go:311:   ✅ Migrations applied
+    addressgroup_integration_test.go:311:   🎭 Starting mock SGROUP server...
+    mock_sgroup_server.go:201:   🎭 Mock SGROUP server listening at: http://127.0.0.1:50779
+    addressgroup_integration_test.go:311:   ✅ Mock SGROUP server started at http://127.0.0.1:50779
+    addressgroup_integration_test.go:311: ✅ Test environment setup complete
+    addressgroup_integration_test.go:316: Created test AddressGroup: test-ns/test-ag-idempotent
+    addressgroup_integration_test.go:327: Timeout waiting for outbox entry: type=AddressGroup, operation=UPDATE, timeout=5s
+    setup_testcontainer.go:91: 🧹 Cleaning up test environment...
+    mock_sgroup_server.go:208:   🛑 Mock SGROUP server stopped
+2025/10/15 03:14:08 🐳 Stopping container: cad807cf142b
+2025/10/15 03:14:08 ✅ Container stopped: cad807cf142b
+2025/10/15 03:14:08 🐳 Terminating container: cad807cf142b
+2025/10/15 03:14:08 🚫 Container terminated: cad807cf142b
+    setup_testcontainer.go:97: ✅ Test environment cleanup complete
+--- FAIL: TestAddressGroupUpdate_Idempotency (6.30s)
+=== RUN   TestBUG002_RetryStateNotPersisted
+    bug_002_retry_persistence_test.go:34: 🚀 Starting test environment setup...
+    bug_002_retry_persistence_test.go:34:   📦 Starting PostgreSQL container...
+2025/10/15 03:14:08 🐳 Creating container for image postgres:16-alpine
+2025/10/15 03:14:08 ✅ Container created: a7eed82cbed0
+2025/10/15 03:14:08 🐳 Starting container: a7eed82cbed0
+2025/10/15 03:14:08 ✅ Container started: a7eed82cbed0
+2025/10/15 03:14:08 ⏳ Waiting for container id a7eed82cbed0 image: postgres:16-alpine. Waiting for: &{timeout:<nil> deadline:0x1400087f3c8 Strategies:[0x14000709a40]}
+2025/10/15 03:14:09 🔔 Container is ready: a7eed82cbed0
+    bug_002_retry_persistence_test.go:34:   ✅ PostgreSQL container started
+    bug_002_retry_persistence_test.go:34:   🔌 Connecting to database...
+    bug_002_retry_persistence_test.go:34:   ✅ Database connection established
+    bug_002_retry_persistence_test.go:34:   📜 Applying migrations...
+    bug_002_retry_persistence_test.go:34:     📂 Found migrations directory: /Users/zhd/Projects/newPro/netguard-pg-backend/migrations
+    bug_002_retry_persistence_test.go:34:     📜 Applying ALL migrations (001-030) using goose...
+2025/10/15 03:14:09 OK   001_initial_schema.sql (22.3ms)
+2025/10/15 03:14:09 OK   002_fix_network_binding_constraint.sql (2.34ms)
+2025/10/15 03:14:09 OK   003_add_address_group_networks_field.sql (1.39ms)
+2025/10/15 03:14:09 OK   004_fix_binding_cascade_deletion.sql (2.7ms)
+2025/10/15 03:14:09 OK   005_add_policy_reference_columns.sql (2.35ms)
+2025/10/15 03:14:09 OK   006_add_kubernetes_metadata_fields.sql (5.32ms)
+2025/10/15 03:14:09 OK   007_fix_rule_s2s_jsonb_schema.sql (3.82ms)
+2025/10/15 03:14:09 OK   008_optimize_k8s_metadata_conditions.sql (2.71ms)
+2025/10/15 03:14:09 OK   009_add_cidr_uniqueness_constraint.sql (2.12ms)
+2025/10/15 03:14:09 OK   010_add_hosts_and_host_bindings.sql (6.01ms)
+2025/10/15 03:14:09 OK   011_remove_hostname_column.sql (899.79µs)
+2025/10/15 03:14:09 OK   012_add_hosts_to_address_group_spec.sql (2.98ms)
+2025/10/15 03:14:09 OK   013_fix_cascade_host_deletion.sql (1.43ms)
+2025/10/15 03:14:09 OK   014_add_aggregated_hosts_with_triggers.sql (2.05ms)
+2025/10/15 03:14:09 OK   015_add_host_binding_triggers.sql (1.1ms)
+2025/10/15 03:14:09 OK   016_add_host_ip_list.sql (1.21ms)
+2025/10/15 03:14:09 OK   017_add_trace_to_ieagag_rules.sql (1.01ms)
+2025/10/15 03:14:09 OK   018_add_service_ag_dual_registration.sql (2.18ms)
+2025/10/15 03:14:09 OK   019_add_deletion_timestamp.sql (1.14ms)
+2025/10/15 03:14:09 OK   020_add_network_binding_triggers.sql (1.9ms)
+2025/10/15 03:14:09 OK   021_validate_service_spec_ag_conflicts.sql (719.83µs)
+2025/10/15 03:14:09 OK   022_fix_host_deletion_trigger_timing.sql (717.71µs)
+2025/10/15 03:14:09 OK   023_fix_host_aggregation_validation.sql (1.66ms)
+2025/10/15 03:14:09 OK   024_add_cidr_overlap_constraint.sql (1.51ms)
+2025/10/15 03:14:09 OK   025_create_sync_outbox_table.sql (4.05ms)
+2025/10/15 03:14:09 OK   026_modify_host_triggers.sql (6.35ms)
+2025/10/15 03:14:09 OK   027_modify_network_triggers.sql (4.29ms)
+2025/10/15 03:14:09 OK   028_add_outbox_to_spec_triggers.sql (1.12ms)
+2025/10/15 03:14:09 OK   029_auto_sync_ready_from_conditions.sql (2.23ms)
+2025/10/15 03:14:09 OK   030_add_namespace_name_to_outbox.sql (5.08ms)
+2025/10/15 03:14:09 OK   031_fix_trigger_namespace_name.sql (1.79ms)
+2025/10/15 03:14:09 OK   032_add_delete_triggers_for_sync_first.sql (1.72ms)
+2025/10/15 03:14:09 goose: successfully migrated database to version: 32
+    bug_002_retry_persistence_test.go:34:     ✅ All migrations applied successfully via goose
+    bug_002_retry_persistence_test.go:34:     ✅ Schema validation passed
+    bug_002_retry_persistence_test.go:34:   ✅ Migrations applied
+    bug_002_retry_persistence_test.go:34:   🎭 Starting mock SGROUP server...
+    mock_sgroup_server.go:201:   🎭 Mock SGROUP server listening at: http://127.0.0.1:50807
+    bug_002_retry_persistence_test.go:34:   ✅ Mock SGROUP server started at http://127.0.0.1:50807
+    bug_002_retry_persistence_test.go:34: ✅ Test environment setup complete
+    bug_002_retry_persistence_test.go:38: 🧹 Outbox table cleaned
+    bug_002_retry_persistence_test.go:41: 📝 Creating AddressGroup...
+    bug_002_retry_persistence_test.go:42: 📝 Created test AddressGroup: default/test-retry-ag
+    bug_002_retry_persistence_test.go:48: 📝 Manually creating outbox entry (simulating Repository writer)...
+    bug_002_retry_persistence_test.go:60:   ✅ Created outbox entry: 9dd96c28-ace6-4635-b7f0-d21307190ba1
+    bug_002_retry_persistence_test.go:63: 🔍 Verifying initial outbox entry state...
+    bug_002_retry_persistence_test.go:64: ✅ Found outbox entry: test-retry-ag (status=PENDING, took 101.857542ms)
+    bug_002_retry_persistence_test.go:75:   ✅ Initial entry ID: 9dd96c28-ace6-4635-b7f0-d21307190ba1, attempts=0
+    bug_002_retry_persistence_test.go:78: ℹ️  This test requires OutboxWorker to be running
+    bug_002_retry_persistence_test.go:79: ℹ️  In production: Worker processes entries and updates retry state
+    bug_002_retry_persistence_test.go:80: ℹ️  BUG-002: Worker does NOT persist retry state to database
+    bug_002_retry_persistence_test.go:81: 
+    bug_002_retry_persistence_test.go:82: 🔬 TEST STRATEGY:
+    bug_002_retry_persistence_test.go:83:    1. Create outbox entry (DONE)
+    bug_002_retry_persistence_test.go:84:    2. Deploy code WITH OutboxWorker
+    bug_002_retry_persistence_test.go:85:    3. Simulate SGROUP failure
+    bug_002_retry_persistence_test.go:86:    4. Verify retry state persists
+    bug_002_retry_persistence_test.go:87: 
+    bug_002_retry_persistence_test.go:88: 📋 MANUAL VALIDATION STEPS:
+    bug_002_retry_persistence_test.go:89:    1. Deploy backend with OutboxWorker enabled
+    bug_002_retry_persistence_test.go:90:    2. Stop SGROUP service
+    bug_002_retry_persistence_test.go:91:    3. Create AddressGroup in K8s
+    bug_002_retry_persistence_test.go:92:    4. Query: SELECT attempts, last_error, next_retry_at FROM sync_outbox
+    bug_002_retry_persistence_test.go:93:    5. If attempts=0, last_error=NULL → BUG-002 EXISTS
+    bug_002_retry_persistence_test.go:94: 
+    bug_002_retry_persistence_test.go:95: ⏭️  Skipping automated test - requires running OutboxWorker
+    setup_testcontainer.go:91: 🧹 Cleaning up test environment...
+    mock_sgroup_server.go:208:   🛑 Mock SGROUP server stopped
+2025/10/15 03:14:09 🐳 Stopping container: a7eed82cbed0
+2025/10/15 03:14:10 ✅ Container stopped: a7eed82cbed0
+2025/10/15 03:14:10 🐳 Terminating container: a7eed82cbed0
+2025/10/15 03:14:10 🚫 Container terminated: a7eed82cbed0
+    setup_testcontainer.go:97: ✅ Test environment cleanup complete
+--- SKIP: TestBUG002_RetryStateNotPersisted (1.40s)
+=== RUN   TestBUG002_RetryAfterWorkerRestart
+    bug_002_retry_persistence_test.go:103: TODO: Requires worker lifecycle management - implement after BUG-002 fixed
+--- SKIP: TestBUG002_RetryAfterWorkerRestart (0.00s)
+=== RUN   TestBUG002_ExponentialBackoffWorks
+    bug_002_retry_persistence_test.go:122: TODO: Requires time manipulation - implement after BUG-002 fixed
+--- SKIP: TestBUG002_ExponentialBackoffWorks (0.00s)
+=== RUN   TestBUG003_DeleteNoOutboxEntry
+    bug_003_delete_no_outbox_test.go:35: 🚀 Starting test environment setup...
+    bug_003_delete_no_outbox_test.go:35:   📦 Starting PostgreSQL container...
+2025/10/15 03:14:10 🐳 Creating container for image postgres:16-alpine
+2025/10/15 03:14:10 ✅ Container created: ecc278f27954
+2025/10/15 03:14:10 🐳 Starting container: ecc278f27954
+2025/10/15 03:14:10 ✅ Container started: ecc278f27954
+2025/10/15 03:14:10 ⏳ Waiting for container id ecc278f27954 image: postgres:16-alpine. Waiting for: &{timeout:<nil> deadline:0x14000ad2c38 Strategies:[0x14002281c80]}
+2025/10/15 03:14:11 🔔 Container is ready: ecc278f27954
+    bug_003_delete_no_outbox_test.go:35:   ✅ PostgreSQL container started
+    bug_003_delete_no_outbox_test.go:35:   🔌 Connecting to database...
+    bug_003_delete_no_outbox_test.go:35:   ✅ Database connection established
+    bug_003_delete_no_outbox_test.go:35:   📜 Applying migrations...
+    bug_003_delete_no_outbox_test.go:35:     📂 Found migrations directory: /Users/zhd/Projects/newPro/netguard-pg-backend/migrations
+    bug_003_delete_no_outbox_test.go:35:     📜 Applying ALL migrations (001-030) using goose...
+2025/10/15 03:14:11 OK   001_initial_schema.sql (24.65ms)
+2025/10/15 03:14:11 OK   002_fix_network_binding_constraint.sql (2.69ms)
+2025/10/15 03:14:11 OK   003_add_address_group_networks_field.sql (1.63ms)
+2025/10/15 03:14:11 OK   004_fix_binding_cascade_deletion.sql (3.42ms)
+2025/10/15 03:14:11 OK   005_add_policy_reference_columns.sql (2.53ms)
+2025/10/15 03:14:11 OK   006_add_kubernetes_metadata_fields.sql (5.3ms)
+2025/10/15 03:14:11 OK   007_fix_rule_s2s_jsonb_schema.sql (4.03ms)
+2025/10/15 03:14:11 OK   008_optimize_k8s_metadata_conditions.sql (2.62ms)
+2025/10/15 03:14:11 OK   009_add_cidr_uniqueness_constraint.sql (2.24ms)
+2025/10/15 03:14:11 OK   010_add_hosts_and_host_bindings.sql (6.37ms)
+2025/10/15 03:14:11 OK   011_remove_hostname_column.sql (895.21µs)
+2025/10/15 03:14:11 OK   012_add_hosts_to_address_group_spec.sql (3.04ms)
+2025/10/15 03:14:11 OK   013_fix_cascade_host_deletion.sql (1.4ms)
+2025/10/15 03:14:11 OK   014_add_aggregated_hosts_with_triggers.sql (2.41ms)
+2025/10/15 03:14:11 OK   015_add_host_binding_triggers.sql (1.3ms)
+2025/10/15 03:14:11 OK   016_add_host_ip_list.sql (1.18ms)
+2025/10/15 03:14:11 OK   017_add_trace_to_ieagag_rules.sql (1.11ms)
+2025/10/15 03:14:11 OK   018_add_service_ag_dual_registration.sql (2.5ms)
+2025/10/15 03:14:11 OK   019_add_deletion_timestamp.sql (1.34ms)
+2025/10/15 03:14:11 OK   020_add_network_binding_triggers.sql (3.07ms)
+2025/10/15 03:14:11 OK   021_validate_service_spec_ag_conflicts.sql (1.45ms)
+2025/10/15 03:14:11 OK   022_fix_host_deletion_trigger_timing.sql (1.65ms)
+2025/10/15 03:14:11 OK   023_fix_host_aggregation_validation.sql (2.62ms)
+2025/10/15 03:14:11 OK   024_add_cidr_overlap_constraint.sql (3.48ms)
+2025/10/15 03:14:11 OK   025_create_sync_outbox_table.sql (6.36ms)
+2025/10/15 03:14:11 OK   026_modify_host_triggers.sql (8.62ms)
+2025/10/15 03:14:11 OK   027_modify_network_triggers.sql (6.29ms)
+2025/10/15 03:14:11 OK   028_add_outbox_to_spec_triggers.sql (1.7ms)
+2025/10/15 03:14:11 OK   029_auto_sync_ready_from_conditions.sql (3.25ms)
+2025/10/15 03:14:11 OK   030_add_namespace_name_to_outbox.sql (6.01ms)
+2025/10/15 03:14:11 OK   031_fix_trigger_namespace_name.sql (2.22ms)
+2025/10/15 03:14:11 OK   032_add_delete_triggers_for_sync_first.sql (2.24ms)
+2025/10/15 03:14:11 goose: successfully migrated database to version: 32
+    bug_003_delete_no_outbox_test.go:35:     ✅ All migrations applied successfully via goose
+    bug_003_delete_no_outbox_test.go:35:     ✅ Schema validation passed
+    bug_003_delete_no_outbox_test.go:35:   ✅ Migrations applied
+    bug_003_delete_no_outbox_test.go:35:   🎭 Starting mock SGROUP server...
+    mock_sgroup_server.go:201:   🎭 Mock SGROUP server listening at: http://127.0.0.1:50819
+    bug_003_delete_no_outbox_test.go:35:   ✅ Mock SGROUP server started at http://127.0.0.1:50819
+    bug_003_delete_no_outbox_test.go:35: ✅ Test environment setup complete
+    bug_003_delete_no_outbox_test.go:41: 🧹 Outbox table cleaned
+    bug_003_delete_no_outbox_test.go:44: 📝 Creating AddressGroup via Repository Writer...
+    bug_003_delete_no_outbox_test.go:48: 📝 Created AddressGroup via Repository: default/test-delete-ag (triggers fired!)
+    repository_helpers.go:33: Transaction rollback (expected if committed): tx is closed
+    bug_003_delete_no_outbox_test.go:52: ✅ Found outbox entry: test-delete-ag (status=PENDING, took 101.46ms)
+    bug_003_delete_no_outbox_test.go:54:   ✅ CREATE entry created: 0e62addb-15b0-4e40-8e9b-68aea17762a2
+    bug_003_delete_no_outbox_test.go:57: 🧹 Cleaning outbox to isolate DELETE test...
+    bug_003_delete_no_outbox_test.go:58: 🧹 Outbox table cleaned
+    bug_003_delete_no_outbox_test.go:65: 🗑️  Deleting AddressGroup via Repository Writer...
+    bug_003_delete_no_outbox_test.go:66: 🗑️  Deleted AddressGroup via Repository: default/test-delete-ag
+    repository_helpers.go:87: Transaction rollback (expected if committed): tx is closed
+    bug_003_delete_no_outbox_test.go:69: 🔍 Checking if DELETE created outbox entry...
+    bug_003_delete_no_outbox_test.go:100:   ✅ DELETE entry created: 144c11ce-a8d4-447b-b887-80216cf82509, operation=DELETE
+    setup_testcontainer.go:91: 🧹 Cleaning up test environment...
+    mock_sgroup_server.go:208:   🛑 Mock SGROUP server stopped
+2025/10/15 03:14:13 🐳 Stopping container: ecc278f27954
+2025/10/15 03:14:13 ✅ Container stopped: ecc278f27954
+2025/10/15 03:14:13 🐳 Terminating container: ecc278f27954
+2025/10/15 03:14:13 🚫 Container terminated: ecc278f27954
+    setup_testcontainer.go:97: ✅ Test environment cleanup complete
+--- PASS: TestBUG003_DeleteNoOutboxEntry (3.52s)
+=== RUN   TestBUG003_DeleteDuringSGROUPDowntime
+    bug_003_delete_no_outbox_test.go:117: 🚀 Starting test environment setup...
+    bug_003_delete_no_outbox_test.go:117:   📦 Starting PostgreSQL container...
+2025/10/15 03:14:13 🐳 Creating container for image postgres:16-alpine
+2025/10/15 03:14:13 ✅ Container created: 33d51179f222
+2025/10/15 03:14:13 🐳 Starting container: 33d51179f222
+2025/10/15 03:14:13 ✅ Container started: 33d51179f222
+2025/10/15 03:14:13 ⏳ Waiting for container id 33d51179f222 image: postgres:16-alpine. Waiting for: &{timeout:<nil> deadline:0x14001b8b6f8 Strategies:[0x1400152d440]}
+2025/10/15 03:14:14 🔔 Container is ready: 33d51179f222
+    bug_003_delete_no_outbox_test.go:117:   ✅ PostgreSQL container started
+    bug_003_delete_no_outbox_test.go:117:   🔌 Connecting to database...
+    bug_003_delete_no_outbox_test.go:117:   ✅ Database connection established
+    bug_003_delete_no_outbox_test.go:117:   📜 Applying migrations...
+    bug_003_delete_no_outbox_test.go:117:     📂 Found migrations directory: /Users/zhd/Projects/newPro/netguard-pg-backend/migrations
+    bug_003_delete_no_outbox_test.go:117:     📜 Applying ALL migrations (001-030) using goose...
+2025/10/15 03:14:14 OK   001_initial_schema.sql (28.94ms)
+2025/10/15 03:14:14 OK   002_fix_network_binding_constraint.sql (2.59ms)
+2025/10/15 03:14:14 OK   003_add_address_group_networks_field.sql (4.77ms)
+2025/10/15 03:14:14 OK   004_fix_binding_cascade_deletion.sql (3.42ms)
+2025/10/15 03:14:14 OK   005_add_policy_reference_columns.sql (3.05ms)
+2025/10/15 03:14:14 OK   006_add_kubernetes_metadata_fields.sql (6.25ms)
+2025/10/15 03:14:14 OK   007_fix_rule_s2s_jsonb_schema.sql (4.36ms)
+2025/10/15 03:14:14 OK   008_optimize_k8s_metadata_conditions.sql (3.55ms)
+2025/10/15 03:14:14 OK   009_add_cidr_uniqueness_constraint.sql (2.48ms)
+2025/10/15 03:14:14 OK   010_add_hosts_and_host_bindings.sql (8.09ms)
+2025/10/15 03:14:14 OK   011_remove_hostname_column.sql (3.66ms)
+2025/10/15 03:14:14 OK   012_add_hosts_to_address_group_spec.sql (4.57ms)
+2025/10/15 03:14:14 OK   013_fix_cascade_host_deletion.sql (1.82ms)
+2025/10/15 03:14:14 OK   014_add_aggregated_hosts_with_triggers.sql (2.4ms)
+2025/10/15 03:14:14 OK   015_add_host_binding_triggers.sql (1.42ms)
+2025/10/15 03:14:14 OK   016_add_host_ip_list.sql (2.19ms)
+2025/10/15 03:14:14 OK   017_add_trace_to_ieagag_rules.sql (1.57ms)
+2025/10/15 03:14:14 OK   018_add_service_ag_dual_registration.sql (2.53ms)
+2025/10/15 03:14:14 OK   019_add_deletion_timestamp.sql (1.7ms)
+2025/10/15 03:14:14 OK   020_add_network_binding_triggers.sql (2.64ms)
+2025/10/15 03:14:14 OK   021_validate_service_spec_ag_conflicts.sql (1.15ms)
+2025/10/15 03:14:14 OK   022_fix_host_deletion_trigger_timing.sql (1.28ms)
+2025/10/15 03:14:14 OK   023_fix_host_aggregation_validation.sql (2.15ms)
+2025/10/15 03:14:14 OK   024_add_cidr_overlap_constraint.sql (1.95ms)
+2025/10/15 03:14:14 OK   025_create_sync_outbox_table.sql (4.66ms)
+2025/10/15 03:14:14 OK   026_modify_host_triggers.sql (7.04ms)
+2025/10/15 03:14:14 OK   027_modify_network_triggers.sql (5.01ms)
+2025/10/15 03:14:14 OK   028_add_outbox_to_spec_triggers.sql (1.74ms)
+2025/10/15 03:14:14 OK   029_auto_sync_ready_from_conditions.sql (2.9ms)
+2025/10/15 03:14:14 OK   030_add_namespace_name_to_outbox.sql (5.95ms)
+2025/10/15 03:14:14 OK   031_fix_trigger_namespace_name.sql (2.77ms)
+2025/10/15 03:14:14 OK   032_add_delete_triggers_for_sync_first.sql (2.2ms)
+2025/10/15 03:14:14 goose: successfully migrated database to version: 32
+    bug_003_delete_no_outbox_test.go:117:     ✅ All migrations applied successfully via goose
+    bug_003_delete_no_outbox_test.go:117:     ✅ Schema validation passed
+    bug_003_delete_no_outbox_test.go:117:   ✅ Migrations applied
+    bug_003_delete_no_outbox_test.go:117:   🎭 Starting mock SGROUP server...
+    mock_sgroup_server.go:201:   🎭 Mock SGROUP server listening at: http://127.0.0.1:50837
+    bug_003_delete_no_outbox_test.go:117:   ✅ Mock SGROUP server started at http://127.0.0.1:50837
+    bug_003_delete_no_outbox_test.go:117: ✅ Test environment setup complete
+    bug_003_delete_no_outbox_test.go:123: ❌ Setting SGROUP to ConnectionRefused (simulating outage)...
+    mock_sgroup_server.go:230:   🔧 Mock SGROUP mode set to: ConnectionRefused
+    bug_003_delete_no_outbox_test.go:127: 📝 Creating AddressGroup...
+    bug_003_delete_no_outbox_test.go:131: 📝 Created test AddressGroup: default/test-delete-offline
+    bug_003_delete_no_outbox_test.go:135: 🧹 Outbox table cleaned
+    bug_003_delete_no_outbox_test.go:137: 🗑️  Deleting AddressGroup while SGROUP is down...
+    bug_003_delete_no_outbox_test.go:145: 🔍 Verifying DELETE outbox entry created...
+    bug_003_delete_no_outbox_test.go:164:   ✅ DELETE outbox entry created: da339c1b-5e7a-4741-9f35-ae94b1d90240
+    bug_003_delete_no_outbox_test.go:167: ✅ Bringing SGROUP back online...
+    mock_sgroup_server.go:230:   🔧 Mock SGROUP mode set to: Healthy
+    bug_003_delete_no_outbox_test.go:171: ⏳ Waiting for worker to process DELETE (15 seconds)...
+    bug_003_delete_no_outbox_test.go:175: 🔍 Checking if DELETE was processed...
+    bug_003_delete_no_outbox_test.go:186:   📊 DELETE entry status: PENDING
+    bug_003_delete_no_outbox_test.go:187: 
+        	Error Trace:	/Users/zhd/Projects/newPro/netguard-pg-backend/internal/sync/integration/bug_003_delete_no_outbox_test.go:187
+        	Error:      	[]string{"COMPLETED", "PROCESSING"} does not contain "PENDING"
+        	Test:       	TestBUG003_DeleteDuringSGROUPDowntime
+        	Messages:   	DELETE should be processed or completed
+    bug_003_delete_no_outbox_test.go:193:   📊 Mock SGROUP received 0 requests
+    bug_003_delete_no_outbox_test.go:196:   ⚠️  WARNING: No requests to SGROUP - worker may not be running
+    setup_testcontainer.go:91: 🧹 Cleaning up test environment...
+    mock_sgroup_server.go:208:   🛑 Mock SGROUP server stopped
+2025/10/15 03:14:31 🐳 Stopping container: 33d51179f222
+2025/10/15 03:14:32 ✅ Container stopped: 33d51179f222
+2025/10/15 03:14:32 🐳 Terminating container: 33d51179f222
+2025/10/15 03:14:32 🚫 Container terminated: 33d51179f222
+    setup_testcontainer.go:97: ✅ Test environment cleanup complete
+--- FAIL: TestBUG003_DeleteDuringSGROUPDowntime (18.48s)
+=== RUN   TestBUG003_MultipleEntityTypesDeleteOutbox
+    bug_003_delete_no_outbox_test.go:211: 🚀 Starting test environment setup...
+    bug_003_delete_no_outbox_test.go:211:   📦 Starting PostgreSQL container...
+2025/10/15 03:14:32 🐳 Creating container for image postgres:16-alpine
+2025/10/15 03:14:32 ✅ Container created: d187c2466bda
+2025/10/15 03:14:32 🐳 Starting container: d187c2466bda
+2025/10/15 03:14:32 ✅ Container started: d187c2466bda
+2025/10/15 03:14:32 ⏳ Waiting for container id d187c2466bda image: postgres:16-alpine. Waiting for: &{timeout:<nil> deadline:0x14001fe5320 Strategies:[0x14001f2a720]}
+2025/10/15 03:14:33 🔔 Container is ready: d187c2466bda
+    bug_003_delete_no_outbox_test.go:211:   ✅ PostgreSQL container started
+    bug_003_delete_no_outbox_test.go:211:   🔌 Connecting to database...
+    bug_003_delete_no_outbox_test.go:211:   ✅ Database connection established
+    bug_003_delete_no_outbox_test.go:211:   📜 Applying migrations...
+    bug_003_delete_no_outbox_test.go:211:     📂 Found migrations directory: /Users/zhd/Projects/newPro/netguard-pg-backend/migrations
+    bug_003_delete_no_outbox_test.go:211:     📜 Applying ALL migrations (001-030) using goose...
+2025/10/15 03:14:33 OK   001_initial_schema.sql (23.48ms)
+2025/10/15 03:14:33 OK   002_fix_network_binding_constraint.sql (2.3ms)
+2025/10/15 03:14:33 OK   003_add_address_group_networks_field.sql (1.24ms)
+2025/10/15 03:14:33 OK   004_fix_binding_cascade_deletion.sql (2.94ms)
+2025/10/15 03:14:33 OK   005_add_policy_reference_columns.sql (2.27ms)
+2025/10/15 03:14:33 OK   006_add_kubernetes_metadata_fields.sql (4.88ms)
+2025/10/15 03:14:33 OK   007_fix_rule_s2s_jsonb_schema.sql (3.41ms)
+2025/10/15 03:14:33 OK   008_optimize_k8s_metadata_conditions.sql (2.35ms)
+2025/10/15 03:14:33 OK   009_add_cidr_uniqueness_constraint.sql (1.87ms)
+2025/10/15 03:14:33 OK   010_add_hosts_and_host_bindings.sql (5.92ms)
+2025/10/15 03:14:33 OK   011_remove_hostname_column.sql (892.58µs)
+2025/10/15 03:14:33 OK   012_add_hosts_to_address_group_spec.sql (3.15ms)
+2025/10/15 03:14:33 OK   013_fix_cascade_host_deletion.sql (1.29ms)
+2025/10/15 03:14:33 OK   014_add_aggregated_hosts_with_triggers.sql (2.3ms)
+2025/10/15 03:14:33 OK   015_add_host_binding_triggers.sql (1.19ms)
+2025/10/15 03:14:33 OK   016_add_host_ip_list.sql (1.16ms)
+2025/10/15 03:14:33 OK   017_add_trace_to_ieagag_rules.sql (1.02ms)
+2025/10/15 03:14:33 OK   018_add_service_ag_dual_registration.sql (2.3ms)
+2025/10/15 03:14:33 OK   019_add_deletion_timestamp.sql (1.2ms)
+2025/10/15 03:14:33 OK   020_add_network_binding_triggers.sql (1.79ms)
+2025/10/15 03:14:33 OK   021_validate_service_spec_ag_conflicts.sql (745µs)
+2025/10/15 03:14:33 OK   022_fix_host_deletion_trigger_timing.sql (703.5µs)
+2025/10/15 03:14:33 OK   023_fix_host_aggregation_validation.sql (1.53ms)
+2025/10/15 03:14:33 OK   024_add_cidr_overlap_constraint.sql (1.49ms)
+2025/10/15 03:14:33 OK   025_create_sync_outbox_table.sql (4.02ms)
+2025/10/15 03:14:33 OK   026_modify_host_triggers.sql (6.35ms)
+2025/10/15 03:14:33 OK   027_modify_network_triggers.sql (4.35ms)
+2025/10/15 03:14:33 OK   028_add_outbox_to_spec_triggers.sql (1.16ms)
+2025/10/15 03:14:33 OK   029_auto_sync_ready_from_conditions.sql (2.13ms)
+2025/10/15 03:14:33 OK   030_add_namespace_name_to_outbox.sql (5.12ms)
+2025/10/15 03:14:33 OK   031_fix_trigger_namespace_name.sql (1.88ms)
+2025/10/15 03:14:33 OK   032_add_delete_triggers_for_sync_first.sql (1.89ms)
+2025/10/15 03:14:33 goose: successfully migrated database to version: 32
+    bug_003_delete_no_outbox_test.go:211:     ✅ All migrations applied successfully via goose
+    bug_003_delete_no_outbox_test.go:211:     ✅ Schema validation passed
+    bug_003_delete_no_outbox_test.go:211:   ✅ Migrations applied
+    bug_003_delete_no_outbox_test.go:211:   🎭 Starting mock SGROUP server...
+    mock_sgroup_server.go:201:   🎭 Mock SGROUP server listening at: http://127.0.0.1:50917
+    bug_003_delete_no_outbox_test.go:211:   ✅ Mock SGROUP server started at http://127.0.0.1:50917
+    bug_003_delete_no_outbox_test.go:211: ✅ Test environment setup complete
+=== RUN   TestBUG003_MultipleEntityTypesDeleteOutbox/AddressGroup_DELETE
+    bug_003_delete_no_outbox_test.go:255: 🧹 Outbox table cleaned
+    bug_003_delete_no_outbox_test.go:258: Creating AddressGroup...
+=== NAME  TestBUG003_MultipleEntityTypesDeleteOutbox
+    bug_003_delete_no_outbox_test.go:226: 📝 Created test AddressGroup: default/test-delete-ag-multi
+=== NAME  TestBUG003_MultipleEntityTypesDeleteOutbox/AddressGroup_DELETE
+    bug_003_delete_no_outbox_test.go:263: 🧹 Outbox table cleaned
+    bug_003_delete_no_outbox_test.go:266: Deleting AddressGroup...
+=== NAME  TestBUG003_MultipleEntityTypesDeleteOutbox
+    setup_testcontainer.go:91: 🧹 Cleaning up test environment...
+    mock_sgroup_server.go:208:   🛑 Mock SGROUP server stopped
+2025/10/15 03:14:35 🐳 Stopping container: d187c2466bda
+2025/10/15 03:14:35 ✅ Container stopped: d187c2466bda
+2025/10/15 03:14:35 🐳 Terminating container: d187c2466bda
+2025/10/15 03:14:35 🚫 Container terminated: d187c2466bda
+    setup_testcontainer.go:97: ✅ Test environment cleanup complete
+--- PASS: TestBUG003_MultipleEntityTypesDeleteOutbox (3.22s)
+    --- PASS: TestBUG003_MultipleEntityTypesDeleteOutbox/AddressGroup_DELETE (2.01s)
+=== RUN   TestConcurrency_MultipleWorkers
+    concurrency_test.go:22: 🚀 Starting test environment setup...
+    concurrency_test.go:22:   📦 Starting PostgreSQL container...
+2025/10/15 03:14:35 🐳 Creating container for image postgres:16-alpine
+2025/10/15 03:14:35 ✅ Container created: 134c8c37234a
+2025/10/15 03:14:35 🐳 Starting container: 134c8c37234a
+2025/10/15 03:14:35 ✅ Container started: 134c8c37234a
+2025/10/15 03:14:35 ⏳ Waiting for container id 134c8c37234a image: postgres:16-alpine. Waiting for: &{timeout:<nil> deadline:0x14002bfabb0 Strategies:[0x14001e70120]}
+2025/10/15 03:14:36 🔔 Container is ready: 134c8c37234a
+    concurrency_test.go:22:   ✅ PostgreSQL container started
+    concurrency_test.go:22:   🔌 Connecting to database...
+    concurrency_test.go:22:   ✅ Database connection established
+    concurrency_test.go:22:   📜 Applying migrations...
+    concurrency_test.go:22:     📂 Found migrations directory: /Users/zhd/Projects/newPro/netguard-pg-backend/migrations
+    concurrency_test.go:22:     📜 Applying ALL migrations (001-030) using goose...
+2025/10/15 03:14:36 OK   001_initial_schema.sql (23.38ms)
+2025/10/15 03:14:36 OK   002_fix_network_binding_constraint.sql (2.36ms)
+2025/10/15 03:14:36 OK   003_add_address_group_networks_field.sql (1.53ms)
+2025/10/15 03:14:36 OK   004_fix_binding_cascade_deletion.sql (2.85ms)
+2025/10/15 03:14:36 OK   005_add_policy_reference_columns.sql (2.48ms)
+2025/10/15 03:14:36 OK   006_add_kubernetes_metadata_fields.sql (5.18ms)
+2025/10/15 03:14:36 OK   007_fix_rule_s2s_jsonb_schema.sql (4.99ms)
+2025/10/15 03:14:36 OK   008_optimize_k8s_metadata_conditions.sql (4.33ms)
+2025/10/15 03:14:36 OK   009_add_cidr_uniqueness_constraint.sql (7.6ms)
+2025/10/15 03:14:36 OK   010_add_hosts_and_host_bindings.sql (6.81ms)
+2025/10/15 03:14:36 OK   011_remove_hostname_column.sql (949.71µs)
+2025/10/15 03:14:36 OK   012_add_hosts_to_address_group_spec.sql (3.35ms)
+2025/10/15 03:14:36 OK   013_fix_cascade_host_deletion.sql (2.13ms)
+2025/10/15 03:14:36 OK   014_add_aggregated_hosts_with_triggers.sql (2.57ms)
+2025/10/15 03:14:36 OK   015_add_host_binding_triggers.sql (1.3ms)
+2025/10/15 03:14:36 OK   016_add_host_ip_list.sql (1.26ms)
+2025/10/15 03:14:36 OK   017_add_trace_to_ieagag_rules.sql (1.15ms)
+2025/10/15 03:14:36 OK   018_add_service_ag_dual_registration.sql (2.83ms)
+2025/10/15 03:14:36 OK   019_add_deletion_timestamp.sql (2.25ms)
+2025/10/15 03:14:36 OK   020_add_network_binding_triggers.sql (2.08ms)
+2025/10/15 03:14:36 OK   021_validate_service_spec_ag_conflicts.sql (852.58µs)
+2025/10/15 03:14:36 OK   022_fix_host_deletion_trigger_timing.sql (864.42µs)
+2025/10/15 03:14:36 OK   023_fix_host_aggregation_validation.sql (1.93ms)
+2025/10/15 03:14:36 OK   024_add_cidr_overlap_constraint.sql (1.69ms)
+2025/10/15 03:14:36 OK   025_create_sync_outbox_table.sql (4.21ms)
+2025/10/15 03:14:36 OK   026_modify_host_triggers.sql (6.93ms)
+2025/10/15 03:14:36 OK   027_modify_network_triggers.sql (5.61ms)
+2025/10/15 03:14:36 OK   028_add_outbox_to_spec_triggers.sql (5.57ms)
+2025/10/15 03:14:36 OK   029_auto_sync_ready_from_conditions.sql (3ms)
+2025/10/15 03:14:36 OK   030_add_namespace_name_to_outbox.sql (6.29ms)
+2025/10/15 03:14:36 OK   031_fix_trigger_namespace_name.sql (2.67ms)
+2025/10/15 03:14:36 OK   032_add_delete_triggers_for_sync_first.sql (5.58ms)
+2025/10/15 03:14:36 goose: successfully migrated database to version: 32
+    concurrency_test.go:22:     ✅ All migrations applied successfully via goose
+    concurrency_test.go:22:     ✅ Schema validation passed
+    concurrency_test.go:22:   ✅ Migrations applied
+    concurrency_test.go:22:   🎭 Starting mock SGROUP server...
+    mock_sgroup_server.go:201:   🎭 Mock SGROUP server listening at: http://127.0.0.1:50937
+    concurrency_test.go:22:   ✅ Mock SGROUP server started at http://127.0.0.1:50937
+    concurrency_test.go:22: ✅ Test environment setup complete
+    concurrency_test.go:25: ✅ Created pgx pool
+    concurrency_test.go:31: Created test Host: test-ns/host-a (uuid=uuid-1, ready=false)
+    concurrency_test.go:35: ✅ Triggered ready transition: resourceVersion=1, ready=true
+    concurrency_test.go:31: Created test Host: test-ns/host-b (uuid=uuid-2, ready=false)
+    concurrency_test.go:35: ✅ Triggered ready transition: resourceVersion=2, ready=true
+    concurrency_test.go:31: Created test Host: test-ns/host-c (uuid=uuid-3, ready=false)
+    concurrency_test.go:35: ✅ Triggered ready transition: resourceVersion=3, ready=true
+    concurrency_test.go:31: Created test Host: test-ns/host-d (uuid=uuid-4, ready=false)
+    concurrency_test.go:35: ✅ Triggered ready transition: resourceVersion=4, ready=true
+    concurrency_test.go:31: Created test Host: test-ns/host-e (uuid=uuid-5, ready=false)
+    concurrency_test.go:35: ✅ Triggered ready transition: resourceVersion=5, ready=true
+    concurrency_test.go:31: Created test Host: test-ns/host-f (uuid=uuid-6, ready=false)
+    concurrency_test.go:35: ✅ Triggered ready transition: resourceVersion=6, ready=true
+    concurrency_test.go:31: Created test Host: test-ns/host-g (uuid=uuid-7, ready=false)
+    concurrency_test.go:35: ✅ Triggered ready transition: resourceVersion=7, ready=true
+    concurrency_test.go:31: Created test Host: test-ns/host-h (uuid=uuid-8, ready=false)
+    concurrency_test.go:35: ✅ Triggered ready transition: resourceVersion=8, ready=true
+    concurrency_test.go:31: Created test Host: test-ns/host-i (uuid=uuid-9, ready=false)
+    concurrency_test.go:35: ✅ Triggered ready transition: resourceVersion=9, ready=true
+    concurrency_test.go:31: Created test Host: test-ns/host-j (uuid=uuid-:, ready=false)
+    concurrency_test.go:35: ✅ Triggered ready transition: resourceVersion=10, ready=true
+    concurrency_test.go:42: 
+        	Error Trace:	/Users/zhd/Projects/newPro/netguard-pg-backend/internal/sync/integration/concurrency_test.go:42
+        	Error:      	"0" is not greater than or equal to "10"
+        	Test:       	TestConcurrency_MultipleWorkers
+        	Messages:   	Should have at least 10 entries
+    panic.go:636: ✅ Closed pgx pool
+    setup_testcontainer.go:91: 🧹 Cleaning up test environment...
+    mock_sgroup_server.go:208:   🛑 Mock SGROUP server stopped
+2025/10/15 03:14:36 🐳 Stopping container: 134c8c37234a
+2025/10/15 03:14:37 ✅ Container stopped: 134c8c37234a
+2025/10/15 03:14:37 🐳 Terminating container: 134c8c37234a
+2025/10/15 03:14:37 🚫 Container terminated: 134c8c37234a
+    setup_testcontainer.go:97: ✅ Test environment cleanup complete
+--- FAIL: TestConcurrency_MultipleWorkers (1.79s)
+=== RUN   TestConcurrency_ForUpdateSkipLocked
+    concurrency_test.go:103: 🚀 Starting test environment setup...
+    concurrency_test.go:103:   📦 Starting PostgreSQL container...
+2025/10/15 03:14:37 🐳 Creating container for image postgres:16-alpine
+2025/10/15 03:14:37 ✅ Container created: ad292e9ade24
+2025/10/15 03:14:37 🐳 Starting container: ad292e9ade24
+2025/10/15 03:14:37 ✅ Container started: ad292e9ade24
+2025/10/15 03:14:37 ⏳ Waiting for container id ad292e9ade24 image: postgres:16-alpine. Waiting for: &{timeout:<nil> deadline:0x1400202dfe8 Strategies:[0x14001e71980]}
+2025/10/15 03:14:38 🔔 Container is ready: ad292e9ade24
+    concurrency_test.go:103:   ✅ PostgreSQL container started
+    concurrency_test.go:103:   🔌 Connecting to database...
+    concurrency_test.go:103:   ✅ Database connection established
+    concurrency_test.go:103:   📜 Applying migrations...
+    concurrency_test.go:103:     📂 Found migrations directory: /Users/zhd/Projects/newPro/netguard-pg-backend/migrations
+    concurrency_test.go:103:     📜 Applying ALL migrations (001-030) using goose...
+2025/10/15 03:14:38 OK   001_initial_schema.sql (30.54ms)
+2025/10/15 03:14:38 OK   002_fix_network_binding_constraint.sql (3.98ms)
+2025/10/15 03:14:38 OK   003_add_address_group_networks_field.sql (3.51ms)
+2025/10/15 03:14:38 OK   004_fix_binding_cascade_deletion.sql (7.48ms)
+2025/10/15 03:14:38 OK   005_add_policy_reference_columns.sql (15.9ms)
+2025/10/15 03:14:38 OK   006_add_kubernetes_metadata_fields.sql (41.98ms)
+2025/10/15 03:14:38 OK   007_fix_rule_s2s_jsonb_schema.sql (20.14ms)
+2025/10/15 03:14:38 OK   008_optimize_k8s_metadata_conditions.sql (17.48ms)
+2025/10/15 03:14:38 OK   009_add_cidr_uniqueness_constraint.sql (4.54ms)
+2025/10/15 03:14:38 OK   010_add_hosts_and_host_bindings.sql (8.96ms)
+2025/10/15 03:14:38 OK   011_remove_hostname_column.sql (1.11ms)
+2025/10/15 03:14:38 OK   012_add_hosts_to_address_group_spec.sql (5.74ms)
+2025/10/15 03:14:38 OK   013_fix_cascade_host_deletion.sql (2.19ms)
+2025/10/15 03:14:38 OK   014_add_aggregated_hosts_with_triggers.sql (3.53ms)
+2025/10/15 03:14:38 OK   015_add_host_binding_triggers.sql (1.53ms)
+2025/10/15 03:14:38 OK   016_add_host_ip_list.sql (3.26ms)
+2025/10/15 03:14:38 OK   017_add_trace_to_ieagag_rules.sql (2.75ms)
+2025/10/15 03:14:38 OK   018_add_service_ag_dual_registration.sql (2.83ms)
+2025/10/15 03:14:38 OK   019_add_deletion_timestamp.sql (1.42ms)
+2025/10/15 03:14:38 OK   020_add_network_binding_triggers.sql (2.98ms)
+2025/10/15 03:14:38 OK   021_validate_service_spec_ag_conflicts.sql (1.06ms)
+2025/10/15 03:14:38 OK   022_fix_host_deletion_trigger_timing.sql (1.31ms)
+2025/10/15 03:14:38 OK   023_fix_host_aggregation_validation.sql (5.6ms)
+2025/10/15 03:14:38 OK   024_add_cidr_overlap_constraint.sql (2.72ms)
+2025/10/15 03:14:38 OK   025_create_sync_outbox_table.sql (5.51ms)
+2025/10/15 03:14:38 OK   026_modify_host_triggers.sql (9.02ms)
+2025/10/15 03:14:38 OK   027_modify_network_triggers.sql (5.79ms)
+2025/10/15 03:14:38 OK   028_add_outbox_to_spec_triggers.sql (1.62ms)
+2025/10/15 03:14:38 OK   029_auto_sync_ready_from_conditions.sql (2.7ms)
+2025/10/15 03:14:38 OK   030_add_namespace_name_to_outbox.sql (5.99ms)
+2025/10/15 03:14:38 OK   031_fix_trigger_namespace_name.sql (2.36ms)
+2025/10/15 03:14:38 OK   032_add_delete_triggers_for_sync_first.sql (2.17ms)
+2025/10/15 03:14:38 goose: successfully migrated database to version: 32
+    concurrency_test.go:103:     ✅ All migrations applied successfully via goose
+    concurrency_test.go:103:     ✅ Schema validation passed
+    concurrency_test.go:103:   ✅ Migrations applied
+    concurrency_test.go:103:   🎭 Starting mock SGROUP server...
+    mock_sgroup_server.go:201:   🎭 Mock SGROUP server listening at: http://127.0.0.1:50952
+    concurrency_test.go:103:   ✅ Mock SGROUP server started at http://127.0.0.1:50952
+    concurrency_test.go:103: ✅ Test environment setup complete
+    concurrency_test.go:106: ✅ Created pgx pool
+    concurrency_test.go:111: Created test Host: test-ns/host-1 (uuid=uuid-1, ready=false)
+    concurrency_test.go:112: ✅ Triggered ready transition: resourceVersion=1, ready=true
+    concurrency_test.go:114: Timeout waiting for outbox entry: type=AddressGroup, operation=UPDATE, timeout=5s
+    panic.go:636: ✅ Closed pgx pool
+    setup_testcontainer.go:91: 🧹 Cleaning up test environment...
+    mock_sgroup_server.go:208:   🛑 Mock SGROUP server stopped
+2025/10/15 03:14:43 🐳 Stopping container: ad292e9ade24
+2025/10/15 03:14:43 ✅ Container stopped: ad292e9ade24
+2025/10/15 03:14:43 🐳 Terminating container: ad292e9ade24
+2025/10/15 03:14:43 🚫 Container terminated: ad292e9ade24
+    setup_testcontainer.go:97: ✅ Test environment cleanup complete
+--- FAIL: TestConcurrency_ForUpdateSkipLocked (6.56s)
+=== RUN   TestConcurrency_NoDoubleProcessing
+    concurrency_test.go:192: 🚀 Starting test environment setup...
+    concurrency_test.go:192:   📦 Starting PostgreSQL container...
+2025/10/15 03:14:43 🐳 Creating container for image postgres:16-alpine
+2025/10/15 03:14:43 ✅ Container created: 42ec0da37b98
+2025/10/15 03:14:43 🐳 Starting container: 42ec0da37b98
+2025/10/15 03:14:43 ✅ Container started: 42ec0da37b98
+2025/10/15 03:14:43 ⏳ Waiting for container id 42ec0da37b98 image: postgres:16-alpine. Waiting for: &{timeout:<nil> deadline:0x14000a58a58 Strategies:[0x14000301260]}
+2025/10/15 03:14:44 🔔 Container is ready: 42ec0da37b98
+    concurrency_test.go:192:   ✅ PostgreSQL container started
+    concurrency_test.go:192:   🔌 Connecting to database...
+    concurrency_test.go:192:   ✅ Database connection established
+    concurrency_test.go:192:   📜 Applying migrations...
+    concurrency_test.go:192:     📂 Found migrations directory: /Users/zhd/Projects/newPro/netguard-pg-backend/migrations
+    concurrency_test.go:192:     📜 Applying ALL migrations (001-030) using goose...
+2025/10/15 03:14:44 OK   001_initial_schema.sql (24.37ms)
+2025/10/15 03:14:44 OK   002_fix_network_binding_constraint.sql (2.65ms)
+2025/10/15 03:14:44 OK   003_add_address_group_networks_field.sql (1.54ms)
+2025/10/15 03:14:44 OK   004_fix_binding_cascade_deletion.sql (3.16ms)
+2025/10/15 03:14:44 OK   005_add_policy_reference_columns.sql (2.5ms)
+2025/10/15 03:14:44 OK   006_add_kubernetes_metadata_fields.sql (6.03ms)
+2025/10/15 03:14:44 OK   007_fix_rule_s2s_jsonb_schema.sql (3.97ms)
+2025/10/15 03:14:44 OK   008_optimize_k8s_metadata_conditions.sql (2.61ms)
+2025/10/15 03:14:44 OK   009_add_cidr_uniqueness_constraint.sql (1.87ms)
+2025/10/15 03:14:44 OK   010_add_hosts_and_host_bindings.sql (6.34ms)
+2025/10/15 03:14:44 OK   011_remove_hostname_column.sql (926.17µs)
+2025/10/15 03:14:44 OK   012_add_hosts_to_address_group_spec.sql (3.5ms)
+2025/10/15 03:14:44 OK   013_fix_cascade_host_deletion.sql (1.52ms)
+2025/10/15 03:14:44 OK   014_add_aggregated_hosts_with_triggers.sql (2.63ms)
+2025/10/15 03:14:44 OK   015_add_host_binding_triggers.sql (1.32ms)
+2025/10/15 03:14:44 OK   016_add_host_ip_list.sql (1.41ms)
+2025/10/15 03:14:44 OK   017_add_trace_to_ieagag_rules.sql (1.28ms)
+2025/10/15 03:14:44 OK   018_add_service_ag_dual_registration.sql (2.82ms)
+2025/10/15 03:14:44 OK   019_add_deletion_timestamp.sql (1.43ms)
+2025/10/15 03:14:44 OK   020_add_network_binding_triggers.sql (2.12ms)
+2025/10/15 03:14:44 OK   021_validate_service_spec_ag_conflicts.sql (758.21µs)
+2025/10/15 03:14:44 OK   022_fix_host_deletion_trigger_timing.sql (816.25µs)
+2025/10/15 03:14:44 OK   023_fix_host_aggregation_validation.sql (2.06ms)
+2025/10/15 03:14:44 OK   024_add_cidr_overlap_constraint.sql (1.52ms)
+2025/10/15 03:14:44 OK   025_create_sync_outbox_table.sql (4.19ms)
+2025/10/15 03:14:44 OK   026_modify_host_triggers.sql (7.48ms)
+2025/10/15 03:14:44 OK   027_modify_network_triggers.sql (5.37ms)
+2025/10/15 03:14:44 OK   028_add_outbox_to_spec_triggers.sql (1.68ms)
+2025/10/15 03:14:44 OK   029_auto_sync_ready_from_conditions.sql (2.98ms)
+2025/10/15 03:14:44 OK   030_add_namespace_name_to_outbox.sql (8.05ms)
+2025/10/15 03:14:44 OK   031_fix_trigger_namespace_name.sql (3.81ms)
+2025/10/15 03:14:44 OK   032_add_delete_triggers_for_sync_first.sql (2.48ms)
+2025/10/15 03:14:44 goose: successfully migrated database to version: 32
+    concurrency_test.go:192:     ✅ All migrations applied successfully via goose
+    concurrency_test.go:192:     ✅ Schema validation passed
+    concurrency_test.go:192:   ✅ Migrations applied
+    concurrency_test.go:192:   🎭 Starting mock SGROUP server...
+    mock_sgroup_server.go:201:   🎭 Mock SGROUP server listening at: http://127.0.0.1:50990
+    concurrency_test.go:192:   ✅ Mock SGROUP server started at http://127.0.0.1:50990
+    concurrency_test.go:192: ✅ Test environment setup complete
+    concurrency_test.go:195: ✅ Created pgx pool
+    concurrency_test.go:202: Created test Host: test-ns/host-a (uuid=uuid-1, ready=false)
+    concurrency_test.go:206: ✅ Triggered ready transition: resourceVersion=1, ready=true
+    concurrency_test.go:202: Created test Host: test-ns/host-b (uuid=uuid-2, ready=false)
+    concurrency_test.go:206: ✅ Triggered ready transition: resourceVersion=2, ready=true
+    concurrency_test.go:202: Created test Host: test-ns/host-c (uuid=uuid-3, ready=false)
+    concurrency_test.go:206: ✅ Triggered ready transition: resourceVersion=3, ready=true
+    concurrency_test.go:202: Created test Host: test-ns/host-d (uuid=uuid-4, ready=false)
+    concurrency_test.go:206: ✅ Triggered ready transition: resourceVersion=4, ready=true
+    concurrency_test.go:202: Created test Host: test-ns/host-e (uuid=uuid-5, ready=false)
+    concurrency_test.go:206: ✅ Triggered ready transition: resourceVersion=5, ready=true
+    concurrency_test.go:211: Created 5 outbox entries
+2025-10-15T03:14:45.238+0300	FATAL	worker/outbox_worker.go:68	invalid worker config	{"error": "poll_interval too aggressive, minimum 1s, got: 100ms"}
+netguard-pg-backend/internal/sync/worker.NewOutboxWorker
+	/Users/zhd/Projects/newPro/netguard-pg-backend/internal/sync/worker/outbox_worker.go:68
+netguard-pg-backend/internal/sync/integration.CreateTestWorker
+	/Users/zhd/Projects/newPro/netguard-pg-backend/internal/sync/integration/test_helpers.go:99
+netguard-pg-backend/internal/sync/integration.TestConcurrency_NoDoubleProcessing.func1
+	/Users/zhd/Projects/newPro/netguard-pg-backend/internal/sync/integration/concurrency_test.go:230
+2025-10-15T03:14:45.238+0300	FATAL	worker/outbox_worker.go:68	invalid worker config	{"error": "poll_interval too aggressive, minimum 1s, got: 100ms"}
+netguard-pg-backend/internal/sync/worker.NewOutboxWorker
+	/Users/zhd/Projects/newPro/netguard-pg-backend/internal/sync/worker/outbox_worker.go:68
+netguard-pg-backend/internal/sync/integration.CreateTestWorker
+	/Users/zhd/Projects/newPro/netguard-pg-backend/internal/sync/integration/test_helpers.go:99
+netguard-pg-backend/internal/sync/integration.TestConcurrency_NoDoubleProcessing.func1
+	/Users/zhd/Projects/newPro/netguard-pg-backend/internal/sync/integration/concurrency_test.go:230
+FAIL	netguard-pg-backend/internal/sync/integration	63.322s
+FAIL

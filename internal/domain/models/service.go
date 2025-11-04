@@ -23,6 +23,9 @@ type Service struct {
 	// Populated automatically by PostgreSQL triggers via junction table
 	XSvcSvcRules *XSvcSvcRules
 
+	// XSvcFqdnRules contains service-to-FQDN rules referencing this Service (READ-ONLY)
+	XSvcFqdnRules *XSvcFqdnRules
+
 	Meta Meta
 }
 

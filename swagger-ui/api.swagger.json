@@ -820,6 +820,68 @@
         ]
       }
     },
+    "/v1/svcfqdn-rules": {
+      "get": {
+        "summary": "ListSvcFqdnRules - gets list of SvcFqdnRules",
+        "description": "ListSvcFqdnRules: gets list of service-to-FQDN rules",
+        "operationId": "NetguardService_ListSvcFqdnRules",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListSvcFqdnRulesResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/svcfqdn-rules/{identifier.namespace}/{identifier.name}": {
+      "get": {
+        "summary": "GetSvcFqdnRule - gets a specific SvcFqdnRule by ID",
+        "description": "GetSvcFqdnRule: gets a specific service-to-FQDN rule by ID",
+        "operationId": "NetguardService_GetSvcFqdnRule",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetSvcFqdnRuleResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "identifier.namespace",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "identifier.name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
     "/v1/svcsvc-rules": {
       "get": {
         "summary": "ListSvcSvcRules - gets list of SvcSvcRules",
@@ -1167,6 +1229,20 @@
       },
       "title": "Condition - kubernetes condition for resource status"
     },
+    "v1FqdnPortSpec": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "title": "Optional source ports expression (\"\", \"443\", \"1000-2000\")"
+        },
+        "destination": {
+          "type": "string",
+          "title": "Destination ports expression (comma-separated single ports or ranges)"
+        }
+      },
+      "title": "FqdnPortSpec - port specification for service-to-FQDN rules"
+    },
     "v1GetAddressGroupBindingPolicyResp": {
       "type": "object",
       "properties": {
@@ -1274,6 +1350,15 @@
         }
       },
       "title": "GetServiceResp - response with a specific service"
+    },
+    "v1GetSvcFqdnRuleResp": {
+      "type": "object",
+      "properties": {
+        "svcfqdnRule": {
+          "$ref": "#/definitions/v1SvcFqdnRule"
+        }
+      },
+      "title": "GetSvcFqdnRuleResp - response with a specific SvcFqdnRule"
     },
     "v1GetSvcSvcRuleResp": {
       "type": "object",
@@ -1618,6 +1703,19 @@
         }
       },
       "title": "ListServicesResp - response with list of services"
+    },
+    "v1ListSvcFqdnRulesResp": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1SvcFqdnRule"
+          }
+        }
+      },
+      "title": "ListSvcFqdnRulesResp - response with list of SvcFqdnRules"
     },
     "v1ListSvcSvcRulesResp": {
       "type": "object",
@@ -1992,7 +2090,11 @@
         },
         "xSvcsvcRules": {
           "$ref": "#/definitions/v1XSvcSvcRules",
-          "title": "XSvcSvcRules - READ-ONLY field populated by PostgreSQL triggers\nContains all rules where this Service participates (as source or destination)"
+          "title": "XSvcSvcRules - READ-ONLY field populated by PostgreSQL triggers\nContains all service-to-service rules where this Service participates"
+        },
+        "xSvcfqdnRules": {
+          "$ref": "#/definitions/v1XSvcFqdnRules",
+          "title": "XSvcFqdnRules - READ-ONLY field populated by PostgreSQL triggers\nContains all service-to-FQDN rules where this Service participates as source"
         }
       },
       "title": "Service - represents a service with ports",
@@ -2050,6 +2152,66 @@
         }
       },
       "title": "ServiceRef - reference to a service"
+    },
+    "v1SvcFqdnRule": {
+      "type": "object",
+      "properties": {
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
+        },
+        "serviceFrom": {
+          "$ref": "#/definitions/v1NamespacedObjectReference",
+          "title": "Source service reference (NamespacedObjectReference)"
+        },
+        "fqdn": {
+          "type": "string",
+          "title": "Target FQDN hostname"
+        },
+        "transport": {
+          "$ref": "#/definitions/NetIPTransport",
+          "title": "Transport protocol (TCP/UDP)"
+        },
+        "ports": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1FqdnPortSpec"
+          },
+          "title": "Port expressions (normalized)"
+        },
+        "logs": {
+          "type": "boolean",
+          "title": "Enable logging"
+        },
+        "trace": {
+          "type": "boolean",
+          "title": "Enable tracing"
+        },
+        "action": {
+          "$ref": "#/definitions/v1RuleAction",
+          "title": "Firewall action (ACCEPT/DROP)"
+        },
+        "priority": {
+          "type": "integer",
+          "format": "int32",
+          "title": "Rule priority (0-1000)"
+        },
+        "description": {
+          "type": "string",
+          "title": "Optional description (Netguard-only)"
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta",
+          "title": "Kubernetes metadata"
+        }
+      },
+      "title": "SvcFqdnRule - service-to-FQDN firewall rule",
+      "required": [
+        "selfRef",
+        "serviceFrom",
+        "fqdn",
+        "transport"
+      ]
     },
     "v1SvcSvcRule": {
       "type": "object",
@@ -2282,6 +2444,10 @@
         "svcsvcRules": {
           "$ref": "#/definitions/v1SyncSvcSvcRules",
           "title": "Subject of SvcSvcRules"
+        },
+        "svcfqdnRules": {
+          "$ref": "#/definitions/v1SyncSvcFqdnRules",
+          "title": "Subject of SvcFqdnRules"
         }
       },
       "title": "SyncReq - request to sync"
@@ -2335,6 +2501,19 @@
       },
       "title": "SyncStatusResp - sync status"
     },
+    "v1SyncSvcFqdnRules": {
+      "type": "object",
+      "properties": {
+        "svcfqdnRules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1SvcFqdnRule"
+          }
+        }
+      },
+      "title": "SyncSvcFqdnRules - subject of SvcFqdnRules to sync"
+    },
     "v1SyncSvcSvcRules": {
       "type": "object",
       "properties": {
@@ -2355,6 +2534,20 @@
         "Egress"
       ],
       "default": "Ingress"
+    },
+    "v1XSvcFqdnRules": {
+      "type": "object",
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ResourceIdentifier"
+          },
+          "title": "Rules where this Service is referenced by SvcFqdnRule as source"
+        }
+      },
+      "title": "XSvcFqdnRules - READ-ONLY field for Service resource containing all FQDN rules referencing the Service"
     },
     "v1XSvcSvcRules": {
       "type": "object",

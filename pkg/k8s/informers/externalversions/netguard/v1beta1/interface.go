@@ -46,6 +46,8 @@ type Interface interface {
 	Services() ServiceInformer
 	// ServiceAliases returns a ServiceAliasInformer.
 	ServiceAliases() ServiceAliasInformer
+	// SvcFqdnRules returns a SvcFqdnRuleInformer.
+	SvcFqdnRules() SvcFqdnRuleInformer
 	// SvcSvcRules returns a SvcSvcRuleInformer.
 	SvcSvcRules() SvcSvcRuleInformer
 }
@@ -114,6 +116,11 @@ func (v *version) Services() ServiceInformer {
 // ServiceAliases returns a ServiceAliasInformer.
 func (v *version) ServiceAliases() ServiceAliasInformer {
 	return &serviceAliasInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// SvcFqdnRules returns a SvcFqdnRuleInformer.
+func (v *version) SvcFqdnRules() SvcFqdnRuleInformer {
+	return &svcFqdnRuleInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // SvcSvcRules returns a SvcSvcRuleInformer.

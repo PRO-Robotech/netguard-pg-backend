@@ -1,0 +1,11 @@
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Service
+metadata:
+  name: test-service-db
+  namespace: incloud-sgroups
+spec:
+  description: "Test database service for SvcSvcRule testing"
+  ingressPorts:
+    - protocol: TCP
+      port: "5432"
+      description: "PostgreSQL"

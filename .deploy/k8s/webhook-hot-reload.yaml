@@ -1,0 +1,111 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: netguard-webhook-debug
+  namespace: incloud-sgroups
+  labels:
+    app.kubernetes.io/name: webhook
+    app.kubernetes.io/instance: netguard
+    app.kubernetes.io/component: debug-hot-reload
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: webhook
+      app.kubernetes.io/instance: netguard-debug
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: webhook
+        app.kubernetes.io/instance: netguard-debug
+        app.kubernetes.io/component: debug-hot-reload
+    spec:
+      serviceAccountName: netguard-webhook
+
+      containers:
+      - name: webhook
+        image: netguard/webhook
+        imagePullPolicy: IfNotPresent
+
+        # NO command override - use CMD from Dockerfile (air)
+        # Air will handle hot reload and process management
+
+        ports:
+        - containerPort: 9443
+          name: webhook
+          protocol: TCP
+        - containerPort: 2347
+          name: debug
+          protocol: TCP
+
+        volumeMounts:
+        - name: certs
+          mountPath: /etc/certs
+          readOnly: true
+
+        # Hot reload mode: relaxed health checks
+        # Air may restart process frequently during development
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "exit 0"
+          initialDelaySeconds: 30
+          periodSeconds: 60
+          failureThreshold: 10
+
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "exit 0"
+          initialDelaySeconds: 15
+          periodSeconds: 60
+          failureThreshold: 10
+
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+
+        # Security context adjusted for debugging
+        securityContext:
+          runAsNonRoot: false
+          capabilities:
+            add:
+              - SYS_PTRACE  # Required for Delve
+
+      volumes:
+      - name: certs
+        secret:
+          secretName: netguard-certs
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: netguard-webhook-debug
+  namespace: incloud-sgroups
+  labels:
+    app.kubernetes.io/name: webhook
+    app.kubernetes.io/instance: netguard-debug
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: webhook
+    app.kubernetes.io/instance: netguard-debug
+  ports:
+  - name: webhook
+    port: 443
+    targetPort: 9443
+    protocol: TCP
+  - name: debug
+    port: 2347
+    targetPort: 2347
+    protocol: TCP

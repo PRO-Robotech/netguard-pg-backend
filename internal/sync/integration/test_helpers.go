@@ -89,6 +89,7 @@ func CreateTestWorker(
 	networkSyncer := syncers.NewNetworkSyncer(mockClient, logger)
 	serviceSyncer := syncers.NewServiceSyncer(mockClient, logger)
 	svcSvcRuleSyncer := syncers.NewSvcSvcRuleSyncer(mockClient, logger)
+	svcFqdnRuleSyncer := syncers.NewSvcFqdnRuleSyncer(mockClient, logger)
 	connMonitor := monitor.NewSGroupConnectionMonitor(mockClient, monitor.DefaultConfig(), zapLogger)
 
 	// Create worker config
@@ -114,6 +115,7 @@ func CreateTestWorker(
 		networkSyncer,
 		serviceSyncer,
 		svcSvcRuleSyncer,
+		svcFqdnRuleSyncer,
 		nil,
 		zapLogger,
 		config,

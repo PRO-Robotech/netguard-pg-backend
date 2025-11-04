@@ -1022,6 +1022,21 @@ func (w *writer) DeleteSvcSvcRulesByIDs(ctx context.Context, ids []models.Resour
 	return nil
 }
 
+func (w *writer) SyncSvcFqdnRules(ctx context.Context, rules []models.SvcFqdnRule, scope ports.Scope, opts ...ports.Option) error {
+	// Stub implementation for in-memory registry
+	return nil
+}
+
+func (w *writer) DeleteSvcFqdnRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	// Stub implementation for in-memory registry
+	return nil
+}
+
+func (w *writer) MarkForDeletionWithStatus(namespace, name, kind string) error {
+	// In-memory registry performs immediate deletion; no-op here
+	return nil
+}
+
 func (w *writer) SyncNetworks(ctx context.Context, networks []models.Network, scope ports.Scope, opts ...ports.Option) error {
 	// Определение операции (по умолчанию FullSync)
 	syncOp := models.SyncOpFullSync

@@ -602,6 +602,24 @@ func (m *MockBackendClient) DeleteSvcSvcRule(ctx context.Context, id models.Reso
 func (m *MockBackendClient) UpdateSvcSvcRuleMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
 	return fmt.Errorf("not implemented")
 }
+func (m *MockBackendClient) GetSvcFqdnRule(ctx context.Context, id models.ResourceIdentifier) (*models.SvcFqdnRule, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (m *MockBackendClient) ListSvcFqdnRules(ctx context.Context, scope ports.Scope) ([]models.SvcFqdnRule, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (m *MockBackendClient) CreateSvcFqdnRule(ctx context.Context, rule *models.SvcFqdnRule) error {
+	return fmt.Errorf("not implemented")
+}
+func (m *MockBackendClient) UpdateSvcFqdnRule(ctx context.Context, rule *models.SvcFqdnRule) error {
+	return fmt.Errorf("not implemented")
+}
+func (m *MockBackendClient) DeleteSvcFqdnRule(ctx context.Context, id models.ResourceIdentifier) error {
+	return fmt.Errorf("not implemented")
+}
+func (m *MockBackendClient) UpdateSvcFqdnRuleMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	return fmt.Errorf("not implemented")
+}
 func (m *MockBackendClient) MarkForDeletion(ctx context.Context, namespace, name, kind string) error {
 	return fmt.Errorf("not implemented")
 }

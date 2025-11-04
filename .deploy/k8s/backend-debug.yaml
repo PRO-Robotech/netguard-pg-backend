@@ -1,0 +1,157 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: netguard-backend-debug
+  namespace: incloud-sgroups
+  labels:
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/instance: netguard
+    app.kubernetes.io/component: debug
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: backend
+      app.kubernetes.io/instance: netguard-debug
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: backend
+        app.kubernetes.io/instance: netguard-debug
+        app.kubernetes.io/component: debug
+    spec:
+      # Init container for migrations
+      initContainers:
+      - name: goose
+        image: netguard/goose
+        imagePullPolicy: IfNotPresent
+        command:
+          - /app/debug-migrate.sh
+          - -dir=/app/migrations
+          - -table=netguard_db_ver
+          - postgres
+          - $(DATABASE_CONNECTION_URL)
+          - up
+        envFrom:
+        - configMapRef:
+            name: netguard-environment
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+      containers:
+      - name: backend
+        image: netguard/pg-backend
+        imagePullPolicy: IfNotPresent
+
+        # Override entrypoint to run with Delve
+        command: ["/usr/local/bin/dlv"]
+        args:
+          - --listen=:2345
+          - --headless=true
+          - --api-version=2
+          - --accept-multiclient
+          - --continue
+          - --log
+          - --log-output=debugger,rpc
+          - exec
+          - /app/server
+          - --
+          - --config=/etc/netguard/config.yaml
+          - --pg-uri=$(DATABASE_CONNECTION_URL)
+
+        ports:
+        - containerPort: 9090
+          name: grpc
+          protocol: TCP
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        - containerPort: 2345
+          name: debug
+          protocol: TCP
+
+        envFrom:
+        - configMapRef:
+            name: netguard-environment
+
+        volumeMounts:
+        - name: config
+          mountPath: /etc/netguard/config.yaml
+          subPath: config
+
+        # Debug mode: minimal TCP probe to avoid EOF warnings
+        # Using exec with /bin/true as a simple health check
+        # Application port 9090 won't be available until debugger connects
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "exit 0"
+          initialDelaySeconds: 15
+          periodSeconds: 60
+          failureThreshold: 10
+
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "exit 0"
+          initialDelaySeconds: 10
+          periodSeconds: 60
+          failureThreshold: 10
+
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+
+        # Security context adjusted for debugging
+        securityContext:
+          runAsNonRoot: false
+          capabilities:
+            add:
+              - SYS_PTRACE  # Required for Delve
+
+      volumes:
+      - name: config
+        configMap:
+          name: netguard-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: netguard-backend-debug
+  namespace: incloud-sgroups
+  labels:
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/instance: netguard-debug
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/instance: netguard-debug
+  ports:
+  - name: grpc
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  - name: debug
+    port: 2345
+    targetPort: 2345
+    protocol: TCP

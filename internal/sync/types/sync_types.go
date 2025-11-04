@@ -40,6 +40,7 @@ const (
 	SyncSubjectTypeHosts                SyncSubjectType = "Hosts"
 	SyncSubjectTypeHostBindings         SyncSubjectType = "HostBindings"
 	SyncSubjectTypeSvcSvcRules          SyncSubjectType = "SvcSvcRules" // NEW! Service-to-Service rules
+	SyncSubjectTypeSvcFqdnRules         SyncSubjectType = "SvcFqdnRules"
 )
 
 // SyncRequest represents a synchronization request

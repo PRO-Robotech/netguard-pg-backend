@@ -218,6 +218,7 @@ func TCCreateTestWorker(t *testing.T, tc *TestContainer) *worker.OutboxWorker {
 	networkSyncer := syncers.NewNetworkSyncer(gateway, logrLogger)
 	serviceSyncer := syncers.NewServiceSyncer(gateway, logrLogger)
 	svcSvcRuleSyncer := syncers.NewSvcSvcRuleSyncer(gateway, logrLogger)
+	svcFqdnRuleSyncer := syncers.NewSvcFqdnRuleSyncer(gateway, logrLogger)
 	connMonitor := monitor.NewSGroupConnectionMonitor(gateway, monitor.DefaultConfig(), logger)
 
 	// Create worker configuration optimized for testing
@@ -243,6 +244,7 @@ func TCCreateTestWorker(t *testing.T, tc *TestContainer) *worker.OutboxWorker {
 		networkSyncer,
 		serviceSyncer,
 		svcSvcRuleSyncer,
+		svcFqdnRuleSyncer,
 		nil,
 		logger,
 		config,

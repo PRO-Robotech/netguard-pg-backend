@@ -1,0 +1,45 @@
+# Hot-reload debug version with Air + Delve
+# Perfect for rapid development iterations
+
+FROM golang:1.24-alpine
+ARG TARGETOS
+ARG TARGETARCH
+
+WORKDIR /src
+
+# Install development tools
+# Air moved to air-verse organization, use version compatible with Go 1.24
+RUN apk add --no-cache git ca-certificates bash && \
+    go install github.com/air-verse/air@v1.52.3 && \
+    go install github.com/go-delve/delve/cmd/dlv@latest
+
+# Copy dependencies first for better caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy Air configuration
+COPY .air.toml /src/.air.toml
+
+# Create tmp directory for Air
+RUN mkdir -p /src/tmp /tmp/air
+
+# Copy source code (will be synced by Skaffold during development)
+COPY cmd/ cmd/
+COPY internal/ internal/
+COPY pkg/ pkg/
+COPY protos/ protos/
+COPY config/ config/
+
+# Expose application ports
+EXPOSE 9090 8080
+# Expose Delve debug port
+EXPOSE 2345
+
+# Run Air for hot reload
+# Air will:
+# 1. Watch for file changes
+# 2. Rebuild with debug symbols (-gcflags="all=-N -l")
+# 3. Restart the application automatically
+# 4. Keep Delve port available for debugging
+
+CMD ["air", "-c", "/src/.air.toml"]

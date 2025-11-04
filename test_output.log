@@ -1,0 +1,7 @@
+# netguard-pg-backend/internal/infrastructure/repositories/pg/writers [netguard-pg-backend/internal/infrastructure/repositories/pg/writers.test]
+internal/infrastructure/repositories/pg/writers/host_condition_only_test.go:142:22: cannot use registry (variable of type *mockRegistry) as ports.Registry value in argument to NewWriter: *mockRegistry does not implement ports.Registry (missing method Subject)
+internal/infrastructure/repositories/pg/writers/host_condition_only_test.go:237:23: cannot use registry (variable of type *mockRegistry) as ports.Registry value in argument to NewWriter: *mockRegistry does not implement ports.Registry (missing method Subject)
+internal/infrastructure/repositories/pg/writers/host_condition_only_test.go:368:22: cannot use registry (variable of type *mockRegistry) as ports.Registry value in argument to NewWriter: *mockRegistry does not implement ports.Registry (missing method Subject)
+internal/infrastructure/repositories/pg/writers/host_condition_only_test.go:426:23: cannot use registry (variable of type *mockRegistry) as ports.Registry value in argument to NewWriter: *mockRegistry does not implement ports.Registry (missing method Subject)
+FAIL	netguard-pg-backend/internal/infrastructure/repositories/pg/writers [build failed]
+FAIL

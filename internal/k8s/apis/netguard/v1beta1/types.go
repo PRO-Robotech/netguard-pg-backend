@@ -961,3 +961,93 @@ type SvcSvcRuleList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []SvcSvcRule `json:"items"`
 }
+
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// SvcFqdnRule represents a service-to-FQDN firewall rule
+type SvcFqdnRule struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   SvcFqdnRuleSpec   `json:"spec"`
+	Status SvcFqdnRuleStatus `json:"status,omitempty"`
+}
+
+// SvcFqdnRuleSpec defines the desired state of SvcFqdnRule
+type SvcFqdnRuleSpec struct {
+	// ServiceFrom - source service reference (NamespacedObjectReference)
+	// +kubebuilder:validation:Required
+	ServiceFrom NamespacedObjectReference `json:"serviceFrom"`
+
+	// FQDN - fully qualified domain name
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:Pattern=`^([a-z0-9]([-a-z0-9]*[a-z0-9])?\.)*[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
+	FQDN string `json:"fqdn"`
+
+	// Transport protocol (TCP or UDP)
+	// +kubebuilder:validation:Enum=TCP;UDP
+	Transport TransportProtocol `json:"transport"`
+
+	// Ports - optional list of port expressions. Each entry defines source/destination ports.
+	// +optional
+	Ports []SvcFqdnPortSpec `json:"ports,omitempty"`
+
+	// Logs - enable traffic logging
+	// +optional
+	Logs bool `json:"logs"`
+
+	// Trace - enable detailed tracing
+	// +optional
+	Trace bool `json:"trace"`
+
+	// Action - firewall action (ACCEPT or DROP)
+	// +kubebuilder:validation:Enum=ACCEPT;DROP
+	Action RuleAction `json:"action"`
+
+	// Priority - rule priority (0-1000, lower = higher priority)
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=1000
+	// +optional
+	Priority int32 `json:"priority,omitempty"`
+
+	// Description - optional human-readable description
+	// +optional
+	Description string `json:"description,omitempty"`
+}
+
+// SvcFqdnPortSpec represents source/destination port expressions for FQDN rule
+type SvcFqdnPortSpec struct {
+	// Source port expression (single port or range). Empty string means any source port.
+	// +optional
+	Source string `json:"source,omitempty"`
+
+	// Destination port expression (single port or range). Required.
+	// +kubebuilder:validation:Required
+	Destination string `json:"destination"`
+}
+
+// SvcFqdnRuleStatus defines the observed state of SvcFqdnRule
+type SvcFqdnRuleStatus struct {
+	// Conditions represent the latest available observations of the rule's current state
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// ObservedGeneration is the most recent generation observed by the controller
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
+	// SyncReady indicates if the rule is ready for SGROUP synchronization
+	// +optional
+	SyncReady bool `json:"syncReady,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// SvcFqdnRuleList contains a list of SvcFqdnRule
+type SvcFqdnRuleList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []SvcFqdnRule `json:"items"`
+}

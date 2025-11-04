@@ -20,6 +20,7 @@ type ServiceServer struct {
 	addressGroupHandler *handlers.AddressGroupHandler
 	ruleHandler         *handlers.RuleHandler
 	svcSvcRuleHandler   *handlers.SvcSvcRuleHandler
+	svcFqdnRuleHandler  *handlers.SvcFqdnRuleHandler
 	networkHandler      *handlers.NetworkHandler
 	hostHandler         *handlers.HostHandler
 	syncDispatcher      *sync.Dispatcher
@@ -32,6 +33,7 @@ func NewServiceServer(service *services.NetguardFacade) *ServiceServer {
 		addressGroupHandler: handlers.NewAddressGroupHandler(service),
 		ruleHandler:         handlers.NewRuleHandler(service),
 		svcSvcRuleHandler:   handlers.NewSvcSvcRuleHandler(service),
+		svcFqdnRuleHandler:  handlers.NewSvcFqdnRuleHandler(service),
 		networkHandler:      handlers.NewNetworkHandler(service),
 		hostHandler:         handlers.NewHostHandler(service),
 		syncDispatcher:      sync.NewDispatcher(service),
@@ -103,6 +105,12 @@ func (s *ServiceServer) ListSvcSvcRules(ctx context.Context, req *netguardpb.Lis
 }
 func (s *ServiceServer) GetSvcSvcRule(ctx context.Context, req *netguardpb.GetSvcSvcRuleReq) (*netguardpb.GetSvcSvcRuleResp, error) {
 	return s.svcSvcRuleHandler.GetSvcSvcRule(ctx, req)
+}
+func (s *ServiceServer) ListSvcFqdnRules(ctx context.Context, req *netguardpb.ListSvcFqdnRulesReq) (*netguardpb.ListSvcFqdnRulesResp, error) {
+	return s.svcFqdnRuleHandler.ListSvcFqdnRules(ctx, req)
+}
+func (s *ServiceServer) GetSvcFqdnRule(ctx context.Context, req *netguardpb.GetSvcFqdnRuleReq) (*netguardpb.GetSvcFqdnRuleResp, error) {
+	return s.svcFqdnRuleHandler.GetSvcFqdnRule(ctx, req)
 }
 func (s *ServiceServer) ListNetworks(ctx context.Context, req *netguardpb.ListNetworksReq) (*netguardpb.ListNetworksResp, error) {
 	return s.networkHandler.ListNetworks(ctx, req)

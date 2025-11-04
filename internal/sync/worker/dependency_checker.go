@@ -37,6 +37,8 @@ func (w *OutboxWorker) isResourceReady(
 		tableName = "networks"
 	case string(registry.TypeService):
 		tableName = "services"
+	case string(registry.TypeSvcFqdnRule):
+		tableName = "svc_fqdn_rules"
 	case string(registry.TypeHostBinding):
 		tableName = "host_bindings"
 	case string(registry.TypeNetworkBinding):
@@ -166,6 +168,8 @@ func (w *OutboxWorker) getResourceUID(
 		tableName = "networks"
 	case string(registry.TypeService):
 		tableName = "services"
+	case string(registry.TypeSvcFqdnRule):
+		tableName = "svc_fqdn_rules"
 	case string(registry.TypeHostBinding):
 		tableName = "host_bindings"
 	case string(registry.TypeNetworkBinding):
@@ -341,6 +345,9 @@ func (w *OutboxWorker) extractEntityDependencies(
 	case string(registry.TypeSvcSvcRule):
 		// SvcSvcRule depends on ServiceFromRef and ServiceToRef (both Services must be Ready)
 		return w.extractSvcSvcRuleDependencies(resource)
+	case string(registry.TypeSvcFqdnRule):
+		// SvcFqdnRule depends on the referenced ServiceFrom (Service must be Ready)
+		return w.extractSvcFqdnRuleDependencies(resource)
 	default:
 		return nil, fmt.Errorf("unknown entity resource type: %s", resourceType)
 	}
@@ -421,6 +428,40 @@ func (w *OutboxWorker) extractSvcSvcRuleDependencies(
 		zap.String("rule_name", rule.Name),
 		zap.String("service_from", fmt.Sprintf("%s/%s", rule.ServiceFromRef.Namespace, rule.ServiceFromRef.Name)),
 		zap.String("service_to", fmt.Sprintf("%s/%s", rule.ServiceToRef.Namespace, rule.ServiceToRef.Name)))
+
+	return deps, nil
+}
+
+// extractSvcFqdnRuleDependencies extracts Service dependencies from SvcFqdnRule
+// SvcFqdnRule depends on ServiceFromRef (Service must be Ready)
+func (w *OutboxWorker) extractSvcFqdnRuleDependencies(
+	resource interface{},
+) ([]EntityDependency, error) {
+	// Type assert to *models.SvcFqdnRule
+	rule, ok := resource.(*models.SvcFqdnRule)
+	if !ok {
+		return nil, fmt.Errorf("invalid resource type for SvcFqdnRule extraction: %T (expected *models.SvcFqdnRule)", resource)
+	}
+
+	// Ensure namespace fallback is respected
+	serviceNamespace := rule.ServiceFromRef.Namespace
+	if serviceNamespace == "" {
+		serviceNamespace = rule.Namespace
+	}
+
+	deps := []EntityDependency{
+		{
+			Type:      string(registry.TypeService),
+			Name:      rule.ServiceFromRef.Name,
+			Namespace: serviceNamespace,
+			Reason:    fmt.Sprintf("Service referenced in SvcFqdnRule.ServiceFromRef (sent as SvcFrom='%s/%s' to SGROUP)", serviceNamespace, rule.ServiceFromRef.Name),
+		},
+	}
+
+	w.logger.Debug("extracted SvcFqdnRule dependencies",
+		zap.String("rule_namespace", rule.Namespace),
+		zap.String("rule_name", rule.Name),
+		zap.String("service_from", fmt.Sprintf("%s/%s", serviceNamespace, rule.ServiceFromRef.Name)))
 
 	return deps, nil
 }
