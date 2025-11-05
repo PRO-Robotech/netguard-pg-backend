@@ -152,6 +152,16 @@ func convertServiceFromProto(protoSvc *netguardpb.Service) models.Service {
 			}
 		}
 	}
+	if protoSvc.XSvcfqdnRules != nil {
+		fqdnRules := &models.XSvcFqdnRules{}
+		if len(protoSvc.XSvcfqdnRules.Rules) > 0 {
+			fqdnRules.Rules = make([]models.ResourceIdentifier, len(protoSvc.XSvcfqdnRules.Rules))
+			for i, ref := range protoSvc.XSvcfqdnRules.Rules {
+				fqdnRules.Rules[i] = models.NewResourceIdentifier(ref.Name, models.WithNamespace(ref.Namespace))
+			}
+		}
+		service.XSvcFqdnRules = fqdnRules
+	}
 	return service
 }
 func convertServiceToProto(service models.Service) *netguardpb.Service {
