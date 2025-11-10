@@ -226,22 +226,14 @@ func (w *Writer) upsertNetwork(ctx context.Context, network *models.Network) err
 		return errors.Wrapf(err, "failed to upsert network %s/%s", network.Namespace, network.Name)
 	}
 
-	// Outbox entry is automatically created by PostgreSQL trigger
-	// (trg_network_upsert_outbox) which uses UID from k8s_metadata.
-	// Migration 042 will fix the trigger to use real Kubernetes UID instead of UUID v5.
-	// This eliminates duplicate outbox entries.
-	//
-	// Previous code (REMOVED to fix duplicate outbox bug):
-	// if err := w.createNetworkOutboxEntry(ctx, network); err != nil {
-	//     return errors.Wrap(err, "failed to create outbox entry for network")
-	// }
+	// Outbox entries for networks are created by trigger 'trg_network_upsert_outbox'
+	// using the Kubernetes UID stored in k8s_metadata.
 
 	return nil
 }
 
-// Removed createNetworkDeleteOutboxEntry - no longer needed!
-// DELETE outbox entries are now automatically created by BEFORE DELETE trigger
-// (migration 026: trigger_network_before_delete)
+// DELETE outbox entries are created by BEFORE DELETE trigger 'trigger_network_before_delete'
+// (migration 026), so additional helpers are unnecessary.
 
 // deleteNetworksInScope deletes networks that match the provided scope
 // Previous implementation used direct DELETE which bypassed Migration 032 trigger,

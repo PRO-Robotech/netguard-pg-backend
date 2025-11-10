@@ -171,15 +171,8 @@ func (w *Writer) upsertAddressGroup(ctx context.Context, ag models.AddressGroup)
 		return errors.Wrapf(err, "failed to upsert address group %s/%s", ag.Namespace, ag.Name)
 	}
 
-	// Outbox entry is automatically created by PostgreSQL trigger
-	// (trg_address_group_upsert_outbox) which uses UID from k8s_metadata.
-	// Migration 041 fixed the trigger to use real Kubernetes UID instead of UUID v5.
-	// This eliminates duplicate outbox entries.
-	//
-	// Previous code (REMOVED to fix triple outbox bug):
-	// if err := w.createAddressGroupOutboxEntry(ctx, ag); err != nil {
-	//     return errors.Wrap(err, "failed to create outbox entry for address group")
-	// }
+	// Outbox entries are produced by PostgreSQL trigger 'trg_address_group_upsert_outbox',
+	// which uses the Kubernetes UID stored in k8s_metadata.
 
 	return nil
 }
@@ -275,10 +268,8 @@ func (w *Writer) SyncAddressGroupBindings(ctx context.Context, bindings []models
 
 	switch syncOp {
 	case models.SyncOpDelete:
-		// CRITICAL FIX: Use soft delete (set deletion_timestamp only) instead of physical deletion
-		// Physical deletion will happen via OutboxWorker AFTER triggers process deletion_timestamp
-		// This fixes the bug where binding was deleted before AFTER UPDATE trigger could read it
-		// See: docs/bindings/service-addressgroup/SERVICE_ADDRESSGROUP_DELETION_BUG.md
+		// Use soft delete (set deletion_timestamp) so triggers can process the change
+		// and OutboxWorker can perform the physical removal later.
 		var identifiers []models.ResourceIdentifier
 		for _, binding := range bindings {
 			identifiers = append(identifiers, binding.SelfRef.ResourceIdentifier)

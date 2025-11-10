@@ -1,13 +1,6 @@
 -- +goose Up
 -- +goose StatementBegin
 
--- Migration 093: Ensure Service outbox payload includes ingress ports and spec address groups
--- Rationale:
---   - SGROUP receives empty protocols because trigger_service_upsert_outbox() only serializes
---     aggregated_address_groups. Worker reconstructs Service from payload snapshot, so
---     missing ingress_ports / description / address_groups are lost before ToSGroupsProto().
---   - This migration extends the payload to include critical spec fields.
-
 CREATE OR REPLACE FUNCTION trigger_service_upsert_outbox()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -18,7 +11,6 @@ BEGIN
     IF TG_OP = 'INSERT' THEN
         v_operation_type := 'CREATE'::sync_operation;
     ELSIF TG_OP = 'UPDATE' THEN
-        -- Check for changes in spec fields including aggregated_address_groups (Migration 070)
         IF OLD.description IS DISTINCT FROM NEW.description OR
            OLD.ingress_ports IS DISTINCT FROM NEW.ingress_ports OR
            OLD.address_groups IS DISTINCT FROM NEW.address_groups OR
@@ -32,15 +24,11 @@ BEGIN
         RETURN NEW;
     END IF;
 
-    -- Try to get real Kubernetes UID from k8s_metadata first
     SELECT km.uid INTO v_resource_id
     FROM k8s_metadata km
     WHERE km.resource_version = NEW.resource_version;
 
-    IF v_resource_id IS NOT NULL THEN
-        -- Use real K8s UID from metadata (preferred)
-    ELSE
-        -- Fallback to UUID v5 if k8s_metadata not found (shouldn't happen in normal operation)
+    IF v_resource_id IS NULL THEN
         v_resource_id := uuid_generate_v5(
             uuid_ns_dns(),
             'Service:' || NEW.namespace || '/' || NEW.name
@@ -82,7 +70,7 @@ BEGIN
         status = 'PENDING',
         attempts = 0,
         updated_at = NOW(),
-        payload = EXCLUDED.payload;  -- keep payload in sync with latest snapshot
+        payload = EXCLUDED.payload;
 
     RETURN NEW;
 END;
@@ -93,7 +81,6 @@ $$ LANGUAGE plpgsql;
 -- +goose Down
 -- +goose StatementBegin
 
--- Revert to version from Migration 079 (payload only contained namespace/name/aggregated_address_groups)
 CREATE OR REPLACE FUNCTION trigger_service_upsert_outbox()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -121,9 +108,7 @@ BEGIN
     FROM k8s_metadata km
     WHERE km.resource_version = NEW.resource_version;
 
-    IF v_resource_id IS NOT NULL THEN
-        -- Use real K8s UID from metadata (preferred)
-    ELSE
+    IF v_resource_id IS NULL THEN
         v_resource_id := uuid_generate_v5(
             uuid_ns_dns(),
             'Service:' || NEW.namespace || '/' || NEW.name

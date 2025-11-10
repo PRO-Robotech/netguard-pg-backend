@@ -388,10 +388,7 @@ func (v *ServiceValidator) CheckDependencies(ctx context.Context, id models.Reso
 		return NewDependencyExistsError("service", id.Key(), "address_groups")
 	}
 
-	// CRITICAL FIX: Check AddressGroupBinding references
-	// Without this check, Service can be deleted from K8s (ValidationWebhook passes)
-	// but deletion is blocked in PostgreSQL by FK constraints (FK violation)
-	// This causes data inconsistency: Service deleted from etcd but exists in PostgreSQL
+	// Also check AddressGroupBinding references to avoid deleting services that are still bound.
 	hasBindings := false
 	err = v.reader.ListAddressGroupBindings(ctx, func(binding models.AddressGroupBinding) error {
 		if binding.ServiceRef.Namespace == id.Namespace && binding.ServiceRef.Name == id.Name {

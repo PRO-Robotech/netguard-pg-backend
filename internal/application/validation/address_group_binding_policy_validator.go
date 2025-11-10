@@ -44,8 +44,7 @@ func (v *AddressGroupBindingPolicyValidator) ValidateReferences(ctx context.Cont
 
 // ValidateForCreation validates an address group binding policy before creation
 func (v *AddressGroupBindingPolicyValidator) ValidateForCreation(ctx context.Context, policy *models.AddressGroupBindingPolicy) error {
-	// PHASE 1: Check for duplicate entity (CRITICAL FIX for overwrite issue)
-	// This prevents creation of entities with the same namespace/name combination
+	// Phase 1: ensure the namespace/name combination is unused before creation.
 	keyExtractor := func(entity interface{}) string {
 		if agbp, ok := entity.(*models.AddressGroupBindingPolicy); ok {
 			return agbp.Key()

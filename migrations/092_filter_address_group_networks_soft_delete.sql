@@ -1,12 +1,6 @@
 -- +goose Up
 -- +goose StatementBegin
 
--- Migration 092: Filter soft-deleted NetworkBindings when rebuilding AddressGroup.networks
--- Problem: rebuild_address_group_networks() aggregated networks from bindings regardless of
---          deletion_timestamp, поэтому мягко удалённые NetworkBinding продолжали появляться
---          в AddressGroup.networks и, следовательно, просачивались в SGROUP payload.
--- Решение: добавляем JOIN на k8s_metadata для network_bindings и networks и фильтруем
---           записи с deletion_timestamp IS NULL, повторяя паттерн Migration 089 для hosts.
 
 CREATE OR REPLACE FUNCTION rebuild_address_group_networks(ag_namespace TEXT, ag_name TEXT)
 RETURNS JSONB AS $$
@@ -44,7 +38,6 @@ $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION rebuild_address_group_networks(TEXT, TEXT) IS
 'Aggregates networks from active NetworkBindings only (deletion_timestamp IS NULL for binding and network).';
 
--- Обновляем существующие записи, чтобы очистить массивы от мягко удалённых сетей
 UPDATE address_groups ag
 SET networks = rebuild_address_group_networks(ag.namespace, ag.name);
 
@@ -53,7 +46,6 @@ SET networks = rebuild_address_group_networks(ag.namespace, ag.name);
 -- +goose Down
 -- +goose StatementBegin
 
--- Восстанавливаем предыдущую версию функции (без проверки deletion_timestamp)
 CREATE OR REPLACE FUNCTION rebuild_address_group_networks(ag_namespace TEXT, ag_name TEXT)
 RETURNS JSONB AS $$
 DECLARE
@@ -88,7 +80,6 @@ $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION rebuild_address_group_networks(TEXT, TEXT) IS
 'Aggregates networks from NetworkBindings without filtering soft-deleted bindings.';
 
--- Пересчитываем networks по старой логике
 UPDATE address_groups ag
 SET networks = rebuild_address_group_networks(ag.namespace, ag.name);
 

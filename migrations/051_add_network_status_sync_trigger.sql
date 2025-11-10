@@ -1,21 +1,10 @@
 -- +goose Up
--- Migration 051: Add Network.status synchronization with NetworkBinding
---
--- Problem: When NetworkBinding is created/deleted, Network.status fields
--- (is_bound, binding_ref_*, address_group_ref_*) are not updated automatically.
--- This causes Network.spec.isBound to remain false even when bound.
---
--- Solution: Add AFTER trigger on network_bindings to update Network.status
--- when binding is created, updated, or deleted.
---
--- Pattern: Similar to Migration 044 (Host binding status updates)
 
 -- +goose StatementBegin
 CREATE OR REPLACE FUNCTION sync_network_status_on_binding_change()
 RETURNS TRIGGER AS $$
 BEGIN
     IF TG_OP = 'INSERT' THEN
-        -- NetworkBinding created → Bind Network
         UPDATE networks
         SET is_bound = true,
             binding_ref_namespace = NEW.namespace,
@@ -26,7 +15,6 @@ BEGIN
           AND name = NEW.network_name;
 
     ELSIF TG_OP = 'DELETE' THEN
-        -- NetworkBinding deleted → Unbind Network
         UPDATE networks
         SET is_bound = false,
             binding_ref_namespace = NULL,
@@ -37,10 +25,8 @@ BEGIN
           AND name = OLD.network_name;
 
     ELSIF TG_OP = 'UPDATE' THEN
-        -- If Network reference changed → Unbind old Network, bind new Network
         IF OLD.network_namespace != NEW.network_namespace
            OR OLD.network_name != NEW.network_name THEN
-            -- Unbind old Network
             UPDATE networks
             SET is_bound = false,
                 binding_ref_namespace = NULL,
@@ -51,7 +37,6 @@ BEGIN
               AND name = OLD.network_name;
         END IF;
 
-        -- Bind new/current Network
         UPDATE networks
         SET is_bound = true,
             binding_ref_namespace = NEW.namespace,
@@ -67,13 +52,11 @@ END;
 $$ LANGUAGE plpgsql;
 -- +goose StatementEnd
 
--- Create trigger on network_bindings
 CREATE TRIGGER trg_sync_network_status_on_binding
 AFTER INSERT OR UPDATE OR DELETE ON network_bindings
 FOR EACH ROW
 EXECUTE FUNCTION sync_network_status_on_binding_change();
 
--- Initialize Network.status for existing NetworkBindings
 UPDATE networks n
 SET is_bound = true,
     binding_ref_namespace = nb.namespace,
@@ -86,13 +69,10 @@ WHERE n.namespace = nb.network_namespace
 
 -- +goose Down
 -- +goose StatementBegin
--- Drop trigger
 DROP TRIGGER IF EXISTS trg_sync_network_status_on_binding ON network_bindings;
 
--- Drop function
 DROP FUNCTION IF EXISTS sync_network_status_on_binding_change();
 
--- Reset Network.status to default (unbind all)
 UPDATE networks
 SET is_bound = false,
     binding_ref_namespace = NULL,

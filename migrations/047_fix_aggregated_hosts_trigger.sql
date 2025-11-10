@@ -1,20 +1,4 @@
 -- +goose Up
--- ============================================================================
--- Migration 047: Fix aggregated_hosts Trigger Function
--- ============================================================================
---
--- Purpose: Fix Migration 044's broken aggregated_hosts update logic.
---
--- Problem: In Migration 044, the trigger function was changed to use direct
---          assignment (NEW.aggregated_hosts := ...) which doesn't work because:
---          1. The trigger is AFTER INSERT OR UPDATE
---          2. In AFTER triggers, modifications to NEW have NO EFFECT on database
---          3. The NEW record is read-only after the row is inserted/updated
---
--- Solution: Restore the separate UPDATE statement pattern from Migration 014
---           while preserving all the new Host status update logic from Migration 044.
---
--- ============================================================================
 
 -- +goose StatementBegin
 CREATE OR REPLACE FUNCTION trigger_update_aggregated_hosts_on_spec_change()
@@ -27,24 +11,17 @@ DECLARE
     removed_hosts JSONB;
     v_host_rv BIGINT;
 BEGIN
-    -- ⚠️ CRITICAL FIX: Use separate UPDATE instead of NEW assignment
-    -- This pattern works correctly in AFTER triggers
     UPDATE address_groups
     SET aggregated_hosts = aggregate_address_group_hosts(NEW.namespace::text, NEW.name::text)
     WHERE namespace = NEW.namespace AND name = NEW.name;
 
-    -- ✨ Preserve NEW LOGIC from Migration 044: Handle spec.hosts changes to update Host.status
     old_hosts_json := COALESCE(OLD.hosts, '[]'::jsonb);
     new_hosts_json := COALESCE(NEW.hosts, '[]'::jsonb);
 
-    -- Only process if spec.hosts actually changed
     IF old_hosts_json <> new_hosts_json THEN
 
         RAISE NOTICE 'AG %.% spec.hosts changed, updating affected Hosts', NEW.namespace, NEW.name;
 
-        -- ─────────────────────────────────────────────────────────────
-        -- Find ADDED hosts (in NEW but not in OLD)
-        -- ─────────────────────────────────────────────────────────────
         SELECT jsonb_agg(elem)
         INTO added_hosts
         FROM jsonb_array_elements(new_hosts_json) elem
@@ -60,13 +37,11 @@ BEGIN
                 SELECT elem->>'name'
                 FROM jsonb_array_elements(added_hosts) elem
             LOOP
-                -- Get Host resource_version
                 SELECT resource_version INTO v_host_rv
                 FROM hosts
                 WHERE namespace = NEW.namespace AND name = host_name_val::resource_name;
 
                 IF v_host_rv IS NOT NULL THEN
-                    -- Update Host: set binding references
                     UPDATE hosts
                     SET is_bound = true,
                         address_group_name = NEW.name,
@@ -74,7 +49,6 @@ BEGIN
                         address_group_ref_name = NEW.name
                     WHERE namespace = NEW.namespace AND name = host_name_val::resource_name;
 
-                    -- Update Host conditions: Ready=False, PendingSync=True
                     UPDATE k8s_metadata
                     SET conditions = jsonb_build_array(
                         jsonb_build_object(
@@ -110,9 +84,6 @@ BEGIN
             END LOOP;
         END IF;
 
-        -- ─────────────────────────────────────────────────────────────
-        -- Find REMOVED hosts (in OLD but not in NEW)
-        -- ─────────────────────────────────────────────────────────────
         SELECT jsonb_agg(elem)
         INTO removed_hosts
         FROM jsonb_array_elements(old_hosts_json) elem
@@ -133,7 +104,6 @@ BEGIN
                 WHERE namespace = NEW.namespace AND name = host_name_val::resource_name;
 
                 IF v_host_rv IS NOT NULL THEN
-                    -- Update Host: clear binding references
                     UPDATE hosts
                     SET is_bound = false,
                         address_group_name = NULL,
@@ -141,7 +111,6 @@ BEGIN
                         address_group_ref_name = NULL
                     WHERE namespace = NEW.namespace AND name = host_name_val::resource_name;
 
-                    -- Update Host conditions: Ready=False, PendingSync=True
                     UPDATE k8s_metadata
                     SET conditions = jsonb_build_array(
                         jsonb_build_object(
@@ -187,7 +156,6 @@ COMMENT ON FUNCTION trigger_update_aggregated_hosts_on_spec_change() IS
 Also updates Host status (isBound, addressGroupRef, conditions) when hosts are added/removed.
 FIXED in Migration 047: Now uses separate UPDATE statement instead of NEW assignment (works in AFTER triggers).';
 
--- Fix existing data: Recalculate aggregated_hosts for all AddressGroups
 UPDATE address_groups
 SET aggregated_hosts = aggregate_address_group_hosts(namespace::text, name::text);
 
@@ -196,7 +164,6 @@ SET aggregated_hosts = aggregate_address_group_hosts(namespace::text, name::text
 -- +goose Down
 -- +goose StatementBegin
 
--- Revert to Migration 044 version (broken version with NEW assignment)
 CREATE OR REPLACE FUNCTION trigger_update_aggregated_hosts_on_spec_change()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -207,7 +174,6 @@ DECLARE
     removed_hosts JSONB;
     v_host_rv BIGINT;
 BEGIN
-    -- BROKEN: This doesn't work in AFTER triggers!
     NEW.aggregated_hosts := aggregate_address_group_hosts(NEW.namespace::text, NEW.name::text);
 
     old_hosts_json := COALESCE(OLD.hosts, '[]'::jsonb);

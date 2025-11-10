@@ -2,7 +2,6 @@ package convert
 
 import (
 	"fmt"
-	"log"
 	"reflect"
 
 	"netguard-pg-backend/internal/domain/models"
@@ -46,11 +45,6 @@ func ConvertMetadataToDomain(objMeta metav1.ObjectMeta, statusConditions []metav
 	return meta
 }
 func ConvertMetadataFromDomain(meta models.Meta, name, namespace string) metav1.ObjectMeta {
-	if meta.DeletionTS != nil {
-		log.Printf("DEBUG_API_DELETION_TS: meta.DeletionTS is NOT nil: %v for %s/%s", meta.DeletionTS, namespace, name)
-	} else {
-		log.Printf("DEBUG_API_DELETION_TS: meta.DeletionTS IS nil for %s/%s", namespace, name)
-	}
 	objMeta := metav1.ObjectMeta{
 		Name:              name,
 		Namespace:         namespace,

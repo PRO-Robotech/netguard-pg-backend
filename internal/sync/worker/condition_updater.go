@@ -26,7 +26,7 @@ const (
 // updatePendingSyncCondition updates the PendingSync condition in k8s_metadata by namespace+name
 // This is the PRIMARY method for updating PendingSync conditions throughout the worker
 //
-// FIXED (Migration 030): Now queries by (resource_type, namespace, name) instead of non-existent resource_id
+// Queries by (resource_type, namespace, name) to match the schema introduced in migration 030.
 //
 // Parameters:
 //   - resourceType: Type of resource (Host, Network, AddressGroup, Service)

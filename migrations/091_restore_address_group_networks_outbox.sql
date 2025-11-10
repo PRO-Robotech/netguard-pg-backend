@@ -1,11 +1,6 @@
 -- +goose Up
 -- +goose StatementBegin
 
--- Migration 091: Restore AddressGroup networks tracking in outbox trigger
--- Background:
---   - Migration 087 отключил обработку поля networks, чтобы не реагировать на Host/Network bindings
---   - Для сетей требуется AddressGroup-centric синхронизация через массив networks (SGROUP не
---     поддерживает Network.sgName). Нужен полный список сетей в payload, включая очистку ([""]).
 
 CREATE OR REPLACE FUNCTION trigger_address_group_upsert_outbox()
 RETURNS TRIGGER AS $$
@@ -88,7 +83,6 @@ COMMENT ON FUNCTION trigger_address_group_upsert_outbox() IS
 -- +goose Down
 -- +goose StatementBegin
 
--- Roll back to Migration 090 behaviour (no networks tracking)
 CREATE OR REPLACE FUNCTION trigger_address_group_upsert_outbox()
 RETURNS TRIGGER AS $$
 DECLARE

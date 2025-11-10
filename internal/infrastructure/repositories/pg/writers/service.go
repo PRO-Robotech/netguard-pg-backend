@@ -206,15 +206,8 @@ func (w *Writer) upsertService(ctx context.Context, service models.Service) erro
 		return errors.Wrapf(err, "failed to upsert service %s/%s", service.Namespace, service.Name)
 	}
 
-	// Outbox entry is automatically created by PostgreSQL trigger
-	// (trg_service_upsert_outbox) which uses UID from k8s_metadata.
-	// Migration 042 will fix the trigger to use real Kubernetes UID instead of UUID v5.
-	// This eliminates duplicate outbox entries.
-	//
-	// Previous code (REMOVED to fix duplicate outbox bug):
-	// if err := w.createServiceOutboxEntry(ctx, service); err != nil {
-	//     return errors.Wrap(err, "failed to create outbox entry for service")
-	// }
+	// Outbox entries for services are created by trigger 'trg_service_upsert_outbox'
+	// using the Kubernetes UID stored in k8s_metadata.
 
 	return nil
 }

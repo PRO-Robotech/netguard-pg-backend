@@ -1,59 +1,6 @@
 -- +goose Up
--- ============================================================================
--- Migration 045: Host Uniqueness Validation
--- ============================================================================
---
--- Purpose: Enforce that each Host can only be attached to ONE AddressGroup
---          through ONLY ONE method (either spec.hosts OR HostBinding).
---
--- Business Rules:
--- 1. A Host CANNOT exist in spec.hosts of one AG and have HostBinding to another AG
--- 2. A Host CANNOT have multiple HostBindings (even to the same AG)
--- 3. A Host CANNOT be in spec.hosts AND have HostBinding to the same AG
---
--- Implementation:
--- 1. Duplicate detection function (runs at migration time, WARNING only)
--- 2. BEFORE INSERT trigger on host_bindings (prevents new duplicates)
--- 3. BEFORE UPDATE trigger on address_groups (prevents adding duplicates to spec.hosts)
---
--- ============================================================================
 
--- ============================================================================
--- PART 1: Duplicate Detection (Migration-time warning)
--- ============================================================================
--- NOTE: Duplicate detection is commented out due to Goose SQL parser limitations.
--- To check for existing duplicates manually, run this query after migration:
---
--- -- Check 1: Hosts in multiple HostBindings
--- SELECT h.namespace, h.name as host_name, h.uuid,
---        COUNT(DISTINCT hb.address_group_namespace || '/' || hb.address_group_name) as ag_count
--- FROM hosts h
--- JOIN host_bindings hb ON hb.host_namespace = h.namespace AND hb.host_name = h.name
--- JOIN k8s_metadata m ON m.resource_version = hb.resource_version
--- WHERE m.deletion_timestamp IS NULL
--- GROUP BY h.namespace, h.name, h.uuid
--- HAVING COUNT(DISTINCT hb.address_group_namespace || '/' || hb.address_group_name) > 1;
---
--- -- Check 2: Hosts in BOTH spec.hosts AND HostBinding
--- WITH hosts_in_spec AS (
---     SELECT ag.namespace as ag_namespace, ag.name as ag_name,
---            host_elem->>'namespace' as host_namespace, host_elem->>'name' as host_name
---     FROM address_groups ag,
---     LATERAL jsonb_array_elements(COALESCE(ag.hosts, '[]'::jsonb)) as host_elem
---     WHERE jsonb_typeof(ag.hosts) = 'array'
--- )
--- SELECT DISTINCT h.namespace, h.name as host_name, h.uuid,
---        his.ag_namespace || '/' || his.ag_name as spec_ag,
---        hb.address_group_namespace || '/' || hb.address_group_name as binding_ag
--- FROM hosts h
--- JOIN hosts_in_spec his ON his.host_namespace = h.namespace::text AND his.host_name = h.name::text
--- JOIN host_bindings hb ON hb.host_namespace = h.namespace AND hb.host_name = h.name
--- JOIN k8s_metadata m ON m.resource_version = hb.resource_version
--- WHERE m.deletion_timestamp IS NULL;
 
--- ============================================================================
--- PART 2: Validation Function
--- ============================================================================
 
 -- +goose StatementBegin
 CREATE OR REPLACE FUNCTION validate_host_uniqueness(
@@ -120,9 +67,6 @@ COMMENT ON FUNCTION validate_host_uniqueness(TEXT, TEXT, TEXT, TEXT, TEXT) IS
 Raises exception if Host already has HostBinding or exists in spec.hosts.';
 -- +goose StatementEnd
 
--- ============================================================================
--- PART 3: Trigger on host_bindings (BEFORE INSERT)
--- ============================================================================
 
 -- +goose StatementBegin
 CREATE OR REPLACE FUNCTION trigger_validate_host_binding_uniqueness()
@@ -151,9 +95,6 @@ COMMENT ON TRIGGER trigger_validate_host_binding_uniqueness ON host_bindings IS
 'Prevents creating HostBinding if Host already has binding or exists in spec.hosts';
 -- +goose StatementEnd
 
--- ============================================================================
--- PART 4: Trigger on address_groups (BEFORE UPDATE on spec.hosts)
--- ============================================================================
 
 -- +goose StatementBegin
 CREATE OR REPLACE FUNCTION trigger_validate_address_group_hosts_uniqueness()

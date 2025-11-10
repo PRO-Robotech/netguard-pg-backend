@@ -1,13 +1,6 @@
 -- +goose Up
 -- +goose StatementBegin
 
--- Migration 085: Skip AddressGroup outbox entries when only aggregated_hosts changed
--- ---------------------------------------------------------------------------------------------------------------------
--- Purpose: Host ↔ AddressGroup синхронизация теперь выполняется через SyncHosts (см. Host-Centric Binding Sync).
--- AggregatedHosts обновляется для локального состояния, но SGROUP больше не ожидает массив hosts в AddressGroup payload.
--- Раньше trigger_address_group_upsert_outbox() реагировал на изменение aggregated_hosts и создавал UPDATE в outbox,
--- что приводило к лишним вызовам SGROUP. Теперь удаляем aggregated_hosts из условий и payload.
--- ---------------------------------------------------------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION trigger_address_group_upsert_outbox()
 RETURNS TRIGGER AS $$
@@ -94,7 +87,6 @@ END $$;
 -- +goose Down
 -- +goose StatementBegin
 
--- Rollback to Migration 083 version (aggregated_hosts tracked in payload and change detection)
 CREATE OR REPLACE FUNCTION trigger_address_group_upsert_outbox()
 RETURNS TRIGGER AS $$
 DECLARE

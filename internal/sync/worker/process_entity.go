@@ -41,10 +41,8 @@ func (w *OutboxWorker) processEntityResource(
 	var resource interface{}
 	var err error
 
-	// CRITICAL FIX: Always prefer payload when available (for deterministic sync)
-	// This ensures we use the exact snapshot captured at trigger execution time,
-	// preventing race conditions where database state changes between trigger and worker processing.
-	// See: migrations/076_PROBLEM_EXPLANATION.md
+	// Prefer the trigger-captured payload when it exists so the worker processes the exact snapshot
+	// rather than a potentially diverged record read from the database later.
 	if item.Payload != nil && len(item.Payload) > 0 {
 		w.logger.Debug("reconstructing resource from payload (deterministic sync)",
 			zap.String("resource_type", item.ResourceType),
@@ -58,9 +56,8 @@ func (w *OutboxWorker) processEntityResource(
 			return fmt.Errorf("failed to reconstruct resource from payload: %w", err)
 		}
 
-		// 🔍 DEBUG POINT 1: Log reconstructed Service from payload
 		if service, ok := resource.(*models.Service); ok {
-			w.logger.Info("🔍 [PAYLOAD_DEBUG] Reconstructed Service from payload",
+			w.logger.Debug("reconstructed service from payload",
 				zap.String("namespace", service.Namespace),
 				zap.String("name", service.Name),
 				zap.Int("aggregated_ags_count", len(service.AggregatedAddressGroups)),
@@ -1103,12 +1100,6 @@ func (a *EntitySyncerAdapter) GetSupportedSubjectType() types.SyncSubjectType {
 	return a.subjectType
 }
 func (w *OutboxWorker) deleteResourceFromDB(ctx context.Context, item *domain.OutboxEntry) error {
-	w.logger.Info("🔥🔥🔥 [DELETE_FROM_DB] deleteResourceFromDB CALLED - ABOUT TO PHYSICALLY DELETE FROM DATABASE",
-		zap.String("resource_type", item.ResourceType),
-		zap.String("namespace", item.ResourceNamespace),
-		zap.String("name", item.ResourceName),
-		zap.String("resource_id", item.ResourceID.String()))
-
 	conn, err := w.pool.Acquire(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to acquire connection: %w", err)
@@ -1140,12 +1131,6 @@ func (w *OutboxWorker) deleteResourceFromDB(ctx context.Context, item *domain.Ou
 		return fmt.Errorf("unknown resource type for deletion: %s", item.ResourceType)
 	}
 
-	w.logger.Info("🗑️ [DELETE_FROM_DB] Executing DELETE query",
-		zap.String("resource_type", item.ResourceType),
-		zap.String("namespace", item.ResourceNamespace),
-		zap.String("name", item.ResourceName),
-		zap.String("query", deleteQuery))
-
 	cmdTag, err := tx.Exec(ctx, deleteQuery, item.ResourceNamespace, item.ResourceName)
 	if err != nil {
 		return fmt.Errorf("failed to delete %s from DB: %w", item.ResourceType, err)
@@ -1163,7 +1148,7 @@ func (w *OutboxWorker) deleteResourceFromDB(ctx context.Context, item *domain.Ou
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("failed to commit deletion transaction: %w", err)
 	}
-	w.logger.Info("resource and outbox entry deleted from DB",
+	w.logger.Debug("resource and outbox entry deleted from DB",
 		zap.String("resource_type", item.ResourceType),
 		zap.String("namespace", item.ResourceNamespace),
 		zap.String("name", item.ResourceName))
@@ -1171,7 +1156,7 @@ func (w *OutboxWorker) deleteResourceFromDB(ctx context.Context, item *domain.Ou
 }
 
 func (w *OutboxWorker) deleteAddressGroupPortMapping(ctx context.Context, tx pgx.Tx, namespace, name string) error {
-	w.logger.Debug("🗑️ [DELETE_FROM_DB] Deleting AddressGroupPortMapping prior to AddressGroup removal",
+	w.logger.Debug("️ [DELETE_FROM_DB] Deleting AddressGroupPortMapping prior to AddressGroup removal",
 		zap.String("namespace", namespace),
 		zap.String("name", name))
 

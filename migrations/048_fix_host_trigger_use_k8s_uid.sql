@@ -1,30 +1,6 @@
 -- +goose Up
 -- +goose StatementBegin
 
--- КРИТИЧЕСКИЙ БАГ-ФИКС: Host UPSERT trigger использует hosts.uuid вместо k8s_metadata.uid
---
--- ПРОБЛЕМА:
--- - trigger_host_upsert_outbox() использует NEW.uuid (Host spec UUID)
--- - trigger_host_before_delete() использует k8s_metadata.uid (Kubernetes UID)
--- - Это РАЗНЫЕ UUID! → CREATE и DELETE записи используют разные resource_id
--- - ON CONFLICT не срабатывает, потому что resource_id разные
---
--- СЛЕДСТВИЕ:
--- - CREATE entry: resource_id = Host.uuid (38fcf701-...)
--- - DELETE entry: resource_id = k8s_metadata.uid (0a2806d7-...)
--- - Пользователь видит только DELETE entry с "неправильным" UUID
--- - CREATE entry был обработан успешно и удалён retention policy
---
--- ДОКАЗАТЕЛЬСТВО:
--- - Migration 026: Host UPSERT использует NEW.uuid (НЕПРАВИЛЬНО)
--- - Migration 026: Host DELETE использует k8s_metadata.uid (ПРАВИЛЬНО)
--- - Migration 041: AddressGroup ИСПРАВЛЕН на k8s_metadata.uid
--- - Migration 042: Network/Service ИСПРАВЛЕНЫ на k8s_metadata.uid
--- - Host trigger НЕ БЫЛ ИСПРАВЛЕН!
---
--- РЕШЕНИЕ:
--- Обновить trigger_host_upsert_outbox() чтобы использовать k8s_metadata.uid
--- как все остальные ресурсы (AddressGroup, Network, Service).
 
 CREATE OR REPLACE FUNCTION trigger_host_upsert_outbox()
 RETURNS TRIGGER AS $$
@@ -33,12 +9,10 @@ DECLARE
     v_operation_type sync_operation;
     v_has_spec_changes BOOLEAN := FALSE;
 BEGIN
-    -- Определение типа операции
     IF TG_OP = 'INSERT' THEN
         v_operation_type := 'CREATE'::sync_operation;
         v_has_spec_changes := TRUE;
     ELSIF TG_OP = 'UPDATE' THEN
-        -- Проверка изменения spec полей
         IF OLD.uuid IS DISTINCT FROM NEW.uuid OR
            OLD.is_bound IS DISTINCT FROM NEW.is_bound OR
            OLD.host_name_sync IS DISTINCT FROM NEW.host_name_sync OR
@@ -47,29 +21,23 @@ BEGIN
             v_has_spec_changes := TRUE;
             v_operation_type := 'UPDATE'::sync_operation;
         ELSE
-            -- Нет изменений spec, пропускаем sync
             RETURN NEW;
         END IF;
     ELSE
         RETURN NEW;
     END IF;
 
-    -- ✅ КРИТИЧЕСКИЙ ФИКС: Используем k8s_metadata.uid вместо hosts.uuid
-    -- Теперь CREATE и DELETE будут использовать ОДИН И ТОТ ЖЕ resource_id!
     SELECT km.uid INTO v_resource_id
     FROM k8s_metadata km
     WHERE km.resource_version = NEW.resource_version;
 
     IF v_resource_id IS NULL THEN
-        -- Fallback (не должно происходить в нормальной работе)
-        -- Генерируем UUID как uuid_generate_v5 на основе namespace/name
         v_resource_id := uuid_generate_v5(
             uuid_ns_dns(),
             'Host:' || NEW.namespace || '/' || NEW.name
         );
     END IF;
 
-    -- Вставка или обновление outbox entry
     INSERT INTO sync_outbox (
         resource_type,
         resource_id,
@@ -87,7 +55,7 @@ BEGIN
     )
     VALUES (
         'Host',
-        v_resource_id,  -- Теперь k8s_metadata.uid!
+        v_resource_id,
         NEW.namespace,
         NEW.name,
         v_operation_type,
@@ -124,7 +92,6 @@ $$ LANGUAGE plpgsql;
 -- +goose Down
 -- +goose StatementBegin
 
--- Откатываем к старой (НЕПРАВИЛЬНОЙ) версии trigger
 CREATE OR REPLACE FUNCTION trigger_host_upsert_outbox()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -137,7 +104,7 @@ BEGIN
         v_operation_type := 'UPDATE'::sync_operation;
     END IF;
 
-    v_resource_id := NEW.uuid;  -- ❌ Старая (неправильная) логика
+    v_resource_id := NEW.uuid;
 
     INSERT INTO sync_outbox (
         resource_type,

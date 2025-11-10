@@ -33,7 +33,7 @@ func NewNetguardUpdatedObjectInfo(patchType types.PatchType, patchData []byte, g
 
 // UpdatedObject applies the patch to the current object without doing any internal lookups
 func (n *netguardUpdatedObjectInfo) UpdatedObject(ctx context.Context, oldObj runtime.Object) (runtime.Object, error) {
-	klog.InfoS("🔧 NetguardUpdatedObjectInfo.UpdatedObject CALLED",
+	klog.InfoS("NetguardUpdatedObjectInfo.UpdatedObject CALLED",
 		"patchType", string(n.patchType),
 		"oldObjType", fmt.Sprintf("%T", oldObj),
 		"patchDataLength", len(n.patchData))
@@ -64,7 +64,7 @@ func (n *netguardUpdatedObjectInfo) Preconditions() *metav1.Preconditions {
 
 // applyMergePatch applies a JSON merge patch (RFC 7396)
 func (n *netguardUpdatedObjectInfo) applyMergePatch(oldObj runtime.Object) (runtime.Object, error) {
-	klog.InfoS("🔧 Applying merge patch", "patchData", string(n.patchData))
+	klog.InfoS("Applying merge patch", "patchData", string(n.patchData))
 
 	// Convert current object to JSON
 	oldJSON, err := json.Marshal(oldObj)

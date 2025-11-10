@@ -79,7 +79,7 @@ func (v *SvcSvcRuleValidator) validateSpec(spec v1beta1.SvcSvcRuleSpec, parentNa
 	allErrs = append(allErrs, ValidateNamespacedObjectReference(&spec.ServiceFrom, fldPath.Child("serviceFrom"))...)
 	allErrs = append(allErrs, v.validateServiceFromDomain(spec.ServiceFrom, fldPath.Child("serviceFrom"))...)
 
-	// CRITICAL: ServiceFrom.Namespace MUST match parent namespace
+	// Ensure ServiceFrom.Namespace matches the parent namespace.
 	if spec.ServiceFrom.Namespace != "" && spec.ServiceFrom.Namespace != parentNamespace {
 		allErrs = append(allErrs, field.Invalid(fldPath.Child("serviceFrom").Child("namespace"), spec.ServiceFrom.Namespace,
 			fmt.Sprintf("serviceFrom.namespace must match SvcSvcRule namespace (%s)", parentNamespace)))

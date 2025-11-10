@@ -1,11 +1,6 @@
 -- +goose Up
 -- +goose StatementBegin
 
--- Migration 089: Ensure aggregate_address_group_hosts includes namespace for binding refs
--- Problem: binding-sourced hosts in aggregated_hosts JSON lacked the namespace field,
---          which breaks host reconciliation (Host.IsBound is reset) when spec.hosts and
---          HostBinding coexist. This migration updates the aggregation function to
---          populate namespace for binding entries.
 
 CREATE OR REPLACE FUNCTION aggregate_address_group_hosts(ag_namespace TEXT, ag_name TEXT)
 RETURNS JSONB AS $$
@@ -15,7 +10,6 @@ DECLARE
     host_record RECORD;
     hosts_field JSONB;
 BEGIN
-    -- Part 1: Hosts explicitly listed via spec.hosts
     SELECT COALESCE(hosts, '[]'::jsonb) INTO hosts_field
     FROM address_groups
     WHERE namespace = ag_namespace AND name = ag_name;
@@ -40,7 +34,6 @@ BEGIN
         END LOOP;
     END IF;
 
-    -- Part 2: Hosts linked via HostBinding (filtering out soft-deleted bindings)
     FOR host_record IN
         SELECT h.namespace, h.name, h.uuid
         FROM host_bindings hb
@@ -71,7 +64,6 @@ $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION aggregate_address_group_hosts(TEXT, TEXT) IS
 'Aggregates hosts from AddressGroup.spec.hosts and HostBindings. Includes namespace for binding refs and filters soft-deleted bindings (deletion_timestamp IS NULL).';
 
--- Rebuild cached aggregated_hosts with the corrected namespace information
 UPDATE address_groups
 SET aggregated_hosts = aggregate_address_group_hosts(namespace::text, name::text);
 
@@ -80,7 +72,6 @@ SET aggregated_hosts = aggregate_address_group_hosts(namespace::text, name::text
 -- +goose Down
 -- +goose StatementBegin
 
--- Restore previous definition (binding refs without explicit namespace)
 CREATE OR REPLACE FUNCTION aggregate_address_group_hosts(ag_namespace TEXT, ag_name TEXT)
 RETURNS JSONB AS $$
 DECLARE
@@ -142,7 +133,6 @@ $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION aggregate_address_group_hosts(TEXT, TEXT) IS
 'Aggregates hosts from AddressGroup.spec.hosts and HostBindings, filtering soft-deleted bindings.';
 
--- Recalculate aggregated_hosts to match the restored definition
 UPDATE address_groups
 SET aggregated_hosts = aggregate_address_group_hosts(namespace::text, name::text);
 

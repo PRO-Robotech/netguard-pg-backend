@@ -22,9 +22,7 @@ func (w *OutboxWorker) scheduleRetry(
 	// Categorize error to determine retry strategy
 	category := w.categorizeError(err)
 
-	// CRITICAL FIX: Use max_retries from database (per-entry limit) instead of category-based limit
-	// This respects the max_retries column set during outbox entry creation (typically 20)
-	// Falls back to category-based limit if max_retries is not set (0 or negative)
+	// Respect the per-entry max_retries value and fall back to category defaults when it is unset.
 	maxAttempts := item.MaxRetries
 	if maxAttempts <= 0 {
 		// Fallback to category-based limit for legacy entries or when not explicitly set

@@ -121,24 +121,6 @@ func (s *Service) ToSGroupsProto() (interface{}, error) {
 		protoSpec.Udp = &pb.ProtoSpec_Ports{Ports: udpPorts}
 	}
 
-	fmt.Printf("  Protocol summary: tcp_ports=%d udp_ports=%d\n", len(tcpPorts), len(udpPorts))
-	for idx, port := range tcpPorts {
-		fmt.Printf("    TCP[%d]: s=%q d=%q\n", idx, port.S, port.D)
-	}
-	for idx, port := range udpPorts {
-		fmt.Printf("    UDP[%d]: s=%q d=%q\n", idx, port.S, port.D)
-	}
-	if protoSpec.Tcp == nil && protoSpec.Udp == nil && protoSpec.Icmpv4 == nil && protoSpec.Icmpv6 == nil {
-		fmt.Printf("  WARNING: ProtoSpec has no protocols defined — SGROUP will keep previous ports unless sync_op=FullSync\n")
-	}
-
-	// 🔍 DEBUG POINT 2: Log before building sgNames
-	fmt.Printf("🔍 [TOSGROUPS_DEBUG] Service.ToSGroupsProto: name=%s, AggregatedAddressGroups count=%d\n",
-		serviceName, len(s.AggregatedAddressGroups))
-	for i, ag := range s.AggregatedAddressGroups {
-		fmt.Printf("  [%d] AG: %s/%s (source: %s)\n", i, ag.Ref.Namespace, ag.Ref.Name, ag.Source)
-	}
-
 	// Build sg_names from AggregatedAddressGroups
 	// NOTE: SGROUP API interprets sg_names = [""] as an explicit request to clear bindings.
 	// If we send an empty slice, SGROUP treats it as "no change" and keeps stale data.
@@ -154,7 +136,6 @@ func (s *Service) ToSGroupsProto() (interface{}, error) {
 	if len(sgNames) == 0 {
 		// Use sentinel value recognized by SGROUP to remove all bindings.
 		sgNames = []string{""}
-		fmt.Printf("  sgNames empty → sending sentinel [\"\"] to SGROUP to clear bindings\n")
 	}
 
 	// Convert to sgroups protobuf element
@@ -162,18 +143,6 @@ func (s *Service) ToSGroupsProto() (interface{}, error) {
 		Name:      serviceName,
 		Protocols: protoSpec,
 		SgNames:   sgNames,
-	}
-
-	// 🔍 DEBUG POINT 3: Log final proto
-	fmt.Printf("🔍 [TOSGROUPS_DEBUG] Final proto.Service: name=%s, sgNames=%v\n",
-		protoService.Name, protoService.SgNames)
-	if protoService.Protocols != nil {
-		if protoService.Protocols.Tcp != nil {
-			fmt.Printf("  protoService.Protocols.Tcp=%v\n", protoService.Protocols.Tcp.Ports)
-		}
-		if protoService.Protocols.Udp != nil {
-			fmt.Printf("  protoService.Protocols.Udp=%v\n", protoService.Protocols.Udp.Ports)
-		}
 	}
 
 	return protoService, nil

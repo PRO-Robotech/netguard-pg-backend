@@ -1,10 +1,6 @@
 -- +goose Up
 -- +goose StatementBegin
 
--- Migration 088: Ensure sync_outbox.affects_resources mirrors payload.affectedResources
--- Purpose: HostBinding DELETE entries inserted by cascade trigger only embed affected resources
---          inside payload. This trigger copies the array into affects_resources so worker logic
---          can rely on either field. Backfill covers existing rows.
 
 CREATE OR REPLACE FUNCTION sync_outbox_fill_affects_resources_fn()
 RETURNS TRIGGER AS $$

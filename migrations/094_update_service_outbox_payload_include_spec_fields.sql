@@ -1,9 +1,5 @@
 -- +goose Up
 -- +goose StatementBegin
---
--- Migration 094: расширяем payload триггера сервисов, чтобы OutboxWorker получал полную фотографию спека.
--- В payload добавляются description, ingress_ports и address_groups (с безопасными COALESCE),
--- чтобы SGROUP всегда видел актуальные протоколы/порты и привязки.
 
 CREATE OR REPLACE FUNCTION trigger_service_upsert_outbox()
 RETURNS TRIGGER AS $$
@@ -28,7 +24,6 @@ BEGIN
         RETURN NEW;
     END IF;
 
-    -- Получаем Kubernetes UID из k8s_metadata, если он уже присутствует
     SELECT km.uid INTO v_resource_id
     FROM k8s_metadata km
     WHERE km.resource_version = NEW.resource_version;
@@ -94,7 +89,6 @@ Migration 094: Added description, ingress_ports and address_groups to payload.';
 -- +goose Down
 -- +goose StatementBegin
 
--- Возвращаем предыдущую версию триггера (без новых полей в payload)
 CREATE OR REPLACE FUNCTION trigger_service_upsert_outbox()
 RETURNS TRIGGER AS $$
 DECLARE

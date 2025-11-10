@@ -1,13 +1,6 @@
 -- +goose Up
 -- +goose StatementBegin
 
--- Migration 087: Ignore binding-driven fields in AddressGroup outbox trigger
--- ---------------------------------------------------------------------------------------------------------------------
--- Purpose: Host/Network membership для AddressGroup теперь синхронизируется через Host/Network объекты.
--- Поля NEW.hosts и NEW.networks меняются триггерами (spec-hosts, NetworkBinding) и больше не должны инициировать
--- SGROUP UPDATE для AddressGroup. Функция trigger_address_group_upsert_outbox теперь реагирует только на
--- собственные поля AddressGroup (default_action, logs, trace).
--- ---------------------------------------------------------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION trigger_address_group_upsert_outbox()
 RETURNS TRIGGER AS $$
@@ -90,7 +83,6 @@ END $$;
 -- +goose Down
 -- +goose StatementBegin
 
--- Rollback to Migration 085 behaviour (hosts + networks considered in change detection/payload)
 CREATE OR REPLACE FUNCTION trigger_address_group_upsert_outbox()
 RETURNS TRIGGER AS $$
 DECLARE

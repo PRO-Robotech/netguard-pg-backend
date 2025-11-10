@@ -1,26 +1,4 @@
 -- +goose Up
--- Migration 052: AddressGroup Coordinated Deletion for NetworkBindings
---
--- This migration implements coordinated deletion for NetworkBinding resources when
--- AddressGroup is deleted, ensuring:
--- 1. Soft delete via deletion_timestamp (2-phase deletion)
--- 2. Automatic update of Network.status when NetworkBinding is marked for deletion
--- 3. Automatic creation of DELETE outbox entries for NetworkBindings
--- 4. SGROUP synchronization before physical deletion
---
--- Architecture: Similar to Migration 044 (Host coordinated deletion)
--- - Database triggers handle all resource updates
--- - OutboxWorker coordinates synchronization and physical deletion
---
--- Flow:
--- 1. User deletes AddressGroup → BEFORE DELETE trigger sets deletion_timestamp
--- 2. THIS TRIGGER fires on deletion_timestamp change
--- 3. For each NetworkBinding referencing this AG:
---    - Create DELETE outbox entry (target_system=INTERNAL)
---    - Update Network.status (unbind)
--- 4. OutboxWorker processes NetworkBinding DELETE entries
--- 5. After sync: OutboxWorker physically deletes NetworkBindings
--- 6. Finally: AddressGroup DELETE entry processed, physical deletion
 
 -- +goose StatementBegin
 CREATE OR REPLACE FUNCTION trigger_address_group_on_deletion_mark()
@@ -33,10 +11,8 @@ DECLARE
     v_network_uid UUID;
     v_network_rv BIGINT;
 BEGIN
-    -- Only act when deletion_timestamp is being set (NULL → timestamp)
     IF NEW.deletion_timestamp IS NOT NULL AND OLD.deletion_timestamp IS NULL THEN
 
-        -- Find AddressGroup by resource_version
         SELECT namespace, name
         INTO v_ag_namespace, v_ag_name
         FROM address_groups
@@ -46,7 +22,6 @@ BEGIN
             RAISE NOTICE 'AddressGroup %.% marked for deletion, processing NetworkBindings',
                 v_ag_namespace, v_ag_name;
 
-            -- Process all NetworkBindings referencing this AddressGroup
             FOR binding_rec IN
                 SELECT nb.namespace, nb.name,
                        nb.network_namespace, nb.network_name,
@@ -55,12 +30,10 @@ BEGIN
                 WHERE nb.address_group_namespace = v_ag_namespace
                   AND nb.address_group_name = v_ag_name
             LOOP
-                -- Get UID for NetworkBinding
                 SELECT m.uid INTO v_binding_uid
                 FROM k8s_metadata m
                 WHERE m.resource_version = binding_rec.resource_version;
 
-                -- Get UID and resource_version for Network
                 SELECT n.resource_version, m.uid
                 INTO v_network_rv, v_network_uid
                 FROM networks n
@@ -69,7 +42,6 @@ BEGIN
                   AND n.name = binding_rec.network_name;
 
                 IF v_binding_uid IS NOT NULL THEN
-                    -- Create DELETE outbox entry for NetworkBinding
                     INSERT INTO sync_outbox (
                         resource_type,
                         resource_id,
@@ -136,7 +108,6 @@ BEGIN
                         binding_rec.network_namespace, binding_rec.network_name;
                 END IF;
 
-                -- Update Network.status immediately (unbind)
                 IF v_network_rv IS NOT NULL THEN
                     UPDATE networks
                     SET is_bound = false,
@@ -147,7 +118,6 @@ BEGIN
                     WHERE namespace = binding_rec.network_namespace
                       AND name = binding_rec.network_name;
 
-                    -- Update Network conditions: Ready=False, PendingSync=True
                     UPDATE k8s_metadata
                     SET conditions = jsonb_build_array(
                         jsonb_build_object(
@@ -199,8 +169,6 @@ COMMENT ON FUNCTION trigger_address_group_on_deletion_mark() IS
 and updates Network.status when deletion_timestamp is set. Part of coordinated deletion
 architecture ensuring SGROUP sync before physical deletion.';
 
--- Create trigger on k8s_metadata for AddressGroup deletion
--- This trigger fires when deletion_timestamp is updated (NULL → timestamp)
 CREATE TRIGGER address_group_on_deletion_mark
 AFTER UPDATE OF deletion_timestamp ON k8s_metadata
 FOR EACH ROW
@@ -215,12 +183,9 @@ COMMENT ON TRIGGER address_group_on_deletion_mark ON k8s_metadata IS
 Creates DELETE outbox entries for NetworkBindings and updates Network.status before SGROUP sync.';
 
 -- +goose Down
--- Rollback coordinated deletion changes
 
 -- +goose StatementBegin
--- Drop trigger
 DROP TRIGGER IF EXISTS address_group_on_deletion_mark ON k8s_metadata;
 
--- Drop function
 DROP FUNCTION IF EXISTS trigger_address_group_on_deletion_mark();
 -- +goose StatementEnd

@@ -4,6 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
+	"netguard-pg-backend/internal/domain/models"
+	"netguard-pg-backend/internal/domain/ports"
+	"netguard-pg-backend/internal/k8s/middleware"
+	"netguard-pg-backend/internal/k8s/registry/base/fieldmanager"
+	"netguard-pg-backend/internal/k8s/registry/base/patch"
+	"netguard-pg-backend/internal/k8s/registry/utils"
+	"reflect"
+	"strings"
+	"time"
+	"unsafe"
+
 	jsonpatch "github.com/evanphx/json-patch/v5"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -17,18 +29,7 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/klog/v2"
-	"math/rand"
-	"netguard-pg-backend/internal/domain/models"
-	"netguard-pg-backend/internal/domain/ports"
-	"netguard-pg-backend/internal/k8s/middleware"
-	"netguard-pg-backend/internal/k8s/registry/base/fieldmanager"
-	"netguard-pg-backend/internal/k8s/registry/base/patch"
-	"netguard-pg-backend/internal/k8s/registry/utils"
-	"reflect"
 	sigyaml "sigs.k8s.io/yaml"
-	"strings"
-	"time"
-	"unsafe"
 )
 
 type BaseStorage[K runtime.Object, D any] struct {
@@ -90,26 +91,19 @@ func (s *BaseStorage[K, D]) NamespaceScoped() bool {
 }
 func (s *BaseStorage[K, D]) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
 	namespace := utils.NamespaceFrom(ctx)
-	getCurrentTime := time.Now()
-	klog.InfoS("🚀 GET METHOD CALLED - ENHANCED TRACKING",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace,
-		"timestamp", getCurrentTime.Format("15:04:05.000000"),
-		"options", fmt.Sprintf("%+v", options))
 	domainObj, err := s.getFromBackend(ctx, namespace, name)
 	if err != nil {
-		klog.V(1).InfoS("🔍 GET: Backend error occurred",
+		klog.V(1).InfoS("get: backend error occurred",
 			"name", name,
 			"error", err.Error())
 		if isNotFoundError(err) {
-			klog.V(1).InfoS("✅ GET: Creating Kubernetes NotFound error", "name", name)
+			klog.V(1).InfoS("get: returning Kubernetes NotFound error", "name", name)
 			return nil, errors.NewNotFound(
 				schema.GroupResource{Group: "netguard.sgroups.io", Resource: s.resourceName},
 				name,
 			)
 		}
-		klog.V(1).InfoS("❌ GET: Not recognized as NotFound, returning raw error", "name", name)
+		klog.V(1).InfoS("get: backend error is not NotFound, returning raw error", "name", name)
 		return nil, err
 	}
 	k8sObj, err := s.converter.FromDomain(ctx, *domainObj)
@@ -262,28 +256,28 @@ func (s *BaseStorage[K, D]) Update(ctx context.Context, name string, objInfo res
 			"cannot update resource %s/%s: resource is being deleted (has deletionTimestamp set)",
 			namespace, name)
 	}
-	klog.InfoS("🔧 Converting current domain object to k8s format",
+	klog.V(3).InfoS("converting current domain object to k8s format",
 		"resource", s.resourceName)
 	currentK8sObj, err := s.converter.FromDomain(ctx, *currentDomainObj)
 	if err != nil {
-		klog.InfoS("❌ CONVERSION FAILED: domain to k8s",
+		klog.V(1).InfoS("conversion failed from domain to k8s",
 			"resource", s.resourceName,
 			"error", err.Error())
 		return nil, false, fmt.Errorf("failed to convert current domain object to k8s object: %w", err)
 	}
-	klog.InfoS("✅ Conversion success: domain to k8s",
+	klog.V(3).InfoS("conversion success from domain to k8s",
 		"resource", s.resourceName)
-	klog.InfoS("🔧 Getting updated object from objInfo",
+	klog.V(4).InfoS("retrieving updated object from objInfo",
 		"resource", s.resourceName,
 		"objInfoType", fmt.Sprintf("%T", objInfo),
 		"currentK8sObjType", fmt.Sprintf("%T", currentK8sObj))
 	objInfoType := fmt.Sprintf("%T", objInfo)
 	if objInfoType == "*rest.defaultUpdatedObjectInfo" {
-		klog.InfoS("🔧 DETECTED defaultUpdatedObjectInfo in PATCH flow",
+		klog.V(4).InfoS("detected defaultUpdatedObjectInfo in patch flow",
 			"resource", s.resourceName,
 			"objInfoType", objInfoType)
 		if requestInfo, ok := request.RequestInfoFrom(ctx); ok && requestInfo.Verb == "patch" {
-			klog.InfoS("🔧 PATCH REQUEST using GET+UPDATE fallback instead of direct PATCH method",
+			klog.V(4).InfoS("patch request using GET+UPDATE fallback instead of direct Patch method",
 				"verb", requestInfo.Verb,
 				"resource", requestInfo.Resource,
 				"name", requestInfo.Name,
@@ -293,33 +287,33 @@ func (s *BaseStorage[K, D]) Update(ctx context.Context, name string, objInfo res
 	objInfoType = fmt.Sprintf("%T", objInfo)
 	var finalK8sObj K
 	if objInfoType == "*rest.defaultUpdatedObjectInfo" {
-		klog.InfoS("🛠️ PATCH OPERATION DETECTED: Attempting to extract patch data from objInfo",
+		klog.V(4).InfoS("patch operation detected, attempting to extract patch data from objInfo",
 			"resource", s.resourceName,
 			"objInfoType", objInfoType,
 			"reason", "Kubernetes bypassed Patch() method, using direct Update() with objInfo")
 		if requestInfo, ok := request.RequestInfoFrom(ctx); ok && requestInfo.Verb == "patch" {
-			klog.InfoS("🎯 CONFIRMED PATCH REQUEST: This is definitely a PATCH operation",
+			klog.V(4).InfoS("confirmed patch request via objInfo",
 				"verb", requestInfo.Verb,
 				"resource", requestInfo.Resource,
 				"name", requestInfo.Name)
-			klog.InfoS("🚀 CALLING extractPatchDataFromObjInfo reflection function",
+			klog.V(4).InfoS("calling extractPatchDataFromObjInfo via reflection",
 				"resource", s.resourceName,
 				"objInfoType", objInfoType)
 			patchData, extractSuccess := extractPatchDataFromObjInfo(objInfo)
 			if extractSuccess {
-				klog.InfoS("✅ PATCH DATA EXTRACTED from objInfo using reflection",
+				klog.V(4).InfoS("patch data extracted from objInfo via reflection",
 					"resource", s.resourceName,
 					"patchType", string(patchData.PatchType),
 					"patchSize", len(patchData.Data))
 				ctx = WithPatchData(ctx, patchData)
-				klog.InfoS("🔧 PATCH DATA stored in context for immediate use",
+				klog.V(4).InfoS("patch data stored in context for immediate use",
 					"resource", s.resourceName,
 					"patchType", string(patchData.PatchType))
 			} else {
 				if storedPatch, ok := PatchDataFrom(ctx); ok && storedPatch != nil {
 					patchData = storedPatch
 					extractSuccess = true
-					klog.InfoS("✅ Using patch data from Patch() method context",
+					klog.V(4).InfoS("using patch data from Patch method context",
 						"resource", s.resourceName,
 						"patchType", string(patchData.PatchType))
 				} else {
@@ -333,13 +327,13 @@ func (s *BaseStorage[K, D]) Update(ctx context.Context, name string, objInfo res
 							Namespace: namespace,
 						}
 						extractSuccess = true
-						klog.InfoS("✅ Using PATCH body from HTTP middleware",
+						klog.V(4).InfoS("using patch body from HTTP middleware",
 							"resource", s.resourceName,
 							"patchType", string(patchType),
 							"bodySize", len(patchBodyData.Body),
 							"contentType", patchBodyData.ContentType)
 					} else {
-						klog.ErrorS(nil, "❌ PATCH body not found in any source",
+						klog.ErrorS(nil, "patch body not found in any source",
 							"resource", s.resourceName,
 							"objInfoType", objInfoType)
 						return nil, false, fmt.Errorf(
@@ -355,11 +349,11 @@ func (s *BaseStorage[K, D]) Update(ctx context.Context, name string, objInfo res
 	}
 	if patchData, hasPatchData := PatchDataFrom(ctx); hasPatchData {
 		if patchData == nil {
-			klog.InfoS("❌ CRITICAL BUG: PatchData in context is nil",
+			klog.ErrorS(nil, "patch data in context is nil",
 				"resource", s.resourceName)
 			return nil, false, fmt.Errorf("internal error: patch data is nil")
 		}
-		klog.InfoS("🎉 DIRECT OBJECT USAGE: Using patched object extracted from objInfo",
+		klog.InfoS("using patched object extracted from objInfo",
 			"resource", s.resourceName,
 			"method", "Unsafe pointer access to private 'obj' field",
 			"reason", "Completely bypassing problematic objInfo.UpdatedObject() call")

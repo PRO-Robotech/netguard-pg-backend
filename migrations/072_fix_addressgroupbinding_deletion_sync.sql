@@ -1,67 +1,7 @@
 -- +goose Up
--- Migration 072: Fix AddressGroupBinding deletion SGROUP sync
---
--- =====================================================================================================================
--- CRITICAL BUG FIX: AddressGroupBinding deletion не синхронизируется с SGROUP
--- =====================================================================================================================
---
--- Problem:
---   При удалении AddressGroupBinding:
---   - База данных обновляется: Service.aggregated_address_groups = [] ✅
---   - НО SGROUP НЕ получает UPDATE: sgNames остается со старыми данными ❌
---
--- Root Cause:
---   AddressGroupBinding НЕ следует паттерну HostBinding (Migration 044) для обновления агрегированных полей.
---
---   Проблема №1 (Migration 018):
---     aggregate_service_address_groups() НЕ фильтрует удаленные bindings
---     - Отсутствует: JOIN k8s_metadata m
---     - Отсутствует: WHERE m.deletion_timestamp IS NULL
---     → Deleted binding все еще появляется в aggregated_address_groups
---
---   Проблема №2 (Migration 066):
---     trigger_addressgroupbinding_on_deletion_mark() НЕ обновляет Service.aggregated_address_groups
---     - Создает только DELETE outbox entry (target=INTERNAL) ✅
---     - НЕ вызывает пересчет aggregated_address_groups ❌
---     → Service UPDATE trigger не срабатывает (нет изменений)
---     → Outbox entry для SGROUP не создается
---
--- Comparison with HostBinding (Migration 044 - CORRECT implementation):
---   ✅ aggregate_address_group_hosts() ФИЛЬТРУЕТ deleted bindings (line 69-72)
---   ✅ trigger_host_binding_on_deletion_mark() ОБНОВЛЯЕТ aggregated_hosts (line 279-282)
---   ✅ AddressGroup UPDATE trigger СОЗДАЕТ SGROUP outbox entry
---   ✅ OutboxWorker синхронизирует изменения в SGROUP
---
--- Solution:
---   Fix 1: Обновить aggregate_service_address_groups() - добавить фильтр deletion_timestamp IS NULL
---   Fix 2: Обновить trigger_addressgroupbinding_on_deletion_mark() - добавить UPDATE services
---
--- Expected Flow After Fix:
---   1. User: DELETE AddressGroupBinding
---   2. BEFORE DELETE trigger: set deletion_timestamp
---   3. AFTER UPDATE (deletion_timestamp): trigger_addressgroupbinding_on_deletion_mark()
---      ├─ Create DELETE outbox (target=INTERNAL) ✅
---      └─ Update Service.aggregated_address_groups ← aggregate_service_address_groups() ФИЛЬТРУЕТ deleted binding ✅
---   4. AFTER UPDATE (aggregated_address_groups): trigger_service_upsert_outbox() (Migration 070)
---      └─ Create UPDATE outbox (target=SGROUP) ✅
---   5. OutboxWorker: Process SGROUP UPDATE with empty array ✅
---
--- Related:
---   - Migration 018: aggregate_service_address_groups() (ИСПРАВЛЯЕТСЯ)
---   - Migration 044: HostBinding deletion pattern (REFERENCE)
---   - Migration 066: AddressGroupBinding deletion trigger (ИСПРАВЛЯЕТСЯ)
---   - Migration 070: Service upsert trigger with aggregated_address_groups check
---   - Migration 071: processed_at backfill (separate bug)
---
--- Date: 2025-10-31
--- =====================================================================================================================
 
 -- +goose StatementBegin
 
--- ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════
--- FIX 1: Update aggregate_service_address_groups() to FILTER deleted AddressGroupBindings
--- ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════
--- Pattern: Similar to Migration 044 aggregate_address_group_hosts() lines 69-72
 
 CREATE OR REPLACE FUNCTION aggregate_service_address_groups(
     svc_namespace TEXT,
@@ -73,18 +13,15 @@ DECLARE
     ag_record RECORD;
     address_groups_field JSONB;
 BEGIN
-    -- Get address_groups field, handling null case
     SELECT COALESCE(address_groups, '[]'::jsonb) INTO address_groups_field
     FROM services
     WHERE namespace = svc_namespace AND name = svc_name;
 
-    -- Source 1: Collect AddressGroups from spec.address_groups (source = 'spec')
     IF address_groups_field IS NOT NULL AND address_groups_field != 'null'::jsonb
        AND jsonb_typeof(address_groups_field) = 'array' AND jsonb_array_length(address_groups_field) > 0 THEN
         FOR ag_ref IN
             SELECT jsonb_array_elements(address_groups_field) as ag_obj
         LOOP
-            -- Add AddressGroup reference with source information
             aggregated_ags_json := aggregated_ags_json || jsonb_build_array(
                 jsonb_build_object(
                     'ref', ag_ref,
@@ -94,19 +31,16 @@ BEGIN
         END LOOP;
     END IF;
 
-    -- Source 2: Collect AddressGroups from AddressGroupBindings (source = 'binding')
-    -- ✨ CRITICAL CHANGE: Added k8s_metadata JOIN and deletion_timestamp filter
     FOR ag_record IN
         SELECT ag.namespace, ag.name
         FROM address_group_bindings agb
         JOIN address_groups ag ON ag.namespace = agb.address_group_namespace
                               AND ag.name = agb.address_group_name
-        JOIN k8s_metadata m ON m.resource_version = agb.resource_version  -- ← ADDED
+        JOIN k8s_metadata m ON m.resource_version = agb.resource_version
         WHERE agb.service_namespace = svc_namespace::namespace_name
         AND agb.service_name = svc_name::resource_name
-        AND m.deletion_timestamp IS NULL  -- ← ADDED: Filter deleted bindings
+        AND m.deletion_timestamp IS NULL
     LOOP
-        -- Add AddressGroup reference with source information
         aggregated_ags_json := aggregated_ags_json || jsonb_build_array(
             jsonb_build_object(
                 'ref', jsonb_build_object(
@@ -131,10 +65,6 @@ COMMENT ON FUNCTION aggregate_service_address_groups(TEXT, TEXT) IS
 NOW FILTERS deleted bindings (Migration 072 fix) - only includes bindings with deletion_timestamp IS NULL.
 Similar to aggregate_address_group_hosts() in Migration 044.';
 
--- ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════
--- FIX 2: Update trigger_addressgroupbinding_on_deletion_mark() to UPDATE Service.aggregated_address_groups
--- ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════
--- Pattern: Similar to Migration 044 trigger_host_binding_on_deletion_mark() lines 279-282
 
 CREATE OR REPLACE FUNCTION trigger_addressgroupbinding_on_deletion_mark()
 RETURNS TRIGGER AS $$
@@ -151,13 +81,10 @@ DECLARE
     v_affected_resources JSONB;
     v_binding_found BOOLEAN := FALSE;
 BEGIN
-    -- Only act when deletion_timestamp is being set (NULL → timestamp)
     IF NEW.deletion_timestamp IS NOT NULL AND OLD.deletion_timestamp IS NULL THEN
 
-        -- Get UID from k8s_metadata (ALWAYS available)
         v_uid := NEW.uid;
 
-        -- Try to get AddressGroupBinding details from address_group_bindings table
         SELECT service_namespace, service_name,
                address_group_namespace, address_group_name,
                namespace, name
@@ -169,17 +96,11 @@ BEGIN
 
         v_binding_found := FOUND;
 
-        -- ═══════════════════════════════════════════════════════════════════
-        -- Create DELETE outbox entry
-        -- ═══════════════════════════════════════════════════════════════════
-        -- CRITICAL for coordinated deletion when Service or AG is deleted
 
         IF v_binding_found THEN
-            -- AddressGroupBinding found - create DELETE entry with complete payload
             RAISE NOTICE '[Migration 066/072] AddressGroupBinding deletion marked: service=%.%, ag=%.%',
                 v_service_namespace, v_service_name, v_ag_namespace, v_ag_name;
 
-            -- Get resource_versions for Service and AddressGroup
             SELECT resource_version INTO v_service_rv
             FROM services
             WHERE namespace = v_service_namespace AND name = v_service_name;
@@ -188,7 +109,6 @@ BEGIN
             FROM address_groups
             WHERE namespace = v_ag_namespace AND name = v_ag_name;
 
-            -- Build affected_resources array (Service and AddressGroup)
             v_affected_resources := jsonb_build_array(
                 jsonb_build_object(
                     'type', 'Service',
@@ -204,7 +124,6 @@ BEGIN
                 )
             );
 
-            -- Insert DELETE entry into sync_outbox with full payload
             INSERT INTO sync_outbox (
                 resource_type,
                 resource_id,
@@ -245,8 +164,8 @@ BEGIN
                 ),
                 'PENDING'::outbox_status,
                 v_affected_resources,
-                0,  -- attempts
-                20, -- max_retries
+                0,
+                20,
                 NOW(),
                 NOW(),
                 NOW()
@@ -256,9 +175,6 @@ BEGIN
             RAISE NOTICE '[Migration 066/072] Created DELETE outbox entry for AddressGroupBinding %.%',
                 v_binding_namespace, v_binding_name;
 
-            -- ✨ CRITICAL CHANGE (Migration 072): Update Service.aggregated_address_groups
-            -- This triggers Service UPDATE trigger (Migration 070) which creates SGROUP outbox entry
-            -- Pattern: Similar to Migration 044 lines 279-282 (trigger_host_binding_on_deletion_mark)
             UPDATE services
             SET aggregated_address_groups = aggregate_service_address_groups(
                 v_service_namespace::text,
@@ -270,7 +186,6 @@ BEGIN
                 v_service_namespace, v_service_name;
 
         ELSE
-            -- AddressGroupBinding not found - may have been deleted already
             RAISE WARNING '[Migration 066/072] AddressGroupBinding not found for resource_version %',
                 NEW.resource_version;
         END IF;
@@ -286,9 +201,6 @@ COMMENT ON FUNCTION trigger_addressgroupbinding_on_deletion_mark() IS
 NOW UPDATES Service.aggregated_address_groups (Migration 072 fix) which triggers Service UPDATE outbox entry for SGROUP sync.
 Similar to trigger_host_binding_on_deletion_mark() in Migration 044.';
 
--- ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════
--- Verification and summary
--- ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════
 
 DO $$
 BEGIN
@@ -320,9 +232,7 @@ END $$;
 -- +goose Down
 -- +goose StatementBegin
 
--- Revert to Migration 066/018 versions WITHOUT fixes
 
--- Revert aggregate_service_address_groups() - remove deletion_timestamp filter
 CREATE OR REPLACE FUNCTION aggregate_service_address_groups(
     svc_namespace TEXT,
     svc_name TEXT
@@ -351,7 +261,6 @@ BEGIN
         END LOOP;
     END IF;
 
-    -- ❌ Reverted: No deletion_timestamp filter
     FOR ag_record IN
         SELECT ag.namespace, ag.name
         FROM address_group_bindings agb
@@ -377,7 +286,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Revert trigger_addressgroupbinding_on_deletion_mark() - remove Service UPDATE
 CREATE OR REPLACE FUNCTION trigger_addressgroupbinding_on_deletion_mark()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -479,7 +387,6 @@ BEGIN
             )
             ON CONFLICT DO NOTHING;
 
-            -- ❌ Reverted: No Service UPDATE
         END IF;
     END IF;
 

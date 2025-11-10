@@ -1,9 +1,6 @@
 -- +goose Up
 -- +goose StatementBegin
 
--- Migration 086: Enrich host outbox payload with binding information.
--- Purpose: ensure OutboxWorker reconstructs Host with AddressGroup/Binding refs
--- so Host sync can populate sgName when bound to an AddressGroup.
 
 CREATE OR REPLACE FUNCTION trigger_host_upsert_outbox()
 RETURNS TRIGGER AS $$
@@ -112,7 +109,6 @@ END $$;
 -- +goose Down
 -- +goose StatementBegin
 
--- Revert to Migration 048 version (without binding refs)
 CREATE OR REPLACE FUNCTION trigger_host_upsert_outbox()
 RETURNS TRIGGER AS $$
 DECLARE

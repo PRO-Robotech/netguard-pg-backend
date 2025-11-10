@@ -147,7 +147,7 @@ func (w *writer) MarkAsDeletingByName(namespace, name, kind string) error {
 	return err
 }
 func (w *writer) MarkForDeletionWithStatus(namespace, name, kind string) error {
-	klog.InfoS("💾 [WRITER] MarkForDeletionWithStatus called - about to UPDATE k8s_metadata",
+	klog.InfoS("[WRITER] MarkForDeletionWithStatus called - about to UPDATE k8s_metadata",
 		"namespace", namespace,
 		"name", name,
 		"kind", kind,
@@ -173,7 +173,7 @@ func (w *writer) MarkForDeletionWithStatus(namespace, name, kind string) error {
 
 	result, err := w.tx.Exec(w.ctx, query, namespace, name, kind)
 	if err != nil {
-		klog.ErrorS(err, "💾 [WRITER] UPDATE k8s_metadata FAILED",
+		klog.ErrorS(err, "[WRITER] UPDATE k8s_metadata FAILED",
 			"namespace", namespace,
 			"name", name,
 			"kind", kind)
@@ -181,7 +181,7 @@ func (w *writer) MarkForDeletionWithStatus(namespace, name, kind string) error {
 	}
 
 	rowsAffected := result.RowsAffected()
-	klog.InfoS("💾 [WRITER] UPDATE k8s_metadata completed",
+	klog.InfoS("[WRITER] UPDATE k8s_metadata completed",
 		"namespace", namespace,
 		"name", name,
 		"kind", kind,
@@ -189,7 +189,7 @@ func (w *writer) MarkForDeletionWithStatus(namespace, name, kind string) error {
 		"note", "This should only UPDATE k8s_metadata, NOT delete from resource table")
 
 	if rowsAffected == 0 {
-		klog.InfoS("💾 [WRITER] No rows affected - resource may already have deletion_timestamp set",
+		klog.InfoS("[WRITER] No rows affected - resource may already have deletion_timestamp set",
 			"namespace", namespace,
 			"name", name,
 			"kind", kind)

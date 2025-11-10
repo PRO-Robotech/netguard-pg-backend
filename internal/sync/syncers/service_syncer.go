@@ -49,25 +49,14 @@ func (s *ServiceSyncer) Sync(ctx context.Context, entity interfaces.SyncableEnti
 		return fmt.Errorf("invalid proto data type for entity %s, expected *pb.Service, got %T", entity.GetSyncKey(), protoData)
 	}
 
-	// 🔍 DEBUG POINT 4: Log before sending to SGROUP
-	s.logger.Info("🔍 [SYNCER_DEBUG] Sending Service to SGROUP",
+	s.logger.V(1).Info("sending Service to SGROUP",
 		"name", protoService.Name,
 		"sgNames", protoService.SgNames,
 		"sgNames_count", len(protoService.SgNames),
 		"operation", operation)
 
-	// ✨ CRITICAL FIX: Protobuf doesn't serialize empty slices, and SGROUP uses
-	// partial update semantics - both cause empty sgNames updates to be ignored.
-	//
-	// Problem: When sgNames is empty (len=0):
-	//   1. Protobuf omits the field from binary message
-	//   2. SGROUP interprets missing/empty field as "don't update" (partial update semantics)
-	//   3. Result: SGROUP retains old sgNames values
-	//
-	// Solution: Use DELETE+UPSERT sequence to force SGROUP to clear sgNames.
-	// This is the ONLY reliable way to clear the field when it becomes empty.
-	// NOTE: This temporarily removes the Service, but immediately recreates it,
-	// which is acceptable since Service deletion is idempotent and fast.
+	// When sgNames is empty, protobuf omits the field and SGROUP treats the update as "no change".
+	// Force a DELETE followed by UPSERT to ensure the array is cleared.
 	if len(protoService.SgNames) == 0 && operation == types.SyncOperationUpsert {
 		s.logger.Info("Empty sgNames detected - using DELETE+UPSERT to force field clear",
 			"name", protoService.Name,

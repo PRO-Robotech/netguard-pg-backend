@@ -424,8 +424,7 @@ func (w *OutboxWorker) processProcessResourceDelete(
 		zap.String("resource_type", item.ResourceType),
 		zap.String("resource_id", item.ResourceID.String()))
 
-	// REMOVED: updateAffectedResourcesForBindingDelete()
-	// Database triggers already did this when deletion_timestamp was set!
+	// Database triggers update dependent resources when deletion_timestamp is set.
 
 	if err := w.reprocessAffectedResourceConditions(ctx, item); err != nil {
 		w.logger.Warn("failed to reprocess affected resource conditions",

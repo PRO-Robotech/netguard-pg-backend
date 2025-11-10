@@ -196,8 +196,7 @@ func (w *Writer) upsertSvcSvcRule(ctx context.Context, rule models.SvcSvcRule) e
 
 // updateSvcSvcRuleConditionsOnly updates ONLY conditions in k8s_metadata without triggering outbox entry
 // This is used by OutboxWorker after successful SGROUP sync to mark resource as Ready
-// CRITICAL: This method updates k8s_metadata directly, bypassing svc_svc_rules table
-// Result: NO trigger fires, NO outbox entry created → breaks infinite loop
+// Updates k8s_metadata directly, bypassing the svc_svc_rules table, so triggers do not fire and no outbox entry is created.
 func (w *Writer) updateSvcSvcRuleConditionsOnly(ctx context.Context, rule models.SvcSvcRule) error {
 	// Marshal only the conditions we need to update
 	conditionsJSON, err := json.Marshal(rule.Meta.Conditions)

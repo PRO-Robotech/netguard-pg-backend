@@ -207,21 +207,13 @@ func (w *Writer) upsertHost(ctx context.Context, host *models.Host) error {
 		return errors.Wrapf(err, "failed to upsert host %s/%s", host.Namespace, host.Name)
 	}
 
-	// Outbox entry is automatically created by PostgreSQL trigger
-	// (trg_host_upsert_outbox) which uses UUID from spec.
-	// This eliminates duplicate outbox entries.
-	//
-	// Previous code (REMOVED to fix duplicate outbox bug):
-	// if err := w.createHostOutboxEntry(ctx, host); err != nil {
-	//     return errors.Wrap(err, "failed to create outbox entry for host")
-	// }
+	// Outbox entries for host upserts are created by trigger 'trg_host_upsert_outbox'.
 
 	return nil
 }
 
-// Removed createHostDeleteOutboxEntry - no longer needed!
-// DELETE outbox entries are now automatically created by BEFORE DELETE trigger
-// (migration 026: trigger_host_before_delete)
+// DELETE outbox entries are created by BEFORE DELETE trigger 'trigger_host_before_delete'
+// (migration 026), so no additional helper is required.
 
 // updateHostConditionsOnly updates ONLY the k8s_metadata.conditions field
 // WITHOUT touching the hosts table or creating outbox entries

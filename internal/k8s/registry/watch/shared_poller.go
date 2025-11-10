@@ -163,7 +163,7 @@ func (p *SharedPoller) generateEvents(newSnapshot map[string]runtime.Object) {
 	// ADDED и MODIFIED события
 	for key, newRes := range newSnapshot {
 		if oldRes, exists := p.lastSnapshot[key]; exists {
-			// 🔒 CRITICAL FIX: Skip MODIFIED events for objects being deleted
+			// Skip MODIFIED events for objects already marked for deletion
 			accessor, err := meta.Accessor(newRes)
 			if err == nil {
 				deletionTimestamp := accessor.GetDeletionTimestamp()

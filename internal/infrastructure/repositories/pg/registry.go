@@ -2,7 +2,6 @@ package pg
 
 import (
 	"context"
-	"fmt"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pkg/errors"
@@ -323,7 +322,6 @@ func (w *simpleWriter) UpdateSyncStatus(ctx context.Context) error {
 	return nil
 }
 func (w *simpleWriter) MarkForDeletionWithStatus(namespace, name, kind string) error {
-	fmt.Printf("SOFTDELETE_LOG: simpleWriter.MarkForDeletionWithStatus called for %s/%s (%s)\n", namespace, name, kind)
 	return w.modularWriter.MarkForDeletionWithStatus(namespace, name, kind)
 }
 

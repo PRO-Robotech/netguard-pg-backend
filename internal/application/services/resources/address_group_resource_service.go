@@ -715,14 +715,7 @@ func (s *AddressGroupResourceService) CreateAddressGroupBinding(ctx context.Cont
 		Name:      binding.ServiceRef.Name,
 		Namespace: binding.ServiceRef.Namespace,
 	}
-	// ✅ REMOVED: synchronizeServiceAddressGroups() call creates race condition
-	// Migration 082 trigger (trigger_update_aggregated_ags_on_binding_change) already updates Service.aggregated_address_groups correctly
-	// This call would overwrite the correct outbox payload with stale data (transaction isolation issue)
-	// if err := s.synchronizeServiceAddressGroups(ctx, serviceID); err != nil {
-	// 	klog.Errorf("Failed to synchronize Service.AddressGroups for service %s after binding creation: %v", serviceID.Key(), err)
-	// 	// Don't fail the operation, but log the critical issue
-	// }
-	klog.Infof("🎯 [LINE 710 FIX DEPLOYED] Skipping synchronizeServiceAddressGroups for binding %s → Service %s (using trigger instead)", binding.Key(), serviceID.Key())
+	// Aggregated address groups are updated by trigger 'trigger_update_aggregated_ags_on_binding_change'.
 	if s.ruleS2SRegenerator != nil {
 		if err := s.ruleS2SRegenerator.NotifyServiceAddressGroupsChanged(ctx, serviceID); err != nil {
 			klog.Errorf("Failed to notify RuleS2S service about AddressGroupBinding %s: %v",
@@ -865,12 +858,7 @@ func (s *AddressGroupResourceService) SyncAddressGroupBindings(ctx context.Conte
 		serviceIDs[key] = models.ResourceIdentifier{Name: binding.ServiceRef.Name, Namespace: binding.ServiceRef.Namespace}
 	}
 
-	// ✅ REMOVED: synchronizeServiceAddressGroups() call creates race condition
-	// PostgreSQL trigger 'trigger_update_aggregated_ags_on_binding_change' already updates Service.aggregated_address_groups
-	// Service UPDATE outbox entry is automatically created by the trigger
-	// Calling synchronizeServiceAddressGroups() here could overwrite correct data with stale data
-	// See: docs/bindings/service-addressgroup/DELETION_ROOT_CAUSE_ANALYSIS.md - Problem #2
-
+	// Aggregated address groups are updated by trigger 'trigger_update_aggregated_ags_on_binding_change'.
 	if s.ruleS2SRegenerator != nil {
 		// Notify for each unique service (including DELETE operations for dependency cleanup)
 		for key, serviceID := range serviceIDs {
@@ -967,12 +955,7 @@ func (s *AddressGroupResourceService) DeleteAddressGroupBindingsByIDs(ctx contex
 			serviceIDs[key] = models.ResourceIdentifier{Name: binding.ServiceRef.Name, Namespace: binding.ServiceRef.Namespace}
 		}
 
-		// ✅ REMOVED: synchronizeServiceAddressGroups() call creates race condition
-		// PostgreSQL trigger 'trigger_update_aggregated_ags_on_binding_change' already updates Service.aggregated_address_groups
-		// Service UPDATE outbox entry is automatically created by the trigger
-		// Calling synchronizeServiceAddressGroups() here could overwrite correct data with stale data
-		// See: docs/bindings/service-addressgroup/DELETION_ROOT_CAUSE_ANALYSIS.md - Problem #2
-
+		// Aggregated address groups are updated by trigger 'trigger_update_aggregated_ags_on_binding_change'.
 		for _, serviceID := range serviceIDs {
 			if err := s.ruleS2SRegenerator.NotifyServiceAddressGroupsChanged(ctx, serviceID); err != nil {
 			}

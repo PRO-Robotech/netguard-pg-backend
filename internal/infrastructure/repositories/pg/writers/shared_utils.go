@@ -7,7 +7,6 @@ import (
 
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/klog/v2"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -138,12 +137,6 @@ func (w *Writer) marshalAccessPorts(accessPorts map[models.ServiceRef]models.Ser
 //  2. Worker syncs to SGROUP → Ready=True (Synced)
 //  3. Only then can bindings be created (Migration 033 checks Ready status)
 func forcePendingSyncCondition(conditions []metav1.Condition) []metav1.Condition {
-	// LOG 1: Incoming conditions
-	conditionsStr := formatConditionsForLog(conditions)
-	klog.InfoS("[DEBUG] Writer: forcePendingSyncCondition ENTRY",
-		"incoming_conditions", conditionsStr,
-		"count", len(conditions))
-
 	// Remove any existing Ready condition
 	filtered := []metav1.Condition{}
 	for _, cond := range conditions {
@@ -163,23 +156,5 @@ func forcePendingSyncCondition(conditions []metav1.Condition) []metav1.Condition
 
 	result := append(filtered, pending)
 
-	// LOG 2: Result after adding PendingSGROUPSync
-	resultStr := formatConditionsForLog(result)
-	klog.InfoS("[DEBUG] Writer: forcePendingSyncCondition RESULT",
-		"result_conditions", resultStr,
-		"added_pending_sync", true)
-
 	return result
-}
-
-// formatConditionsForLog formats conditions slice for logging (local helper)
-func formatConditionsForLog(conditions []metav1.Condition) string {
-	if len(conditions) == 0 {
-		return "EMPTY"
-	}
-	parts := make([]string, 0, len(conditions))
-	for _, c := range conditions {
-		parts = append(parts, fmt.Sprintf("%s=%s(%s)", c.Type, c.Status, c.Reason))
-	}
-	return strings.Join(parts, ", ")
 }

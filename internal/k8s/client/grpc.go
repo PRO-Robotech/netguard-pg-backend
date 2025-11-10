@@ -3,7 +3,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -2119,18 +2118,6 @@ func (c *GRPCBackendClient) UpdateSvcSvcRuleMeta(ctx context.Context, id models.
 	return c.UpdateSvcSvcRule(ctx, rule)
 }
 func (c *GRPCBackendClient) MarkForDeletion(ctx context.Context, namespace, name, kind string) error {
-	// Get stack trace to see where this was called from (API Server)
-	buf := make([]byte, 4096)
-	n := runtime.Stack(buf, false)
-	stackTrace := string(buf[:n])
-
-	klog.InfoS("📡 [GRPC_CLIENT] GRPCBackendClient.MarkForDeletion called - making gRPC call to backend",
-		"namespace", namespace,
-		"name", name,
-		"kind", kind,
-		"call_path", "API_Server → gRPC → Backend")
-	klog.InfoS("📡 [GRPC_CLIENT] Call stack trace",
-		"stack", stackTrace)
 
 	_, err := c.client.MarkForDeletion(ctx, &netguardpb.MarkForDeletionReq{
 		Namespace: namespace,
@@ -2139,17 +2126,12 @@ func (c *GRPCBackendClient) MarkForDeletion(ctx context.Context, namespace, name
 	})
 
 	if err != nil {
-		klog.ErrorS(err, "📡 [GRPC_CLIENT] gRPC MarkForDeletion FAILED",
+		klog.ErrorS(err, "[GRPC_CLIENT] gRPC MarkForDeletion FAILED",
 			"namespace", namespace,
 			"name", name,
 			"kind", kind)
 		return err
 	}
-
-	klog.InfoS("📡 [GRPC_CLIENT] gRPC MarkForDeletion SUCCESS",
-		"namespace", namespace,
-		"name", name,
-		"kind", kind)
 
 	return nil
 }

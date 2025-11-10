@@ -28,8 +28,6 @@ func NewValidationWebhook(backendClient client.BackendClient) *ValidationWebhook
 }
 
 func (w *ValidationWebhook) ValidateAdmissionReview(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
-	// 🔍 COMPREHENSIVE WEBHOOK TRACING - Start
-
 	var response *admissionv1.AdmissionResponse
 	switch req.Kind.Kind {
 	case "Service":
@@ -137,7 +135,7 @@ func (w *ValidationWebhook) validateService(ctx context.Context, req *admissionv
 }
 
 func (w *ValidationWebhook) validateAddressGroup(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
-	// 🔧 FIX: Handle DELETE operations separately - no object to unmarshal
+	// DELETE requests do not include an object payload, so handle them separately before unmarshalling.
 	if req.Operation == admissionv1.Delete {
 
 		// Get validator for dependency checking
@@ -205,14 +203,11 @@ func (w *ValidationWebhook) validateAddressGroup(ctx context.Context, req *admis
 }
 
 func (w *ValidationWebhook) validateAddressGroupBinding(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
-	// 🔍 ADDRESSGROUPBINDING WEBHOOK ENTRY POINT
-
-	// CRITICAL CHECK: This should ONLY be called for AddressGroupBinding resources
 	if req.Kind.Kind != "AddressGroupBinding" {
 		return w.errorResponse(req.UID, fmt.Sprintf("AddressGroupBinding webhook incorrectly called for %s resource", req.Kind.Kind))
 	}
 
-	// 🔧 FIX: Handle DELETE operations separately - no object to unmarshal
+	// DELETE requests do not include an object payload, so handle them separately before unmarshalling.
 	if req.Operation == admissionv1.Delete {
 
 		// Get validator for dependency checking
@@ -346,7 +341,6 @@ func (w *ValidationWebhook) validateAddressGroupPortMapping(ctx context.Context,
 }
 
 func (w *ValidationWebhook) validateRuleS2S(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
-	// 🔧 FIX: Handle DELETE operations separately - no object to unmarshal
 	if req.Operation == admissionv1.Delete {
 
 		// Get validator for dependency checking
@@ -474,7 +468,7 @@ func (w *ValidationWebhook) validateSvcFqdnRule(ctx context.Context, req *admiss
 }
 
 func (w *ValidationWebhook) validateServiceAlias(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
-	// 🔧 FIX: Handle DELETE operations separately - no object to unmarshal
+	// DELETE requests do not include an object payload, so handle them separately before unmarshalling.
 	if req.Operation == admissionv1.Delete {
 
 		// Get validator for dependency checking
@@ -895,8 +889,6 @@ func convertAddressGroupBindingToDomain(k8sBinding netguardv1beta1.AddressGroupB
 		ServiceRef:      k8sBinding.Spec.ServiceRef,      // Direct assignment - preserves namespace!
 		AddressGroupRef: k8sBinding.Spec.AddressGroupRef, // Direct assignment - preserves namespace!
 	}
-
-	// 🔍 EXTENSIVE DEBUG: Log the resulting domain model
 
 	return domainBinding
 }

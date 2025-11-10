@@ -77,7 +77,7 @@ func (cm *ConditionManager) ProcessRuleS2SConditions(ctx context.Context, rule *
 				rule.Meta.SetErrorCondition(models.ReasonDependencyError, fmt.Sprintf("Failed to generate IEAgAgRules: %v", err))
 				// Keep Ready=True but log the generation failure
 			} else {
-				klog.Infof("🔨 ConditionManager: Generated %d IEAgAgRules for Ready RuleS2S %s/%s", len(ieAgAgRules), rule.Namespace, rule.Name)
+				klog.Infof("ConditionManager: Generated %d IEAgAgRules for Ready RuleS2S %s/%s", len(ieAgAgRules), rule.Namespace, rule.Name)
 				if len(ieAgAgRules) > 0 && cm.ruleS2SService != nil {
 
 					if syncErr := cm.ruleS2SService.SyncIEAgAgRules(ctx, ieAgAgRules, ports.EmptyScope{}); syncErr != nil {

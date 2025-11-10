@@ -1,29 +1,7 @@
 -- +goose Up
--- Migration 044: Coordinated HostBinding Deletion
---
--- This migration implements coordinated deletion for HostBinding resources ensuring:
--- 1. Soft delete via deletion_timestamp (2-phase deletion)
--- 2. Automatic update of Host and AddressGroup when binding is marked for deletion
--- 3. SGROUP synchronization before physical deletion
--- 4. Automatic update of Host.status when added/removed from AG.spec.hosts
---
--- Architecture: Trigger-First approach
--- - Database triggers handle all resource updates
--- - OutboxWorker coordinates synchronization and physical deletion
--- - See: docs/architecture/COORDINATED_BINDING_DELETION.md
 
 -- +goose StatementBegin
 
--- ============================================================================
--- PART 1: Modify aggregate_address_group_hosts() to filter deleted bindings
--- ============================================================================
---
--- CRITICAL CHANGE: Add deletion_timestamp filter to exclude HostBindings
--- that are marked for deletion from aggregated_hosts calculation.
---
--- This ensures that when a HostBinding is soft-deleted (deletion_timestamp set),
--- it immediately stops appearing in AddressGroup.aggregatedHosts without
--- requiring physical deletion first.
 
 CREATE OR REPLACE FUNCTION aggregate_address_group_hosts(ag_namespace TEXT, ag_name TEXT)
 RETURNS JSONB AS $$
@@ -33,7 +11,6 @@ DECLARE
     host_record RECORD;
     hosts_field JSONB;
 BEGIN
-    -- Part 1: Get hosts from spec.hosts (unchanged logic)
     SELECT COALESCE(hosts, '[]'::jsonb) INTO hosts_field
     FROM address_groups
     WHERE namespace = ag_namespace AND name = ag_name;
@@ -43,13 +20,11 @@ BEGIN
         FOR host_ref IN
             SELECT jsonb_array_elements(hosts_field) as host_obj
         LOOP
-            -- Get host UUID from hosts table
             SELECT h.uuid INTO host_record
             FROM hosts h
             WHERE h.namespace = ag_namespace::namespace_name
             AND h.name = (host_ref->>'name')::resource_name;
 
-            -- Add host reference with source information
             aggregated_hosts_json := aggregated_hosts_json || jsonb_build_array(
                 jsonb_build_object(
                     'ref', host_ref,
@@ -60,8 +35,6 @@ BEGIN
         END LOOP;
     END IF;
 
-    -- Part 2: Add hosts from HostBindings (WITH DELETION_TIMESTAMP FILTER)
-    -- ✨ CRITICAL CHANGE: Added JOIN with k8s_metadata and deletion_timestamp filter
     FOR host_record IN
         SELECT h.namespace, h.name, h.uuid
         FROM host_bindings hb
@@ -69,9 +42,8 @@ BEGIN
         JOIN k8s_metadata m ON m.resource_version = hb.resource_version
         WHERE hb.address_group_namespace = ag_namespace::namespace_name
         AND hb.address_group_name = ag_name::resource_name
-        AND m.deletion_timestamp IS NULL  -- ← НОВАЯ СТРОКА: Exclude soft-deleted bindings
+        AND m.deletion_timestamp IS NULL
     LOOP
-        -- Add host reference with source information
         aggregated_hosts_json := aggregated_hosts_json || jsonb_build_array(
             jsonb_build_object(
                 'ref', jsonb_build_object(
@@ -94,21 +66,6 @@ COMMENT ON FUNCTION aggregate_address_group_hosts(TEXT, TEXT) IS
 FILTERS OUT HostBindings with deletion_timestamp != NULL to support coordinated deletion.
 See: docs/architecture/COORDINATED_BINDING_DELETION.md';
 
--- ============================================================================
--- PART 2: New trigger for HostBinding soft delete handling
--- ============================================================================
---
--- This trigger fires AFTER deletion_timestamp is set on a HostBinding.
--- It updates Host and AddressGroup to reflect the binding removal BEFORE
--- waiting for SGROUP synchronization.
---
--- Flow:
--- 1. HostBinding BEFORE DELETE trigger sets deletion_timestamp
--- 2. THIS TRIGGER fires on deletion_timestamp change
--- 3. Updates Host: clear binding refs, set Ready=False
--- 4. Updates AG: recalculate aggregated_hosts (binding excluded by filter), set Ready=False
--- 5. OutboxWorker processes Host UPDATE and AG UPDATE
--- 6. After sync: OutboxWorker physically deletes HostBinding
 
 CREATE OR REPLACE FUNCTION trigger_host_binding_on_deletion_mark()
 RETURNS TRIGGER AS $$
@@ -120,20 +77,16 @@ DECLARE
     v_host_rv BIGINT;
     v_ag_rv BIGINT;
     v_binding_record RECORD;
-    -- Variables for Step 3: DELETE outbox entry
     v_uid UUID;
     v_binding_namespace namespace_name;
     v_binding_name resource_name;
     v_affected_resources JSONB;
     v_binding_found BOOLEAN := false;
 BEGIN
-    -- Only act when deletion_timestamp is being set (not NULL → NOT NULL transitions are ignored)
     IF NEW.deletion_timestamp IS NOT NULL AND OLD.deletion_timestamp IS NULL THEN
 
-        -- Get UID from k8s_metadata (ALWAYS available)
         v_uid := NEW.uid;
 
-        -- Try to get HostBinding details from host_bindings table
         SELECT host_namespace, host_name, address_group_namespace, address_group_name,
                namespace, name
         INTO v_host_namespace, v_host_name, v_ag_namespace, v_ag_name,
@@ -143,19 +96,11 @@ BEGIN
 
         v_binding_found := FOUND;
 
-        -- ═══════════════════════════════════════════════════════════════════
-        -- Step 3: Create DELETE outbox entry (ALWAYS EXECUTES!)
-        -- ═══════════════════════════════════════════════════════════════════
-        -- This is CRITICAL for Case 2 (DELETE Host → CASCADE HostBinding)
-        -- Migration 031's BEFORE DELETE trigger only fires on physical deletion (Case 1)
-        -- For soft deletion (Case 2), we must create DELETE entry here!
 
         IF v_binding_found THEN
-            -- HostBinding found - create full DELETE entry with complete payload
             RAISE NOTICE 'HostBinding deletion marked: host=%.%, ag=%.%',
                 v_host_namespace, v_host_name, v_ag_namespace, v_ag_name;
 
-            -- Get resource_versions for Host and AddressGroup
             SELECT resource_version INTO v_host_rv
             FROM hosts
             WHERE namespace = v_host_namespace AND name = v_host_name;
@@ -164,7 +109,6 @@ BEGIN
             FROM address_groups
             WHERE namespace = v_ag_namespace AND name = v_ag_name;
 
-            -- Build affected_resources array (only Host and AddressGroup)
             v_affected_resources := jsonb_build_array(
                 jsonb_build_object(
                     'resourceType', 'Host',
@@ -180,7 +124,6 @@ BEGIN
                 )
             );
 
-            -- Insert DELETE entry into sync_outbox with full payload
             INSERT INTO sync_outbox (
                 resource_type,
                 resource_id,
@@ -228,9 +171,6 @@ BEGIN
             RAISE NOTICE 'HostBinding %.% DELETE entry created in sync_outbox (target_system=INTERNAL)',
                 v_binding_namespace, v_binding_name;
 
-            -- ═══════════════════════════════════════════════════════════════════
-            -- Step 1: Update Host - clear binding references (OPTIONAL)
-            -- ═══════════════════════════════════════════════════════════════════
             IF v_host_rv IS NOT NULL THEN
                 UPDATE hosts
                 SET is_bound = false,
@@ -239,7 +179,6 @@ BEGIN
                     address_group_ref_name = NULL
                 WHERE namespace = v_host_namespace AND name = v_host_name;
 
-                -- Update Host conditions: Ready=False, PendingSync=True, Synced=False
                 UPDATE k8s_metadata
                 SET conditions = jsonb_build_array(
                     jsonb_build_object(
@@ -271,17 +210,11 @@ BEGIN
                 RAISE WARNING 'Host %.% not found for binding deletion', v_host_namespace, v_host_name;
             END IF;
 
-            -- ═══════════════════════════════════════════════════════════════════
-            -- Step 2: Update AddressGroup - recalculate aggregated_hosts (OPTIONAL)
-            -- ═══════════════════════════════════════════════════════════════════
-            -- The aggregate_address_group_hosts() function will automatically
-            -- exclude this HostBinding because deletion_timestamp filter
             IF v_ag_rv IS NOT NULL THEN
                 UPDATE address_groups
                 SET aggregated_hosts = aggregate_address_group_hosts(v_ag_namespace::text, v_ag_name::text)
                 WHERE namespace = v_ag_namespace AND name = v_ag_name;
 
-                -- Update AG conditions: Ready=False, PendingSync=True, Synced=False
                 UPDATE k8s_metadata
                 SET conditions = jsonb_build_array(
                     jsonb_build_object(
@@ -315,10 +248,8 @@ BEGIN
             END IF;
 
         ELSE
-            -- HostBinding NOT found - create minimal DELETE entry (race condition / already deleted)
             RAISE WARNING 'HostBinding not found for resource_version %, creating minimal DELETE entry', NEW.resource_version;
 
-            -- Insert minimal DELETE entry with only resource_version info
             INSERT INTO sync_outbox (
                 resource_type,
                 resource_id,
@@ -337,8 +268,8 @@ BEGIN
             VALUES (
                 'HostBinding',
                 v_uid,
-                'unknown',  -- Namespace unknown
-                'unknown',  -- Name unknown
+                'unknown',
+                'unknown',
                 'DELETE'::sync_operation,
                 'INTERNAL'::target_system,
                 jsonb_build_object(
@@ -368,13 +299,6 @@ COMMENT ON FUNCTION trigger_host_binding_on_deletion_mark() IS
 Part of coordinated deletion architecture ensuring SGROUP sync before physical deletion.
 See: docs/architecture/COORDINATED_BINDING_DELETION.md';
 
--- Create trigger on k8s_metadata for HostBinding resources
--- This trigger fires when deletion_timestamp is updated (NULL → timestamp)
---
--- NOTE: We trigger on k8s_metadata (not host_bindings) because the trigger
--- needs to fire AFTER deletion_timestamp is set by the BEFORE DELETE trigger
--- IMPORTANT: Cannot use subquery in WHEN clause (PostgreSQL limitation),
--- so we check for HostBinding existence inside the function instead
 CREATE TRIGGER host_binding_on_deletion_mark
 AFTER UPDATE OF deletion_timestamp ON k8s_metadata
 FOR EACH ROW
@@ -388,17 +312,6 @@ COMMENT ON TRIGGER host_binding_on_deletion_mark ON k8s_metadata IS
 'Fires when HostBinding is soft-deleted (deletion_timestamp set).
 Updates Host and AddressGroup to reflect binding removal before SGROUP sync.';
 
--- ============================================================================
--- PART 3: Modify trigger for AG.spec.hosts changes
--- ============================================================================
---
--- CRITICAL ADDITION: When Host is added to or removed from AG.spec.hosts,
--- update Host.status to reflect the binding.
---
--- This implements Case 3: UPDATE AG.spec.hosts
---
--- Before: Only recalculated AG.aggregated_hosts
--- After: Also updates Host.isBound, Host.addressGroupRef, Host.conditions
 
 CREATE OR REPLACE FUNCTION trigger_update_aggregated_hosts_on_spec_change()
 RETURNS TRIGGER AS $$
@@ -410,21 +323,15 @@ DECLARE
     removed_hosts JSONB;
     v_host_rv BIGINT;
 BEGIN
-    -- First: Recalculate aggregated_hosts (existing logic)
     NEW.aggregated_hosts := aggregate_address_group_hosts(NEW.namespace::text, NEW.name::text);
 
-    -- ✨ NEW LOGIC: Handle spec.hosts changes to update Host.status
     old_hosts_json := COALESCE(OLD.hosts, '[]'::jsonb);
     new_hosts_json := COALESCE(NEW.hosts, '[]'::jsonb);
 
-    -- Only process if spec.hosts actually changed
     IF old_hosts_json <> new_hosts_json THEN
 
         RAISE NOTICE 'AG %.% spec.hosts changed, updating affected Hosts', NEW.namespace, NEW.name;
 
-        -- ─────────────────────────────────────────────────────────────
-        -- Find ADDED hosts (in NEW but not in OLD)
-        -- ─────────────────────────────────────────────────────────────
         SELECT jsonb_agg(elem)
         INTO added_hosts
         FROM jsonb_array_elements(new_hosts_json) elem
@@ -440,13 +347,11 @@ BEGIN
                 SELECT elem->>'name'
                 FROM jsonb_array_elements(added_hosts) elem
             LOOP
-                -- Get Host resource_version
                 SELECT resource_version INTO v_host_rv
                 FROM hosts
                 WHERE namespace = NEW.namespace AND name = host_name_val::resource_name;
 
                 IF v_host_rv IS NOT NULL THEN
-                    -- Update Host: set binding references
                     UPDATE hosts
                     SET is_bound = true,
                         address_group_name = NEW.name,
@@ -454,7 +359,6 @@ BEGIN
                         address_group_ref_name = NEW.name
                     WHERE namespace = NEW.namespace AND name = host_name_val::resource_name;
 
-                    -- Update Host conditions: Ready=False, PendingSync=True
                     UPDATE k8s_metadata
                     SET conditions = jsonb_build_array(
                         jsonb_build_object(
@@ -490,9 +394,6 @@ BEGIN
             END LOOP;
         END IF;
 
-        -- ─────────────────────────────────────────────────────────────
-        -- Find REMOVED hosts (in OLD but not in NEW)
-        -- ─────────────────────────────────────────────────────────────
         SELECT jsonb_agg(elem)
         INTO removed_hosts
         FROM jsonb_array_elements(old_hosts_json) elem
@@ -513,7 +414,6 @@ BEGIN
                 WHERE namespace = NEW.namespace AND name = host_name_val::resource_name;
 
                 IF v_host_rv IS NOT NULL THEN
-                    -- Update Host: clear binding references
                     UPDATE hosts
                     SET is_bound = false,
                         address_group_name = NULL,
@@ -521,7 +421,6 @@ BEGIN
                         address_group_ref_name = NULL
                     WHERE namespace = NEW.namespace AND name = host_name_val::resource_name;
 
-                    -- Update Host conditions: Ready=False, PendingSync=True
                     UPDATE k8s_metadata
                     SET conditions = jsonb_build_array(
                         jsonb_build_object(
@@ -571,15 +470,12 @@ See: docs/architecture/COORDINATED_BINDING_DELETION.md';
 -- +goose StatementEnd
 
 -- +goose Down
--- Rollback coordinated deletion changes
 
 -- +goose StatementBegin
 
--- Drop new trigger
 DROP TRIGGER IF EXISTS host_binding_on_deletion_mark ON k8s_metadata;
 DROP FUNCTION IF EXISTS trigger_host_binding_on_deletion_mark();
 
--- Restore old version of aggregate_address_group_hosts (without deletion_timestamp filter)
 CREATE OR REPLACE FUNCTION aggregate_address_group_hosts(ag_namespace TEXT, ag_name TEXT)
 RETURNS JSONB AS $$
 DECLARE
@@ -588,7 +484,6 @@ DECLARE
     host_record RECORD;
     hosts_field JSONB;
 BEGIN
-    -- Get hosts field, handling null case
     SELECT COALESCE(hosts, '[]'::jsonb) INTO hosts_field
     FROM address_groups
     WHERE namespace = ag_namespace AND name = ag_name;
@@ -613,7 +508,6 @@ BEGIN
         END LOOP;
     END IF;
 
-    -- OLD VERSION: WITHOUT deletion_timestamp filter
     FOR host_record IN
         SELECT h.namespace, h.name, h.uuid
         FROM host_bindings hb
@@ -638,11 +532,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Restore old version of trigger_update_aggregated_hosts_on_spec_change (without Host.status updates)
 CREATE OR REPLACE FUNCTION trigger_update_aggregated_hosts_on_spec_change()
 RETURNS TRIGGER AS $$
 BEGIN
-    -- Update aggregated_hosts with separate UPDATE statement after the main operation
     UPDATE address_groups
     SET aggregated_hosts = aggregate_address_group_hosts(NEW.namespace, NEW.name)
     WHERE namespace = NEW.namespace AND name = NEW.name;

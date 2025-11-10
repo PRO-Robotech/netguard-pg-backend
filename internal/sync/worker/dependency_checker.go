@@ -339,8 +339,7 @@ func (w *OutboxWorker) extractEntityDependencies(
 	case string(registry.TypeService):
 		return w.extractServiceDependencies(resource)
 	case string(registry.TypeHost):
-		// FIXED: Hosts HAVE dependency when bound to AddressGroup!
-		// When IsBound=true, Host includes SgName in ToSGroupsProto()
+		// Bound hosts depend on the referenced AddressGroup.
 		return w.extractHostDependencies(resource)
 	case string(registry.TypeSvcSvcRule):
 		// SvcSvcRule depends on ServiceFromRef and ServiceToRef (both Services must be Ready)

@@ -1,31 +1,8 @@
 -- +goose Up
 -- +goose StatementBegin
 
--- =====================================================
--- Migration 063: Fix Duplicate FK Constraints + Fix Service Deletion Trigger
--- =====================================================
--- Purpose: Fix two critical bugs preventing Service coordinated deletion
---
--- Problem 1: Duplicate FK constraints on address_group_bindings → address_groups
---   address_group_bindings has TWO FK constraints to address_groups:
---   - ..._address_gro_fkey (CASCADE) - from old schema
---   - ..._address_group_na (RESTRICT) - from Migration 055
---   This conflict may cause undefined behavior.
---
--- Problem 2: Service deletion trigger not working
---   Migration 057 trigger does NOT fire when Service is deleted.
---   Service stays with deletion_timestamp set, binding не удаляется, FK RESTRICT блокирует.
---
--- Solution:
---   Part 1: Remove CASCADE FK, keep only RESTRICT FK
---   Part 2: Debug and fix Service deletion trigger
---
--- Date: 2025-10-31
--- =====================================================
 
--- ==================== PART 1: Fix Duplicate FK ====================
 
--- Drop CASCADE FK constraint (if exists)
 DO $$
 BEGIN
     IF EXISTS (
@@ -41,14 +18,12 @@ BEGIN
     END IF;
 END $$;
 
--- Verify RESTRICT FK exists (it should from Migration 055)
 DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM pg_constraint
         WHERE conname = 'address_group_bindings_address_group_namespace_address_group_na'
     ) THEN
-        -- If RESTRICT FK doesn't exist, create it
         ALTER TABLE address_group_bindings
         ADD CONSTRAINT address_group_bindings_address_group_namespace_address_group_na
             FOREIGN KEY (address_group_namespace, address_group_name)
@@ -61,12 +36,7 @@ BEGIN
     END IF;
 END $$;
 
--- ==================== PART 2: Fix Service Deletion Trigger ====================
 
--- The trigger exists but doesn't fire. Debugging approach:
--- 1. Add extensive logging
--- 2. Verify trigger fires on ALL k8s_metadata updates
--- 3. Check Service lookup logic
 
 CREATE OR REPLACE FUNCTION trigger_service_on_deletion_mark_for_ag_bindings()
 RETURNS TRIGGER AS $$
@@ -78,15 +48,12 @@ DECLARE
     v_ag_uid UUID;
     v_ag_rv BIGINT;
 BEGIN
-    -- Debug: Log every trigger invocation
     RAISE NOTICE '[Migration 063/DEBUG] Trigger fired: OLD.deletion_timestamp=%, NEW.deletion_timestamp=%',
         OLD.deletion_timestamp, NEW.deletion_timestamp;
 
-    -- Only act when deletion_timestamp is being set (NULL → timestamp)
     IF NEW.deletion_timestamp IS NOT NULL AND OLD.deletion_timestamp IS NULL THEN
         RAISE NOTICE '[Migration 063/DEBUG] Deletion timestamp set, checking if this is a Service...';
 
-        -- Find Service by resource_version
         SELECT namespace, name
         INTO v_service_namespace, v_service_name
         FROM services
@@ -96,7 +63,6 @@ BEGIN
             RAISE NOTICE '[Migration 063] Service %.% marked for deletion, processing AddressGroupBindings',
                 v_service_namespace, v_service_name;
 
-            -- Process all AddressGroupBindings referencing this Service
             FOR binding_rec IN
                 SELECT agb.namespace, agb.name,
                        agb.address_group_namespace, agb.address_group_name,
@@ -108,12 +74,10 @@ BEGIN
                 RAISE NOTICE '[Migration 063] Processing AddressGroupBinding %.%',
                     binding_rec.namespace, binding_rec.name;
 
-                -- Get UID for AddressGroupBinding
                 SELECT m.uid INTO v_binding_uid
                 FROM k8s_metadata m
                 WHERE m.resource_version = binding_rec.resource_version;
 
-                -- Get AddressGroup UID and resource_version for affects_resources
                 SELECT m.uid, ag.resource_version
                 INTO v_ag_uid, v_ag_rv
                 FROM address_groups ag
@@ -121,7 +85,6 @@ BEGIN
                 WHERE ag.namespace = binding_rec.address_group_namespace
                   AND ag.name = binding_rec.address_group_name;
 
-                -- Create DELETE outbox entry for AddressGroupBinding (target=INTERNAL)
                 INSERT INTO sync_outbox (
                     resource_type,
                     resource_id,
@@ -176,7 +139,6 @@ BEGIN
                 RAISE NOTICE '[Migration 063] Created DELETE outbox entry for AddressGroupBinding %.%',
                     binding_rec.namespace, binding_rec.name;
 
-                -- Update aggregated_address_groups in Service (same as Migration 057)
                 PERFORM aggregate_service_address_groups(v_service_namespace, v_service_name);
 
                 RAISE NOTICE '[Migration 063] Updated aggregated_address_groups for Service %.%',
@@ -197,7 +159,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Ensure trigger exists
 DROP TRIGGER IF EXISTS service_on_deletion_mark_for_ag_bindings ON k8s_metadata;
 
 CREATE TRIGGER service_on_deletion_mark_for_ag_bindings
@@ -206,7 +167,6 @@ FOR EACH ROW
 WHEN (NEW.deletion_timestamp IS NOT NULL AND OLD.deletion_timestamp IS NULL)
 EXECUTE FUNCTION trigger_service_on_deletion_mark_for_ag_bindings();
 
--- Log migration completion (must be in DO block)
 DO $$
 BEGIN
     RAISE NOTICE '[Migration 063] Service deletion trigger recreated with debug logging';
@@ -217,7 +177,6 @@ END $$;
 -- +goose Down
 -- +goose StatementBegin
 
--- Revert to Migration 057 version (without debug logging)
 CREATE OR REPLACE FUNCTION trigger_service_on_deletion_mark_for_ag_bindings()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -299,7 +258,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Restore CASCADE FK if needed for rollback compatibility
 ALTER TABLE address_group_bindings
 ADD CONSTRAINT address_group_bindings_address_group_namespace_address_gro_fkey
     FOREIGN KEY (address_group_namespace, address_group_name)

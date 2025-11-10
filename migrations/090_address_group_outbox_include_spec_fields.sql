@@ -1,12 +1,6 @@
 -- +goose Up
 -- +goose StatementBegin
 
--- Migration 090: AddressGroup outbox payload should include spec fields (default_action, logs, trace)
--- Problem: Migration 087 trimmed trigger_address_group_upsert_outbox() too aggressively, leaving
---          only namespace/name in the payload. As a result, SGROUP never received updates for
---          defaultAction/logs/trace, so toggling those flags had no effect.
--- Fix: Re-extend the payload with the intrinsic spec fields while still ignoring binding-driven
---       changes (hosts/networks) as intended by Migration 087.
 
 CREATE OR REPLACE FUNCTION trigger_address_group_upsert_outbox()
 RETURNS TRIGGER AS $$
@@ -87,7 +81,6 @@ COMMENT ON FUNCTION trigger_address_group_upsert_outbox() IS
 -- +goose Down
 -- +goose StatementBegin
 
--- Revert to Migration 087 definition (namespace/name only)
 CREATE OR REPLACE FUNCTION trigger_address_group_upsert_outbox()
 RETURNS TRIGGER AS $$
 DECLARE

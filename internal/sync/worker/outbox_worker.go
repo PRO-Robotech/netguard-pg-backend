@@ -258,8 +258,7 @@ func (w *OutboxWorker) processBatch(ctx context.Context) error {
 				zap.Error(err),
 			)
 
-			// CRITICAL FIX: Handle error with retry logic
-			// scheduleRetry will categorize error and either schedule retry or mark as FAILED_PERMANENT
+			// Use scheduleRetry to categorize the error and either enqueue another attempt or mark it permanent.
 			if retryErr := w.scheduleRetry(ctx, entry, err); retryErr != nil {
 				w.logger.Error("failed to schedule retry",
 					zap.String("entry_id", entry.ID.String()),

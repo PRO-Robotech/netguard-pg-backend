@@ -1,58 +1,4 @@
 -- +goose Up
--- Migration 078: Fix AddressGroupBinding deletion - ALWAYS update Service
---
--- ═══════════════════════════════════════════════════════════════════════════════════════════════════
--- CRITICAL BUG FIX: Service UPDATE outbox entry NOT created when AddressGroupBinding deleted
--- ═══════════════════════════════════════════════════════════════════════════════════════════════════
---
--- Root Cause (discovered 2025-10-31):
---   Migration 072 trigger_addressgroupbinding_on_deletion_mark() reads binding from table:
---
---   SELECT service_namespace, service_name, ...
---   FROM address_group_bindings
---   WHERE resource_version = NEW.resource_version;
---
---   v_binding_found := FOUND;
---
---   IF v_binding_found THEN
---       -- Update Service.aggregated_address_groups ✅
---   ELSE
---       -- Service NOT updated ❌ ← BUG!
---   END IF;
---
---   PROBLEM: By the time AFTER UPDATE trigger fires, binding is ALREADY physically deleted
---            from address_group_bindings table (asynchronously by OutboxWorker or other process).
---            PostgreSQL logs show: "WARNING: AddressGroupBinding not found for resource_version XXX"
---            Result: v_binding_found = FALSE → Service UPDATE does NOT happen!
---
--- Impact:
---   1. kubectl delete addressgroupbinding → deletion_timestamp set in k8s_metadata ✅
---   2. Binding physically deleted from address_group_bindings (race condition) ❌
---   3. AFTER UPDATE trigger fires → binding NOT found ❌
---   4. Service.aggregated_address_groups NOT updated ❌
---   5. Service UPDATE outbox entry NOT created ❌
---   6. SGROUP never receives UPDATE → shows old binding data ❌
---
--- Solution (Migration 078):
---   Trigger should ALWAYS update Service, even if binding not found in table!
---
---   Strategy:
---   1. Try to find binding in address_group_bindings (as before)
---   2. If NOT found → extract service info from sync_outbox (previous CREATE entry)
---   3. If still not found → UPDATE ALL Services (last resort, triggers aggregate recalculation)
---   4. aggregate_service_address_groups() automatically filters deleted bindings ✅
---
--- Expected Flow After Fix:
---   1. kubectl delete addressgroupbinding
---   2. deletion_timestamp set in k8s_metadata
---   3. AFTER UPDATE trigger fires (binding may or may not exist in table)
---   4. Trigger finds Service info (from table OR from outbox)
---   5. UPDATE services SET aggregated_address_groups = aggregate_service_address_groups(...) ✅
---   6. Service UPDATE trigger creates SGROUP outbox entry ✅
---   7. OutboxWorker syncs to SGROUP with correct payload (aggregated_address_groups=[]) ✅
---
--- Date: 2025-10-31
--- ═══════════════════════════════════════════════════════════════════════════════════════════════════
 
 -- +goose StatementBegin
 
@@ -73,15 +19,10 @@ DECLARE
     v_service_found BOOLEAN := FALSE;
     v_outbox_payload JSONB;
 BEGIN
-    -- Only act when deletion_timestamp is being set (NULL → timestamp)
     IF NEW.deletion_timestamp IS NOT NULL AND OLD.deletion_timestamp IS NULL THEN
 
-        -- Get UID from k8s_metadata (ALWAYS available)
         v_uid := NEW.uid;
 
-        -- ═══════════════════════════════════════════════════════════════════
-        -- Step 1: Try to get AddressGroupBinding details from table
-        -- ═══════════════════════════════════════════════════════════════════
         SELECT service_namespace, service_name,
                address_group_namespace, address_group_name,
                namespace, name
@@ -93,13 +34,9 @@ BEGIN
 
         v_binding_found := FOUND;
 
-        -- ═══════════════════════════════════════════════════════════════════
-        -- Step 2: If binding NOT found in table, try to get Service info from outbox
-        -- ═══════════════════════════════════════════════════════════════════
         IF NOT v_binding_found THEN
             RAISE WARNING '[Migration 078] AddressGroupBinding not found in table for resource_version %, attempting outbox lookup', NEW.resource_version;
 
-            -- Try to find previous CREATE/UPDATE outbox entry for this binding
             SELECT payload INTO v_outbox_payload
             FROM sync_outbox
             WHERE resource_id = v_uid
@@ -110,7 +47,6 @@ BEGIN
             LIMIT 1;
 
             IF FOUND AND v_outbox_payload IS NOT NULL THEN
-                -- Extract service info from payload
                 v_service_namespace := (v_outbox_payload->'serviceRef'->>'namespace')::namespace_name;
                 v_service_name := (v_outbox_payload->'serviceRef'->>'name')::resource_name;
                 v_ag_namespace := (v_outbox_payload->'addressGroupRef'->>'namespace')::namespace_name;
@@ -128,11 +64,7 @@ BEGIN
             v_service_found := TRUE;
         END IF;
 
-        -- ═══════════════════════════════════════════════════════════════════
-        -- Step 3: Create DELETE outbox entry (using available data)
-        -- ═══════════════════════════════════════════════════════════════════
         IF v_service_found THEN
-            -- Get resource_versions for Service and AddressGroup
             SELECT resource_version INTO v_service_rv
             FROM services
             WHERE namespace = v_service_namespace AND name = v_service_name;
@@ -141,7 +73,6 @@ BEGIN
             FROM address_groups
             WHERE namespace = v_ag_namespace AND name = v_ag_name;
 
-            -- Build affected_resources array
             v_affected_resources := jsonb_build_array(
                 jsonb_build_object(
                     'type', 'Service',
@@ -157,7 +88,6 @@ BEGIN
                 )
             );
 
-            -- Insert DELETE entry into sync_outbox
             INSERT INTO sync_outbox (
                 resource_type,
                 resource_id,
@@ -195,7 +125,7 @@ BEGIN
                     'affectedResources', v_affected_resources,
                     'reason', 'Coordinated deletion',
                     'deletionTimestamp', NEW.deletion_timestamp::text,
-                    'recoveredFromOutbox', NOT v_binding_found  -- Flag indicating data source
+                    'recoveredFromOutbox', NOT v_binding_found
                 ),
                 'PENDING'::outbox_status,
                 v_affected_resources,
@@ -210,11 +140,6 @@ BEGIN
             RAISE NOTICE '[Migration 078] Created DELETE outbox entry for AddressGroupBinding %.% (recovered=%)',
                 v_binding_namespace, v_binding_name, NOT v_binding_found;
 
-            -- ═══════════════════════════════════════════════════════════════════
-            -- ✨ CRITICAL FIX (Migration 078): ALWAYS update Service!
-            -- ═══════════════════════════════════════════════════════════════════
-            -- This ensures Service UPDATE outbox entry is created even if binding
-            -- was already physically deleted from table.
             UPDATE services
             SET aggregated_address_groups = aggregate_service_address_groups(
                 v_service_namespace::text,
@@ -226,9 +151,6 @@ BEGIN
                 v_service_namespace, v_service_name;
 
         ELSE
-            -- ═══════════════════════════════════════════════════════════════════
-            -- Last resort: Create minimal DELETE entry and trigger full Services update
-            -- ═══════════════════════════════════════════════════════════════════
             RAISE WARNING '[Migration 078] Cannot determine Service for AddressGroupBinding (rv=%, uid=%), creating minimal DELETE entry',
                 NEW.resource_version, v_uid;
 
@@ -268,8 +190,6 @@ BEGIN
             )
             ON CONFLICT DO NOTHING;
 
-            -- ⚠️ WARNING: This updates ALL Services - inefficient but ensures correctness
-            -- aggregate_service_address_groups() will filter deleted bindings automatically
             UPDATE services
             SET aggregated_address_groups = aggregate_service_address_groups(
                 namespace::text,
@@ -291,9 +211,6 @@ Migration 078 fix: ALWAYS updates Service.aggregated_address_groups even if bind
 Uses multi-tier strategy: table → outbox → fallback (update all Services).
 This ensures Service UPDATE outbox entry is ALWAYS created for SGROUP synchronization.';
 
--- ═══════════════════════════════════════════════════════════════════════════════════════════════════
--- Verification and summary
--- ═══════════════════════════════════════════════════════════════════════════════════════════════════
 
 DO $$
 BEGIN
@@ -319,7 +236,6 @@ END $$;
 -- +goose Down
 -- +goose StatementBegin
 
--- Revert to Migration 072 version (does NOT update Service if binding not found)
 CREATE OR REPLACE FUNCTION trigger_addressgroupbinding_on_deletion_mark()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -428,7 +344,6 @@ BEGIN
             RAISE NOTICE '[Migration 066/072] Created DELETE outbox entry for AddressGroupBinding %.%',
                 v_binding_namespace, v_binding_name;
 
-            -- ❌ Migration 072 version: Service UPDATE only if binding found
             UPDATE services
             SET aggregated_address_groups = aggregate_service_address_groups(
                 v_service_namespace::text,

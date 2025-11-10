@@ -46,7 +46,7 @@ func (cm *ConditionManager) ProcessHostConditions(ctx context.Context, host *mod
 			"namespace", host.Namespace, "name", host.Name)
 
 		if cm.hasPendingOutboxEntry(ctx, "Host", host.Namespace, host.Name) {
-			klog.InfoS("ConditionManager: Pending outbox entry for host, skip update",
+			klog.V(4).InfoS("ConditionManager: Pending outbox entry for host, skip update",
 				"namespace", host.Namespace,
 				"name", host.Name)
 			return nil
