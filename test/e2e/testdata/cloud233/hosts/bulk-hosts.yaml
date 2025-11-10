@@ -1,0 +1,110 @@
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Host
+metadata:
+  name: bulk-host-001
+  namespace: incloud-sgroups
+  labels:
+    test: cloud233
+    scenario: bulk-test
+spec:
+  uuid: "00000000-0000-0000-0000-000000000001"
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Host
+metadata:
+  name: bulk-host-002
+  namespace: incloud-sgroups
+  labels:
+    test: cloud233
+    scenario: bulk-test
+spec:
+  uuid: "00000000-0000-0000-0000-000000000002"
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Host
+metadata:
+  name: bulk-host-003
+  namespace: incloud-sgroups
+  labels:
+    test: cloud233
+    scenario: bulk-test
+spec:
+  uuid: "00000000-0000-0000-0000-000000000003"
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Host
+metadata:
+  name: bulk-host-004
+  namespace: incloud-sgroups
+  labels:
+    test: cloud233
+    scenario: bulk-test
+spec:
+  uuid: "00000000-0000-0000-0000-000000000004"
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Host
+metadata:
+  name: bulk-host-005
+  namespace: incloud-sgroups
+  labels:
+    test: cloud233
+    scenario: bulk-test
+spec:
+  uuid: "00000000-0000-0000-0000-000000000005"
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Host
+metadata:
+  name: bulk-host-006
+  namespace: incloud-sgroups
+  labels:
+    test: cloud233
+    scenario: bulk-test
+spec:
+  uuid: "00000000-0000-0000-0000-000000000006"
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Host
+metadata:
+  name: bulk-host-007
+  namespace: incloud-sgroups
+  labels:
+    test: cloud233
+    scenario: bulk-test
+spec:
+  uuid: "00000000-0000-0000-0000-000000000007"
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Host
+metadata:
+  name: bulk-host-008
+  namespace: incloud-sgroups
+  labels:
+    test: cloud233
+    scenario: bulk-test
+spec:
+  uuid: "00000000-0000-0000-0000-000000000008"
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Host
+metadata:
+  name: bulk-host-009
+  namespace: incloud-sgroups
+  labels:
+    test: cloud233
+    scenario: bulk-test
+spec:
+  uuid: "00000000-0000-0000-0000-000000000009"
+---
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Host
+metadata:
+  name: bulk-host-010
+  namespace: incloud-sgroups
+  labels:
+    test: cloud233
+    scenario: bulk-test
+spec:
+  uuid: "00000000-0000-0000-0000-000000000010"

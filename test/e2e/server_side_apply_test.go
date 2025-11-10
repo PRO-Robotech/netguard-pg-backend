@@ -445,11 +445,11 @@ func (suite *ServerSideApplyE2ETestSuite) TestServerSideApply_RoundTripConsisten
 				Annotations: map[string]string{
 					"description":        "Complex service for consistency testing",
 					"last-updated-by":    "e2e-test",
-					"special-characters": "test-with-ñ-and-中文-and-🚀",
+					"special-characters": "test-with-ñ-and-中文-and-",
 				},
 			},
 			Spec: netguardv1beta1.ServiceSpec{
-				Description: "Consistency test service with special chars: ñ, 中文, 🚀",
+				Description: "Consistency test service with special chars: ñ, 中文, ",
 				IngressPorts: []netguardv1beta1.IngressPort{
 					{
 						Port:        "80",
@@ -459,7 +459,7 @@ func (suite *ServerSideApplyE2ETestSuite) TestServerSideApply_RoundTripConsisten
 					{
 						Port:        "443",
 						Protocol:    netguardv1beta1.ProtocolTCP,
-						Description: "HTTPS port with special chars: ñ 中文 🚀",
+						Description: "HTTPS port with special chars: ñ 中文 ",
 					},
 					{
 						Port:        "8080",

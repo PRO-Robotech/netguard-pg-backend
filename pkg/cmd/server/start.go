@@ -31,7 +31,7 @@ func NewCommandStartNetguardServer(ctx context.Context, out, errOut io.Writer) *
 		Use:   "netguard-apiserver",
 		Short: "Launch a netguard API server",
 		RunE: func(c *cobra.Command, args []string) error {
-			klog.Info("🚀 Starting Netguard API server with correct pattern...")
+			klog.Info("Starting Netguard API server with correct pattern...")
 
 			server, err := apiserver.NewServer(opts)
 			if err != nil {

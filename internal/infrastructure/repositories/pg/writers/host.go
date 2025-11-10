@@ -5,17 +5,15 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"strconv"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
 
-	"netguard-pg-backend/internal/domain"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
-	"netguard-pg-backend/internal/infrastructure/repositories"
 )
 
 type UUIDAlreadyExistsError struct {
@@ -209,110 +207,13 @@ func (w *Writer) upsertHost(ctx context.Context, host *models.Host) error {
 		return errors.Wrapf(err, "failed to upsert host %s/%s", host.Namespace, host.Name)
 	}
 
-	// ========================================
-	// ========================================
-	if err := w.createHostOutboxEntry(ctx, host); err != nil {
-		return errors.Wrap(err, "failed to create outbox entry for host")
-	}
+	// Outbox entries for host upserts are created by trigger 'trg_host_upsert_outbox'.
 
 	return nil
 }
 
-// createHostOutboxEntry creates an outbox entry for Host resource (CREATE/UPDATE)
-func (w *Writer) createHostOutboxEntry(ctx context.Context, host *models.Host) error {
-	// Build payload
-	payload := map[string]interface{}{
-		"namespace":          host.Namespace,
-		"name":               host.Name,
-		"uuid":               host.UUID,
-		"hostname":           host.HostName,
-		"ip_list":            host.IpList,
-		"address_group_name": host.AddressGroupName,
-		"is_bound":           host.IsBound,
-	}
-	payloadJSON, err := json.Marshal(payload)
-	if err != nil {
-		return errors.Wrap(err, "failed to marshal host payload")
-	}
-
-	// Parse resource UUID
-	resourceUUID, err := uuid.Parse(host.UUID)
-	if err != nil {
-		return errors.Wrapf(err, "invalid host UUID: %s", host.UUID)
-	}
-
-	// Create outbox entry
-	outboxEntry := &domain.OutboxEntry{
-		ResourceType:      "Host",
-		ResourceID:        resourceUUID,
-		ResourceNamespace: host.Namespace,
-		ResourceName:      host.Name,
-		Operation:         domain.SyncOperationCreate, // Always CREATE for upsert pattern
-		TargetSystem:      domain.TargetSystemSGROUP,
-		Payload:           payloadJSON,
-		Status:            domain.OutboxStatusPending,
-		MaxRetries:        5,
-	}
-
-	// Use OutboxRepository with existing transaction
-	outboxRepo := repositories.NewOutboxRepository(w.tx)
-	if err := outboxRepo.Create(ctx, outboxEntry); err != nil {
-		return errors.Wrap(err, "failed to persist outbox entry")
-	}
-
-	klog.V(4).InfoS("Created outbox entry for Host",
-		"namespace", host.Namespace,
-		"name", host.Name,
-		"outbox_id", outboxEntry.ID)
-
-	return nil
-}
-
-// createHostDeleteOutboxEntry creates an outbox entry for Host DELETE operation
-func (w *Writer) createHostDeleteOutboxEntry(ctx context.Context, host *models.Host) error {
-	// Build minimal payload for DELETE (only need identifiers)
-	payload := map[string]interface{}{
-		"namespace": host.Namespace,
-		"name":      host.Name,
-		"uuid":      host.UUID,
-	}
-	payloadJSON, err := json.Marshal(payload)
-	if err != nil {
-		return errors.Wrap(err, "failed to marshal host DELETE payload")
-	}
-
-	// Parse resource UUID
-	resourceUUID, err := uuid.Parse(host.UUID)
-	if err != nil {
-		return errors.Wrapf(err, "invalid host UUID: %s", host.UUID)
-	}
-
-	// Create DELETE outbox entry
-	outboxEntry := &domain.OutboxEntry{
-		ResourceType:      "Host",
-		ResourceID:        resourceUUID,
-		ResourceNamespace: host.Namespace,
-		ResourceName:      host.Name,
-		Operation:         domain.SyncOperationDelete, // DELETE operation
-		TargetSystem:      domain.TargetSystemSGROUP,
-		Payload:           payloadJSON,
-		Status:            domain.OutboxStatusPending,
-		MaxRetries:        5,
-	}
-
-	// Use OutboxRepository with existing transaction
-	outboxRepo := repositories.NewOutboxRepository(w.tx)
-	if err := outboxRepo.Create(ctx, outboxEntry); err != nil {
-		return errors.Wrap(err, "failed to persist DELETE outbox entry")
-	}
-
-	klog.V(4).InfoS("Created DELETE outbox entry for Host",
-		"namespace", host.Namespace,
-		"name", host.Name,
-		"outbox_id", outboxEntry.ID)
-
-	return nil
-}
+// DELETE outbox entries are created by BEFORE DELETE trigger 'trigger_host_before_delete'
+// (migration 026), so no additional helper is required.
 
 // updateHostConditionsOnly updates ONLY the k8s_metadata.conditions field
 // WITHOUT touching the hosts table or creating outbox entries
@@ -389,8 +290,33 @@ func (w *Writer) deleteHostsInScope(ctx context.Context, scope ports.Scope) erro
 }
 
 // DeleteHostsByIDs deletes hosts by their resource identifiers
+//
+// This method triggers the BEFORE DELETE trigger (migration 026: trigger_host_before_delete)
+// which automatically handles:
+// - Soft delete (UPDATE k8s_metadata SET deletion_timestamp = NOW())
+// - DELETE outbox entry creation
+// - Prevention of physical deletion (RETURN NULL) until Worker syncs to SGROUP
 func (w *Writer) DeleteHostsByIDs(ctx context.Context, ids []models.ResourceIdentifier, options ...ports.Option) error {
+	// ===== LOGGING: Get stack trace =====
+	buf := make([]byte, 4096)
+	n := runtime.Stack(buf, false)
+	stackTrace := string(buf[:n])
+
+	klog.InfoS("[DELETE_HOSTS] ===== DeleteHostsByIDs CALLED =====",
+		"count", len(ids))
+
+	for i, id := range ids {
+		klog.InfoS("[DELETE_HOSTS] Host to delete",
+			"index", i,
+			"namespace", id.Namespace,
+			"name", id.Name)
+	}
+
+	klog.InfoS("[DELETE_HOSTS] Call stack trace",
+		"stack", stackTrace)
+
 	if len(ids) == 0 {
+		klog.InfoS("[DELETE_HOSTS] No hosts to delete, returning early")
 		return nil
 	}
 
@@ -405,93 +331,37 @@ func (w *Writer) DeleteHostsByIDs(ctx context.Context, ids []models.ResourceIden
 		argIndex += 2
 	}
 
-	// ========================================================================
-	// ========================================================================
-	// We need Host.UUID and other fields to create DELETE outbox entry
-	fetchQuery := fmt.Sprintf(`
-		SELECT namespace, name, uuid, host_name_sync, address_group_name, is_bound
-		FROM hosts
+	// Execute DELETE FROM hosts
+	// This will trigger the BEFORE DELETE trigger which:
+	// 1. Checks if deletion_timestamp is NULL (first delete attempt)
+	// 2. If NULL: soft delete + create DELETE outbox entry + prevent physical deletion
+	// 3. If NOT NULL: allow physical deletion (Worker already synced to SGROUP)
+	deleteQuery := fmt.Sprintf(`
+		DELETE FROM hosts
 		WHERE (namespace, name) IN (%s)
 	`, strings.Join(values, ","))
 
-	rows, err := w.tx.Query(ctx, fetchQuery, args...)
+	klog.InfoS("[DELETE_HOSTS] Executing DELETE query",
+		"query", deleteQuery,
+		"args", fmt.Sprintf("%v", args))
+
+	result, err := w.tx.Exec(ctx, deleteQuery, args...)
 	if err != nil {
-		return errors.Wrap(err, "failed to fetch hosts before deletion")
-	}
-	defer rows.Close()
-
-	var hostsToDelete []models.Host
-	for rows.Next() {
-		var host models.Host
-		var hostNameSync, addressGroupName sql.NullString
-
-		err := rows.Scan(
-			&host.Namespace,
-			&host.Name,
-			&host.UUID,
-			&hostNameSync,
-			&addressGroupName,
-			&host.IsBound,
-		)
-		if err != nil {
-			return errors.Wrap(err, "failed to scan host data")
-		}
-
-		if hostNameSync.Valid {
-			host.HostName = hostNameSync.String
-		}
-		if addressGroupName.Valid {
-			host.AddressGroupName = addressGroupName.String
-		}
-
-		hostsToDelete = append(hostsToDelete, host)
+		klog.ErrorS(err, "[DELETE_HOSTS] DELETE query FAILED")
+		return errors.Wrap(err, "failed to delete hosts")
 	}
 
-	if err := rows.Err(); err != nil {
-		return errors.Wrap(err, "error iterating host rows")
+	rowsAffected := result.RowsAffected()
+	klog.InfoS("[DELETE_HOSTS] DELETE query completed",
+		"requested", len(ids),
+		"rows_affected", rowsAffected)
+
+	if rowsAffected == 0 {
+		klog.InfoS("[DELETE_HOSTS] *** NO ROWS AFFECTED *** - Host may have been soft deleted (deletion_timestamp set, physical deletion prevented by trigger)")
+	} else {
+		klog.InfoS("[DELETE_HOSTS] *** ROWS PHYSICALLY DELETED *** - Check if this was expected (should only happen after SGROUP sync)",
+			"rows_deleted", rowsAffected)
 	}
-
-	klog.V(4).InfoS("Fetched hosts for deletion",
-		"count", len(hostsToDelete),
-		"requested", len(ids))
-
-	// ========================================================================
-	// STEP 2 - Mark as "pending deletion" in k8s_metadata
-	// ========================================================================
-	// SYNC-FIRST PRINCIPLE: We DON'T delete from DB yet!
-	// Worker will sync to SGROUP first, THEN delete from DB
-	markDeleteQuery := `
-		UPDATE k8s_metadata m
-		SET deletion_timestamp = NOW(),
-		    conditions = COALESCE(conditions, '[]'::jsonb) ||
-		        '[{"type":"PendingSync","status":"True","reason":"PendingDeletion","message":"Awaiting SGROUP sync before deletion"}]'::jsonb
-		FROM hosts h
-		WHERE h.resource_version = m.resource_version
-		  AND (h.namespace, h.name) IN (%s)
-		  AND m.deletion_timestamp IS NULL`
-
-	markQuery := fmt.Sprintf(markDeleteQuery, strings.Join(values, ","))
-	_, err = w.tx.Exec(ctx, markQuery, args...)
-	if err != nil {
-		return errors.Wrap(err, "failed to mark hosts as pending deletion")
-	}
-
-	klog.V(4).InfoS("Marked hosts as pending deletion (NOT deleted from DB yet)",
-		"count", len(hostsToDelete))
-
-	// ========================================================================
-	// STEP 3 - Create DELETE outbox entries for SGROUP sync
-	// ========================================================================
-	// Worker will process these, sync to SGROUP, THEN delete from DB
-	for i := range hostsToDelete {
-		if err := w.createHostDeleteOutboxEntry(ctx, &hostsToDelete[i]); err != nil {
-			return errors.Wrapf(err, "failed to create DELETE outbox entry for host %s/%s",
-				hostsToDelete[i].Namespace, hostsToDelete[i].Name)
-		}
-	}
-
-	klog.V(4).InfoS("Created DELETE outbox entries for hosts (resources remain in DB until Worker processes)",
-		"count", len(hostsToDelete))
 
 	return nil
 }

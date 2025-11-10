@@ -38,6 +38,7 @@ func CreateNewPortMapping(addressGroupID models.ResourceIdentifier, service mode
 
 	serviceRef := models.NewServiceRef(service.Name, models.WithNamespace(service.Namespace))
 	portMapping.AccessPorts[serviceRef] = servicePorts
+	updateAccessPortsWithRefs(portMapping)
 
 	return portMapping
 }
@@ -72,9 +73,26 @@ func UpdatePortMapping(
 		}
 	}
 
-	updatedMapping.AccessPorts[models.NewServiceRef(service.Name, models.WithNamespace(service.Namespace))] = servicePorts
+	newServiceRef := models.NewServiceRef(service.Name, models.WithNamespace(service.Namespace))
+	updatedMapping.AccessPorts[newServiceRef] = servicePorts
+	updateAccessPortsWithRefs(&updatedMapping)
 
 	return &updatedMapping
+}
+
+func updateAccessPortsWithRefs(mapping *models.AddressGroupPortMapping) {
+	if mapping == nil {
+		return
+	}
+	items := make([]models.ServicePortsItem, 0, len(mapping.AccessPorts))
+	for serviceRef, servicePorts := range mapping.AccessPorts {
+		items = append(items, models.ServicePortsItem{
+			ServiceRef: serviceRef,
+			Ports:      servicePorts.Ports,
+		})
+	}
+	models.SortServicePortsItems(items)
+	mapping.AccessPortsWithRefs = items
 }
 
 // CheckPortOverlaps checks for port overlaps in a port mapping
@@ -328,11 +346,25 @@ func (v *AddressGroupBindingValidator) ValidateForCreation(ctx context.Context, 
 		}
 	}
 
+	serviceRef := models.NewServiceRef(binding.ServiceRef.Name, models.WithNamespace(binding.ServiceRef.Namespace))
 	portMapping, err := v.reader.GetAddressGroupPortMappingByID(ctx, agID)
+	if err != nil && !errors.Is(err, ports.ErrNotFound) {
+		return fmt.Errorf("failed to get address group port mapping for validation: %v", err)
+	}
+	var mappingToValidate *models.AddressGroupPortMapping
 	if err == nil && portMapping != nil {
-		if err := CheckPortOverlaps(*service, *portMapping); err != nil {
-			return fmt.Errorf("port conflict detected: %v", err)
-		}
+		mappingToValidate = UpdatePortMapping(*portMapping, serviceRef, *service)
+	} else {
+		mappingToValidate = CreateNewPortMapping(agID, *service)
+	}
+
+	mappingValidator := NewAddressGroupPortMappingValidator(v.reader)
+	if err := mappingValidator.CheckInternalPortOverlaps(*mappingToValidate); err != nil {
+		return fmt.Errorf("port conflict detected: %v", err)
+	}
+
+	if err := CheckPortOverlaps(*service, *mappingToValidate); err != nil {
+		return fmt.Errorf("port conflict detected: %v", err)
 	}
 
 	return nil
@@ -511,12 +543,20 @@ func (v *AddressGroupBindingValidator) ValidateForUpdate(ctx context.Context, ol
 
 	// Check if there's an existing port mapping for this address group
 	portMapping, err := v.reader.GetAddressGroupPortMappingByID(ctx, agID)
+	if err != nil && !errors.Is(err, ports.ErrNotFound) {
+		return errors.Wrapf(err, "failed to get address group port mapping for binding %s", newBinding.Key())
+	}
 	if err == nil && portMapping != nil {
 		// Port mapping exists - check for port overlaps
 		// Create a temporary updated mapping to check for overlaps
 		// Convert ObjectReference to ServiceRef
 		serviceRef := models.NewServiceRef(newBinding.ServiceRef.Name, models.WithNamespace(newBinding.Namespace))
 		updatedMapping := UpdatePortMapping(*portMapping, serviceRef, *service)
+
+		mappingValidator := NewAddressGroupPortMappingValidator(v.reader)
+		if err := mappingValidator.CheckInternalPortOverlaps(*updatedMapping); err != nil {
+			return err
+		}
 
 		// Check for port overlaps
 		if err := CheckPortOverlaps(*service, *updatedMapping); err != nil {

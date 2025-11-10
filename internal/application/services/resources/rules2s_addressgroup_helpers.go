@@ -39,7 +39,7 @@ func (s *RuleS2SResourceService) populateServiceAddressGroups(
 	reader ports.Reader,
 	service *models.Service,
 ) (*models.Service, error) {
-	klog.V(2).Infof("🔧 POPULATE_ADDRESSGROUPS: Starting AddressGroup population for service %s", service.Key())
+	klog.V(2).Infof("POPULATE_ADDRESSGROUPS: Starting AddressGroup population for service %s", service.Key())
 
 	// Create a copy of the service to avoid modifying the original
 	serviceCopy := *service
@@ -49,7 +49,7 @@ func (s *RuleS2SResourceService) populateServiceAddressGroups(
 	err := reader.ListAddressGroupBindings(ctx, func(binding models.AddressGroupBinding) error {
 		// Check if this binding references our service
 		if binding.ServiceRef.Name == service.Name && binding.ServiceRef.Namespace == service.Namespace {
-			klog.V(2).Infof("  🔗 FOUND_BINDING: %s → AddressGroup %s/%s",
+			klog.V(2).Infof("  FOUND_BINDING: %s → AddressGroup %s/%s",
 				binding.Key(), binding.AddressGroupRef.Namespace, binding.AddressGroupRef.Name)
 
 			// Create AddressGroupRef from the binding
@@ -77,7 +77,7 @@ func (s *RuleS2SResourceService) populateServiceAddressGroups(
 
 	// Log the AddressGroups for debugging
 	for i, ag := range serviceCopy.AddressGroups {
-		klog.V(2).Infof("    📍 AG[%d]: %s/%s", i, ag.Namespace, ag.Name)
+		klog.V(2).Infof("    AG[%d]: %s/%s", i, ag.Namespace, ag.Name)
 	}
 
 	return &serviceCopy, nil
@@ -116,7 +116,7 @@ func (s *RuleS2SResourceService) extractAggregationGroupsFromRuleS2S(ctx context
 
 	var groups []AggregationGroup
 
-	// 🎯 STORY-001: Use AggregatedAddressGroups (spec + bindings) instead of AddressGroups (spec only)
+	// STORY-001: Use AggregatedAddressGroups (spec + bindings) instead of AddressGroups (spec only)
 	localAGs := extractAddressGroupRefs(localService.AggregatedAddressGroups)
 	targetAGs := extractAddressGroupRefs(targetService.AggregatedAddressGroups)
 

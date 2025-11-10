@@ -67,6 +67,9 @@ func (r *SvcSvcRule) ToSGroupsProto() (interface{}, error) {
 	if r == nil {
 		return nil, fmt.Errorf("SvcSvcRule cannot be nil")
 	}
+	if r.ServiceFromRef.Name == "" || r.ServiceToRef.Name == "" {
+		return nil, fmt.Errorf("SvcSvcRule %s/%s missing service references", r.Namespace, r.Name)
+	}
 
 	// Build fully-qualified name (namespace/name)
 	ruleName := r.Name
@@ -75,9 +78,13 @@ func (r *SvcSvcRule) ToSGroupsProto() (interface{}, error) {
 	}
 
 	// Build service references (namespace/name format)
+	svcFromNamespace := r.ServiceFromRef.Namespace
+	if svcFromNamespace == "" {
+		svcFromNamespace = r.Namespace
+	}
 	svcFrom := r.ServiceFromRef.Name
-	if r.ServiceFromRef.Namespace != "" {
-		svcFrom = fmt.Sprintf("%s/%s", r.ServiceFromRef.Namespace, r.ServiceFromRef.Name)
+	if svcFromNamespace != "" {
+		svcFrom = fmt.Sprintf("%s/%s", svcFromNamespace, r.ServiceFromRef.Name)
 	}
 
 	svcTo := r.ServiceToRef.Name

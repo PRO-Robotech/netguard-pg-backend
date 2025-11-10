@@ -2,28 +2,18 @@ package ports
 
 import (
 	"context"
-
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/patterns"
 )
 
 type (
-	// Scope defines the scope of operations
 	Scope interface {
 		IsEmpty() bool
 		String() string
 	}
-
-	// Option defines options for operations
-	Option interface{}
-
-	// ConditionOnlyOperation indicates this sync operation is for condition updates only
-	// This allows PostgreSQL backend to only update conditions in k8s_metadata, not the main resource table
+	Option                 interface{}
 	ConditionOnlyOperation struct{}
-
-	// ReaderNoClose defines read operations without close
-	ReaderNoClose interface {
-		// List methods with scope
+	ReaderNoClose          interface {
 		ListServices(ctx context.Context, consume func(models.Service) error, scope Scope) error
 		ListAddressGroups(ctx context.Context, consume func(models.AddressGroup) error, scope Scope) error
 		ListAddressGroupBindings(ctx context.Context, consume func(models.AddressGroupBinding) error, scope Scope) error
@@ -37,9 +27,8 @@ type (
 		ListHosts(ctx context.Context, consume func(models.Host) error, scope Scope) error
 		ListHostBindings(ctx context.Context, consume func(models.HostBinding) error, scope Scope) error
 		ListSvcSvcRules(ctx context.Context, consume func(models.SvcSvcRule) error, scope Scope) error
+		ListSvcFqdnRules(ctx context.Context, consume func(models.SvcFqdnRule) error, scope Scope) error
 		GetSyncStatus(ctx context.Context) (*models.SyncStatus, error)
-
-		// Get methods with ResourceIdentifier
 		GetServiceByID(ctx context.Context, id models.ResourceIdentifier) (*models.Service, error)
 		GetAddressGroupByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroup, error)
 		GetAddressGroupBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBinding, error)
@@ -49,25 +38,19 @@ type (
 		GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error)
 		GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error)
 		GetNetworkByID(ctx context.Context, id models.ResourceIdentifier) (*models.Network, error)
-
 		GetNetworkByCIDR(ctx context.Context, cidr string) (*models.Network, error)
 		GetNetworksOverlappingCIDR(ctx context.Context, cidr string) ([]*models.Network, error)
-
 		GetNetworkBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.NetworkBinding, error)
 		GetHostByID(ctx context.Context, id models.ResourceIdentifier) (*models.Host, error)
 		GetHostBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.HostBinding, error)
 		GetSvcSvcRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcSvcRule, error)
+		GetSvcFqdnRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcFqdnRule, error)
 	}
-
-	// Reader defines read operations
 	Reader interface {
 		ReaderNoClose
 		Close() error
 	}
-
-	// Writer defines write operations
 	Writer interface {
-		// Sync methods with scope
 		SyncServices(ctx context.Context, services []models.Service, scope Scope, opts ...Option) error
 		SyncAddressGroups(ctx context.Context, addressGroups []models.AddressGroup, scope Scope, opts ...Option) error
 		SyncAddressGroupBindings(ctx context.Context, bindings []models.AddressGroupBinding, scope Scope, opts ...Option) error
@@ -81,8 +64,7 @@ type (
 		SyncHosts(ctx context.Context, hosts []models.Host, scope Scope, opts ...Option) error
 		SyncHostBindings(ctx context.Context, bindings []models.HostBinding, scope Scope, opts ...Option) error
 		SyncSvcSvcRules(ctx context.Context, rules []models.SvcSvcRule, scope Scope, opts ...Option) error
-
-		// Delete methods with ResourceIdentifier
+		SyncSvcFqdnRules(ctx context.Context, rules []models.SvcFqdnRule, scope Scope, opts ...Option) error
 		DeleteServicesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
 		DeleteAddressGroupsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
 		DeleteAddressGroupBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
@@ -96,19 +78,16 @@ type (
 		DeleteHostsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
 		DeleteHostBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
 		DeleteSvcSvcRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
-
+		DeleteSvcFqdnRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
+		MarkForDeletionWithStatus(namespace, name, kind string) error
 		Commit() error
 		Abort()
 	}
-
-	// Registry defines the registry interface
 	Registry interface {
 		Subject() patterns.Subject
 		Writer(ctx context.Context) (Writer, error)
 		Reader(ctx context.Context) (Reader, error)
-		// ReaderFromWriter returns a reader that can see changes made in the current transaction
 		ReaderFromWriter(ctx context.Context, writer Writer) (Reader, error)
-		// ReaderWithReadCommitted returns a reader with ReadCommitted isolation for Cross-RuleS2S aggregation
 		ReaderWithReadCommitted(ctx context.Context) (Reader, error)
 		Close() error
 	}

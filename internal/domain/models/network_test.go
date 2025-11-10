@@ -121,8 +121,8 @@ func TestNetwork_SetIsBound(t *testing.T) {
 func TestNetwork_ClearBinding(t *testing.T) {
 	network := &Network{
 		IsBound:         true,
-		BindingRef:      &v1beta1.ObjectReference{Name: "test-binding"},
-		AddressGroupRef: &v1beta1.ObjectReference{Name: "test-group"},
+		BindingRef:      &v1beta1.NamespacedObjectReference{ObjectReference: v1beta1.ObjectReference{Name: "test-binding"}},
+		AddressGroupRef: &v1beta1.NamespacedObjectReference{ObjectReference: v1beta1.ObjectReference{Name: "test-group"}},
 	}
 
 	network.ClearBinding()

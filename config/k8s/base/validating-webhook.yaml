@@ -237,21 +237,45 @@ webhooks:
   admissionReviewVersions: ["v1", "v1beta1"]
   # Порядок вызова - 1000
   # order: 1000
-  
+
   clientConfig:
     service:
       name: netguard-apiserver-webhook
       namespace: netguard-system
       path: /validate
     caBundle: ""
-  
+
   rules:
   - operations: ["CREATE", "UPDATE", "DELETE"]
     apiGroups: ["netguard.sgroups.io"]
     apiVersions: ["v1beta1"]
     resources: ["networkbindings"]
     scope: "Namespaced"
-  
+
+  failurePolicy: Fail
+  sideEffects: None
+  namespaceSelector: {}
+  timeoutSeconds: 10
+
+- name: svcsvcrule.netguard.sgroups.io
+  admissionReviewVersions: ["v1", "v1beta1"]
+  # Порядок вызова - 1000
+  # order: 1000
+
+  clientConfig:
+    service:
+      name: netguard-webhook
+      namespace: incloud-sgroups
+      path: /validate
+    caBundle: ""
+
+  rules:
+  - operations: ["CREATE", "UPDATE"]
+    apiGroups: ["netguard.sgroups.io"]
+    apiVersions: ["v1beta1"]
+    resources: ["svcsvcrules"]
+    scope: "Namespaced"
+
   failurePolicy: Fail
   sideEffects: None
   namespaceSelector: {}

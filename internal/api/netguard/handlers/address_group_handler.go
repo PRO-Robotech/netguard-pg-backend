@@ -10,6 +10,8 @@ import (
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
 
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // AddressGroupHandler handles address group-related operations
@@ -107,7 +109,10 @@ func (h *AddressGroupHandler) GetAddressGroupPortMapping(ctx context.Context, re
 
 	mapping, err := h.service.GetAddressGroupPortMappingByID(ctx, id)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get address group port mapping")
+		if errors.Is(err, ports.ErrNotFound) {
+			return nil, status.Errorf(codes.NotFound, "address group port mapping %s not found", id.Key())
+		}
+		return nil, status.Errorf(codes.Internal, "failed to get address group port mapping: %v", err)
 	}
 
 	return &netguardpb.GetAddressGroupPortMappingResp{

@@ -9,9 +9,11 @@ import (
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	pb "github.com/PRO-Robotech/protos/pkg/api/sgroups"
+	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/sync/interfaces"
 	"netguard-pg-backend/internal/sync/types"
+
+	pb "github.com/PRO-Robotech/protos/pkg/api/sgroups"
 )
 
 // MockSGroupGateway is a mock implementation of SGroupGateway
@@ -32,6 +34,21 @@ func (m *MockSGroupGateway) Health(ctx context.Context) error {
 func (m *MockSGroupGateway) GetStatuses(ctx context.Context) (chan *timestamppb.Timestamp, error) {
 	args := m.Called(ctx)
 	return args.Get(0).(chan *timestamppb.Timestamp), args.Error(1)
+}
+
+func (m *MockSGroupGateway) GetHostsByUUIDs(ctx context.Context, uuids []string) ([]*pb.Host, error) {
+	args := m.Called(ctx, uuids)
+	return args.Get(0).([]*pb.Host), args.Error(1)
+}
+
+func (m *MockSGroupGateway) ListAllHosts(ctx context.Context) ([]*pb.Host, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]*pb.Host), args.Error(1)
+}
+
+func (m *MockSGroupGateway) GetHostsInSecurityGroup(ctx context.Context, sgNames []string) ([]*pb.Host, error) {
+	args := m.Called(ctx, sgNames)
+	return args.Get(0).([]*pb.Host), args.Error(1)
 }
 
 func (m *MockSGroupGateway) Close() error {
@@ -141,6 +158,94 @@ func TestAddressGroupSyncer_Sync(t *testing.T) {
 			mockGateway.AssertExpectations(t)
 		})
 	}
+}
+
+func TestAddressGroupSyncer_Sync_DeleteBeforeUpsertWhenNetworksEmpty(t *testing.T) {
+	mockGateway := &MockSGroupGateway{}
+	logger := logr.Discard()
+	syncer := NewAddressGroupSyncer(mockGateway, logger)
+
+	ag := &models.AddressGroup{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: models.ResourceIdentifier{
+				Name:      "ag-clear",
+				Namespace: "incloud-sgroups",
+			},
+		},
+		DefaultAction: models.ActionAccept,
+		Networks:      []models.NetworkItem{},
+	}
+
+	deleteMatcher := mock.MatchedBy(func(req *types.SyncRequest) bool {
+		batch, ok := req.Data.(*pb.SyncSecurityGroups)
+		if !ok || len(batch.Groups) != 1 {
+			return false
+		}
+		grp := batch.Groups[0]
+		return req.Operation == types.SyncOperationDelete &&
+			req.SubjectType == types.SyncSubjectTypeGroups &&
+			grp.GetName() == "incloud-sgroups/ag-clear"
+	})
+
+	upsertMatcher := mock.MatchedBy(func(req *types.SyncRequest) bool {
+		batch, ok := req.Data.(*pb.SyncSecurityGroups)
+		if !ok || len(batch.Groups) != 1 {
+			return false
+		}
+		grp := batch.Groups[0]
+		return req.Operation == types.SyncOperationUpsert &&
+			req.SubjectType == types.SyncSubjectTypeGroups &&
+			grp.GetName() == "incloud-sgroups/ag-clear" &&
+			len(grp.GetNetworks()) == 0
+	})
+
+	mockGateway.On("Sync", mock.Anything, deleteMatcher).Return(nil).Once()
+	mockGateway.On("Sync", mock.Anything, upsertMatcher).Return(nil).Once()
+
+	err := syncer.Sync(context.Background(), ag, types.SyncOperationUpsert)
+	assert.NoError(t, err)
+	mockGateway.AssertExpectations(t)
+}
+
+func TestAddressGroupSyncer_Sync_UpsertWhenNetworksPresent(t *testing.T) {
+	mockGateway := &MockSGroupGateway{}
+	logger := logr.Discard()
+	syncer := NewAddressGroupSyncer(mockGateway, logger)
+
+	ag := &models.AddressGroup{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: models.ResourceIdentifier{
+				Name:      "ag-with-net",
+				Namespace: "incloud-sgroups",
+			},
+		},
+		DefaultAction: models.ActionAccept,
+		Networks: []models.NetworkItem{
+			{
+				Name:      "net-1",
+				Namespace: "incloud-sgroups",
+				CIDR:      "10.0.0.0/24",
+			},
+		},
+	}
+
+	upsertMatcher := mock.MatchedBy(func(req *types.SyncRequest) bool {
+		batch, ok := req.Data.(*pb.SyncSecurityGroups)
+		if !ok || len(batch.Groups) != 1 {
+			return false
+		}
+		grp := batch.Groups[0]
+		return req.Operation == types.SyncOperationUpsert &&
+			req.SubjectType == types.SyncSubjectTypeGroups &&
+			len(grp.GetNetworks()) == 1 &&
+			grp.GetNetworks()[0] == "incloud-sgroups/net-1"
+	})
+
+	mockGateway.On("Sync", mock.Anything, upsertMatcher).Return(nil).Once()
+
+	err := syncer.Sync(context.Background(), ag, types.SyncOperationUpsert)
+	assert.NoError(t, err)
+	mockGateway.AssertExpectations(t)
 }
 
 func TestAddressGroupSyncer_SyncBatch(t *testing.T) {

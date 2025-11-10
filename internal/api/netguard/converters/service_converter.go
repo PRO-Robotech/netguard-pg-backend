@@ -55,6 +55,44 @@ func ConvertService(svc *netguardpb.Service) models.Service {
 		}
 	}
 
+	// Convert XSvcSvcRules (READ-ONLY metadata)
+	if svc.XSvcsvcRules != nil {
+		domainRules := &models.XSvcSvcRules{}
+		if len(svc.XSvcsvcRules.AsServiceFrom) > 0 {
+			domainRules.AsServiceFrom = make([]v1beta1.NamespacedObjectReference, len(svc.XSvcsvcRules.AsServiceFrom))
+			for i, ref := range svc.XSvcsvcRules.AsServiceFrom {
+				domainRules.AsServiceFrom[i] = NewNamespacedObjectReference(
+					KindSvcSvcRule,
+					ref.GetName(),
+					ref.GetNamespace(),
+				)
+			}
+		}
+		if len(svc.XSvcsvcRules.AsServiceTo) > 0 {
+			domainRules.AsServiceTo = make([]v1beta1.NamespacedObjectReference, len(svc.XSvcsvcRules.AsServiceTo))
+			for i, ref := range svc.XSvcsvcRules.AsServiceTo {
+				domainRules.AsServiceTo[i] = NewNamespacedObjectReference(
+					KindSvcSvcRule,
+					ref.GetName(),
+					ref.GetNamespace(),
+				)
+			}
+		}
+		result.XSvcSvcRules = domainRules
+	}
+
+	// Convert XSvcFqdnRules (READ-ONLY metadata)
+	if svc.XSvcfqdnRules != nil {
+		domainFqdnRules := &models.XSvcFqdnRules{}
+		if len(svc.XSvcfqdnRules.Rules) > 0 {
+			domainFqdnRules.Rules = make([]models.ResourceIdentifier, len(svc.XSvcfqdnRules.Rules))
+			for i, ref := range svc.XSvcfqdnRules.Rules {
+				domainFqdnRules.Rules[i] = models.NewResourceIdentifier(ref.GetName(), models.WithNamespace(ref.GetNamespace()))
+			}
+		}
+		result.XSvcFqdnRules = domainFqdnRules
+	}
+
 	return result
 }
 
@@ -124,6 +162,18 @@ func ConvertServiceToPB(svc models.Service) *netguardpb.Service {
 			result.XSvcsvcRules.AsServiceTo = make([]*netguardpb.ResourceIdentifier, len(svc.XSvcSvcRules.AsServiceTo))
 			for i, ref := range svc.XSvcSvcRules.AsServiceTo {
 				result.XSvcsvcRules.AsServiceTo[i] = &netguardpb.ResourceIdentifier{
+					Name:      ref.Name,
+					Namespace: ref.Namespace,
+				}
+			}
+		}
+	}
+	if svc.XSvcFqdnRules != nil {
+		result.XSvcfqdnRules = &netguardpb.XSvcFqdnRules{}
+		if len(svc.XSvcFqdnRules.Rules) > 0 {
+			result.XSvcfqdnRules.Rules = make([]*netguardpb.ResourceIdentifier, len(svc.XSvcFqdnRules.Rules))
+			for i, ref := range svc.XSvcFqdnRules.Rules {
+				result.XSvcfqdnRules.Rules[i] = &netguardpb.ResourceIdentifier{
 					Name:      ref.Name,
 					Namespace: ref.Namespace,
 				}

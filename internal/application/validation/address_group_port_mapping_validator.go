@@ -89,8 +89,7 @@ func (v *AddressGroupPortMappingValidator) CheckInternalPortOverlaps(mapping mod
 
 // ValidateForCreation validates an address group port mapping before creation
 func (v *AddressGroupPortMappingValidator) ValidateForCreation(ctx context.Context, mapping models.AddressGroupPortMapping) error {
-	// PHASE 1: Check for duplicate entity (CRITICAL FIX for overwrite issue)
-	// This prevents creation of entities with the same namespace/name combination
+	// Phase 1: ensure the namespace/name combination is unused before creation.
 	keyExtractor := func(entity interface{}) string {
 		if agpm, ok := entity.(*models.AddressGroupPortMapping); ok {
 			return agpm.Key()

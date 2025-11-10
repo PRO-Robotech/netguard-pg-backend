@@ -222,7 +222,7 @@ func TCCreateTestHostWithMetadata(
 	`, namespace, name, hostUUID, resourceVersion)
 	require.NoError(t, err, "failed to create test host")
 
-	t.Logf("📝 Created test Host: %s/%s (uuid=%s)",
+	t.Logf("Created test Host: %s/%s (uuid=%s)",
 		namespace, name, hostUUID)
 
 	return name // Return name for consistency with other helpers
@@ -257,7 +257,7 @@ func TCCreateTestNetworkWithMetadata(
 	`, namespace, name, "10.0.0.0/24", resourceVersion)
 	require.NoError(t, err, "failed to create test network")
 
-	t.Logf("📝 Created test Network: %s/%s",
+	t.Logf("Created test Network: %s/%s",
 		namespace, name)
 
 	return name // Return name for consistency with other helpers
@@ -317,7 +317,7 @@ func TCCleanOutboxTable(t *testing.T, db *sql.DB) {
 	_, err := db.Exec("TRUNCATE TABLE sync_outbox CASCADE")
 	require.NoError(t, err, "failed to clean outbox table")
 
-	t.Log("🧹 Outbox table cleaned")
+	t.Log("Outbox table cleaned")
 }
 
 // TCCountOutboxEntries counts total outbox entries (TestContainer version)
@@ -401,7 +401,7 @@ func TCLogOutboxState(t *testing.T, db *sql.DB) {
 
 	entries := TCGetAllOutboxEntries(t, db)
 
-	t.Logf("📊 Outbox State: %d entries", len(entries))
+	t.Logf("Outbox State: %d entries", len(entries))
 	for i, entry := range entries {
 		t.Logf("  [%d] %s/%s | %s %s | status=%s attempts=%d",
 			i+1,
@@ -436,7 +436,7 @@ func TCCreateTestAddressGroup(t *testing.T, db *sql.DB, namespace, name string) 
 	`, namespace, name, resourceVersion)
 	require.NoError(t, err, "failed to create test address_group")
 
-	t.Logf("📝 Created test AddressGroup: %s/%s", namespace, name)
+	t.Logf("Created test AddressGroup: %s/%s", namespace, name)
 
 	return name // Return name for easy query
 }

@@ -388,6 +388,23 @@ func (v *ServiceValidator) CheckDependencies(ctx context.Context, id models.Reso
 		return NewDependencyExistsError("service", id.Key(), "address_groups")
 	}
 
+	// Also check AddressGroupBinding references to avoid deleting services that are still bound.
+	hasBindings := false
+	err = v.reader.ListAddressGroupBindings(ctx, func(binding models.AddressGroupBinding) error {
+		if binding.ServiceRef.Namespace == id.Namespace && binding.ServiceRef.Name == id.Name {
+			hasBindings = true
+		}
+		return nil
+	}, nil)
+
+	if err != nil {
+		return errors.Wrap(err, "failed to check address group bindings")
+	}
+
+	if hasBindings {
+		return NewDependencyExistsError("service", id.Key(), "address_group_bindings")
+	}
+
 	return nil
 }
 

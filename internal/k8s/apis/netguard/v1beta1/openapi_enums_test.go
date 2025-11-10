@@ -271,6 +271,27 @@ func TestGetOpenAPIDefinitionsWithEnums_Integration(t *testing.T) {
 		assert.Equal(t, []interface{}{"ACCEPT", "DROP"}, actionField.SchemaProps.Enum,
 			"SvcSvcRuleSpec action field should have enum values")
 	})
+
+	t.Run("SvcFqdnRuleSpecFieldsHaveEnumValues", func(t *testing.T) {
+		// Act
+		allDefs := v1beta1.GetOpenAPIDefinitionsWithEnums(refCallback)
+
+		// Assert - SvcFqdnRuleSpec fields should have enum values
+		svcFqdnRuleSpecDef, exists := allDefs["netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcFqdnRuleSpec"]
+		require.True(t, exists, "SvcFqdnRuleSpec definition should exist")
+
+		// Check transport field
+		transportField, exists := svcFqdnRuleSpecDef.Schema.Properties["transport"]
+		require.True(t, exists, "transport field should exist")
+		assert.Equal(t, []interface{}{"TCP", "UDP"}, transportField.SchemaProps.Enum,
+			"SvcFqdnRuleSpec transport field should have enum values")
+
+		// Check action field
+		actionField, exists := svcFqdnRuleSpecDef.Schema.Properties["action"]
+		require.True(t, exists, "action field should exist")
+		assert.Equal(t, []interface{}{"ACCEPT", "DROP"}, actionField.SchemaProps.Enum,
+			"SvcFqdnRuleSpec action field should have enum values")
+	})
 }
 
 func TestOpenAPIEnumSerialization_JSONValidation(t *testing.T) {
@@ -315,6 +336,7 @@ func TestOpenAPIEnumSerialization_JSONValidation(t *testing.T) {
 			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IngressPort",
 			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupSpec",
 			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcSvcRuleSpec",
+			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcFqdnRuleSpec",
 		}
 
 		for _, defName := range modifiedDefs {

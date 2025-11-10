@@ -106,6 +106,14 @@ type ServiceAliasListerExpansion interface{}
 // ServiceAliasNamespaceLister.
 type ServiceAliasNamespaceListerExpansion interface{}
 
+// SvcFqdnRuleListerExpansion allows custom methods to be added to
+// SvcFqdnRuleLister.
+type SvcFqdnRuleListerExpansion interface{}
+
+// SvcFqdnRuleNamespaceListerExpansion allows custom methods to be added to
+// SvcFqdnRuleNamespaceLister.
+type SvcFqdnRuleNamespaceListerExpansion interface{}
+
 // SvcSvcRuleListerExpansion allows custom methods to be added to
 // SvcSvcRuleLister.
 type SvcSvcRuleListerExpansion interface{}

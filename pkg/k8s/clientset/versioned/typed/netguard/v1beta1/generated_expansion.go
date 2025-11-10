@@ -40,4 +40,6 @@ type ServiceExpansion interface{}
 
 type ServiceAliasExpansion interface{}
 
+type SvcFqdnRuleExpansion interface{}
+
 type SvcSvcRuleExpansion interface{}

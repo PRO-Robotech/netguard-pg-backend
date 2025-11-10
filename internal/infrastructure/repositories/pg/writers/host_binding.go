@@ -189,14 +189,20 @@ func (w *Writer) DeleteHostBindingsByIDs(ctx context.Context, ids []models.Resou
 func (w *Writer) createHostBindingOutboxEntry(ctx context.Context, binding *models.HostBinding) error {
 	affectedResources := []map[string]string{
 		{
-			"type":      "Host",
-			"namespace": binding.HostRef.Namespace,
-			"name":      binding.HostRef.Name,
+			"type":              "Host",
+			"resourceType":      "Host",
+			"namespace":         binding.HostRef.Namespace,
+			"resourceNamespace": binding.HostRef.Namespace,
+			"name":              binding.HostRef.Name,
+			"resourceName":      binding.HostRef.Name,
 		},
 		{
-			"type":      "AddressGroup",
-			"namespace": binding.AddressGroupRef.Namespace,
-			"name":      binding.AddressGroupRef.Name,
+			"type":              "AddressGroup",
+			"resourceType":      "AddressGroup",
+			"namespace":         binding.AddressGroupRef.Namespace,
+			"resourceNamespace": binding.AddressGroupRef.Namespace,
+			"name":              binding.AddressGroupRef.Name,
+			"resourceName":      binding.AddressGroupRef.Name,
 		},
 	}
 	affectedResourcesJSON, err := json.Marshal(affectedResources)

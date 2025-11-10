@@ -5,6 +5,7 @@ package v1beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	schema "k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // TransportProtocol represents protocols for transport layer
@@ -64,6 +65,12 @@ type Service struct {
 	// Users should NOT modify this field directly - changes will be ignored.
 	// +optional
 	XSvcSvcRules *XSvcSvcRules `json:"xSvcSvcRules,omitempty"`
+
+	// xSvcFqdnRules contains references to all SvcFqdnRule resources where this Service is the source.
+	// This field is automatically populated by PostgreSQL triggers and is READ-ONLY.
+	// Users should NOT modify this field directly - changes will be ignored.
+	// +optional
+	XSvcFqdnRules *XSvcFqdnRules `json:"xSvcFqdnRules,omitempty"`
 }
 
 // ServiceSpec defines the desired state of Service
@@ -132,6 +139,16 @@ type XSvcSvcRules struct {
 	// Full NamespacedObjectReference for each rule
 	// +optional
 	AsServiceTo []NamespacedObjectReference `json:"asServiceTo,omitempty"`
+}
+
+// XSvcFqdnRules - READ-ONLY field for Service resource
+// Contains references to all FQDN rules where this Service is the source
+// Populated automatically by PostgreSQL triggers
+type XSvcFqdnRules struct {
+	// Rules contains the list of FQDN rules where this Service is the source
+	// Full NamespacedObjectReference for each FQDN rule
+	// +optional
+	Rules []NamespacedObjectReference `json:"rules,omitempty"`
 }
 
 // AddressGroupsSpec defines the address groups associated with a Service
@@ -401,19 +418,33 @@ type ServicePortsRef struct {
 // AccessPortsSpec defines the services and their ports that are allowed access
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type AccessPortsSpec struct {
-	metav1.TypeMeta `json:",inline"`
+	// MappingName optionally identifies the parent AddressGroupPortMapping (used by subresource responses)
 	// +optional
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	MappingName string `json:"mappingName,omitempty"`
+
+	// MappingNamespace optionally identifies the parent AddressGroupPortMapping namespace (used by subresource responses)
+	// +optional
+	MappingNamespace string `json:"mappingNamespace,omitempty"`
+
 	// Items contains the list of service ports references
 	Items []ServicePortsRef `json:"items,omitempty"`
 }
 
-// AccessPortsSpecList contains a list of AccessPortsSpec
+// AccessPortsSpecList contains a list of AccessPortsSpec entries
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type AccessPortsSpecList struct {
-	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []AccessPortsSpec `json:"items"`
+}
+
+// GetObjectKind implements runtime.Object without inlining TypeMeta in JSON responses
+func (AccessPortsSpec) GetObjectKind() schema.ObjectKind {
+	return schema.EmptyObjectKind
+}
+
+// GetObjectKind implements runtime.Object for the list variant without extra JSON fields
+func (AccessPortsSpecList) GetObjectKind() schema.ObjectKind {
+	return schema.EmptyObjectKind
 }
 
 // AddressGroupBindingStatus defines the observed state of AddressGroupBinding
@@ -960,4 +991,94 @@ type SvcSvcRuleList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []SvcSvcRule `json:"items"`
+}
+
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// SvcFqdnRule represents a service-to-FQDN firewall rule
+type SvcFqdnRule struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   SvcFqdnRuleSpec   `json:"spec"`
+	Status SvcFqdnRuleStatus `json:"status,omitempty"`
+}
+
+// SvcFqdnRuleSpec defines the desired state of SvcFqdnRule
+type SvcFqdnRuleSpec struct {
+	// ServiceFrom - source service reference (NamespacedObjectReference)
+	// +kubebuilder:validation:Required
+	ServiceFrom NamespacedObjectReference `json:"serviceFrom"`
+
+	// FQDN - fully qualified domain name
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:Pattern=`^([a-z0-9]([-a-z0-9]*[a-z0-9])?\.)*[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
+	FQDN string `json:"fqdn"`
+
+	// Transport protocol (TCP or UDP)
+	// +kubebuilder:validation:Enum=TCP;UDP
+	Transport TransportProtocol `json:"transport"`
+
+	// Ports - list of port expressions. Each entry defines allowed ports.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinItems=1
+	Ports []SvcFqdnPortSpec `json:"ports"`
+
+	// Logs - enable traffic logging
+	// +optional
+	Logs bool `json:"logs"`
+
+	// Trace - enable detailed tracing
+	// +optional
+	Trace bool `json:"trace"`
+
+	// Action - firewall action (ACCEPT or DROP)
+	// +kubebuilder:validation:Enum=ACCEPT;DROP
+	Action RuleAction `json:"action"`
+
+	// Priority - rule priority (0-1000, lower = higher priority)
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=1000
+	// +optional
+	Priority int32 `json:"priority,omitempty"`
+
+	// Description - optional human-readable description
+	// +optional
+	Description string `json:"description,omitempty"`
+}
+
+// SvcFqdnPortSpec represents a single port specification for FQDN rule
+type SvcFqdnPortSpec struct {
+	// Port - single port or port range (e.g., "80", "1000-2000", "443,8080")
+	// Can specify multiple ports/ranges separated by commas.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=255
+	Port string `json:"port"`
+}
+
+// SvcFqdnRuleStatus defines the observed state of SvcFqdnRule
+type SvcFqdnRuleStatus struct {
+	// Conditions represent the latest available observations of the rule's current state
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// ObservedGeneration is the most recent generation observed by the controller
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
+	// SyncReady indicates if the rule is ready for SGROUP synchronization
+	// +optional
+	SyncReady bool `json:"syncReady,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// SvcFqdnRuleList contains a list of SvcFqdnRule
+type SvcFqdnRuleList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []SvcFqdnRule `json:"items"`
 }

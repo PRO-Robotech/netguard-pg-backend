@@ -3,41 +3,30 @@ package repositories
 import (
 	"context"
 	"fmt"
-	"time"
-
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
-
 	"netguard-pg-backend/internal/domain"
 	"netguard-pg-backend/internal/domain/ports"
+	"time"
 )
 
-// PgxExecutor is an interface for pgx pool and transaction
-// This allows using the same repository with both pool and transaction
 type PgxExecutor interface {
 	Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
 	QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
 	Exec(ctx context.Context, sql string, args ...interface{}) (pgconn.CommandTag, error)
 }
 
-// Ensure pgxpool.Pool implements PgxExecutor
 var _ PgxExecutor = (*pgxpool.Pool)(nil)
 
-// PgxOutboxRepository implements OutboxRepository using pgx/v5
-// This is the adapter in Ports & Adapters (Hexagonal Architecture)
 type PgxOutboxRepository struct {
 	executor PgxExecutor
 }
 
-// NewOutboxRepository creates a new pgx-based outbox repository
 func NewOutboxRepository(executor PgxExecutor) ports.OutboxRepository {
 	return &PgxOutboxRepository{executor: executor}
 }
-
-// Create implements UPSERT logic using ON CONFLICT ... DO UPDATE
-// This ensures idempotency: same resource+operation+target will update existing entry
 func (r *PgxOutboxRepository) Create(ctx context.Context, entry *domain.OutboxEntry) error {
 	query := `
 		INSERT INTO sync_outbox (
@@ -72,13 +61,9 @@ func (r *PgxOutboxRepository) Create(ctx context.Context, entry *domain.OutboxEn
 			processed_at = EXCLUDED.processed_at
 		RETURNING id
 	`
-
-	// Generate ID if not set
 	if entry.ID == uuid.Nil {
 		entry.ID = uuid.New()
 	}
-
-	// Set timestamps if not set
 	now := time.Now()
 	if entry.CreatedAt.IsZero() {
 		entry.CreatedAt = now
@@ -86,8 +71,6 @@ func (r *PgxOutboxRepository) Create(ctx context.Context, entry *domain.OutboxEn
 	if entry.UpdatedAt.IsZero() {
 		entry.UpdatedAt = now
 	}
-
-	// Execute UPSERT
 	err := r.executor.QueryRow(ctx, query,
 		entry.ID, entry.ResourceType, entry.ResourceID, entry.ResourceNamespace, entry.ResourceName,
 		entry.Operation, entry.TargetSystem,
@@ -96,15 +79,11 @@ func (r *PgxOutboxRepository) Create(ctx context.Context, entry *domain.OutboxEn
 		entry.LastError, entry.ErrorCategory,
 		entry.CreatedAt, entry.UpdatedAt, entry.ProcessedAt,
 	).Scan(&entry.ID)
-
 	if err != nil {
 		return fmt.Errorf("failed to create/update outbox entry: %w", err)
 	}
-
 	return nil
 }
-
-// FindByID finds an outbox entry by ID
 func (r *PgxOutboxRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.OutboxEntry, error) {
 	query := `
 		SELECT
@@ -117,7 +96,6 @@ func (r *PgxOutboxRepository) FindByID(ctx context.Context, id uuid.UUID) (*doma
 		FROM sync_outbox
 		WHERE id = $1
 	`
-
 	entry := &domain.OutboxEntry{}
 	err := r.executor.QueryRow(ctx, query, id).Scan(
 		&entry.ID, &entry.ResourceType, &entry.ResourceID, &entry.ResourceNamespace, &entry.ResourceName,
@@ -127,18 +105,14 @@ func (r *PgxOutboxRepository) FindByID(ctx context.Context, id uuid.UUID) (*doma
 		&entry.LastError, &entry.ErrorCategory,
 		&entry.CreatedAt, &entry.UpdatedAt, &entry.ProcessedAt,
 	)
-
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("outbox entry not found: %s", id)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to find outbox entry: %w", err)
 	}
-
 	return entry, nil
 }
-
-// FindByResource finds all entries for a specific resource
 func (r *PgxOutboxRepository) FindByResource(ctx context.Context, resourceType string, resourceID uuid.UUID) ([]*domain.OutboxEntry, error) {
 	query := `
 		SELECT
@@ -152,13 +126,11 @@ func (r *PgxOutboxRepository) FindByResource(ctx context.Context, resourceType s
 		WHERE resource_type = $1 AND resource_id = $2
 		ORDER BY created_at DESC
 	`
-
 	rows, err := r.executor.Query(ctx, query, resourceType, resourceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query entries for resource: %w", err)
 	}
 	defer rows.Close()
-
 	var entries []*domain.OutboxEntry
 	for rows.Next() {
 		entry := &domain.OutboxEntry{}
@@ -175,16 +147,11 @@ func (r *PgxOutboxRepository) FindByResource(ctx context.Context, resourceType s
 		}
 		entries = append(entries, entry)
 	}
-
 	if rows.Err() != nil {
 		return nil, fmt.Errorf("error iterating entries: %w", rows.Err())
 	}
-
 	return entries, nil
 }
-
-// FindPending finds pending entries ready to process
-// CRITICAL: Uses FOR UPDATE SKIP LOCKED for multi-worker concurrency!
 func (r *PgxOutboxRepository) FindPending(ctx context.Context, limit int) ([]*domain.OutboxEntry, error) {
 	query := `
 		SELECT
@@ -201,13 +168,11 @@ func (r *PgxOutboxRepository) FindPending(ctx context.Context, limit int) ([]*do
 		LIMIT $1
 		FOR UPDATE SKIP LOCKED
 	`
-
 	rows, err := r.executor.Query(ctx, query, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query pending entries: %w", err)
 	}
 	defer rows.Close()
-
 	var entries []*domain.OutboxEntry
 	for rows.Next() {
 		entry := &domain.OutboxEntry{}
@@ -224,16 +189,11 @@ func (r *PgxOutboxRepository) FindPending(ctx context.Context, limit int) ([]*do
 		}
 		entries = append(entries, entry)
 	}
-
 	if rows.Err() != nil {
 		return nil, fmt.Errorf("error iterating pending entries: %w", rows.Err())
 	}
-
 	return entries, nil
 }
-
-// CountPending returns the number of pending entries ready to process
-// Uses same filtering logic as FindPending (for metrics)
 func (r *PgxOutboxRepository) CountPending(ctx context.Context) (int, error) {
 	query := `
 		SELECT COUNT(*)
@@ -241,17 +201,30 @@ func (r *PgxOutboxRepository) CountPending(ctx context.Context) (int, error) {
 		WHERE status IN ('PENDING', 'FAILED_RETRYABLE')
 		  AND (next_retry_at IS NULL OR next_retry_at <= NOW())
 	`
-
 	var count int
 	err := r.executor.QueryRow(ctx, query).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count pending entries: %w", err)
 	}
-
 	return count, nil
 }
-
-// UpdateStatus updates entry status and metadata
+func (r *PgxOutboxRepository) CountPendingForResource(ctx context.Context, resourceType, namespace, name string) (int, error) {
+	query := `
+		SELECT COUNT(*)
+		FROM sync_outbox
+		WHERE resource_type = $1
+		  AND resource_namespace = $2
+		  AND resource_name = $3
+		  AND status IN ('PENDING', 'FAILED_RETRYABLE')
+		  AND (next_retry_at IS NULL OR next_retry_at <= NOW())
+	`
+	var count int
+	err := r.executor.QueryRow(ctx, query, resourceType, namespace, name).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count pending entries for resource: %w", err)
+	}
+	return count, nil
+}
 func (r *PgxOutboxRepository) UpdateStatus(
 	ctx context.Context,
 	id uuid.UUID,
@@ -270,20 +243,15 @@ func (r *PgxOutboxRepository) UpdateStatus(
 			updated_at = NOW()
 		WHERE id = $1
 	`
-
 	result, err := r.executor.Exec(ctx, query, id, status, processedAt, lastError, errorCategory)
 	if err != nil {
 		return fmt.Errorf("failed to update status: %w", err)
 	}
-
 	if result.RowsAffected() == 0 {
 		return fmt.Errorf("outbox entry not found: %s", id)
 	}
-
 	return nil
 }
-
-// IncrementAttempts increments attempts counter and sets next retry time
 func (r *PgxOutboxRepository) IncrementAttempts(ctx context.Context, id uuid.UUID, nextRetryAt *time.Time) error {
 	query := `
 		UPDATE sync_outbox
@@ -293,49 +261,51 @@ func (r *PgxOutboxRepository) IncrementAttempts(ctx context.Context, id uuid.UUI
 			updated_at = NOW()
 		WHERE id = $1
 	`
-
 	result, err := r.executor.Exec(ctx, query, id, nextRetryAt)
 	if err != nil {
 		return fmt.Errorf("failed to increment attempts: %w", err)
 	}
-
 	if result.RowsAffected() == 0 {
 		return fmt.Errorf("outbox entry not found: %s", id)
 	}
-
 	return nil
 }
-
-// Delete removes an outbox entry
+func (r *PgxOutboxRepository) MarkCompleted(ctx context.Context, id uuid.UUID) error {
+	query := `
+		UPDATE sync_outbox
+		SET status = 'SUCCESS', processed_at = NOW(), updated_at = NOW()
+		WHERE id = $1
+	`
+	result, err := r.executor.Exec(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("failed to mark outbox entry as completed: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("outbox entry not found: %s", id)
+	}
+	return nil
+}
 func (r *PgxOutboxRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	query := `DELETE FROM sync_outbox WHERE id = $1`
-
 	result, err := r.executor.Exec(ctx, query, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete outbox entry: %w", err)
 	}
-
 	if result.RowsAffected() == 0 {
 		return fmt.Errorf("outbox entry not found: %s", id)
 	}
-
 	return nil
 }
-
-// DeleteOldSuccessful deletes SUCCESS entries older than duration
 func (r *PgxOutboxRepository) DeleteOldSuccessful(ctx context.Context, olderThan time.Duration) (int64, error) {
 	cutoff := time.Now().Add(-olderThan)
-
 	query := `
 		DELETE FROM sync_outbox
 		WHERE status = 'SUCCESS'
 		  AND processed_at < $1
 	`
-
 	result, err := r.executor.Exec(ctx, query, cutoff)
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete old successful entries: %w", err)
 	}
-
 	return result.RowsAffected(), nil
 }

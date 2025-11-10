@@ -3,14 +3,12 @@ package client
 import (
 	"context"
 	"fmt"
-
 	"netguard-pg-backend/internal/application/validation"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 )
 
-// MockBackendClient с реальными тестовыми данными
 type MockBackendClient struct {
 	services             []models.Service
 	addressGroups        []models.AddressGroup
@@ -128,8 +126,6 @@ func NewMockBackendClient() *MockBackendClient {
 		hostBindings: []models.HostBinding{},
 	}
 }
-
-// Service operations
 func (m *MockBackendClient) GetService(ctx context.Context, id models.ResourceIdentifier) (*models.Service, error) {
 	for _, service := range m.services {
 		if service.ResourceIdentifier.Key() == id.Key() {
@@ -138,16 +134,13 @@ func (m *MockBackendClient) GetService(ctx context.Context, id models.ResourceId
 	}
 	return nil, fmt.Errorf("service not found: %s", id.Key())
 }
-
 func (m *MockBackendClient) ListServices(ctx context.Context, scope ports.Scope) ([]models.Service, error) {
 	return m.services, nil
 }
-
 func (m *MockBackendClient) CreateService(ctx context.Context, service *models.Service) error {
 	m.services = append(m.services, *service)
 	return nil
 }
-
 func (m *MockBackendClient) UpdateService(ctx context.Context, service *models.Service) error {
 	for i, svc := range m.services {
 		if svc.ResourceIdentifier.Key() == service.ResourceIdentifier.Key() {
@@ -157,7 +150,6 @@ func (m *MockBackendClient) UpdateService(ctx context.Context, service *models.S
 	}
 	return fmt.Errorf("service not found for update: %s", service.ResourceIdentifier.Key())
 }
-
 func (m *MockBackendClient) DeleteService(ctx context.Context, id models.ResourceIdentifier) error {
 	for i, service := range m.services {
 		if service.ResourceIdentifier.Key() == id.Key() {
@@ -167,8 +159,6 @@ func (m *MockBackendClient) DeleteService(ctx context.Context, id models.Resourc
 	}
 	return fmt.Errorf("service not found for delete: %s", id.Key())
 }
-
-// AddressGroup operations
 func (m *MockBackendClient) GetAddressGroup(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroup, error) {
 	for _, group := range m.addressGroups {
 		if group.ResourceIdentifier.Key() == id.Key() {
@@ -177,16 +167,13 @@ func (m *MockBackendClient) GetAddressGroup(ctx context.Context, id models.Resou
 	}
 	return nil, fmt.Errorf("address group not found: %s", id.Key())
 }
-
 func (m *MockBackendClient) ListAddressGroups(ctx context.Context, scope ports.Scope) ([]models.AddressGroup, error) {
 	return m.addressGroups, nil
 }
-
 func (m *MockBackendClient) CreateAddressGroup(ctx context.Context, group *models.AddressGroup) error {
 	m.addressGroups = append(m.addressGroups, *group)
 	return nil
 }
-
 func (m *MockBackendClient) UpdateAddressGroup(ctx context.Context, group *models.AddressGroup) error {
 	for i, ag := range m.addressGroups {
 		if ag.ResourceIdentifier.Key() == group.ResourceIdentifier.Key() {
@@ -196,7 +183,6 @@ func (m *MockBackendClient) UpdateAddressGroup(ctx context.Context, group *model
 	}
 	return fmt.Errorf("address group not found for update: %s", group.ResourceIdentifier.Key())
 }
-
 func (m *MockBackendClient) DeleteAddressGroup(ctx context.Context, id models.ResourceIdentifier) error {
 	for i, group := range m.addressGroups {
 		if group.ResourceIdentifier.Key() == id.Key() {
@@ -206,8 +192,6 @@ func (m *MockBackendClient) DeleteAddressGroup(ctx context.Context, id models.Re
 	}
 	return fmt.Errorf("address group not found for delete: %s", id.Key())
 }
-
-// AddressGroupBinding operations
 func (m *MockBackendClient) GetAddressGroupBinding(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBinding, error) {
 	for _, binding := range m.addressGroupBindings {
 		if binding.ResourceIdentifier.Key() == id.Key() {
@@ -216,16 +200,13 @@ func (m *MockBackendClient) GetAddressGroupBinding(ctx context.Context, id model
 	}
 	return nil, fmt.Errorf("binding not found: %s", id.Key())
 }
-
 func (m *MockBackendClient) ListAddressGroupBindings(ctx context.Context, scope ports.Scope) ([]models.AddressGroupBinding, error) {
 	return m.addressGroupBindings, nil
 }
-
 func (m *MockBackendClient) CreateAddressGroupBinding(ctx context.Context, binding *models.AddressGroupBinding) error {
 	m.addressGroupBindings = append(m.addressGroupBindings, *binding)
 	return nil
 }
-
 func (m *MockBackendClient) UpdateAddressGroupBinding(ctx context.Context, binding *models.AddressGroupBinding) error {
 	for i, b := range m.addressGroupBindings {
 		if b.ResourceIdentifier.Key() == binding.ResourceIdentifier.Key() {
@@ -235,7 +216,6 @@ func (m *MockBackendClient) UpdateAddressGroupBinding(ctx context.Context, bindi
 	}
 	return fmt.Errorf("binding not found for update: %s", binding.ResourceIdentifier.Key())
 }
-
 func (m *MockBackendClient) DeleteAddressGroupBinding(ctx context.Context, id models.ResourceIdentifier) error {
 	for i, binding := range m.addressGroupBindings {
 		if binding.ResourceIdentifier.Key() == id.Key() {
@@ -245,109 +225,81 @@ func (m *MockBackendClient) DeleteAddressGroupBinding(ctx context.Context, id mo
 	}
 	return fmt.Errorf("binding not found for delete: %s", id.Key())
 }
-
-// Stubs for other operations
 func (m *MockBackendClient) GetAddressGroupPortMapping(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupPortMapping, error) {
 	return nil, fmt.Errorf("not implemented in mock")
 }
-
 func (m *MockBackendClient) ListAddressGroupPortMappings(ctx context.Context, scope ports.Scope) ([]models.AddressGroupPortMapping, error) {
 	return nil, nil
 }
-
 func (m *MockBackendClient) CreateAddressGroupPortMapping(ctx context.Context, mapping *models.AddressGroupPortMapping) error {
 	return nil
 }
-
 func (m *MockBackendClient) UpdateAddressGroupPortMapping(ctx context.Context, mapping *models.AddressGroupPortMapping) error {
 	return nil
 }
-
 func (m *MockBackendClient) DeleteAddressGroupPortMapping(ctx context.Context, id models.ResourceIdentifier) error {
 	return nil
 }
-
 func (m *MockBackendClient) GetRuleS2S(ctx context.Context, id models.ResourceIdentifier) (*models.RuleS2S, error) {
 	return nil, fmt.Errorf("not implemented in mock")
 }
-
 func (m *MockBackendClient) ListRuleS2S(ctx context.Context, scope ports.Scope) ([]models.RuleS2S, error) {
 	return nil, nil
 }
-
 func (m *MockBackendClient) CreateRuleS2S(ctx context.Context, rule *models.RuleS2S) error {
 	return nil
 }
-
 func (m *MockBackendClient) UpdateRuleS2S(ctx context.Context, rule *models.RuleS2S) error {
 	return nil
 }
-
 func (m *MockBackendClient) DeleteRuleS2S(ctx context.Context, id models.ResourceIdentifier) error {
 	return nil
 }
-
 func (m *MockBackendClient) GetServiceAlias(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error) {
 	return nil, fmt.Errorf("not implemented in mock")
 }
-
 func (m *MockBackendClient) ListServiceAliases(ctx context.Context, scope ports.Scope) ([]models.ServiceAlias, error) {
 	return nil, nil
 }
-
 func (m *MockBackendClient) CreateServiceAlias(ctx context.Context, alias *models.ServiceAlias) error {
 	return nil
 }
-
 func (m *MockBackendClient) UpdateServiceAlias(ctx context.Context, alias *models.ServiceAlias) error {
 	return nil
 }
-
 func (m *MockBackendClient) DeleteServiceAlias(ctx context.Context, id models.ResourceIdentifier) error {
 	return nil
 }
-
 func (m *MockBackendClient) GetAddressGroupBindingPolicy(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
 	return nil, fmt.Errorf("not implemented in mock")
 }
-
 func (m *MockBackendClient) ListAddressGroupBindingPolicies(ctx context.Context, scope ports.Scope) ([]models.AddressGroupBindingPolicy, error) {
 	return nil, nil
 }
-
 func (m *MockBackendClient) CreateAddressGroupBindingPolicy(ctx context.Context, policy *models.AddressGroupBindingPolicy) error {
 	return nil
 }
-
 func (m *MockBackendClient) UpdateAddressGroupBindingPolicy(ctx context.Context, policy *models.AddressGroupBindingPolicy) error {
 	return nil
 }
-
 func (m *MockBackendClient) DeleteAddressGroupBindingPolicy(ctx context.Context, id models.ResourceIdentifier) error {
 	return nil
 }
-
 func (m *MockBackendClient) GetIEAgAgRule(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
 	return nil, fmt.Errorf("not implemented in mock")
 }
-
 func (m *MockBackendClient) ListIEAgAgRules(ctx context.Context, scope ports.Scope) ([]models.IEAgAgRule, error) {
 	return nil, nil
 }
-
 func (m *MockBackendClient) CreateIEAgAgRule(ctx context.Context, rule *models.IEAgAgRule) error {
 	return nil
 }
-
 func (m *MockBackendClient) UpdateIEAgAgRule(ctx context.Context, rule *models.IEAgAgRule) error {
 	return nil
 }
-
 func (m *MockBackendClient) DeleteIEAgAgRule(ctx context.Context, id models.ResourceIdentifier) error {
 	return fmt.Errorf("not implemented")
 }
-
-// Network operations
 func (m *MockBackendClient) GetNetwork(ctx context.Context, id models.ResourceIdentifier) (*models.Network, error) {
 	for _, network := range m.networks {
 		if network.Key() == id.Key() {
@@ -356,16 +308,13 @@ func (m *MockBackendClient) GetNetwork(ctx context.Context, id models.ResourceId
 	}
 	return nil, fmt.Errorf("network not found: %s", id.Key())
 }
-
 func (m *MockBackendClient) ListNetworks(ctx context.Context, scope ports.Scope) ([]models.Network, error) {
 	return m.networks, nil
 }
-
 func (m *MockBackendClient) CreateNetwork(ctx context.Context, network *models.Network) error {
 	m.networks = append(m.networks, *network)
 	return nil
 }
-
 func (m *MockBackendClient) UpdateNetwork(ctx context.Context, network *models.Network) error {
 	for i, existing := range m.networks {
 		if existing.Key() == network.Key() {
@@ -375,7 +324,6 @@ func (m *MockBackendClient) UpdateNetwork(ctx context.Context, network *models.N
 	}
 	return fmt.Errorf("network not found: %s", network.Key())
 }
-
 func (m *MockBackendClient) DeleteNetwork(ctx context.Context, id models.ResourceIdentifier) error {
 	for i, network := range m.networks {
 		if network.Key() == id.Key() {
@@ -385,8 +333,6 @@ func (m *MockBackendClient) DeleteNetwork(ctx context.Context, id models.Resourc
 	}
 	return fmt.Errorf("network not found: %s", id.Key())
 }
-
-// NetworkBinding operations
 func (m *MockBackendClient) GetNetworkBinding(ctx context.Context, id models.ResourceIdentifier) (*models.NetworkBinding, error) {
 	for _, binding := range m.networkBindings {
 		if binding.Key() == id.Key() {
@@ -395,16 +341,13 @@ func (m *MockBackendClient) GetNetworkBinding(ctx context.Context, id models.Res
 	}
 	return nil, fmt.Errorf("network binding not found: %s", id.Key())
 }
-
 func (m *MockBackendClient) ListNetworkBindings(ctx context.Context, scope ports.Scope) ([]models.NetworkBinding, error) {
 	return m.networkBindings, nil
 }
-
 func (m *MockBackendClient) CreateNetworkBinding(ctx context.Context, binding *models.NetworkBinding) error {
 	m.networkBindings = append(m.networkBindings, *binding)
 	return nil
 }
-
 func (m *MockBackendClient) UpdateNetworkBinding(ctx context.Context, binding *models.NetworkBinding) error {
 	for i, existing := range m.networkBindings {
 		if existing.Key() == binding.Key() {
@@ -414,7 +357,6 @@ func (m *MockBackendClient) UpdateNetworkBinding(ctx context.Context, binding *m
 	}
 	return fmt.Errorf("network binding not found: %s", binding.Key())
 }
-
 func (m *MockBackendClient) DeleteNetworkBinding(ctx context.Context, id models.ResourceIdentifier) error {
 	for i, binding := range m.networkBindings {
 		if binding.Key() == id.Key() {
@@ -424,65 +366,48 @@ func (m *MockBackendClient) DeleteNetworkBinding(ctx context.Context, id models.
 	}
 	return fmt.Errorf("network binding not found: %s", id.Key())
 }
-
 func (m *MockBackendClient) Sync(ctx context.Context, syncOp models.SyncOp, resources interface{}) error {
 	return nil
 }
-
 func (m *MockBackendClient) GetSyncStatus(ctx context.Context) (*models.SyncStatus, error) {
 	return &models.SyncStatus{}, nil
 }
-
 func (m *MockBackendClient) GetDependencyValidator() *validation.DependencyValidator {
 	return validation.NewDependencyValidator(nil)
 }
-
 func (m *MockBackendClient) GetReader(ctx context.Context) (ports.Reader, error) {
 	return nil, fmt.Errorf("not implemented in mock")
 }
-
 func (m *MockBackendClient) HealthCheck(ctx context.Context) error {
 	return nil
 }
-
-// Ping - простая проверка для mock (всегда успешна)
 func (m *MockBackendClient) Ping(ctx context.Context) error {
 	return nil
 }
-
-// UpdateMeta методы для всех ресурсов (простые заглушки для mock)
 func (m *MockBackendClient) UpdateServiceMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
 	return m.UpdateService(ctx, &models.Service{SelfRef: models.SelfRef{ResourceIdentifier: id}, Meta: meta})
 }
-
 func (m *MockBackendClient) UpdateAddressGroupMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
 	return m.UpdateAddressGroup(ctx, &models.AddressGroup{SelfRef: models.SelfRef{ResourceIdentifier: id}, Meta: meta})
 }
-
 func (m *MockBackendClient) UpdateAddressGroupBindingMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
 	return m.UpdateAddressGroupBinding(ctx, &models.AddressGroupBinding{SelfRef: models.SelfRef{ResourceIdentifier: id}, Meta: meta})
 }
-
 func (m *MockBackendClient) UpdateAddressGroupPortMappingMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
-	return nil // Простая заглушка для mock
+	return nil
 }
-
 func (m *MockBackendClient) UpdateRuleS2SMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
-	return nil // Простая заглушка для mock
+	return nil
 }
-
 func (m *MockBackendClient) UpdateServiceAliasMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
-	return nil // Простая заглушка для mock
+	return nil
 }
-
 func (m *MockBackendClient) UpdateAddressGroupBindingPolicyMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
-	return nil // Простая заглушка для mock
+	return nil
 }
-
 func (m *MockBackendClient) UpdateIEAgAgRuleMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
 	return fmt.Errorf("not implemented")
 }
-
 func (m *MockBackendClient) UpdateNetworkMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
 	for i, network := range m.networks {
 		if network.Key() == id.Key() {
@@ -492,7 +417,6 @@ func (m *MockBackendClient) UpdateNetworkMeta(ctx context.Context, id models.Res
 	}
 	return fmt.Errorf("network not found: %s", id.Key())
 }
-
 func (m *MockBackendClient) UpdateNetworkBindingMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
 	for i, binding := range m.networkBindings {
 		if binding.Key() == id.Key() {
@@ -502,10 +426,7 @@ func (m *MockBackendClient) UpdateNetworkBindingMeta(ctx context.Context, id mod
 	}
 	return fmt.Errorf("network binding not found: %s", id.Key())
 }
-
-// Helper методы для subresources (простые заглушки для mock)
 func (m *MockBackendClient) ListAddressGroupsForService(ctx context.Context, serviceID models.ResourceIdentifier) ([]models.AddressGroup, error) {
-	// Возвращаем тестовые address groups для mock
 	if serviceID.Name == "test-service-1" {
 		return []models.AddressGroup{
 			{
@@ -523,9 +444,7 @@ func (m *MockBackendClient) ListAddressGroupsForService(ctx context.Context, ser
 	}
 	return []models.AddressGroup{}, nil
 }
-
 func (m *MockBackendClient) ListRuleS2SDstOwnRef(ctx context.Context, serviceID models.ResourceIdentifier) ([]models.RuleS2S, error) {
-	// Возвращаем тестовые cross-namespace rules для mock
 	return []models.RuleS2S{
 		{
 			SelfRef: models.SelfRef{
@@ -554,9 +473,7 @@ func (m *MockBackendClient) ListRuleS2SDstOwnRef(ctx context.Context, serviceID 
 		},
 	}, nil
 }
-
 func (m *MockBackendClient) ListAccessPorts(ctx context.Context, mappingID models.ResourceIdentifier) ([]models.ServicePortsRef, error) {
-	// Возвращаем тестовые service ports refs для mock
 	return []models.ServicePortsRef{
 		{
 			ServiceRef: models.NewServiceRef("test-service-1", models.WithNamespace("netguard-test")),
@@ -571,8 +488,6 @@ func (m *MockBackendClient) ListAccessPorts(ctx context.Context, mappingID model
 		},
 	}, nil
 }
-
-// Host operations
 func (m *MockBackendClient) GetHost(ctx context.Context, id models.ResourceIdentifier) (*models.Host, error) {
 	for _, host := range m.hosts {
 		if host.ResourceIdentifier.Key() == id.Key() {
@@ -581,16 +496,13 @@ func (m *MockBackendClient) GetHost(ctx context.Context, id models.ResourceIdent
 	}
 	return nil, fmt.Errorf("host not found: %s", id.Key())
 }
-
 func (m *MockBackendClient) ListHosts(ctx context.Context, scope ports.Scope) ([]models.Host, error) {
 	return m.hosts, nil
 }
-
 func (m *MockBackendClient) CreateHost(ctx context.Context, host *models.Host) error {
 	m.hosts = append(m.hosts, *host)
 	return nil
 }
-
 func (m *MockBackendClient) UpdateHost(ctx context.Context, host *models.Host) error {
 	for i, existingHost := range m.hosts {
 		if existingHost.ResourceIdentifier.Key() == host.ResourceIdentifier.Key() {
@@ -600,7 +512,6 @@ func (m *MockBackendClient) UpdateHost(ctx context.Context, host *models.Host) e
 	}
 	return fmt.Errorf("host not found for update: %s", host.ResourceIdentifier.Key())
 }
-
 func (m *MockBackendClient) DeleteHost(ctx context.Context, id models.ResourceIdentifier) error {
 	for i, host := range m.hosts {
 		if host.ResourceIdentifier.Key() == id.Key() {
@@ -610,8 +521,6 @@ func (m *MockBackendClient) DeleteHost(ctx context.Context, id models.ResourceId
 	}
 	return fmt.Errorf("host not found for deletion: %s", id.Key())
 }
-
-// HostBinding operations
 func (m *MockBackendClient) GetHostBinding(ctx context.Context, id models.ResourceIdentifier) (*models.HostBinding, error) {
 	for _, binding := range m.hostBindings {
 		if binding.ResourceIdentifier.Key() == id.Key() {
@@ -620,16 +529,13 @@ func (m *MockBackendClient) GetHostBinding(ctx context.Context, id models.Resour
 	}
 	return nil, fmt.Errorf("host binding not found: %s", id.Key())
 }
-
 func (m *MockBackendClient) ListHostBindings(ctx context.Context, scope ports.Scope) ([]models.HostBinding, error) {
 	return m.hostBindings, nil
 }
-
 func (m *MockBackendClient) CreateHostBinding(ctx context.Context, binding *models.HostBinding) error {
 	m.hostBindings = append(m.hostBindings, *binding)
 	return nil
 }
-
 func (m *MockBackendClient) UpdateHostBinding(ctx context.Context, binding *models.HostBinding) error {
 	for i, existingBinding := range m.hostBindings {
 		if existingBinding.ResourceIdentifier.Key() == binding.ResourceIdentifier.Key() {
@@ -639,7 +545,6 @@ func (m *MockBackendClient) UpdateHostBinding(ctx context.Context, binding *mode
 	}
 	return fmt.Errorf("host binding not found for update: %s", binding.ResourceIdentifier.Key())
 }
-
 func (m *MockBackendClient) DeleteHostBinding(ctx context.Context, id models.ResourceIdentifier) error {
 	for i, binding := range m.hostBindings {
 		if binding.ResourceIdentifier.Key() == id.Key() {
@@ -649,8 +554,6 @@ func (m *MockBackendClient) DeleteHostBinding(ctx context.Context, id models.Res
 	}
 	return fmt.Errorf("host binding not found for deletion: %s", id.Key())
 }
-
-// Host and HostBinding Meta operations
 func (m *MockBackendClient) UpdateHostMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
 	for i, host := range m.hosts {
 		if host.ResourceIdentifier.Key() == id.Key() {
@@ -660,7 +563,6 @@ func (m *MockBackendClient) UpdateHostMeta(ctx context.Context, id models.Resour
 	}
 	return fmt.Errorf("host not found for meta update: %s", id.Key())
 }
-
 func (m *MockBackendClient) UpdateHostBindingMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
 	for i, binding := range m.hostBindings {
 		if binding.ResourceIdentifier.Key() == id.Key() {
@@ -670,47 +572,54 @@ func (m *MockBackendClient) UpdateHostBindingMeta(ctx context.Context, id models
 	}
 	return fmt.Errorf("host binding not found for meta update: %s", id.Key())
 }
-
 func (m *MockBackendClient) Close() error {
 	return nil
 }
-
-// Создаем mock клиент вместо реального grpc
 func createMockGRPCBackendClient(config BackendClientConfig) (BackendClient, error) {
 	return NewMockBackendClient(), nil
 }
-
-// Пропускает circuit breaker для mock
 func createMockCircuitBreakerClient(client BackendClient, config BackendClientConfig) BackendClient {
 	return client
 }
-
-// Пропускает cache для mock
 func createMockCachedBackendClient(client BackendClient, config BackendClientConfig) BackendClient {
 	return client
 }
-
-// SvcSvcRule methods (stub implementations)
 func (m *MockBackendClient) GetSvcSvcRule(ctx context.Context, id models.ResourceIdentifier) (*models.SvcSvcRule, error) {
 	return nil, fmt.Errorf("not implemented")
 }
-
 func (m *MockBackendClient) ListSvcSvcRules(ctx context.Context, scope ports.Scope) ([]models.SvcSvcRule, error) {
 	return nil, fmt.Errorf("not implemented")
 }
-
 func (m *MockBackendClient) CreateSvcSvcRule(ctx context.Context, rule *models.SvcSvcRule) error {
 	return fmt.Errorf("not implemented")
 }
-
 func (m *MockBackendClient) UpdateSvcSvcRule(ctx context.Context, rule *models.SvcSvcRule) error {
 	return fmt.Errorf("not implemented")
 }
-
 func (m *MockBackendClient) DeleteSvcSvcRule(ctx context.Context, id models.ResourceIdentifier) error {
 	return fmt.Errorf("not implemented")
 }
-
 func (m *MockBackendClient) UpdateSvcSvcRuleMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	return fmt.Errorf("not implemented")
+}
+func (m *MockBackendClient) GetSvcFqdnRule(ctx context.Context, id models.ResourceIdentifier) (*models.SvcFqdnRule, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (m *MockBackendClient) ListSvcFqdnRules(ctx context.Context, scope ports.Scope) ([]models.SvcFqdnRule, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (m *MockBackendClient) CreateSvcFqdnRule(ctx context.Context, rule *models.SvcFqdnRule) error {
+	return fmt.Errorf("not implemented")
+}
+func (m *MockBackendClient) UpdateSvcFqdnRule(ctx context.Context, rule *models.SvcFqdnRule) error {
+	return fmt.Errorf("not implemented")
+}
+func (m *MockBackendClient) DeleteSvcFqdnRule(ctx context.Context, id models.ResourceIdentifier) error {
+	return fmt.Errorf("not implemented")
+}
+func (m *MockBackendClient) UpdateSvcFqdnRuleMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	return fmt.Errorf("not implemented")
+}
+func (m *MockBackendClient) MarkForDeletion(ctx context.Context, namespace, name, kind string) error {
 	return fmt.Errorf("not implemented")
 }

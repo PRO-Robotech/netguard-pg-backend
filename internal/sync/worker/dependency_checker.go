@@ -3,9 +3,11 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 
 	"netguard-pg-backend/internal/domain"
@@ -35,6 +37,8 @@ func (w *OutboxWorker) isResourceReady(
 		tableName = "networks"
 	case string(registry.TypeService):
 		tableName = "services"
+	case string(registry.TypeSvcFqdnRule):
+		tableName = "svc_fqdn_rules"
 	case string(registry.TypeHostBinding):
 		tableName = "host_bindings"
 	case string(registry.TypeNetworkBinding):
@@ -46,30 +50,40 @@ func (w *OutboxWorker) isResourceReady(
 	// Query k8s_metadata via the resource table's resource_version foreign key
 	// Check if conditions contains a Ready condition with status True
 	query := fmt.Sprintf(`
-		SELECT EXISTS(
-			SELECT 1
-			FROM %s r
-			JOIN k8s_metadata km ON r.resource_version = km.resource_version
-			WHERE r.namespace = $1
-			  AND r.name = $2
-			  AND km.conditions @> '[{"type":"Ready","status":"True"}]'::jsonb
-		)
-	`, tableName)
+        SELECT
+            km.conditions @> '[{"type":"Ready","status":"True"}]'::jsonb AS ready,
+            km.deletion_timestamp IS NOT NULL AS deleting
+        FROM %s r
+        JOIN k8s_metadata km ON r.resource_version = km.resource_version
+        WHERE r.namespace = $1
+          AND r.name = $2
+    `, tableName)
 
-	var ready bool
-	err := w.pool.QueryRow(ctx, query, namespace, name).Scan(&ready)
+	var ready, deleting bool
+	err := w.pool.QueryRow(ctx, query, namespace, name).Scan(&ready, &deleting)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
 		return false, fmt.Errorf("failed to check resource readiness for %s/%s/%s: %w",
 			resourceType, namespace, name, err)
 	}
+
+	logicalReady := computeResourceReadinessFlag(ready, deleting)
 
 	w.logger.Debug("checked resource readiness",
 		zap.String("resource_type", resourceType),
 		zap.String("namespace", namespace),
 		zap.String("name", name),
-		zap.Bool("ready", ready))
+		zap.Bool("ready_condition", ready),
+		zap.Bool("marked_for_deletion", deleting),
+		zap.Bool("ready", logicalReady))
 
-	return ready, nil
+	return logicalReady, nil
+}
+
+func computeResourceReadinessFlag(ready, deleting bool) bool {
+	return ready || deleting
 }
 
 // ensureOutboxEntryExists creates an Outbox entry for a pending dependency if it doesn't exist
@@ -108,13 +122,15 @@ func (w *OutboxWorker) ensureOutboxEntryExists(
 	// Create outbox entry using the repository
 	// The repository handles ON CONFLICT logic (UPSERT)
 	entry := &domain.OutboxEntry{
-		ResourceType: resource.Type,
-		ResourceID:   resourceUID,
-		Operation:    domain.SyncOperationUpdate,
-		TargetSystem: targetSystem,
-		Payload:      []byte(fmt.Sprintf(`{"metadata":{"namespace":"%s","name":"%s"}}`, resource.Namespace, resource.Name)),
-		Status:       domain.OutboxStatusPending,
-		MaxRetries:   20, // Standard retry count
+		ResourceType:      resource.Type,
+		ResourceID:        resourceUID,
+		ResourceNamespace: resource.Namespace,
+		ResourceName:      resource.Name,
+		Operation:         domain.SyncOperationUpdate,
+		TargetSystem:      targetSystem,
+		Payload:           []byte(fmt.Sprintf(`{"metadata":{"namespace":"%s","name":"%s"}}`, resource.Namespace, resource.Name)),
+		Status:            domain.OutboxStatusPending,
+		MaxRetries:        20, // Standard retry count
 	}
 
 	// Validate before creating
@@ -152,6 +168,8 @@ func (w *OutboxWorker) getResourceUID(
 		tableName = "networks"
 	case string(registry.TypeService):
 		tableName = "services"
+	case string(registry.TypeSvcFqdnRule):
+		tableName = "svc_fqdn_rules"
 	case string(registry.TypeHostBinding):
 		tableName = "host_bindings"
 	case string(registry.TypeNetworkBinding):
@@ -321,12 +339,14 @@ func (w *OutboxWorker) extractEntityDependencies(
 	case string(registry.TypeService):
 		return w.extractServiceDependencies(resource)
 	case string(registry.TypeHost):
-		// FIXED: Hosts HAVE dependency when bound to AddressGroup!
-		// When IsBound=true, Host includes SgName in ToSGroupsProto()
+		// Bound hosts depend on the referenced AddressGroup.
 		return w.extractHostDependencies(resource)
 	case string(registry.TypeSvcSvcRule):
 		// SvcSvcRule depends on ServiceFromRef and ServiceToRef (both Services must be Ready)
 		return w.extractSvcSvcRuleDependencies(resource)
+	case string(registry.TypeSvcFqdnRule):
+		// SvcFqdnRule depends on the referenced ServiceFrom (Service must be Ready)
+		return w.extractSvcFqdnRuleDependencies(resource)
 	default:
 		return nil, fmt.Errorf("unknown entity resource type: %s", resourceType)
 	}
@@ -411,34 +431,74 @@ func (w *OutboxWorker) extractSvcSvcRuleDependencies(
 	return deps, nil
 }
 
-// extractAddressGroupDependencies extracts Host dependencies from AddressGroup
-// AddressGroup depends on all Hosts in AggregatedHosts field
+// extractSvcFqdnRuleDependencies extracts Service dependencies from SvcFqdnRule
+// SvcFqdnRule depends on ServiceFromRef (Service must be Ready)
+func (w *OutboxWorker) extractSvcFqdnRuleDependencies(
+	resource interface{},
+) ([]EntityDependency, error) {
+	// Type assert to *models.SvcFqdnRule
+	rule, ok := resource.(*models.SvcFqdnRule)
+	if !ok {
+		return nil, fmt.Errorf("invalid resource type for SvcFqdnRule extraction: %T (expected *models.SvcFqdnRule)", resource)
+	}
+
+	// Ensure namespace fallback is respected
+	serviceNamespace := rule.ServiceFromRef.Namespace
+	if serviceNamespace == "" {
+		serviceNamespace = rule.Namespace
+	}
+
+	deps := []EntityDependency{
+		{
+			Type:      string(registry.TypeService),
+			Name:      rule.ServiceFromRef.Name,
+			Namespace: serviceNamespace,
+			Reason:    fmt.Sprintf("Service referenced in SvcFqdnRule.ServiceFromRef (sent as SvcFrom='%s/%s' to SGROUP)", serviceNamespace, rule.ServiceFromRef.Name),
+		},
+	}
+
+	w.logger.Debug("extracted SvcFqdnRule dependencies",
+		zap.String("rule_namespace", rule.Namespace),
+		zap.String("rule_name", rule.Name),
+		zap.String("service_from", fmt.Sprintf("%s/%s", serviceNamespace, rule.ServiceFromRef.Name)))
+
+	return deps, nil
+}
+
+// extractAddressGroupDependencies extracts dependencies for AddressGroup
+// IMPORTANT: AddressGroup does NOT depend on Hosts!
+//
+// Architecture rationale:
+// - AggregatedHosts is a payload field for K8s API status display, NOT a dependency
+// - AddressGroup.ToSGroupsProto() does NOT include Hosts in the SGROUP sync payload
+// - SGROUP architecture uses ONE-WAY dependency: Host → AddressGroup (via SgName)
+// - Hosts synchronize independently and reference their AddressGroup
+// - Making AG depend on Hosts creates CIRCULAR DEPENDENCY deadlock:
+//   - Host waits for AG.Ready=True
+//   - AG waits for Host.Ready=True
+//   - → Deadlock! All operations (CREATE/UPDATE/DELETE) hang forever
+//
+// Therefore: AddressGroup has NO dependencies (or optionally depends only on Networks)
 func (w *OutboxWorker) extractAddressGroupDependencies(
 	resource interface{},
 ) ([]EntityDependency, error) {
 	// Type assert to *models.AddressGroup
-	// The resource is loaded by loadEntityResource() in process_entity.go
 	ag, ok := resource.(*models.AddressGroup)
 	if !ok {
 		return nil, fmt.Errorf("invalid resource type for AddressGroup extraction: %T (expected *models.AddressGroup)", resource)
 	}
 
-	// AddressGroup depends on all Hosts in AggregatedHosts
-	// Each Host must be Ready before AddressGroup can be synced to SGROUP
+	// AddressGroup has NO dependencies on Hosts (see comment above)
+	// AggregatedHosts is for status display only, not for SGROUP sync
+
+	// Future: Could add dependency on Networks if AG.Networks is used in sync
+	// For now, AddressGroup is independent
 	var deps []EntityDependency
-	for _, hostRef := range ag.AggregatedHosts {
-		deps = append(deps, EntityDependency{
-			Type:      string(registry.TypeHost),
-			Name:      hostRef.GetName(),
-			Namespace: ag.Namespace, // Hosts are in same namespace as AG
-			Reason:    fmt.Sprintf("Host referenced in AddressGroup.AggregatedHosts (source: %s)", hostRef.Source),
-		})
-	}
 
 	w.logger.Debug("extracted AddressGroup dependencies",
 		zap.String("ag_namespace", ag.Namespace),
 		zap.String("ag_name", ag.Name),
-		zap.Int("host_count", len(deps)))
+		zap.Int("dependency_count", len(deps))) // Should be 0
 
 	return deps, nil
 }

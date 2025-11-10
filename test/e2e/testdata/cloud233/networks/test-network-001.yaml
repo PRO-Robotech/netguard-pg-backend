@@ -1,0 +1,10 @@
+apiVersion: netguard.sgroups.io/v1beta1
+kind: Network
+metadata:
+  name: test-network-001
+  namespace: incloud-sgroups
+  labels:
+    test: cloud233
+    scenario: network-create-sync
+spec:
+  cidr: "10.0.1.0/24"

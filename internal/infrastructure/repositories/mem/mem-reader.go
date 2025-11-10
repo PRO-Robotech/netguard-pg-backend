@@ -97,6 +97,18 @@ func (r *reader) GetServiceByID(ctx context.Context, id models.ResourceIdentifie
 	return nil, ports.ErrNotFound
 }
 
+func (r *reader) ListSvcSvcRules(ctx context.Context, consume func(models.SvcSvcRule) error, scope ports.Scope) error {
+	// No in-memory storage for svc-svc rules in tests; behave as empty.
+	return nil
+}
+
+func (r *reader) GetSvcSvcRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcSvcRule, error) {
+	// In-memory registry does not currently persist SvcSvcRule objects.
+	// Return ErrNotFound to match behaviour expected by higher layers when
+	// a rule isn't present in the store.
+	return nil, ports.ErrNotFound
+}
+
 func (r *reader) ListAddressGroups(ctx context.Context, consume func(models.AddressGroup) error, scope ports.Scope) error {
 	var addressGroups map[string]models.AddressGroup
 
@@ -512,13 +524,12 @@ func (r *reader) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdenti
 	return nil, ports.ErrNotFound
 }
 
-// Stub methods for SvcSvcRule - not implemented in memory repository yet
-func (r *reader) ListSvcSvcRules(ctx context.Context, consume func(models.SvcSvcRule) error, scope ports.Scope) error {
+func (r *reader) ListSvcFqdnRules(ctx context.Context, consume func(models.SvcFqdnRule) error, scope ports.Scope) error {
 	// Stub implementation - return empty list
 	return nil
 }
 
-func (r *reader) GetSvcSvcRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcSvcRule, error) {
+func (r *reader) GetSvcFqdnRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcFqdnRule, error) {
 	// Stub implementation - always return not found
 	return nil, ports.ErrNotFound
 }

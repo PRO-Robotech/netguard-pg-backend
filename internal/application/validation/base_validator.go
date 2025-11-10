@@ -7,10 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
+
+	"github.com/pkg/errors"
 )
 
 // BaseValidator provides common validation functionality for all entity validators

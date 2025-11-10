@@ -178,6 +178,16 @@ func (d *Dispatcher) DispatchSync(ctx context.Context, syncOp models.SyncOp, sub
 		}
 		return d.service.Sync(ctx, syncOp, rules)
 
+	case *netguardpb.SyncReq_SvcfqdnRules:
+		if s.SvcfqdnRules == nil || len(s.SvcfqdnRules.SvcfqdnRules) == 0 {
+			return nil
+		}
+		rules := make([]models.SvcFqdnRule, 0, len(s.SvcfqdnRules.SvcfqdnRules))
+		for _, r := range s.SvcfqdnRules.SvcfqdnRules {
+			rules = append(rules, converters.ConvertSvcFqdnRule(r))
+		}
+		return d.service.Sync(ctx, syncOp, rules)
+
 	default:
 		return errors.New("subject not specified")
 	}

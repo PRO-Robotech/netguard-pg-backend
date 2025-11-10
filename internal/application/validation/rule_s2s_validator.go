@@ -99,8 +99,7 @@ func (v *RuleS2SValidator) ValidateNamespaceRules(ctx context.Context, rule mode
 
 // ValidateForCreation validates a rule s2s before creation
 func (v *RuleS2SValidator) ValidateForCreation(ctx context.Context, rule models.RuleS2S) error {
-	// PHASE 1: Check for duplicate entity (CRITICAL FIX for overwrite issue)
-	// This prevents creation of entities with the same namespace/name combination
+	// Phase 1: ensure the namespace/name combination is unused before creation.
 	keyExtractor := func(entity interface{}) string {
 		if rs2s, ok := entity.(*models.RuleS2S); ok {
 			return rs2s.Key()

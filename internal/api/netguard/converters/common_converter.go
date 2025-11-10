@@ -8,7 +8,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// GetSelfRef extracts ResourceIdentifier from protobuf
 func GetSelfRef(identifier *netguardpb.ResourceIdentifier) models.ResourceIdentifier {
 	if identifier == nil {
 		return models.ResourceIdentifier{}
@@ -16,12 +15,10 @@ func GetSelfRef(identifier *netguardpb.ResourceIdentifier) models.ResourceIdenti
 	return models.NewResourceIdentifier(identifier.GetName(), models.WithNamespace(identifier.GetNamespace()))
 }
 
-// ConvertMeta converts protobuf Meta to domain Meta
 func ConvertMeta(metaPB *netguardpb.Meta) models.Meta {
 	if metaPB == nil {
 		return models.Meta{}
 	}
-
 	meta := models.Meta{
 		UID:                metaPB.Uid,
 		ResourceVersion:    metaPB.ResourceVersion,
@@ -30,11 +27,13 @@ func ConvertMeta(metaPB *netguardpb.Meta) models.Meta {
 		Annotations:        metaPB.Annotations,
 		ObservedGeneration: metaPB.ObservedGeneration,
 	}
-
 	if metaPB.CreationTs != nil {
 		meta.CreationTS = metav1.NewTime(metaPB.CreationTs.AsTime())
 	}
-
+	if metaPB.DeletionTs != nil {
+		deletionTime := metav1.NewTime(metaPB.DeletionTs.AsTime())
+		meta.DeletionTS = &deletionTime
+	}
 	if metaPB.Conditions != nil {
 		meta.Conditions = models.ProtoConditionsToK8s(metaPB.Conditions)
 	}
@@ -42,7 +41,6 @@ func ConvertMeta(metaPB *netguardpb.Meta) models.Meta {
 	return meta
 }
 
-// ConvertMetaToPB converts domain Meta to protobuf Meta
 func ConvertMetaToPB(meta models.Meta) *netguardpb.Meta {
 	result := &netguardpb.Meta{
 		Uid:                meta.UID,
@@ -53,23 +51,21 @@ func ConvertMetaToPB(meta models.Meta) *netguardpb.Meta {
 		Conditions:         models.K8sConditionsToProto(meta.Conditions),
 		ObservedGeneration: meta.ObservedGeneration,
 	}
-
 	if !meta.CreationTS.IsZero() {
 		result.CreationTs = timestamppb.New(meta.CreationTS.Time)
+	}
+	if meta.DeletionTS != nil && !meta.DeletionTS.IsZero() {
+		result.DeletionTs = timestamppb.New(meta.DeletionTS.Time)
 	}
 
 	return result
 }
-
-// ResourceIdentifierFromPB converts protobuf ResourceIdentifier to domain model
 func ResourceIdentifierFromPB(id *netguardpb.ResourceIdentifier) models.ResourceIdentifier {
 	if id == nil {
 		return models.ResourceIdentifier{}
 	}
 	return models.NewResourceIdentifier(id.GetName(), models.WithNamespace(id.GetNamespace()))
 }
-
-// ResourceIdentifierToPB converts domain ResourceIdentifier to protobuf
 func ResourceIdentifierToPB(id models.ResourceIdentifier) *netguardpb.ResourceIdentifier {
 	return &netguardpb.ResourceIdentifier{
 		Name:      id.Name,
@@ -77,12 +73,10 @@ func ResourceIdentifierToPB(id models.ResourceIdentifier) *netguardpb.ResourceId
 	}
 }
 
-// ConvertSyncOp converts protobuf SyncOp to domain SyncOp
 func ConvertSyncOp(protoSyncOp netguardpb.SyncOp) models.SyncOp {
 	return models.ProtoToSyncOp(int32(protoSyncOp))
 }
 
-// ConvertActionToPB converts domain RuleAction to protobuf RuleAction
 func ConvertActionToPB(action models.RuleAction) netguardpb.RuleAction {
 	switch action {
 	case models.ActionAccept:
@@ -94,7 +88,6 @@ func ConvertActionToPB(action models.RuleAction) netguardpb.RuleAction {
 	}
 }
 
-// ConvertActionFromPB converts protobuf RuleAction to domain RuleAction
 func ConvertActionFromPB(action netguardpb.RuleAction) models.RuleAction {
 	switch action {
 	case netguardpb.RuleAction_ACCEPT:
@@ -106,7 +99,6 @@ func ConvertActionFromPB(action netguardpb.RuleAction) models.RuleAction {
 	}
 }
 
-// ConvertTransportToPB converts domain TransportProtocol to protobuf Transport
 func ConvertTransportToPB(transport models.TransportProtocol) netguardpb.Networks_NetIP_Transport {
 	switch transport {
 	case models.TCP:
@@ -118,7 +110,6 @@ func ConvertTransportToPB(transport models.TransportProtocol) netguardpb.Network
 	}
 }
 
-// ConvertTransportFromPB converts protobuf Transport to domain TransportProtocol
 func ConvertTransportFromPB(transport netguardpb.Networks_NetIP_Transport) models.TransportProtocol {
 	switch transport {
 	case netguardpb.Networks_NetIP_TCP:
@@ -130,7 +121,6 @@ func ConvertTransportFromPB(transport netguardpb.Networks_NetIP_Transport) model
 	}
 }
 
-// ConvertTrafficToPB converts domain Traffic to protobuf Traffic
 func ConvertTrafficToPB(traffic models.Traffic) netguardpb.Traffic {
 	switch traffic {
 	case models.INGRESS:
@@ -142,7 +132,6 @@ func ConvertTrafficToPB(traffic models.Traffic) netguardpb.Traffic {
 	}
 }
 
-// ConvertTrafficFromPB converts protobuf Traffic to domain Traffic
 func ConvertTrafficFromPB(traffic netguardpb.Traffic) models.Traffic {
 	switch traffic {
 	case netguardpb.Traffic_Ingress:

@@ -59,6 +59,8 @@ func (w *MutationWebhook) Handle(ctx context.Context, req *admissionv1.Admission
 		return w.mutateRuleS2S(ctx, req)
 	case "SvcSvcRule":
 		return w.mutateSvcSvcRule(ctx, req)
+	case "SvcFqdnRule":
+		return w.mutateSvcFqdnRule(ctx, req)
 	case "ServiceAlias":
 		return w.mutateServiceAlias(ctx, req)
 	case "AddressGroupBindingPolicy":
@@ -274,7 +276,7 @@ func (w *MutationWebhook) mutateSvcSvcRule(ctx context.Context, req *admissionv1
 	// Normalize namespace in ServiceFrom if empty
 	if rule.Spec.ServiceFrom.Namespace == "" {
 		patches = append(patches, map[string]interface{}{
-			"op":    "replace",
+			"op":    "add",
 			"path":  "/spec/serviceFrom/namespace",
 			"value": rule.Namespace,
 		})
@@ -283,9 +285,46 @@ func (w *MutationWebhook) mutateSvcSvcRule(ctx context.Context, req *admissionv1
 	// Normalize namespace in ServiceTo if empty
 	if rule.Spec.ServiceTo.Namespace == "" {
 		patches = append(patches, map[string]interface{}{
-			"op":    "replace",
+			"op":    "add",
 			"path":  "/spec/serviceTo/namespace",
 			"value": rule.Namespace,
+		})
+	}
+
+	return w.createPatchResponse(req.UID, patches)
+}
+
+// mutateSvcFqdnRule applies defaulting logic to SvcFqdnRule resources.
+func (w *MutationWebhook) mutateSvcFqdnRule(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
+	var rule netguardv1beta1.SvcFqdnRule
+	if err := runtime.DecodeInto(w.decoder, req.Object.Raw, &rule); err != nil {
+		return w.errorResponse(req.UID, fmt.Sprintf("Failed to decode SvcFqdnRule: %v", err))
+	}
+
+	var patches []map[string]interface{}
+
+	patches = append(patches, w.addManagedByLabel(&rule)...)
+	patches = append(patches, w.addCreatedByAnnotation(&rule)...)
+
+	if rule.Spec.ServiceFrom.Namespace == "" {
+		patches = append(patches, map[string]interface{}{
+			"op":    "add",
+			"path":  "/spec/serviceFrom/namespace",
+			"value": rule.Namespace,
+		})
+	}
+	if rule.Spec.ServiceFrom.APIVersion == "" {
+		patches = append(patches, map[string]interface{}{
+			"op":    "add",
+			"path":  "/spec/serviceFrom/apiVersion",
+			"value": "netguard.sgroups.io/v1beta1",
+		})
+	}
+	if rule.Spec.ServiceFrom.Kind == "" {
+		patches = append(patches, map[string]interface{}{
+			"op":    "add",
+			"path":  "/spec/serviceFrom/kind",
+			"value": "Service",
 		})
 	}
 

@@ -176,4 +176,22 @@ func modifyStructFieldsWithEnums(defs map[string]common.OpenAPIDefinition) {
 			defs["netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcSvcRuleSpec"] = svcSvcSpec
 		}
 	}
+
+	if svcFqdnSpec, exists := defs["netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcFqdnRuleSpec"]; exists {
+		if svcFqdnSpec.Schema.Properties != nil {
+			if transportProp, ok := svcFqdnSpec.Schema.Properties["transport"]; ok {
+				transportProp.SchemaProps.Enum = []interface{}{"TCP", "UDP"}
+				transportProp.SchemaProps.Description = "Transport protocol (TCP or UDP)"
+				svcFqdnSpec.Schema.Properties["transport"] = transportProp
+			}
+
+			if actionProp, ok := svcFqdnSpec.Schema.Properties["action"]; ok {
+				actionProp.SchemaProps.Enum = []interface{}{"ACCEPT", "DROP"}
+				actionProp.SchemaProps.Description = "Action for the rule (ACCEPT or DROP)"
+				svcFqdnSpec.Schema.Properties["action"] = actionProp
+			}
+
+			defs["netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcFqdnRuleSpec"] = svcFqdnSpec
+		}
+	}
 }

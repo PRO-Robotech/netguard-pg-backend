@@ -187,6 +187,25 @@ func (r *GRPCReader) GetServiceAliasByID(ctx context.Context, id models.Resource
 	return r.grpcClient.GetServiceAlias(ctx, id)
 }
 
+func (r *GRPCReader) ListSvcFqdnRules(ctx context.Context, consume func(models.SvcFqdnRule) error, scope ports.Scope) error {
+	rules, err := r.grpcClient.ListSvcFqdnRules(ctx, scope)
+	if err != nil {
+		return err
+	}
+
+	for _, rule := range rules {
+		if err := consume(rule); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *GRPCReader) GetSvcFqdnRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcFqdnRule, error) {
+	return r.grpcClient.GetSvcFqdnRule(ctx, id)
+}
+
 // GetAddressGroupBindingPolicyByID реализует ports.Reader интерфейс
 func (r *GRPCReader) GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
 	return r.grpcClient.GetAddressGroupBindingPolicy(ctx, id)

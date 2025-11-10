@@ -75,6 +75,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Netguard().V1beta1().Services().Informer()}, nil
 	case v1beta1.SchemeGroupVersion.WithResource("servicealiases"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Netguard().V1beta1().ServiceAliases().Informer()}, nil
+	case v1beta1.SchemeGroupVersion.WithResource("svcfqdnrules"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Netguard().V1beta1().SvcFqdnRules().Informer()}, nil
 	case v1beta1.SchemeGroupVersion.WithResource("svcsvcrules"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Netguard().V1beta1().SvcSvcRules().Informer()}, nil
 

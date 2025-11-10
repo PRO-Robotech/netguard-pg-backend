@@ -32,6 +32,9 @@ const (
 	// TypeService represents a network service with port mappings
 	TypeService ResourceType = "Service"
 
+	// TypeSvcFqdnRule represents a service-to-FQDN firewall rule
+	TypeSvcFqdnRule ResourceType = "SvcFqdnRule"
+
 	// TypeSvcSvcRule represents a service-to-service firewall rule
 	TypeSvcSvcRule ResourceType = "SvcSvcRule"
 
@@ -79,7 +82,7 @@ type ResourceDefinition struct {
 	SupportsDelete bool
 
 	// AffectsResources lists resource types affected by this Process resource
-	// Only populated for Process resources (e.g., HostBinding affects [AddressGroup])
+	// Only populated for Process resources (e.g., HostBinding affects [Host])
 	// Empty for Entity resources
 	AffectsResources []ResourceType
 }
@@ -144,6 +147,16 @@ func init() {
 		AffectsResources: nil,
 	}
 
+	resourceRegistry[TypeSvcFqdnRule] = ResourceDefinition{
+		Type:             TypeSvcFqdnRule,
+		Category:         CategoryEntity,
+		TargetSystem:     TargetSGROUP,
+		SupportsCreate:   true,
+		SupportsUpdate:   true,
+		SupportsDelete:   true,
+		AffectsResources: nil,
+	}
+
 	// Process Resources - processed internally
 	// Process resources only support CREATE and DELETE (no UPDATE)
 	// Each process resource affects one or more Entity resources
@@ -155,8 +168,8 @@ func init() {
 		SupportsCreate: true,
 		SupportsUpdate: false, // HostBinding only supports CREATE/DELETE
 		SupportsDelete: true,
-		// HostBinding affects AddressGroup (updates aggregated_hosts)
-		AffectsResources: []ResourceType{TypeAddressGroup},
+		// HostBinding now coordinates Host readiness only (AddressGroup handled via triggers)
+		AffectsResources: []ResourceType{TypeHost},
 	}
 
 	resourceRegistry[TypeNetworkBinding] = ResourceDefinition{
@@ -166,8 +179,8 @@ func init() {
 		SupportsCreate: true,
 		SupportsUpdate: false, // NetworkBinding only supports CREATE/DELETE
 		SupportsDelete: true,
-		// NetworkBinding affects AddressGroup (updates aggregated_networks)
-		AffectsResources: []ResourceType{TypeAddressGroup},
+		// NetworkBinding now coordinates Network readiness only (AddressGroup handled via triggers)
+		AffectsResources: []ResourceType{TypeNetwork},
 	}
 
 	resourceRegistry[TypeAddressGroupBinding] = ResourceDefinition{
@@ -266,9 +279,9 @@ func ValidateRegistry() error {
 		return fmt.Errorf("registry is empty")
 	}
 
-	// Check expected count (6 resource types: 4 entities + 2 processes)
+	// Check expected count (7 resource types: 5 entities + 2 processes)
 	requiredTypes := []ResourceType{
-		TypeHost, TypeAddressGroup, TypeNetwork, TypeService,
+		TypeHost, TypeAddressGroup, TypeNetwork, TypeService, TypeSvcFqdnRule,
 		TypeHostBinding, TypeNetworkBinding,
 	}
 

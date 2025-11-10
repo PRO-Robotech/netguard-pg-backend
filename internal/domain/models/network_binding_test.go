@@ -6,8 +6,8 @@ import (
 )
 
 func TestNetworkBinding_NewNetworkBinding(t *testing.T) {
-	networkRef := v1beta1.ObjectReference{Name: "test-network"}
-	addressGroupRef := v1beta1.ObjectReference{Name: "test-group"}
+	networkRef := v1beta1.NamespacedObjectReference{ObjectReference: v1beta1.ObjectReference{Name: "test-network"}}
+	addressGroupRef := v1beta1.NamespacedObjectReference{ObjectReference: v1beta1.ObjectReference{Name: "test-group"}}
 
 	binding := NewNetworkBinding("test-binding", "default", networkRef, addressGroupRef)
 

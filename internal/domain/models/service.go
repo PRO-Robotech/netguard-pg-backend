@@ -23,6 +23,9 @@ type Service struct {
 	// Populated automatically by PostgreSQL triggers via junction table
 	XSvcSvcRules *XSvcSvcRules
 
+	// XSvcFqdnRules contains service-to-FQDN rules referencing this Service (READ-ONLY)
+	XSvcFqdnRules *XSvcFqdnRules
+
 	Meta Meta
 }
 
@@ -119,13 +122,20 @@ func (s *Service) ToSGroupsProto() (interface{}, error) {
 	}
 
 	// Build sg_names from AggregatedAddressGroups
-	var sgNames []string
+	// NOTE: SGROUP API interprets sg_names = [""] as an explicit request to clear bindings.
+	// If we send an empty slice, SGROUP treats it as "no change" and keeps stale data.
+	sgNames := make([]string, 0)
 	for _, agRef := range s.AggregatedAddressGroups {
 		agName := agRef.Ref.Name
 		if agRef.Ref.Namespace != "" {
 			agName = fmt.Sprintf("%s/%s", agRef.Ref.Namespace, agRef.Ref.Name)
 		}
 		sgNames = append(sgNames, agName)
+	}
+
+	if len(sgNames) == 0 {
+		// Use sentinel value recognized by SGROUP to remove all bindings.
+		sgNames = []string{""}
 	}
 
 	// Convert to sgroups protobuf element

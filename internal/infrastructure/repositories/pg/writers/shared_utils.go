@@ -154,5 +154,7 @@ func forcePendingSyncCondition(conditions []metav1.Condition) []metav1.Condition
 		LastTransitionTime: metav1.Now(),
 	}
 
-	return append(filtered, pending)
+	result := append(filtered, pending)
+
+	return result
 }

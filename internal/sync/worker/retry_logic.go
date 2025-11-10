@@ -21,14 +21,29 @@ func (w *OutboxWorker) scheduleRetry(
 ) error {
 	// Categorize error to determine retry strategy
 	category := w.categorizeError(err)
-	maxAttempts := getMaxAttempts(category)
+
+	// Respect the per-entry max_retries value and fall back to category defaults when it is unset.
+	maxAttempts := item.MaxRetries
+	if maxAttempts <= 0 {
+		// Fallback to category-based limit for legacy entries or when not explicitly set
+		maxAttempts = getMaxAttempts(category)
+	}
 
 	// Log retry attempt with context
+	lastErr := ""
+	if item.LastError != nil {
+		lastErr = *item.LastError
+	}
+
 	w.logger.Info("scheduling retry",
 		zap.String("resource_type", item.ResourceType),
 		zap.String("resource_id", item.ResourceID.String()),
+		zap.String("resource_namespace", item.ResourceNamespace),
+		zap.String("resource_name", item.ResourceName),
+		zap.String("current_status", string(item.Status)),
 		zap.Int("current_attempts", item.Attempts),
 		zap.Int("max_attempts", maxAttempts),
+		zap.String("previous_last_error", lastErr),
 		zap.String("error_category", string(category)),
 		zap.Error(err))
 
@@ -95,6 +110,8 @@ func (w *OutboxWorker) scheduleRetry(
 	w.logger.Info("retry scheduled",
 		zap.String("resource_type", item.ResourceType),
 		zap.String("resource_id", item.ResourceID.String()),
+		zap.String("resource_namespace", item.ResourceNamespace),
+		zap.String("resource_name", item.ResourceName),
 		zap.Int("attempt", item.Attempts+1),
 		zap.Int("max_attempts", maxAttempts),
 		zap.Duration("retry_in", nextRetry),

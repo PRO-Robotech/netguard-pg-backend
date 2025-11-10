@@ -73,6 +73,10 @@ func (c *FakeNetguardV1beta1) ServiceAliases(namespace string) v1beta1.ServiceAl
 	return newFakeServiceAliases(c, namespace)
 }
 
+func (c *FakeNetguardV1beta1) SvcFqdnRules(namespace string) v1beta1.SvcFqdnRuleInterface {
+	return newFakeSvcFqdnRules(c, namespace)
+}
+
 func (c *FakeNetguardV1beta1) SvcSvcRules(namespace string) v1beta1.SvcSvcRuleInterface {
 	return newFakeSvcSvcRules(c, namespace)
 }

@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 
 	"netguard-pg-backend/internal/domain/ports"
+	"netguard-pg-backend/internal/sync/monitor"
 	"netguard-pg-backend/internal/sync/syncers"
 	"netguard-pg-backend/internal/sync/worker"
 )
@@ -87,9 +88,12 @@ func CreateTestWorker(
 	addressGroupSyncer := syncers.NewAddressGroupSyncer(mockClient, logger)
 	networkSyncer := syncers.NewNetworkSyncer(mockClient, logger)
 	serviceSyncer := syncers.NewServiceSyncer(mockClient, logger)
+	svcSvcRuleSyncer := syncers.NewSvcSvcRuleSyncer(mockClient, logger)
+	svcFqdnRuleSyncer := syncers.NewSvcFqdnRuleSyncer(mockClient, logger)
+	connMonitor := monitor.NewSGroupConnectionMonitor(mockClient, monitor.DefaultConfig(), zapLogger)
 
 	// Create worker config
-	// 🔧 FIX: Added all required fields
+	// FIX: Added all required fields
 	config := &worker.WorkerConfig{
 		PollInterval:          1 * time.Second, // Changed from 100ms to 1s (minimum)
 		BatchSize:             10,
@@ -110,8 +114,13 @@ func CreateTestWorker(
 		addressGroupSyncer,
 		networkSyncer,
 		serviceSyncer,
+		svcSvcRuleSyncer,
+		svcFqdnRuleSyncer,
+		nil,
 		zapLogger,
 		config,
+		connMonitor,
+		nil,
 	)
 
 	t.Logf("✅ Created test worker (PollInterval=%v, BatchSize=%d)", config.PollInterval, config.BatchSize)

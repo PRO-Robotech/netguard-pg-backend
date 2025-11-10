@@ -1,0 +1,19 @@
+apiVersion: netguard.sgroups.io/v1beta1
+kind: HostBinding
+metadata:
+  name: test-host-binding-001
+  namespace: incloud-sgroups
+  labels:
+    test: cloud233
+    scenario: hostbinding-create-sync
+spec:
+  hostRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: Host
+    name: test-host-001
+    namespace: incloud-sgroups
+  addressGroupRef:
+    apiVersion: netguard.sgroups.io/v1beta1
+    kind: AddressGroup
+    name: test-ag-001
+    namespace: incloud-sgroups

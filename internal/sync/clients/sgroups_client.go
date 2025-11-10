@@ -184,9 +184,9 @@ func (c *sgroupsClient) GetHostsByUUIDs(ctx context.Context, uuids []string) ([]
 
 	// Create request with ByUID filter
 	req := &pb.ListHostsReq{
-		Criteria: &pb.ListHostsReq_ByUuid{
-			ByUuid: &pb.ListHostsReq_ByUID{
-				UIDs: uuids,
+		Criteria: &pb.ListHostsReq_ByUUID_{
+			ByUUID: &pb.ListHostsReq_ByUUID{
+				UUIDs: uuids,
 			},
 		},
 	}
@@ -324,6 +324,12 @@ func (c *sgroupsClient) convertSyncRequestToProto(req *types.SyncRequest) (*pb.S
 			pbReq.Subject = &pb.SyncReq_ServiceRules{ServiceRules: rules}
 		} else {
 			return nil, fmt.Errorf("invalid data type for SvcSvcRules subject, expected *pb.SyncSvcSvcRules, got %T", req.Data)
+		}
+	case types.SyncSubjectTypeSvcFqdnRules:
+		if rules, ok := req.Data.(*pb.SyncSvcFqdnRules); ok {
+			pbReq.Subject = &pb.SyncReq_SvcFqdnRules{SvcFqdnRules: rules}
+		} else {
+			return nil, fmt.Errorf("invalid data type for SvcFqdnRules subject, expected *pb.SyncSvcFqdnRules, got %T", req.Data)
 		}
 	default:
 		return nil, fmt.Errorf("unknown subject type: %s", req.SubjectType)

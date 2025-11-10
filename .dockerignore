@@ -42,7 +42,7 @@ netguard-server
 *.bin
 
 # Test coverage
-coverage.out
+../docs/coverage.out
 coverage.html
 *.test
 

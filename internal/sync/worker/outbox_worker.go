@@ -11,11 +11,18 @@ import (
 	"go.uber.org/zap"
 
 	"netguard-pg-backend/internal/domain"
+	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/infrastructure/repositories"
 	"netguard-pg-backend/internal/sync/monitor"
 	"netguard-pg-backend/internal/sync/syncers"
 )
+
+// PortMappingRegenerator encapsulates AddressGroupPortMapping regeneration hooks
+type PortMappingRegenerator interface {
+	RegeneratePortMappingsForService(ctx context.Context, serviceID models.ResourceIdentifier) error
+	RegeneratePortMappingsForAddressGroup(ctx context.Context, addressGroupID models.ResourceIdentifier) error
+}
 
 // OutboxWorker polls sync_outbox table and processes pending entries
 type OutboxWorker struct {
@@ -26,12 +33,19 @@ type OutboxWorker struct {
 	// In-memory registry for loading resources
 	registry ports.Registry
 
+	// Condition management (injected)
+	conditionManager ports.ConditionManager
+
 	// Syncers for entity resources
 	hostSyncer         *syncers.HostSyncer
 	addressGroupSyncer *syncers.AddressGroupSyncer
 	networkSyncer      *syncers.NetworkSyncer
 	serviceSyncer      *syncers.ServiceSyncer
 	svcSvcRuleSyncer   *syncers.SvcSvcRuleSyncer
+	svcFqdnRuleSyncer  *syncers.SvcFqdnRuleSyncer
+
+	// Port mapping maintenance (optional)
+	portMappingRegenerator PortMappingRegenerator
 
 	// Configuration
 	config *WorkerConfig
@@ -65,9 +79,12 @@ func NewOutboxWorker(
 	networkSyncer *syncers.NetworkSyncer,
 	serviceSyncer *syncers.ServiceSyncer,
 	svcSvcRuleSyncer *syncers.SvcSvcRuleSyncer,
+	svcFqdnRuleSyncer *syncers.SvcFqdnRuleSyncer,
+	conditionManager ports.ConditionManager,
 	logger *zap.Logger,
 	config *WorkerConfig,
 	connectionMonitor *monitor.SGroupConnectionMonitor,
+	portMappingRegenerator PortMappingRegenerator,
 ) *OutboxWorker {
 	if config == nil {
 		config = DefaultConfig()
@@ -82,20 +99,23 @@ func NewOutboxWorker(
 	}
 
 	return &OutboxWorker{
-		pool:               pool,
-		outboxRepo:         repositories.NewOutboxRepository(pool),
-		registry:           registry,
-		hostSyncer:         hostSyncer,
-		addressGroupSyncer: addressGroupSyncer,
-		networkSyncer:      networkSyncer,
-		serviceSyncer:      serviceSyncer,
-		svcSvcRuleSyncer:   svcSvcRuleSyncer,
-		config:             config,
-		logger:             logger.With(zap.String("component", "outbox-worker")),
-		connectionMonitor:  connectionMonitor,
-		isPaused:           false,
-		stopCh:             make(chan struct{}),
-		doneCh:             make(chan struct{}),
+		pool:                   pool,
+		outboxRepo:             repositories.NewOutboxRepository(pool),
+		registry:               registry,
+		conditionManager:       conditionManager,
+		hostSyncer:             hostSyncer,
+		addressGroupSyncer:     addressGroupSyncer,
+		networkSyncer:          networkSyncer,
+		serviceSyncer:          serviceSyncer,
+		svcSvcRuleSyncer:       svcSvcRuleSyncer,
+		svcFqdnRuleSyncer:      svcFqdnRuleSyncer,
+		portMappingRegenerator: portMappingRegenerator,
+		config:                 config,
+		logger:                 logger.With(zap.String("component", "outbox-worker")),
+		connectionMonitor:      connectionMonitor,
+		isPaused:               false,
+		stopCh:                 make(chan struct{}),
+		doneCh:                 make(chan struct{}),
 	}
 }
 
@@ -224,12 +244,29 @@ func (w *OutboxWorker) processBatch(ctx context.Context) error {
 	// Process each entry
 	for _, entry := range entries {
 		if err := w.processEntry(ctx, entry); err != nil {
+			// Special handling for ErrWaitingForSync - don't count as failure, just skip
+			if IsWaitingForSync(err) {
+				w.logger.Debug("entry waiting for SGROUP sync, will retry in next batch",
+					zap.String("resource_type", entry.ResourceType),
+					zap.String("resource_id", entry.ResourceID.String()))
+				continue
+			}
+
 			w.logger.Error("failed to process entry",
 				zap.String("resource_type", entry.ResourceType),
 				zap.String("resource_id", entry.ResourceID.String()),
 				zap.Error(err),
 			)
-			// Note: failed is incremented per batch, not per entry
+
+			// Use scheduleRetry to categorize the error and either enqueue another attempt or mark it permanent.
+			if retryErr := w.scheduleRetry(ctx, entry, err); retryErr != nil {
+				w.logger.Error("failed to schedule retry",
+					zap.String("entry_id", entry.ID.String()),
+					zap.String("resource_type", entry.ResourceType),
+					zap.Error(retryErr))
+			}
+
+			atomic.AddInt64(&w.failed, 1)
 		} else {
 			atomic.AddInt64(&w.processed, 1)
 		}
