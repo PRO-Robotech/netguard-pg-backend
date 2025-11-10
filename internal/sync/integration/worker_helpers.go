@@ -252,7 +252,7 @@ func TCCreateTestWorker(t *testing.T, tc *TestContainer) *worker.OutboxWorker {
 		nil,
 	)
 
-	t.Logf("  🏗️  Created OutboxWorker for E2E testing")
+	t.Logf("  ️  Created OutboxWorker for E2E testing")
 
 	// Register cleanup to close registry (which closes the pool)
 	t.Cleanup(func() {

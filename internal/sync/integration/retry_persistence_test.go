@@ -38,14 +38,14 @@ func TestBUG002_RetryStateNotPersisted(t *testing.T) {
 	TCCleanOutboxTable(t, tc.DB)
 
 	// STEP 1: Create AddressGroup
-	t.Log("📝 Creating AddressGroup...")
+	t.Log("Creating AddressGroup...")
 	agID := TCCreateTestAddressGroup(t, tc.DB, "default", "test-retry-ag")
 	require.NotEmpty(t, agID)
 
 	// STEP 2: Manually insert outbox entry (since direct INSERT doesn't trigger spec triggers)
 	// NOTE: In production, Repository writers create outbox entries via triggers
 	// For this test, we simulate that by manually inserting
-	t.Log("📝 Manually creating outbox entry (simulating Repository writer)...")
+	t.Log("Manually creating outbox entry (simulating Repository writer)...")
 	var entryID string
 	err := tc.DB.QueryRow(`
 		INSERT INTO sync_outbox (
@@ -60,7 +60,7 @@ func TestBUG002_RetryStateNotPersisted(t *testing.T) {
 	t.Logf("  ✅ Created outbox entry: %s", entryID)
 
 	// STEP 3: Verify outbox entry exists with initial state
-	t.Log("🔍 Verifying initial outbox entry state...")
+	t.Log("Verifying initial outbox entry state...")
 	entry := TCWaitForOutboxEntry(t, tc.DB, "test-retry-ag", 2*time.Second)
 	require.NotNil(t, entry, "outbox entry should exist")
 
@@ -79,13 +79,13 @@ func TestBUG002_RetryStateNotPersisted(t *testing.T) {
 	t.Log("ℹ️  In production: Worker processes entries and updates retry state")
 	t.Log("ℹ️  BUG-002: Worker does NOT persist retry state to database")
 	t.Log("")
-	t.Log("🔬 TEST STRATEGY:")
+	t.Log("TEST STRATEGY:")
 	t.Log("   1. Create outbox entry (DONE)")
 	t.Log("   2. Deploy code WITH OutboxWorker")
 	t.Log("   3. Simulate SGROUP failure")
 	t.Log("   4. Verify retry state persists")
 	t.Log("")
-	t.Log("📋 MANUAL VALIDATION STEPS:")
+	t.Log("MANUAL VALIDATION STEPS:")
 	t.Log("   1. Deploy backend with OutboxWorker enabled")
 	t.Log("   2. Stop SGROUP service")
 	t.Log("   3. Create AddressGroup in K8s")

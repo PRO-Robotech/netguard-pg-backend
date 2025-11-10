@@ -35,13 +35,13 @@ import (
 // condition setting logic in the Writer.
 func TestHost_InitialConditions_ReadyFalseBeforeSync(t *testing.T) {
 	t.Log("========================================")
-	t.Log("🧪 TEST: Host Initial Conditions - Ready=False Before SGROUP Sync")
+	t.Log("TEST: Host Initial Conditions - Ready=False Before SGROUP Sync")
 	t.Log("========================================")
 
 	// ========================================
 	// STEP 1: Setup testcontainer with PostgreSQL
 	// ========================================
-	t.Log("\n📦 STEP 1: Setting up test environment...")
+	t.Log("\nSTEP 1: Setting up test environment...")
 	tc := SetupTestEnvironment(t)
 	defer tc.Cleanup()
 
@@ -54,7 +54,7 @@ func TestHost_InitialConditions_ReadyFalseBeforeSync(t *testing.T) {
 	// ========================================
 	// STEP 2: Create pgxpool for Writer
 	// ========================================
-	t.Log("\n🔌 STEP 2: Creating pgxpool connection...")
+	t.Log("\nSTEP 2: Creating pgxpool connection...")
 
 	pool, err := pgxpool.New(ctx, tc.ConnectionString)
 	require.NoError(t, err, "failed to create pgxpool")
@@ -65,7 +65,7 @@ func TestHost_InitialConditions_ReadyFalseBeforeSync(t *testing.T) {
 	// ========================================
 	// STEP 3: CREATE Host via Writer (simulates kubectl create)
 	// ========================================
-	t.Log("\n📝 STEP 3: Creating Host through Writer (simulates kubectl create)...")
+	t.Log("\nSTEP 3: Creating Host through Writer (simulates kubectl create)...")
 
 	namespace := "test-ns"
 	name := "host-initial-conditions"
@@ -95,7 +95,7 @@ func TestHost_InitialConditions_ReadyFalseBeforeSync(t *testing.T) {
 	// ========================================
 	// STEP 4: Write Host to DB using Writer
 	// ========================================
-	t.Log("\n💾 STEP 4: Writing Host to database...")
+	t.Log("\nSTEP 4: Writing Host to database...")
 
 	// Begin transaction
 	tx, err := pool.Begin(ctx)
@@ -122,7 +122,7 @@ func TestHost_InitialConditions_ReadyFalseBeforeSync(t *testing.T) {
 	// ========================================
 	// STEP 5: Read Host from DB and check conditions
 	// ========================================
-	t.Log("\n🔍 STEP 5: Reading Host from database and checking conditions...")
+	t.Log("\nSTEP 5: Reading Host from database and checking conditions...")
 
 	// Query k8s_metadata for conditions
 	var conditions string
@@ -135,7 +135,7 @@ func TestHost_InitialConditions_ReadyFalseBeforeSync(t *testing.T) {
 	`, namespace, name).Scan(&ready, &conditions)
 	require.NoError(t, err, "failed to query host conditions")
 
-	t.Logf("\n📊 RESULTS:")
+	t.Logf("\nRESULTS:")
 	t.Logf("   - DB ready column: %v", ready)
 	t.Logf("   - Conditions JSON: %s", conditions)
 
@@ -151,7 +151,7 @@ func TestHost_InitialConditions_ReadyFalseBeforeSync(t *testing.T) {
 	`, namespace, name).Scan(&conditionList)
 
 	if err == nil {
-		t.Log("\n📋 Parsed Conditions:")
+		t.Log("\nParsed Conditions:")
 		for _, cond := range conditionList {
 			t.Logf("   - Type: %s, Status: %s, Reason: %s, Message: %s",
 				cond.Type, cond.Status, cond.Reason, cond.Message)
@@ -161,7 +161,7 @@ func TestHost_InitialConditions_ReadyFalseBeforeSync(t *testing.T) {
 	// ========================================
 	// STEP 6: CRITICAL ASSERTIONS
 	// ========================================
-	t.Log("\n🚨 STEP 6: CRITICAL ASSERTIONS...")
+	t.Log("\nSTEP 6: CRITICAL ASSERTIONS...")
 
 	t.Run("DB ready column should be FALSE", func(t *testing.T) {
 		assert.False(t, ready,
@@ -224,7 +224,7 @@ func TestHost_InitialConditions_ReadyFalseBeforeSync(t *testing.T) {
 	// ========================================
 	// STEP 7: Verify Outbox Entry Created
 	// ========================================
-	t.Log("\n📨 STEP 7: Verifying outbox entry was created by trigger...")
+	t.Log("\nSTEP 7: Verifying outbox entry was created by trigger...")
 
 	var outboxCount int
 	err = tc.DB.QueryRow(`
@@ -245,7 +245,7 @@ func TestHost_InitialConditions_ReadyFalseBeforeSync(t *testing.T) {
 	}
 
 	t.Log("\n========================================")
-	t.Log("🧪 TEST COMPLETE")
+	t.Log("TEST COMPLETE")
 	t.Log("========================================")
 
 	// Summary

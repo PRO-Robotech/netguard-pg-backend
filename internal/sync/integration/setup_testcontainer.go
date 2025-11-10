@@ -44,10 +44,10 @@ func SetupTestEnvironment(t *testing.T) *TestContainer {
 	t.Helper()
 	ctx := context.Background()
 
-	t.Log("🚀 Starting test environment setup...")
+	t.Log("Starting test environment setup...")
 
 	// 1. Start PostgreSQL container
-	t.Log("  📦 Starting PostgreSQL container...")
+	t.Log("  Starting PostgreSQL container...")
 	pgContainer, err := postgres.RunContainer(ctx,
 		testcontainers.WithImage("postgres:16-alpine"),
 		postgres.WithDatabase("netguard_test"),
@@ -66,7 +66,7 @@ func SetupTestEnvironment(t *testing.T) *TestContainer {
 	require.NoError(t, err, "failed to get connection string")
 
 	// 3. Connect to database
-	t.Log("  🔌 Connecting to database...")
+	t.Log("  Connecting to database...")
 	db, err := sql.Open("pgx", connStr)
 	require.NoError(t, err, "failed to open database")
 
@@ -76,19 +76,19 @@ func SetupTestEnvironment(t *testing.T) *TestContainer {
 	t.Log("  ✅ Database connection established")
 
 	// 4. Apply migrations (minimal schema + outbox migrations only)
-	t.Log("  📜 Applying migrations...")
+	t.Log("  Applying migrations...")
 	tcApplyMigrations(t, db)
 	t.Log("  ✅ Migrations applied")
 
 	// 5. Setup mock SGROUP server
-	t.Log("  🎭 Starting mock SGROUP server...")
+	t.Log("  Starting mock SGROUP server...")
 	mockSGROUP := NewMockSGROUPServer(t)
 	mockSGROUP.Start()
 	t.Logf("  ✅ Mock SGROUP server started at %s", mockSGROUP.URL())
 
 	// 6. Cleanup function
 	cleanup := func() {
-		t.Log("🧹 Cleaning up test environment...")
+		t.Log("Cleaning up test environment...")
 		mockSGROUP.Stop()
 		db.Close()
 		if err := pgContainer.Terminate(ctx); err != nil {
@@ -121,7 +121,7 @@ func tcApplyMigrations(t *testing.T, db *sql.DB) {
 
 	// Find migrations directory
 	migrationsDir := tcFindMigrationsDir(t)
-	t.Logf("    📂 Found migrations directory: %s", migrationsDir)
+	t.Logf("    Found migrations directory: %s", migrationsDir)
 
 	// Set goose dialect
 	if err := goose.SetDialect("postgres"); err != nil {
@@ -129,7 +129,7 @@ func tcApplyMigrations(t *testing.T, db *sql.DB) {
 	}
 
 	// Apply ALL migrations using goose (handles StatementBegin/End correctly!)
-	t.Log("    📜 Applying ALL migrations (001-030) using goose...")
+	t.Log("    Applying ALL migrations (001-030) using goose...")
 
 	if err := goose.Up(db, migrationsDir); err != nil {
 		require.NoError(t, err, "failed to apply migrations with goose")

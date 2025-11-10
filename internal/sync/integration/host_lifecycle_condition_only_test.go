@@ -25,7 +25,8 @@ import (
 //
 // ROOT CAUSE:
 // markEntityResourceReady() in process_entity.go:246 calls:
-//     writer.SyncHosts(ctx, []models.Host{*r}, resourceScope, ports.ConditionOnlyOperation{})
+//
+//	writer.SyncHosts(ctx, []models.Host{*r}, resourceScope, ports.ConditionOnlyOperation{})
 //
 // But SyncHosts() IGNORES ConditionOnlyOperation{} flag and deletes Host!
 //
@@ -33,13 +34,13 @@ import (
 // This proves the bug exists and needs fixing.
 func TestHostLifecycle_ConditionOnlyUpdate_HostSurvives(t *testing.T) {
 	t.Log("========================================")
-	t.Log("🧪 TEST: Full Host Lifecycle - Condition-Only Update")
+	t.Log("TEST: Full Host Lifecycle - Condition-Only Update")
 	t.Log("========================================")
 
 	// ========================================
 	// STEP 1: Setup testcontainer with PostgreSQL
 	// ========================================
-	t.Log("\n📦 STEP 1: Setting up test environment...")
+	t.Log("\nSTEP 1: Setting up test environment...")
 	tc := SetupTestEnvironment(t)
 	defer tc.Cleanup()
 
@@ -51,7 +52,7 @@ func TestHostLifecycle_ConditionOnlyUpdate_HostSurvives(t *testing.T) {
 	// ========================================
 	// STEP 2: Start OutboxWorker
 	// ========================================
-	t.Log("\n🏗️  STEP 2: Creating OutboxWorker...")
+	t.Log("\n️  STEP 2: Creating OutboxWorker...")
 	worker := TCCreateTestWorker(t, tc)
 	require.NotNil(t, worker, "worker should not be nil")
 
@@ -64,7 +65,7 @@ func TestHostLifecycle_ConditionOnlyUpdate_HostSurvives(t *testing.T) {
 	// ========================================
 	// STEP 3: CREATE Host in DB
 	// ========================================
-	t.Log("\n📝 STEP 3: Creating Host in database...")
+	t.Log("\nSTEP 3: Creating Host in database...")
 
 	namespace := "test-ns"
 	name := "host-lifecycle-test"
@@ -86,7 +87,7 @@ func TestHostLifecycle_ConditionOnlyUpdate_HostSurvives(t *testing.T) {
 	// ========================================
 	// STEP 4: Verify Host exists (Baseline)
 	// ========================================
-	t.Log("\n🔍 STEP 4: Verifying Host exists (baseline check)...")
+	t.Log("\nSTEP 4: Verifying Host exists (baseline check)...")
 
 	var countBefore int
 	err := tc.DB.QueryRow(`
@@ -101,7 +102,7 @@ func TestHostLifecycle_ConditionOnlyUpdate_HostSurvives(t *testing.T) {
 	// ========================================
 	// STEP 5: Create Outbox Entry (simulate upsertHost creating outbox)
 	// ========================================
-	t.Log("\n📨 STEP 5: Creating Outbox entry for Host CREATE operation...")
+	t.Log("\nSTEP 5: Creating Outbox entry for Host CREATE operation...")
 
 	// Wait a moment for any trigger-based outbox entries
 	time.Sleep(500 * time.Millisecond)
@@ -186,7 +187,7 @@ func TestHostLifecycle_ConditionOnlyUpdate_HostSurvives(t *testing.T) {
 	// ========================================
 	// STEP 7: CRITICAL CHECK - Does Host still exist?
 	// ========================================
-	t.Log("\n🚨 STEP 7: CRITICAL CHECK - Verifying Host still exists...")
+	t.Log("\nSTEP 7: CRITICAL CHECK - Verifying Host still exists...")
 	t.Log("   Expected: Host SHOULD still exist (count=1)")
 	t.Log("   Actual (BUG): Host DELETED by SyncHosts() (count=0)")
 
@@ -197,7 +198,7 @@ func TestHostLifecycle_ConditionOnlyUpdate_HostSurvives(t *testing.T) {
 	`, namespace, name).Scan(&countAfter)
 	require.NoError(t, err, "failed to count hosts after worker processing")
 
-	t.Logf("\n📊 RESULTS:")
+	t.Logf("\nRESULTS:")
 	t.Logf("   - Hosts before worker: %d", countBefore)
 	t.Logf("   - Hosts after worker:  %d", countAfter)
 	t.Logf("   - SGROUP requests:     %d", sgroupRequests)
@@ -267,7 +268,7 @@ func TestHostLifecycle_ConditionOnlyUpdate_HostSurvives(t *testing.T) {
 	}
 
 	t.Log("\n========================================")
-	t.Log("🧪 TEST COMPLETE")
+	t.Log("TEST COMPLETE")
 	t.Log("========================================")
 
 	if countAfter == 0 {

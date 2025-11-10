@@ -9,9 +9,11 @@ import (
 	"strings"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -195,7 +197,7 @@ func (h *E2ETestHelper) loadTestScenarios() error {
 
 // EnsureNamespace creates the test namespace if it doesn't exist
 func (h *E2ETestHelper) EnsureNamespace(ctx context.Context) error {
-	namespace := &metav1.Namespace{
+	namespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: h.Config.Namespace,
 			Labels: map[string]string{
@@ -300,7 +302,7 @@ func (h *E2ETestHelper) applyServiceScenario(ctx context.Context, scenario TestS
 	}
 
 	return h.NetguardClient.NetguardV1beta1().Services(service.Namespace).Patch(
-		ctx, service.Name, metav1.PatchType("application/apply-patch+yaml"), resourceData, patchOptions)
+		ctx, service.Name, types.ApplyPatchType, resourceData, patchOptions)
 }
 
 // applyAddressGroupScenario applies an AddressGroup scenario
@@ -321,7 +323,7 @@ func (h *E2ETestHelper) applyAddressGroupScenario(ctx context.Context, scenario 
 	}
 
 	return h.NetguardClient.NetguardV1beta1().AddressGroups(addressGroup.Namespace).Patch(
-		ctx, addressGroup.Name, metav1.PatchType("application/apply-patch+yaml"), resourceData, patchOptions)
+		ctx, addressGroup.Name, types.ApplyPatchType, resourceData, patchOptions)
 }
 
 // ValidateManagedFields validates managedFields structure

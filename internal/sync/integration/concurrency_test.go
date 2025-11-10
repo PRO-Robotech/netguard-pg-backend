@@ -33,7 +33,7 @@ func TestConcurrency_MultipleWorkers(t *testing.T) {
 			"uuid-"+string(rune('1'+i)),
 			resourceVersion, false)
 
-		// 🔧 FIX: Trigger ready transition
+		// FIX: Trigger ready transition
 		TriggerReadyTransition(t, env.DB, resourceVersion, true)
 	}
 
@@ -112,7 +112,7 @@ func TestConcurrency_ForUpdateSkipLocked(t *testing.T) {
 	resourceVersion := CreateK8sMetadata(t, env.DB, `[]`)
 	CreateTestHost(t, env.DB, "test-ns", "host-1", "uuid-1", resourceVersion, false)
 
-	// 🔧 FIX: Trigger ready transition
+	// FIX: Trigger ready transition
 	TriggerReadyTransition(t, env.DB, resourceVersion, true)
 
 	entry := WaitForOutboxEntry(t, env.DB, "AddressGroup", string(domain.SyncOperationUpdate), 5*time.Second)
@@ -208,7 +208,7 @@ func TestConcurrency_NoDoubleProcessing(t *testing.T) {
 			"uuid-"+string(rune('1'+i)),
 			resourceVersion, false)
 
-		// 🔧 FIX: Trigger ready transition
+		// FIX: Trigger ready transition
 		TriggerReadyTransition(t, env.DB, resourceVersion, true)
 	}
 
@@ -284,7 +284,7 @@ func TestConcurrency_RaceCondition(t *testing.T) {
 	hostResourceVersion := CreateK8sMetadata(t, env.DB, `[]`)
 	hostKey := CreateTestHost(t, env.DB, "test-ns", "host-1", "uuid-1", hostResourceVersion, false)
 
-	// 🔧 FIX: Trigger ready transition
+	// FIX: Trigger ready transition
 	TriggerReadyTransition(t, env.DB, hostResourceVersion, true)
 	time.Sleep(200 * time.Millisecond)
 
@@ -489,7 +489,7 @@ func TestConcurrency_ParallelDependencyChecks(t *testing.T) {
 	`, agNamespace, agName, networkKey.Namespace, networkKey.Name)
 	require.NoError(t, err)
 
-	// 🔧 FIX: Trigger network ready transition
+	// FIX: Trigger network ready transition
 	TriggerReadyTransition(t, env.DB, networkResourceVersion, true)
 
 	time.Sleep(300 * time.Millisecond)
@@ -623,7 +623,7 @@ func TestConcurrency_StressTest(t *testing.T) {
 			"uuid-"+string(rune('1'+i)),
 			resourceVersion, false)
 
-		// 🔧 FIX: Trigger ready transition
+		// FIX: Trigger ready transition
 		TriggerReadyTransition(t, env.DB, resourceVersion, true)
 	}
 

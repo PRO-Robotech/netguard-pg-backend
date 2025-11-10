@@ -23,7 +23,7 @@ func TestE2E_AddressGroup_CreateFlow(t *testing.T) {
 	// Reset Mock SGROUP to clean state
 	tc.MockSGROUP.Reset()
 
-	t.Log("📝 Step 1: Create AddressGroup via Repository")
+	t.Log("Step 1: Create AddressGroup via Repository")
 	_ = TCCreateAddressGroupViaRepositoryWithConnStr(
 		t,
 		tc.ConnectionString,
@@ -31,16 +31,16 @@ func TestE2E_AddressGroup_CreateFlow(t *testing.T) {
 		"test-e2e-create",
 	)
 
-	t.Log("📝 Step 2: Verify outbox entry created")
+	t.Log("Step 2: Verify outbox entry created")
 	entry := TCWaitForOutboxEntry(t, tc.DB, "test-e2e-create", 5*time.Second)
 	require.NotNil(t, entry, "outbox entry should be created")
 	assert.Equal(t, "PENDING", string(entry.Status), "entry should be PENDING")
 	assert.Equal(t, "AddressGroup", entry.ResourceType)
 
-	t.Log("📝 Step 3: Worker processes outbox entry")
+	t.Log("Step 3: Worker processes outbox entry")
 	TCProcessWorkerOnce(t, worker)
 
-	t.Log("📝 Step 4: Verify Mock SGROUP received CREATE request")
+	t.Log("Step 4: Verify Mock SGROUP received CREATE request")
 	time.Sleep(200 * time.Millisecond) // Allow async processing
 
 	requestCount := tc.MockSGROUP.GetRequestCount()
@@ -68,7 +68,7 @@ func TestE2E_AddressGroup_UpdateFlow(t *testing.T) {
 	// Reset Mock SGROUP
 	tc.MockSGROUP.Reset()
 
-	t.Log("📝 Step 1: Create AddressGroup")
+	t.Log("Step 1: Create AddressGroup")
 	_ = TCCreateAddressGroupViaRepositoryWithConnStr(
 		t,
 		tc.ConnectionString,
@@ -87,7 +87,7 @@ func TestE2E_AddressGroup_UpdateFlow(t *testing.T) {
 	tc.MockSGROUP.Reset()
 	TCCleanOutboxTable(t, tc.DB)
 
-	t.Log("📝 Step 2: Update AddressGroup (modify DefaultAction)")
+	t.Log("Step 2: Update AddressGroup (modify DefaultAction)")
 	// For now, we'll create again (acts as UPDATE due to UPSERT)
 	_ = TCCreateAddressGroupViaRepositoryWithConnStr(
 		t,
@@ -96,15 +96,15 @@ func TestE2E_AddressGroup_UpdateFlow(t *testing.T) {
 		"test-e2e-update",
 	)
 
-	t.Log("📝 Step 3: Verify outbox entry created for UPDATE")
+	t.Log("Step 3: Verify outbox entry created for UPDATE")
 	entry := TCWaitForOutboxEntry(t, tc.DB, "test-e2e-update", 5*time.Second)
 	require.NotNil(t, entry)
 
-	t.Log("📝 Step 4: Worker processes UPDATE")
+	t.Log("Step 4: Worker processes UPDATE")
 	TCProcessWorkerOnce(t, worker)
 	time.Sleep(200 * time.Millisecond)
 
-	t.Log("📝 Step 5: Verify Mock SGROUP received UPDATE request")
+	t.Log("Step 5: Verify Mock SGROUP received UPDATE request")
 	requestCount := tc.MockSGROUP.GetRequestCount()
 	assert.Equal(t, 1, requestCount, "Mock SGROUP should receive UPDATE request")
 
@@ -130,7 +130,7 @@ func TestE2E_AddressGroup_DeleteFlow(t *testing.T) {
 	// Reset Mock SGROUP
 	tc.MockSGROUP.Reset()
 
-	t.Log("📝 Step 1: Create AddressGroup")
+	t.Log("Step 1: Create AddressGroup")
 	_ = TCCreateAddressGroupViaRepositoryWithConnStr(
 		t,
 		tc.ConnectionString,
@@ -149,7 +149,7 @@ func TestE2E_AddressGroup_DeleteFlow(t *testing.T) {
 	tc.MockSGROUP.Reset()
 	TCCleanOutboxTable(t, tc.DB)
 
-	t.Log("📝 Step 2: Delete AddressGroup via Repository")
+	t.Log("Step 2: Delete AddressGroup via Repository")
 	TCDeleteAddressGroupViaRepositoryWithConnStr(
 		t,
 		tc.ConnectionString,
@@ -157,7 +157,7 @@ func TestE2E_AddressGroup_DeleteFlow(t *testing.T) {
 		"test-e2e-delete",
 	)
 
-	t.Log("📝 Step 3: Check for DELETE outbox entry")
+	t.Log("Step 3: Check for DELETE outbox entry")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
@@ -184,9 +184,9 @@ func TestE2E_AddressGroup_DeleteFlow(t *testing.T) {
 
 checkResult:
 	if !deleteEntryExists {
-		t.Log("🐛 BUG-003 DETECTED: DELETE did NOT create outbox entry")
+		t.Log("BUG-003 DETECTED: DELETE did NOT create outbox entry")
 		t.Log("  ❌ This is EXPECTED until BUG-003 is fixed")
-		t.Log("  📋 After fix: This test will PASS automatically")
+		t.Log("  After fix: This test will PASS automatically")
 
 		// Log current state
 		TCLogOutboxState(t, tc.DB)
@@ -195,16 +195,16 @@ checkResult:
 		return
 	}
 
-	t.Log("📝 Step 4: Verify DELETE outbox entry created")
+	t.Log("Step 4: Verify DELETE outbox entry created")
 	entry := TCWaitForOutboxEntry(t, tc.DB, "test-e2e-delete", 5*time.Second)
 	require.NotNil(t, entry, "DELETE outbox entry should exist")
 	assert.Equal(t, "DELETE", string(entry.Operation), "operation should be DELETE")
 
-	t.Log("📝 Step 5: Worker processes DELETE")
+	t.Log("Step 5: Worker processes DELETE")
 	TCProcessWorkerOnce(t, worker)
 	time.Sleep(200 * time.Millisecond)
 
-	t.Log("📝 Step 6: Verify Mock SGROUP received DELETE request")
+	t.Log("Step 6: Verify Mock SGROUP received DELETE request")
 	requestCount := tc.MockSGROUP.GetRequestCount()
 	assert.Equal(t, 1, requestCount, "Mock SGROUP should receive DELETE request")
 
@@ -213,7 +213,7 @@ checkResult:
 	assert.Equal(t, types.SyncSubjectTypeGroups, deleteReq.SubjectType)
 
 	t.Logf("✅ E2E DELETE Flow Complete (BUG-003 FIXED!)")
-	t.Logf("  🎉 DELETE operations now create outbox entries")
+	t.Logf("  DELETE operations now create outbox entries")
 
 	tc.MockSGROUP.DumpRequests()
 }
@@ -229,7 +229,7 @@ func TestE2E_AddressGroup_FullCycle(t *testing.T) {
 	resourceName := "test-e2e-fullcycle"
 
 	// CREATE
-	t.Log("📝 Phase 1: CREATE")
+	t.Log("Phase 1: CREATE")
 	_ = TCCreateAddressGroupViaRepositoryWithConnStr(t, tc.ConnectionString, "default", resourceName)
 	TCProcessWorkerOnce(t, worker)
 	time.Sleep(200 * time.Millisecond)
@@ -238,7 +238,7 @@ func TestE2E_AddressGroup_FullCycle(t *testing.T) {
 	assert.Equal(t, 1, createCount, "should have 1 CREATE/UPSERT request")
 
 	// UPDATE
-	t.Log("📝 Phase 2: UPDATE")
+	t.Log("Phase 2: UPDATE")
 	TCCleanOutboxTable(t, tc.DB)
 	_ = TCCreateAddressGroupViaRepositoryWithConnStr(t, tc.ConnectionString, "default", resourceName)
 	TCProcessWorkerOnce(t, worker)
@@ -248,7 +248,7 @@ func TestE2E_AddressGroup_FullCycle(t *testing.T) {
 	assert.Equal(t, 2, updateCount, "should have 2 UPSERT requests (CREATE + UPDATE)")
 
 	// DELETE (will skip if BUG-003 exists)
-	t.Log("📝 Phase 3: DELETE")
+	t.Log("Phase 3: DELETE")
 	TCCleanOutboxTable(t, tc.DB)
 	TCDeleteAddressGroupViaRepositoryWithConnStr(t, tc.ConnectionString, "default", resourceName)
 
@@ -281,22 +281,22 @@ func TestE2E_AddressGroup_MultipleConcurrent(t *testing.T) {
 	worker := TCCreateTestWorker(t, tc)
 	tc.MockSGROUP.Reset()
 
-	t.Log("📝 Step 1: Create 5 AddressGroups")
+	t.Log("Step 1: Create 5 AddressGroups")
 	for i := 1; i <= 5; i++ {
 		name := fmt.Sprintf("test-e2e-concurrent-%d", i)
 		TCCreateAddressGroupViaRepositoryWithConnStr(t, tc.ConnectionString, "default", name)
 	}
 
-	t.Log("📝 Step 2: Verify 5 outbox entries created")
+	t.Log("Step 2: Verify 5 outbox entries created")
 	time.Sleep(500 * time.Millisecond)
 	count := TCCountOutboxEntries(t, tc.DB)
 	assert.Equal(t, 5, count, "should have 5 outbox entries")
 
-	t.Log("📝 Step 3: Worker processes all entries in batch")
+	t.Log("Step 3: Worker processes all entries in batch")
 	TCProcessWorkerOnce(t, worker)
 	time.Sleep(500 * time.Millisecond)
 
-	t.Log("📝 Step 4: Verify Mock SGROUP received 5 requests")
+	t.Log("Step 4: Verify Mock SGROUP received 5 requests")
 	requestCount := tc.MockSGROUP.GetRequestCount()
 	assert.Equal(t, 5, requestCount, "Mock SGROUP should receive 5 requests")
 

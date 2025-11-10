@@ -24,7 +24,7 @@ func TestNetwork_AutoDelete(t *testing.T) {
 	name := "test-network-standalone"
 	cidr := "192.168.100.0/24"
 
-	t.Logf("📝 Step 1: Creating standalone Network: %s/%s (CIDR: %s) - NO bindings, NO references",
+	t.Logf("Step 1: Creating standalone Network: %s/%s (CIDR: %s) - NO bindings, NO references",
 		namespace, name, cidr)
 
 	// Create Network using Repository Writer (goes through Writers → outbox creation)
@@ -45,7 +45,7 @@ func TestNetwork_AutoDelete(t *testing.T) {
 	query = `SELECT COUNT(*) FROM sync_outbox WHERE resource_type = 'Network' AND resource_name = $1 AND operation = 'CREATE'`
 	err = tc.DB.QueryRow(query, name).Scan(&createEntryCount)
 	require.NoError(t, err)
-	t.Logf("📦 Initial outbox state: %d CREATE entries", createEntryCount)
+	t.Logf("Initial outbox state: %d CREATE entries", createEntryCount)
 
 	query = `SELECT COUNT(*) FROM sync_outbox WHERE resource_type = 'Network' AND resource_name = $1 AND operation = 'DELETE'`
 	err = tc.DB.QueryRow(query, name).Scan(&deleteEntryCount)

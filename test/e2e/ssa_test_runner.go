@@ -1,3 +1,6 @@
+//go:build e2e_ssa_runner
+// +build e2e_ssa_runner
+
 package e2e
 
 import (

@@ -64,7 +64,7 @@ func TCCreateAddressGroupViaRepositoryWithConnStr(t *testing.T, connStr, namespa
 	err = tx.Commit(ctx)
 	require.NoError(t, err, "failed to commit transaction")
 
-	t.Logf("📝 Created AddressGroup via Repository: %s/%s (triggers fired!)", namespace, name)
+	t.Logf("Created AddressGroup via Repository: %s/%s (triggers fired!)", namespace, name)
 
 	return ag
 }
@@ -103,7 +103,7 @@ func TCDeleteAddressGroupViaRepositoryWithConnStr(t *testing.T, connStr, namespa
 	err = tx.Commit(ctx)
 	require.NoError(t, err, "failed to commit transaction")
 
-	t.Logf("🗑️  Deleted AddressGroup via Repository: %s/%s", namespace, name)
+	t.Logf("️  Deleted AddressGroup via Repository: %s/%s", namespace, name)
 }
 
 // ==================== Host Repository Helpers ====================
@@ -156,7 +156,7 @@ func TCCreateHostViaRepositoryWithConnStr(t *testing.T, connStr, namespace, name
 	err = tx.Commit(ctx)
 	require.NoError(t, err, "failed to commit transaction")
 
-	t.Logf("📝 Created Host via Repository: %s/%s (triggers fired!)", namespace, name)
+	t.Logf("Created Host via Repository: %s/%s (triggers fired!)", namespace, name)
 
 	return host
 }
@@ -195,7 +195,7 @@ func TCDeleteHostViaRepositoryWithConnStr(t *testing.T, connStr, namespace, name
 	err = tx.Commit(ctx)
 	require.NoError(t, err, "failed to commit transaction")
 
-	t.Logf("🗑️  Deleted Host via Repository: %s/%s", namespace, name)
+	t.Logf("️  Deleted Host via Repository: %s/%s", namespace, name)
 }
 
 // ==================== Network Repository Helpers ====================
@@ -245,7 +245,7 @@ func TCCreateNetworkViaRepositoryWithConnStr(t *testing.T, connStr, namespace, n
 	err = tx.Commit(ctx)
 	require.NoError(t, err, "failed to commit transaction")
 
-	t.Logf("📝 Created Network via Repository: %s/%s (triggers fired!)", namespace, name)
+	t.Logf("Created Network via Repository: %s/%s (triggers fired!)", namespace, name)
 
 	return network
 }
@@ -284,5 +284,5 @@ func TCDeleteNetworkViaRepositoryWithConnStr(t *testing.T, connStr, namespace, n
 	err = tx.Commit(ctx)
 	require.NoError(t, err, "failed to commit transaction")
 
-	t.Logf("🗑️  Deleted Network via Repository: %s/%s", namespace, name)
+	t.Logf("️  Deleted Network via Repository: %s/%s", namespace, name)
 }

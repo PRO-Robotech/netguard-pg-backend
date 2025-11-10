@@ -30,7 +30,7 @@ import (
 //
 // This test verifies the REAL problem and will FAIL until fixed.
 func TestHostReadyBug_RealScenario_SqlErrNoRows(t *testing.T) {
-	t.Log("🧪 INTEGRATION TEST: Reproduce REAL bug - sql.ErrNoRows handling")
+	t.Log("INTEGRATION TEST: Reproduce REAL bug - sql.ErrNoRows handling")
 
 	// Setup real PostgreSQL container
 	tc := SetupTestEnvironment(t)
@@ -44,7 +44,7 @@ func TestHostReadyBug_RealScenario_SqlErrNoRows(t *testing.T) {
 	defer pool.Close()
 
 	// ===== STEP 1: Create NEW Host using Writer (simulates kubectl apply) =====
-	t.Log("  📝 STEP 1: Creating NEW Host via Writer (this is where bug occurs)")
+	t.Log("  STEP 1: Creating NEW Host via Writer (this is where bug occurs)")
 
 	// Begin transaction
 	tx, err := pool.Begin(ctx)
@@ -80,7 +80,7 @@ func TestHostReadyBug_RealScenario_SqlErrNoRows(t *testing.T) {
 	require.NoError(t, err, "failed to commit transaction")
 
 	// ===== STEP 2: Read conditions from database =====
-	t.Log("  🔍 STEP 2: Reading conditions from database AFTER Writer commit")
+	t.Log("  STEP 2: Reading conditions from database AFTER Writer commit")
 
 	var conditionsJSON string
 	err = pool.QueryRow(ctx, `
@@ -124,7 +124,7 @@ func TestHostReadyBug_RealScenario_SqlErrNoRows(t *testing.T) {
 		t.Errorf("❌ BUG REPRODUCED: Ready=True for NEW Host (should be False!)")
 		t.Errorf("   This proves sql.ErrNoRows is NOT handled correctly")
 		t.Errorf("   forcePendingSyncCondition() was NEVER called")
-		t.Logf("   🐛 ACTUAL: Ready=%s, Reason=%s", readyCondition.Status, readyCondition.Reason)
+		t.Logf("   ACTUAL: Ready=%s, Reason=%s", readyCondition.Status, readyCondition.Reason)
 		t.Logf("   ✅ EXPECTED: Ready=False, Reason=PendingSGROUPSync")
 	} else {
 		t.Logf("   ✅ CORRECT: forcePendingSyncCondition() was called")
@@ -139,12 +139,12 @@ func TestHostReadyBug_RealScenario_SqlErrNoRows(t *testing.T) {
 	assert.Contains(t, readyCondition.Message, "Awaiting synchronization",
 		"CRITICAL BUG: Message should indicate waiting for SGROUP sync")
 
-	t.Log("🏁 TEST COMPLETE")
+	t.Log("TEST COMPLETE")
 }
 
 // TestNetworkReadyBug_RealScenario verifies same bug exists for Network
 func TestNetworkReadyBug_RealScenario(t *testing.T) {
-	t.Log("🧪 INTEGRATION TEST: Test Network Ready bug (same sql.ErrNoRows issue)")
+	t.Log("INTEGRATION TEST: Test Network Ready bug (same sql.ErrNoRows issue)")
 
 	tc := SetupTestEnvironment(t)
 	defer tc.Cleanup()
@@ -212,7 +212,7 @@ func TestNetworkReadyBug_RealScenario(t *testing.T) {
 
 // TestAddressGroupReadyBug_RealScenario verifies same bug exists for AddressGroup
 func TestAddressGroupReadyBug_RealScenario(t *testing.T) {
-	t.Log("🧪 INTEGRATION TEST: Test AddressGroup Ready bug (same sql.ErrNoRows issue)")
+	t.Log("INTEGRATION TEST: Test AddressGroup Ready bug (same sql.ErrNoRows issue)")
 
 	tc := SetupTestEnvironment(t)
 	defer tc.Cleanup()
@@ -283,7 +283,7 @@ func TestAddressGroupReadyBug_RealScenario(t *testing.T) {
 
 // TestServiceReadyBug_RealScenario verifies same bug exists for Service
 func TestServiceReadyBug_RealScenario(t *testing.T) {
-	t.Log("🧪 INTEGRATION TEST: Test Service Ready bug (same sql.ErrNoRows issue)")
+	t.Log("INTEGRATION TEST: Test Service Ready bug (same sql.ErrNoRows issue)")
 
 	tc := SetupTestEnvironment(t)
 	defer tc.Cleanup()
@@ -366,5 +366,5 @@ func TestServiceReadyBug_RealScenario(t *testing.T) {
 	assert.Contains(t, readyCondition.Message, "Awaiting synchronization",
 		"Service should have message indicating waiting for SGROUP sync")
 
-	t.Log("🏁 TEST COMPLETE")
+	t.Log("TEST COMPLETE")
 }

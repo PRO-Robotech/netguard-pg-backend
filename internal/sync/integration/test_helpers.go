@@ -93,7 +93,7 @@ func CreateTestWorker(
 	connMonitor := monitor.NewSGroupConnectionMonitor(mockClient, monitor.DefaultConfig(), zapLogger)
 
 	// Create worker config
-	// 🔧 FIX: Added all required fields
+	// FIX: Added all required fields
 	config := &worker.WorkerConfig{
 		PollInterval:          1 * time.Second, // Changed from 100ms to 1s (minimum)
 		BatchSize:             10,

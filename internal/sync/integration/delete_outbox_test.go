@@ -41,7 +41,7 @@ func TestBUG003_DeleteNoOutboxEntry(t *testing.T) {
 	TCCleanOutboxTable(t, tc.DB)
 
 	// STEP 1: Create AddressGroup via Repository (triggers fire!)
-	t.Log("📝 Creating AddressGroup via Repository Writer...")
+	t.Log("Creating AddressGroup via Repository Writer...")
 	agNamespace := "default"
 	agName := "test-delete-ag"
 
@@ -54,7 +54,7 @@ func TestBUG003_DeleteNoOutboxEntry(t *testing.T) {
 	t.Logf("  ✅ CREATE entry created: %s", createEntry.ID)
 
 	// STEP 2: Process CREATE (clear outbox for clean test)
-	t.Log("🧹 Cleaning outbox to isolate DELETE test...")
+	t.Log("Cleaning outbox to isolate DELETE test...")
 	TCCleanOutboxTable(t, tc.DB)
 
 	// Verify outbox is empty
@@ -62,11 +62,11 @@ func TestBUG003_DeleteNoOutboxEntry(t *testing.T) {
 	require.Equal(t, 0, count, "outbox should be empty after cleanup")
 
 	// STEP 3: DELETE AddressGroup via Repository (triggers should fire!)
-	t.Log("🗑️  Deleting AddressGroup via Repository Writer...")
+	t.Log("️  Deleting AddressGroup via Repository Writer...")
 	TCDeleteAddressGroupViaRepositoryWithConnStr(t, tc.ConnectionString, agNamespace, agName)
 
 	// STEP 4: Check if DELETE created outbox entry
-	t.Log("🔍 Checking if DELETE created outbox entry...")
+	t.Log("Checking if DELETE created outbox entry...")
 	time.Sleep(2 * time.Second) // Give triggers time to fire
 
 	// Query for DELETE outbox entry
@@ -82,14 +82,14 @@ func TestBUG003_DeleteNoOutboxEntry(t *testing.T) {
 		LIMIT 1
 	`, agNamespace, agName).Scan(&deleteEntryID, &operation)
 
-	// 🐛 BUG-003 DETECTION: If no DELETE entry found, bug exists!
+	// BUG-003 DETECTION: If no DELETE entry found, bug exists!
 	if err != nil {
 		t.Logf("  ❌ No DELETE outbox entry found!")
-		t.Logf("  🐛 BUG-003 DETECTED: DELETE did NOT create outbox entry")
+		t.Logf("  BUG-003 DETECTED: DELETE did NOT create outbox entry")
 
 		// Check if ANY outbox entries exist (should be 0)
 		allCount := TCCountOutboxEntries(t, tc.DB)
-		t.Logf("  📊 Total outbox entries after DELETE: %d", allCount)
+		t.Logf("  Total outbox entries after DELETE: %d", allCount)
 
 		require.Fail(t,
 			"BUG-003 CONFIRMED: DELETE operation did NOT create outbox entry",
@@ -124,7 +124,7 @@ func TestBUG003_DeleteDuringSGROUPDowntime(t *testing.T) {
 	tc.MockSGROUP.SetMode(ModeConnectionRefused)
 
 	// STEP 2: Create and then delete AddressGroup
-	t.Log("📝 Creating AddressGroup...")
+	t.Log("Creating AddressGroup...")
 	agNamespace := "default"
 	agName := "test-delete-offline"
 
@@ -134,7 +134,7 @@ func TestBUG003_DeleteDuringSGROUPDowntime(t *testing.T) {
 	// Clean outbox for isolation
 	TCCleanOutboxTable(t, tc.DB)
 
-	t.Log("🗑️  Deleting AddressGroup while SGROUP is down...")
+	t.Log("️  Deleting AddressGroup while SGROUP is down...")
 	_, err := tc.DB.ExecContext(ctx, `
 		DELETE FROM address_groups
 		WHERE namespace = $1 AND name = $2
@@ -142,7 +142,7 @@ func TestBUG003_DeleteDuringSGROUPDowntime(t *testing.T) {
 	require.NoError(t, err)
 
 	// STEP 3: Verify DELETE outbox entry created
-	t.Log("🔍 Verifying DELETE outbox entry created...")
+	t.Log("Verifying DELETE outbox entry created...")
 	time.Sleep(2 * time.Second)
 
 	var deleteEntryID string
@@ -157,7 +157,7 @@ func TestBUG003_DeleteDuringSGROUPDowntime(t *testing.T) {
 
 	if err != nil {
 		require.Fail(t,
-			"🐛 BUG-003: DELETE during SGROUP downtime did NOT create outbox entry",
+			"BUG-003: DELETE during SGROUP downtime did NOT create outbox entry",
 			"This means the resource will be orphaned in SGROUP!")
 	}
 
@@ -172,7 +172,7 @@ func TestBUG003_DeleteDuringSGROUPDowntime(t *testing.T) {
 	time.Sleep(15 * time.Second)
 
 	// STEP 6: Verify DELETE outbox entry was processed
-	t.Log("🔍 Checking if DELETE was processed...")
+	t.Log("Checking if DELETE was processed...")
 	var status string
 	err = tc.DB.QueryRowContext(ctx, `
 		SELECT status
@@ -183,14 +183,14 @@ func TestBUG003_DeleteDuringSGROUPDowntime(t *testing.T) {
 	if err != nil {
 		t.Logf("  ✅ DELETE entry removed from outbox (processed successfully)")
 	} else {
-		t.Logf("  📊 DELETE entry status: %s", status)
+		t.Logf("  DELETE entry status: %s", status)
 		assert.Contains(t, []string{"COMPLETED", "PROCESSING"}, status,
 			"DELETE should be processed or completed")
 	}
 
 	// STEP 7: Verify mock SGROUP received DELETE request
 	requestCount := tc.MockSGROUP.GetRequestCount()
-	t.Logf("  📊 Mock SGROUP received %d requests", requestCount)
+	t.Logf("  Mock SGROUP received %d requests", requestCount)
 
 	if requestCount == 0 {
 		t.Log("  ⚠️  WARNING: No requests to SGROUP - worker may not be running")
@@ -272,7 +272,7 @@ func TestBUG003_MultipleEntityTypesDeleteOutbox(t *testing.T) {
 			count := TCCountOutboxEntriesByOperation(t, tc.DB, "DELETE")
 
 			assert.Greater(t, count, 0,
-				"🐛 BUG-003: %s DELETE did NOT create outbox entry", testCase.entityType)
+				"BUG-003: %s DELETE did NOT create outbox entry", testCase.entityType)
 		})
 	}
 }

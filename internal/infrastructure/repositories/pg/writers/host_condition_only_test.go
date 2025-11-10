@@ -130,14 +130,14 @@ func (m *mockRegistry) Close() error {
 //
 // ROOT CAUSE:
 // Missing check in host.go:36-50:
-//   func (w *Writer) SyncHosts(ctx context.Context, hosts []models.Host, scope ports.Scope, options ...ports.Option) error {
-//       syncOp := models.SyncOpUpsert
-//       // ❌ NO CHECK for ConditionOnlyOperation flag!
 //
-//       if !scope.IsEmpty() && syncOp != models.SyncOpDelete {
-//           // ❌ Deletes Host even when updating conditions only!
-//           if err := w.deleteHostsInScope(ctx, scope); err != nil {
+//	func (w *Writer) SyncHosts(ctx context.Context, hosts []models.Host, scope ports.Scope, options ...ports.Option) error {
+//	    syncOp := models.SyncOpUpsert
+//	    // ❌ NO CHECK for ConditionOnlyOperation flag!
 //
+//	    if !scope.IsEmpty() && syncOp != models.SyncOpDelete {
+//	        // ❌ Deletes Host even when updating conditions only!
+//	        if err := w.deleteHostsInScope(ctx, scope); err != nil {
 func TestSyncHosts_ConditionOnlyOperation_DoesNotDeleteHost(t *testing.T) {
 	pool := setupTestDB(t)
 	defer pool.Close()
@@ -269,7 +269,7 @@ func TestSyncHosts_ConditionOnlyOperation_DoesNotDeleteHost(t *testing.T) {
 	// STEP 5: ASSERT - Host should STILL EXIST
 	// ==========================================
 
-	// 🔍 BUG REPRODUCTION: This will FAIL because deleteHostsInScope() deleted the host
+	// BUG REPRODUCTION: This will FAIL because deleteHostsInScope() deleted the host
 	err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM hosts WHERE namespace = $1 AND name = $2",
 		testHost.Namespace, testHost.Name).Scan(&hostCount)
 	require.NoError(t, err)
@@ -277,7 +277,7 @@ func TestSyncHosts_ConditionOnlyOperation_DoesNotDeleteHost(t *testing.T) {
 	// ❌ EXPECTED TO FAIL HERE DUE TO BUG
 	assert.Equal(t, 1, hostCount,
 		"❌ BUG REPRODUCED: Host was DELETED when it should only have conditions updated! "+
-		"deleteHostsInScope() was called even with ConditionOnlyOperation flag")
+			"deleteHostsInScope() was called even with ConditionOnlyOperation flag")
 
 	// Verify conditions were updated (if host still exists)
 	if hostCount > 0 {
@@ -329,7 +329,7 @@ func TestSyncHosts_ConditionOnlyOperation_DoesNotDeleteHost(t *testing.T) {
 	// ConditionOnlyOperation should NOT create additional entries
 	assert.Equal(t, 1, outboxCount,
 		"Should have only 1 outbox entry (from initial creation), "+
-		"ConditionOnlyOperation should not create new entries")
+			"ConditionOnlyOperation should not create new entries")
 }
 
 // TestSyncHosts_ConditionOnlyOperation_CompareWithAddressGroup demonstrates the correct behavior

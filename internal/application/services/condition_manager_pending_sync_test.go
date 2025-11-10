@@ -17,7 +17,7 @@ import (
 // =============================================================================
 
 func TestConditionManager_Network_KeepsPendingSyncStatus(t *testing.T) {
-	t.Log("🧪 TEST: Network с PendingSGROUPSync НЕ должен получить Ready=True от ConditionManager")
+	t.Log("TEST: Network с PendingSGROUPSync НЕ должен получить Ready=True от ConditionManager")
 
 	// SETUP: Создаем Network как Writer (с Ready=False, reason=PendingSGROUPSync)
 	network := &models.Network{
@@ -84,7 +84,7 @@ func TestConditionManager_Network_KeepsPendingSyncStatus(t *testing.T) {
 // =============================================================================
 
 func TestConditionManager_AddressGroup_KeepsPendingSyncStatus(t *testing.T) {
-	t.Log("🧪 TEST: AddressGroup с PendingSGROUPSync НЕ должен получить Ready=True от ConditionManager")
+	t.Log("TEST: AddressGroup с PendingSGROUPSync НЕ должен получить Ready=True от ConditionManager")
 
 	// SETUP: Создаем AddressGroup как Writer (с Ready=False, reason=PendingSGROUPSync)
 	ag := &models.AddressGroup{
@@ -150,7 +150,7 @@ func TestConditionManager_AddressGroup_KeepsPendingSyncStatus(t *testing.T) {
 // =============================================================================
 
 func TestConditionManager_Host_KeepsPendingSyncStatus(t *testing.T) {
-	t.Log("🧪 TEST: Host с PendingSGROUPSync НЕ должен получить Ready=True от ConditionManager")
+	t.Log("TEST: Host с PendingSGROUPSync НЕ должен получить Ready=True от ConditionManager")
 
 	// SETUP: Создаем Host как Writer (с Ready=False, reason=PendingSGROUPSync)
 	host := &models.Host{
@@ -217,7 +217,7 @@ func TestConditionManager_Host_KeepsPendingSyncStatus(t *testing.T) {
 // =============================================================================
 
 func TestConditionManager_Network_ExistingResource_SetsReadyTrue(t *testing.T) {
-	t.Log("🧪 TEST: Существующий Network (БЕЗ PendingSGROUPSync) должен получить Ready=True")
+	t.Log("TEST: Существующий Network (БЕЗ PendingSGROUPSync) должен получить Ready=True")
 
 	// SETUP: Создаем Network как существующий ресурс (уже был синхронизирован)
 	network := &models.Network{
@@ -262,7 +262,7 @@ func TestConditionManager_Network_ExistingResource_SetsReadyTrue(t *testing.T) {
 }
 
 func TestConditionManager_AddressGroup_ExistingResource_SetsReadyTrue(t *testing.T) {
-	t.Log("🧪 TEST: Существующая AddressGroup (БЕЗ PendingSGROUPSync) должна получить Ready=True")
+	t.Log("TEST: Существующая AddressGroup (БЕЗ PendingSGROUPSync) должна получить Ready=True")
 
 	// SETUP: Существующая AddressGroup
 	ag := &models.AddressGroup{
@@ -302,7 +302,7 @@ func TestConditionManager_AddressGroup_ExistingResource_SetsReadyTrue(t *testing
 }
 
 func TestConditionManager_Host_ExistingResource_SetsReadyTrue(t *testing.T) {
-	t.Log("🧪 TEST: Существующий Host (БЕЗ PendingSGROUPSync) должен получить Ready=True")
+	t.Log("TEST: Существующий Host (БЕЗ PendingSGROUPSync) должен получить Ready=True")
 
 	// SETUP: Существующий Host
 	host := &models.Host{

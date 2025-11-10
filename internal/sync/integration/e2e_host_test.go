@@ -22,7 +22,7 @@ func TestE2E_Host_CreateFlow(t *testing.T) {
 	// Reset Mock SGROUP to clean state
 	tc.MockSGROUP.Reset()
 
-	t.Log("📝 Step 1: Create Host via Repository")
+	t.Log("Step 1: Create Host via Repository")
 	_ = TCCreateHostViaRepositoryWithConnStr(
 		t,
 		tc.ConnectionString,
@@ -31,16 +31,16 @@ func TestE2E_Host_CreateFlow(t *testing.T) {
 		"192.168.1.100/32",
 	)
 
-	t.Log("📝 Step 2: Verify outbox entry created")
+	t.Log("Step 2: Verify outbox entry created")
 	entry := TCWaitForOutboxEntry(t, tc.DB, "test-e2e-host-create", 5*time.Second)
 	require.NotNil(t, entry, "outbox entry should be created")
 	assert.Equal(t, "PENDING", string(entry.Status), "entry should be PENDING")
 	assert.Equal(t, "Host", entry.ResourceType)
 
-	t.Log("📝 Step 3: Worker processes outbox entry")
+	t.Log("Step 3: Worker processes outbox entry")
 	TCProcessWorkerOnce(t, worker)
 
-	t.Log("📝 Step 4: Verify Mock SGROUP received CREATE request")
+	t.Log("Step 4: Verify Mock SGROUP received CREATE request")
 	time.Sleep(200 * time.Millisecond) // Allow async processing
 
 	requestCount := tc.MockSGROUP.GetRequestCount()
@@ -68,7 +68,7 @@ func TestE2E_Host_UpdateFlow(t *testing.T) {
 	// Reset Mock SGROUP
 	tc.MockSGROUP.Reset()
 
-	t.Log("📝 Step 1: Create Host")
+	t.Log("Step 1: Create Host")
 	_ = TCCreateHostViaRepositoryWithConnStr(
 		t,
 		tc.ConnectionString,
@@ -88,7 +88,7 @@ func TestE2E_Host_UpdateFlow(t *testing.T) {
 	tc.MockSGROUP.Reset()
 	TCCleanOutboxTable(t, tc.DB)
 
-	t.Log("📝 Step 2: Update Host (re-insert with same name)")
+	t.Log("Step 2: Update Host (re-insert with same name)")
 	_ = TCCreateHostViaRepositoryWithConnStr(
 		t,
 		tc.ConnectionString,
@@ -97,15 +97,15 @@ func TestE2E_Host_UpdateFlow(t *testing.T) {
 		"192.168.1.101/32",
 	)
 
-	t.Log("📝 Step 3: Verify outbox entry created for UPDATE")
+	t.Log("Step 3: Verify outbox entry created for UPDATE")
 	entry := TCWaitForOutboxEntry(t, tc.DB, "test-e2e-host-update", 5*time.Second)
 	require.NotNil(t, entry)
 
-	t.Log("📝 Step 4: Worker processes UPDATE")
+	t.Log("Step 4: Worker processes UPDATE")
 	TCProcessWorkerOnce(t, worker)
 	time.Sleep(200 * time.Millisecond)
 
-	t.Log("📝 Step 5: Verify Mock SGROUP received UPDATE request")
+	t.Log("Step 5: Verify Mock SGROUP received UPDATE request")
 	requestCount := tc.MockSGROUP.GetRequestCount()
 	assert.Equal(t, 1, requestCount, "Mock SGROUP should receive UPDATE request")
 
@@ -131,7 +131,7 @@ func TestE2E_Host_DeleteFlow(t *testing.T) {
 	// Reset Mock SGROUP
 	tc.MockSGROUP.Reset()
 
-	t.Log("📝 Step 1: Create Host")
+	t.Log("Step 1: Create Host")
 	_ = TCCreateHostViaRepositoryWithConnStr(
 		t,
 		tc.ConnectionString,
@@ -151,7 +151,7 @@ func TestE2E_Host_DeleteFlow(t *testing.T) {
 	tc.MockSGROUP.Reset()
 	TCCleanOutboxTable(t, tc.DB)
 
-	t.Log("📝 Step 2: Delete Host via Repository")
+	t.Log("Step 2: Delete Host via Repository")
 	TCDeleteHostViaRepositoryWithConnStr(
 		t,
 		tc.ConnectionString,
@@ -159,13 +159,13 @@ func TestE2E_Host_DeleteFlow(t *testing.T) {
 		"test-e2e-host-delete",
 	)
 
-	t.Log("📝 Step 3: Check for DELETE outbox entry")
+	t.Log("Step 3: Check for DELETE outbox entry")
 	time.Sleep(500 * time.Millisecond)
 	_, err := TCGetOutboxEntryByResourceName(t, tc.DB, "test-e2e-host-delete")
 	if err != nil {
-		t.Log("🐛 BUG-003 DETECTED: DELETE did NOT create outbox entry for Host")
+		t.Log("BUG-003 DETECTED: DELETE did NOT create outbox entry for Host")
 		t.Log("  ❌ This is EXPECTED until BUG-003 is fixed")
-		t.Log("  📋 After fix: This test will PASS automatically")
+		t.Log("  After fix: This test will PASS automatically")
 
 		// Log current state
 		TCLogOutboxState(t, tc.DB)
@@ -174,16 +174,16 @@ func TestE2E_Host_DeleteFlow(t *testing.T) {
 		return
 	}
 
-	t.Log("📝 Step 4: Verify DELETE outbox entry created")
+	t.Log("Step 4: Verify DELETE outbox entry created")
 	entry := TCWaitForOutboxEntry(t, tc.DB, "test-e2e-host-delete", 5*time.Second)
 	require.NotNil(t, entry, "DELETE outbox entry should exist")
 	assert.Equal(t, "DELETE", string(entry.Operation), "operation should be DELETE")
 
-	t.Log("📝 Step 5: Worker processes DELETE")
+	t.Log("Step 5: Worker processes DELETE")
 	TCProcessWorkerOnce(t, worker)
 	time.Sleep(200 * time.Millisecond)
 
-	t.Log("📝 Step 6: Verify Mock SGROUP received DELETE request")
+	t.Log("Step 6: Verify Mock SGROUP received DELETE request")
 	requestCount := tc.MockSGROUP.GetRequestCount()
 	assert.Equal(t, 1, requestCount, "Mock SGROUP should receive DELETE request")
 
@@ -192,7 +192,7 @@ func TestE2E_Host_DeleteFlow(t *testing.T) {
 	assert.Equal(t, types.SyncSubjectTypeHosts, deleteReq.SubjectType)
 
 	t.Logf("✅ E2E DELETE Flow Complete (BUG-003 FIXED!)")
-	t.Logf("  🎉 DELETE operations now create outbox entries for Hosts")
+	t.Logf("  DELETE operations now create outbox entries for Hosts")
 
 	tc.MockSGROUP.DumpRequests()
 }
@@ -205,23 +205,23 @@ func TestE2E_Host_MultipleConcurrent(t *testing.T) {
 	worker := TCCreateTestWorker(t, tc)
 	tc.MockSGROUP.Reset()
 
-	t.Log("📝 Step 1: Create 5 Hosts")
+	t.Log("Step 1: Create 5 Hosts")
 	for i := 1; i <= 5; i++ {
 		name := fmt.Sprintf("test-e2e-host-concurrent-%d", i)
 		ip := fmt.Sprintf("192.168.1.%d/32", 100+i)
 		TCCreateHostViaRepositoryWithConnStr(t, tc.ConnectionString, "default", name, ip)
 	}
 
-	t.Log("📝 Step 2: Verify 5 outbox entries created")
+	t.Log("Step 2: Verify 5 outbox entries created")
 	time.Sleep(500 * time.Millisecond)
 	count := TCCountOutboxEntries(t, tc.DB)
 	assert.Equal(t, 5, count, "should have 5 outbox entries")
 
-	t.Log("📝 Step 3: Worker processes all entries in batch")
+	t.Log("Step 3: Worker processes all entries in batch")
 	TCProcessWorkerOnce(t, worker)
 	time.Sleep(500 * time.Millisecond)
 
-	t.Log("📝 Step 4: Verify Mock SGROUP received 5 requests")
+	t.Log("Step 4: Verify Mock SGROUP received 5 requests")
 	requestCount := tc.MockSGROUP.GetRequestCount()
 	assert.Equal(t, 5, requestCount, "Mock SGROUP should receive 5 requests")
 

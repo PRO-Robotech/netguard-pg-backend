@@ -62,7 +62,7 @@ func (m *MockSGROUPServer) handleSync(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	case ModeTimeout:
-		m.t.Log("  🐌 Mock SGROUP: Simulating timeout...")
+		m.t.Log("  Mock SGROUP: Simulating timeout...")
 		time.Sleep(10 * time.Minute)
 		return
 	case ModeServerError:
@@ -131,12 +131,12 @@ func (m *MockSGROUPServer) handleHealth(w http.ResponseWriter, r *http.Request) 
 	})
 }
 func (m *MockSGROUPServer) Start() {
-	m.t.Logf("  🎭 Mock SGROUP server listening at: %s", m.server.URL)
+	m.t.Logf("  Mock SGROUP server listening at: %s", m.server.URL)
 }
 func (m *MockSGROUPServer) Stop() {
 	if m.server != nil {
 		m.server.Close()
-		m.t.Log("  🛑 Mock SGROUP server stopped")
+		m.t.Log("  Mock SGROUP server stopped")
 	}
 }
 func (m *MockSGROUPServer) URL() string {
@@ -153,7 +153,7 @@ func (m *MockSGROUPServer) SetMode(mode SGROUPMode) {
 		ModeServerError:       "ServerError",
 		ModeRateLimited:       "RateLimited",
 	}
-	m.t.Logf("  🔧 Mock SGROUP mode set to: %s", modeNames[mode])
+	m.t.Logf("  Mock SGROUP mode set to: %s", modeNames[mode])
 }
 func (m *MockSGROUPServer) GetMode() SGROUPMode {
 	m.mu.RLock()
@@ -198,7 +198,7 @@ func (m *MockSGROUPServer) Reset() {
 	m.requests = []MockSGROUPRequest{}
 	m.responses = make(map[string]interface{})
 	m.mode = ModeHealthy
-	m.t.Log("  🔄 Mock SGROUP server reset")
+	m.t.Log("  Mock SGROUP server reset")
 }
 func (m *MockSGROUPServer) AssertRequestCount(expected int) error {
 	m.mu.RLock()
@@ -288,7 +288,7 @@ func (m *MockSGROUPServer) WaitForRequest(op types.SyncOperation, subject types.
 func (m *MockSGROUPServer) DumpRequests() {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	m.t.Logf("  📋 Mock SGROUP Requests (%d total):", len(m.requests))
+	m.t.Logf("  Mock SGROUP Requests (%d total):", len(m.requests))
 	for i, req := range m.requests {
 		resourceName := "unknown"
 		if name, ok := req.Resource["name"].(string); ok {
