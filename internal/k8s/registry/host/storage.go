@@ -56,6 +56,7 @@ func (a *HostConverterAdapter) ToList(ctx context.Context, domainObjs []*models.
 // HostStorage implements REST storage for Host resources using BaseStorage
 type HostStorage struct {
 	*base.BaseStorage[*netguardv1beta1.Host, *models.Host]
+	converter *HostConverterAdapter
 }
 
 // NewHostStorage creates a new HostStorage using BaseStorage
@@ -81,34 +82,31 @@ func NewHostStorage(backendClient client.BackendClient) *HostStorage {
 
 	storage := &HostStorage{
 		BaseStorage: baseStorage,
+		converter:   converter,
 	}
 
 	return storage
 }
 
-// handleHostCreate implements custom logic when a Host is created
-func (s *HostStorage) handleHostCreate(ctx context.Context, obj *netguardv1beta1.Host, domainObj *models.Host) error {
+// Custom Delete() removed - using BaseStorage.Delete() like Network/AddressGroup/Service
+// This fixes premature deletion bug where Host was physically deleted before SGROUP sync
+// See: docs/bugs/2025-10-29-host-storage-custom-delete-bug.md
 
-	// Initialize Host as unbound initially
+func (s *HostStorage) handleHostCreate(ctx context.Context, obj *netguardv1beta1.Host, domainObj *models.Host) error {
 	obj.Status.IsBound = false
 	obj.Status.BindingRef = nil
 	obj.Status.AddressGroupRef = nil
 	obj.Status.AddressGroupName = ""
-
 	return nil
 }
 
-// handleHostUpdate implements custom logic when a Host is updated
 func (s *HostStorage) handleHostUpdate(ctx context.Context, obj, oldObj *netguardv1beta1.Host, domainObj *models.Host) error {
-
 	return nil
 }
 
-// handleHostDelete implements custom logic when a Host is deleted
-func (s *HostStorage) handleHostDelete(ctx context.Context, obj *netguardv1beta1.Host, domainObj *models.Host) error {
-
-	return nil
-}
+// handleHostDelete() removed - deletion now handled by OutboxWorker after soft delete
+// Physical deletion happens only after successful SGROUP sync, not immediately
+// See: docs/bugs/2025-10-29-host-storage-custom-delete-bug.md
 
 // GetSingularName returns the singular name for this resource
 func (s *HostStorage) GetSingularName() string {
@@ -224,5 +222,6 @@ func durationShortHumanDuration(d time.Duration) string {
 
 // Ensure HostStorage implements the required interfaces
 var _ rest.StandardStorage = &HostStorage{}
+var _ rest.CollectionDeleter = &HostStorage{}
 var _ rest.KindProvider = &HostStorage{}
 var _ rest.SingularNameProvider = &HostStorage{}

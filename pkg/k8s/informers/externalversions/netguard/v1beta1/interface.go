@@ -1,5 +1,5 @@
 /*
-Copyright 2024 The PRO-Robotech Authors.
+Copyright 2024 The Netguard Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -38,8 +38,6 @@ type Interface interface {
 	HostBindings() HostBindingInformer
 	// IEAgAgRules returns a IEAgAgRuleInformer.
 	IEAgAgRules() IEAgAgRuleInformer
-	// Networks returns a NetworkInformer.
-	Networks() NetworkInformer
 	// NetworkBindings returns a NetworkBindingInformer.
 	NetworkBindings() NetworkBindingInformer
 	// RuleS2Ss returns a RuleS2SInformer.
@@ -48,6 +46,10 @@ type Interface interface {
 	Services() ServiceInformer
 	// ServiceAliases returns a ServiceAliasInformer.
 	ServiceAliases() ServiceAliasInformer
+	// SvcFqdnRules returns a SvcFqdnRuleInformer.
+	SvcFqdnRules() SvcFqdnRuleInformer
+	// SvcSvcRules returns a SvcSvcRuleInformer.
+	SvcSvcRules() SvcSvcRuleInformer
 }
 
 type version struct {
@@ -96,11 +98,6 @@ func (v *version) IEAgAgRules() IEAgAgRuleInformer {
 	return &iEAgAgRuleInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
-// Networks returns a NetworkInformer.
-func (v *version) Networks() NetworkInformer {
-	return &networkInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
-}
-
 // NetworkBindings returns a NetworkBindingInformer.
 func (v *version) NetworkBindings() NetworkBindingInformer {
 	return &networkBindingInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
@@ -119,4 +116,14 @@ func (v *version) Services() ServiceInformer {
 // ServiceAliases returns a ServiceAliasInformer.
 func (v *version) ServiceAliases() ServiceAliasInformer {
 	return &serviceAliasInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// SvcFqdnRules returns a SvcFqdnRuleInformer.
+func (v *version) SvcFqdnRules() SvcFqdnRuleInformer {
+	return &svcFqdnRuleInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// SvcSvcRules returns a SvcSvcRuleInformer.
+func (v *version) SvcSvcRules() SvcSvcRuleInformer {
+	return &svcSvcRuleInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

@@ -1,0 +1,196 @@
+package syncers
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/go-logr/logr"
+
+	pb "github.com/PRO-Robotech/protos/pkg/api/sgroups"
+
+	"netguard-pg-backend/internal/sync/interfaces"
+	"netguard-pg-backend/internal/sync/types"
+)
+
+// ServiceSyncer implements EntitySyncer for Service entities
+type ServiceSyncer struct {
+	gateway interfaces.SGroupGateway
+	logger  logr.Logger
+}
+
+// NewServiceSyncer creates a new Service syncer
+func NewServiceSyncer(gateway interfaces.SGroupGateway, logger logr.Logger) *ServiceSyncer {
+	return &ServiceSyncer{
+		gateway: gateway,
+		logger:  logger,
+	}
+}
+
+// Sync synchronizes a single Service entity
+func (s *ServiceSyncer) Sync(ctx context.Context, entity interfaces.SyncableEntity, operation types.SyncOperation) error {
+	if entity == nil {
+		return fmt.Errorf("entity cannot be nil")
+	}
+
+	// Validate entity type
+	if entity.GetSyncSubjectType() != types.SyncSubjectTypeServices {
+		return fmt.Errorf("invalid entity type for ServiceSyncer: %s", entity.GetSyncSubjectType())
+	}
+
+	// Convert entity to single protobuf service
+	protoData, err := entity.ToSGroupsProto()
+	if err != nil {
+		return fmt.Errorf("failed to convert entity to sgroups proto: %w", err)
+	}
+
+	// Cast to *pb.Service and wrap in SyncServices for single entity
+	protoService, ok := protoData.(*pb.Service)
+	if !ok {
+		return fmt.Errorf("invalid proto data type for entity %s, expected *pb.Service, got %T", entity.GetSyncKey(), protoData)
+	}
+
+	s.logger.V(1).Info("sending Service to SGROUP",
+		"name", protoService.Name,
+		"sgNames", protoService.SgNames,
+		"sgNames_count", len(protoService.SgNames),
+		"operation", operation)
+
+	// When sgNames is empty, protobuf omits the field and SGROUP treats the update as "no change".
+	// Force a DELETE followed by UPSERT to ensure the array is cleared.
+	if len(protoService.SgNames) == 0 && operation == types.SyncOperationUpsert {
+		s.logger.Info("Empty sgNames detected - using DELETE+UPSERT to force field clear",
+			"name", protoService.Name,
+			"reason", "SGROUP partial update semantics ignore empty arrays")
+
+		// Step 1: DELETE Service to clear all fields including sgNames
+		deleteService := &pb.Service{
+			Name:      protoService.Name,
+			Protocols: protoService.Protocols,
+		}
+		deleteBatch := &pb.SyncServices{
+			Services: []*pb.Service{deleteService},
+		}
+		deleteReq := &types.SyncRequest{
+			Operation:   types.SyncOperationDelete,
+			SubjectType: types.SyncSubjectTypeServices,
+			Data:        deleteBatch,
+		}
+		if err := s.gateway.Sync(ctx, deleteReq); err != nil {
+			s.logger.Error(err, "Failed to DELETE Service to clear empty sgNames",
+				"name", protoService.Name)
+			return fmt.Errorf("failed to delete Service to clear sgNames: %w", err)
+		}
+
+		// Step 2: UPSERT Service without sgNames (correct state)
+		// Field will be omitted in protobuf, which is correct for empty array
+		createService := &pb.Service{
+			Name:      protoService.Name,
+			Protocols: protoService.Protocols,
+		}
+		createBatch := &pb.SyncServices{
+			Services: []*pb.Service{createService},
+		}
+		createReq := &types.SyncRequest{
+			Operation:   types.SyncOperationUpsert,
+			SubjectType: types.SyncSubjectTypeServices,
+			Data:        createBatch,
+		}
+		if err := s.gateway.Sync(ctx, createReq); err != nil {
+			return fmt.Errorf("failed to recreate Service without sgNames: %w", err)
+		}
+		s.logger.Info("Successfully cleared sgNames using DELETE+UPSERT workaround",
+			"name", protoService.Name)
+		return nil
+	}
+
+	// Normal case: Service has sgNames or operation is not UPDATE
+	// Create single-entity batch structure for backward compatibility
+	singleEntityBatch := &pb.SyncServices{
+		Services: []*pb.Service{protoService},
+	}
+
+	// Create sync request
+	syncReq := &types.SyncRequest{
+		Operation:   operation,
+		SubjectType: types.SyncSubjectTypeServices,
+		Data:        singleEntityBatch, // Send single-entity batch structure
+	}
+
+	// Send sync request to sgroups
+	if err := s.gateway.Sync(ctx, syncReq); err != nil {
+		return fmt.Errorf("failed to sync Service with sgroups: %w", err)
+	}
+
+	s.logger.V(1).Info("Successfully synced Service",
+		"key", entity.GetSyncKey(),
+		"operation", operation)
+
+	return nil
+}
+
+// SyncBatch synchronizes multiple Service entities in a batch
+func (s *ServiceSyncer) SyncBatch(ctx context.Context, entities []interfaces.SyncableEntity, operation types.SyncOperation) error {
+	if len(entities) == 0 {
+		return nil
+	}
+
+	// Validate all entities and convert to protobuf services
+	var protoServices []*pb.Service
+	entityKeys := make([]string, 0, len(entities))
+
+	for _, entity := range entities {
+		if entity == nil {
+			continue
+		}
+
+		if entity.GetSyncSubjectType() != types.SyncSubjectTypeServices {
+			return fmt.Errorf("invalid entity type for ServiceSyncer: %s", entity.GetSyncSubjectType())
+		}
+
+		// Convert entity to single protobuf service
+		protoData, err := entity.ToSGroupsProto()
+		if err != nil {
+			return fmt.Errorf("failed to convert entity %s to sgroups proto: %w", entity.GetSyncKey(), err)
+		}
+
+		// Cast to *pb.Service
+		if protoService, ok := protoData.(*pb.Service); ok {
+			protoServices = append(protoServices, protoService)
+			entityKeys = append(entityKeys, entity.GetSyncKey())
+		} else {
+			return fmt.Errorf("invalid proto data type for entity %s, expected *pb.Service, got %T", entity.GetSyncKey(), protoData)
+		}
+	}
+
+	if len(protoServices) == 0 {
+		return nil
+	}
+
+	// Create aggregated batch sync request
+	batchProtoData := &pb.SyncServices{
+		Services: protoServices,
+	}
+
+	syncReq := &types.SyncRequest{
+		Operation:   operation,
+		SubjectType: types.SyncSubjectTypeServices,
+		Data:        batchProtoData, // Send aggregated structure
+	}
+
+	// Send batch sync request to sgroups
+	if err := s.gateway.Sync(ctx, syncReq); err != nil {
+		return fmt.Errorf("failed to sync Service batch with sgroups: %w", err)
+	}
+
+	s.logger.Info("Successfully synced Service batch",
+		"count", len(protoServices),
+		"operation", operation,
+		"keys", entityKeys)
+
+	return nil
+}
+
+// GetSupportedSubjectType returns the subject type this syncer supports
+func (s *ServiceSyncer) GetSupportedSubjectType() types.SyncSubjectType {
+	return types.SyncSubjectTypeServices
+}

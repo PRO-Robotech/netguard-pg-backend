@@ -60,6 +60,26 @@ func (c *ServiceConverter) ToDomain(ctx context.Context, k8sObj *netguardv1beta1
 	aggregatedAGs := convertAddressGroupReferencesToDomain(k8sObj.AggregatedAddressGroups)
 	domainService.AggregatedAddressGroups = aggregatedAGs
 
+	// Convert XSvcSvcRules (READ-ONLY field, but convert for completeness)
+	if k8sObj.XSvcSvcRules != nil {
+		domainService.XSvcSvcRules = &models.XSvcSvcRules{
+			AsServiceFrom: k8sObj.XSvcSvcRules.AsServiceFrom,
+			AsServiceTo:   k8sObj.XSvcSvcRules.AsServiceTo,
+		}
+	}
+
+	// Convert XSvcFqdnRules (READ-ONLY field populated by PostgreSQL triggers)
+	if k8sObj.XSvcFqdnRules != nil {
+		fqdnRules := &models.XSvcFqdnRules{}
+		if len(k8sObj.XSvcFqdnRules.Rules) > 0 {
+			fqdnRules.Rules = make([]models.ResourceIdentifier, len(k8sObj.XSvcFqdnRules.Rules))
+			for i, ref := range k8sObj.XSvcFqdnRules.Rules {
+				fqdnRules.Rules[i] = models.NewResourceIdentifier(ref.Name, models.WithNamespace(ref.Namespace))
+			}
+		}
+		domainService.XSvcFqdnRules = fqdnRules
+	}
+
 	return domainService, nil
 }
 
@@ -105,12 +125,9 @@ func (c *ServiceConverter) FromDomain(ctx context.Context, domainObj *models.Ser
 		}
 	}
 
-	// Convert AggregatedAddressGroups to ROOT level (not Status!)
 	aggregatedAGsK8s := convertAddressGroupReferencesToK8s(domainObj.AggregatedAddressGroups)
 
-	// Defensive: If AggregatedAddressGroups is empty but Spec.AddressGroups is not,
-	// populate AggregatedAddressGroups from Spec to maintain data consistency.
-	// This handles the case before PostgreSQL triggers populate aggregated data.
+
 	if len(aggregatedAGsK8s) == 0 && len(k8sService.Spec.AddressGroups) > 0 {
 		aggregatedAGsK8s = make([]netguardv1beta1.AddressGroupReference, len(k8sService.Spec.AddressGroups))
 		for i, ag := range k8sService.Spec.AddressGroups {
@@ -122,6 +139,33 @@ func (c *ServiceConverter) FromDomain(ctx context.Context, domainObj *models.Ser
 	}
 
 	k8sService.AggregatedAddressGroups = aggregatedAGsK8s
+
+	// Convert XSvcSvcRules (READ-ONLY field populated by PostgreSQL triggers)
+	if domainObj.XSvcSvcRules != nil {
+		k8sService.XSvcSvcRules = &netguardv1beta1.XSvcSvcRules{
+			AsServiceFrom: domainObj.XSvcSvcRules.AsServiceFrom,
+			AsServiceTo:   domainObj.XSvcSvcRules.AsServiceTo,
+		}
+	}
+
+	// Convert XSvcFqdnRules (READ-ONLY field populated by PostgreSQL triggers)
+	if domainObj.XSvcFqdnRules != nil {
+		fqdnRules := &netguardv1beta1.XSvcFqdnRules{}
+		if len(domainObj.XSvcFqdnRules.Rules) > 0 {
+			fqdnRules.Rules = make([]netguardv1beta1.NamespacedObjectReference, len(domainObj.XSvcFqdnRules.Rules))
+			for i, ref := range domainObj.XSvcFqdnRules.Rules {
+				fqdnRules.Rules[i] = netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
+						APIVersion: "netguard.sgroups.io/v1beta1",
+						Kind:       "SvcFqdnRule",
+						Name:       ref.Name,
+					},
+					Namespace: ref.Namespace,
+				}
+			}
+		}
+		k8sService.XSvcFqdnRules = fqdnRules
+	}
 
 	// Convert status using standard helper
 	conditions, observedGeneration := ConvertStatusFromDomain(domainObj.Meta)

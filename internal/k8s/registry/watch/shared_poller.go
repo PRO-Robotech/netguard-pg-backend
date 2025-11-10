@@ -9,6 +9,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/google/uuid"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
@@ -162,6 +163,17 @@ func (p *SharedPoller) generateEvents(newSnapshot map[string]runtime.Object) {
 	// ADDED и MODIFIED события
 	for key, newRes := range newSnapshot {
 		if oldRes, exists := p.lastSnapshot[key]; exists {
+			// Skip MODIFIED events for objects already marked for deletion
+			accessor, err := meta.Accessor(newRes)
+			if err == nil {
+				deletionTimestamp := accessor.GetDeletionTimestamp()
+				if deletionTimestamp != nil && !deletionTimestamp.IsZero() {
+					// Object is being deleted - don't send MODIFIED events
+					// This prevents triggering sync loops during deletion
+					continue
+				}
+			}
+
 			// Ресурс существовал - проверить изменения
 			if !reflect.DeepEqual(oldRes, newRes) {
 				event := watch.Event{

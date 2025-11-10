@@ -3,6 +3,7 @@ package apiserver
 import (
 	"fmt"
 	"net"
+	"net/http"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -30,6 +31,8 @@ import (
 	rules2sstorage "netguard-pg-backend/internal/k8s/registry/rules2s"
 	svcstorage "netguard-pg-backend/internal/k8s/registry/service"
 	aliasstorage "netguard-pg-backend/internal/k8s/registry/servicealias"
+	svcfqdnstorage "netguard-pg-backend/internal/k8s/registry/svcfqdn_rule"
+	svcsvcstorage "netguard-pg-backend/internal/k8s/registry/svcsvc_rule"
 
 	"k8s.io/apiserver/pkg/endpoints/openapi"
 	"k8s.io/apiserver/pkg/util/compatibility"
@@ -142,6 +145,13 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 		return nil, fmt.Errorf("apply options: %w", err)
 	}
 
+	// Configure BuildHandlerChainFunc to add our PATCH middleware
+	genericCfg.BuildHandlerChainFunc = func(apiHandler http.Handler, c *server.Config) http.Handler {
+		handler := server.DefaultBuildHandlerChain(apiHandler, c)
+		handler = WithPatchBodyExtractor(handler)
+		return handler
+	}
+
 	// Real OpenAPI configs using generated definitions with enum support
 	genericCfg.OpenAPIConfig = server.DefaultOpenAPIConfig(netguardv1beta1.GetOpenAPIDefinitionsWithEnums, openapi.NewDefinitionNamer(scheme.Scheme))
 	genericCfg.OpenAPIConfig.Info.Title = "Netguard"
@@ -197,6 +207,8 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 	pmStore := portmappingstorage.NewAddressGroupPortMappingStorage(bClient)
 	rules2sStore := rules2sstorage.NewRuleS2SStorage(bClient)
 	ieagagStore := ieagagstorage.NewIEAgAgRuleStorage(bClient)
+	svcSvcRuleStore := svcsvcstorage.NewSvcSvcRuleStorage(bClient)
+	svcFqdnRuleStore := svcfqdnstorage.NewSvcFqdnRuleStorage(bClient)
 
 	// Use BaseStorage approach for Network resources (supports generateName)
 	networkStore := networkstorage.NewNetworkStorageWithClient(bClient)
@@ -216,6 +228,8 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 		"addressgroupportmappings":    pmStore,
 		"rules2s":                     rules2sStore,
 		"ieagagrules":                 ieagagStore,
+		"svcsvcrules":                 svcSvcRuleStore,
+		"svcfqdnrules":                svcFqdnRuleStore,
 		"networks":                    networkStore,
 		"networkbindings":             networkBindingStore,
 		"hosts":                       hostStore,
@@ -229,6 +243,8 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 		"addressgroupportmappings/status":    portmappingstorage.NewStatusREST(pmStore),
 		"rules2s/status":                     rules2sstorage.NewStatusREST(rules2sStore),
 		"ieagagrules/status":                 ieagagstorage.NewStatusREST(ieagagStore),
+		"svcsvcrules/status":                 svcsvcstorage.NewStatusREST(svcSvcRuleStore),
+		"svcfqdnrules/status":                svcfqdnstorage.NewStatusREST(svcFqdnRuleStore),
 
 		"services/addressgroups":               svcstorage.NewAddressGroupsREST(bClient),
 		"services/rules2sdstownref":            svcstorage.NewRuleS2SDstOwnRefREST(bClient),

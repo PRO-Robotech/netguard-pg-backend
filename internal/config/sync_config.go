@@ -13,6 +13,11 @@ type SyncConfig struct {
 	// Enabled determines if synchronization is enabled
 	Enabled bool `yaml:"enabled" env:"SYNC_ENABLED"`
 
+	// Required determines if SGROUP connection is critical for backend startup
+	// false - graceful degradation (backend starts without SGROUP, connects later)
+	// true - fail-fast (backend does not start if SGROUP is unavailable)
+	Required bool `yaml:"required" env:"SYNC_REQUIRED"`
+
 	// SGroups holds sgroups service configuration
 	SGroups clients.SGroupsConfig `yaml:"sgroups"`
 
@@ -44,8 +49,9 @@ type CleanupConfig struct {
 // DefaultSyncConfig returns default synchronization configuration
 func DefaultSyncConfig() SyncConfig {
 	return SyncConfig{
-		Enabled: true,
-		SGroups: clients.DefaultSGroupsConfig(),
+		Enabled:  true,
+		Required: false, // graceful degradation by default
+		SGroups:  clients.DefaultSGroupsConfig(),
 		Retry: interfaces.RetryConfig{
 			MaxRetries:    3,
 			InitialDelay:  100,  // 100ms
@@ -66,6 +72,13 @@ func DefaultSyncConfig() SyncConfig {
 func (c *SyncConfig) Validate() error {
 	if !c.Enabled {
 		return nil // Skip validation if sync is disabled
+	}
+
+	// If sync is required, enforce strict validation
+	if c.Required {
+		if c.SGroups.GRPCAddress == "" {
+			return fmt.Errorf("sgroups GRPC address is required when sync.required=true")
+		}
 	}
 
 	if c.SGroups.GRPCAddress == "" {

@@ -1,0 +1,22 @@
+--- a/setup_testcontainer.go
++++ b/setup_testcontainer.go
+@@ -148,13 +148,15 @@ func tcApplyMigrations(t *testing.T, db *sql.DB) {
+ 		// Execute migration SQL
+ 		// Note: Some migrations may fail if constraints already exist - that's OK
+ 		_, err = db.Exec(string(content))
+ 		if err != nil {
+-			// Check if error is about existing object (table/constraint/etc)
++			// Ignore only "already exists" and "duplicate" errors
++			// These occur when re-running migrations or when ALTER IF EXISTS is not used
+ 			errMsg := err.Error()
+ 			if strings.Contains(errMsg, "already exists") ||
+-				strings.Contains(errMsg, "does not exist") ||
+ 				strings.Contains(errMsg, "duplicate") {
+ 				t.Logf("    ⚠️  Skipped %s: %v", filename, err)
+ 				continue
++			} else if strings.Contains(errMsg, "does not exist") && (strings.Contains(string(content), "DROP") || strings.Contains(string(content), "ALTER TABLE")) {
++				t.Logf("    ⚠️  Skipped %s (object doesn't exist): %v", filename, err)
++				continue
+ 			}
+ 			// Other errors are fatal
+ 			require.NoError(t, err, "failed to execute migration: %s", filename)

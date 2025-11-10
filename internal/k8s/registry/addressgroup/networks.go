@@ -60,7 +60,7 @@ func (r *NetworksREST) Destroy() {
 func (r *NetworksREST) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
 	// Extract namespace from context
 	namespace := utils.NamespaceFrom(ctx)
-	
+
 	// Get the parent AddressGroup
 	addressGroupID := models.NewResourceIdentifier(name, models.WithNamespace(namespace))
 	addressGroup, err := r.backendClient.GetAddressGroup(ctx, addressGroupID)

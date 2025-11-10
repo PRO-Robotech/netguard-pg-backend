@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"netguard-pg-backend/internal/sync/detector"
+	"netguard-pg-backend/internal/sync/monitor"
 	"netguard-pg-backend/internal/sync/synchronizer"
 	"netguard-pg-backend/internal/sync/types"
 )
@@ -54,7 +54,7 @@ func (p *hostProcessor) GetEntityType() string {
 }
 
 // ProcessChanges processes change events for hosts
-func (p *hostProcessor) ProcessChanges(ctx context.Context, event detector.ChangeEvent) error {
+func (p *hostProcessor) ProcessChanges(ctx context.Context, event monitor.SyncChangeEvent) error {
 
 	var result *types.HostSyncResult
 	var err error
@@ -127,15 +127,12 @@ func (p *hostProcessor) mergeResults(aggregate, individual *types.HostSyncResult
 }
 
 // handleSyncError handles synchronization errors with retry logic
-func (p *hostProcessor) handleSyncError(err error, event detector.ChangeEvent) error {
-
-	// For now, just log and return the error
-	// In future, could implement retry logic based on MaxRetryAttempts
+func (p *hostProcessor) handleSyncError(err error, event monitor.SyncChangeEvent) error {
 	return fmt.Errorf("host sync failed for event from %s: %w", event.Source, err)
 }
 
 // logSyncResults logs the synchronization results
-func (p *hostProcessor) logSyncResults(result *types.HostSyncResult, event detector.ChangeEvent) {
+func (p *hostProcessor) logSyncResults(result *types.HostSyncResult, event monitor.SyncChangeEvent) {
 	if result.IsEmpty() {
 		return
 	}

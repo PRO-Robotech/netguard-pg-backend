@@ -1,5 +1,5 @@
 /*
-Copyright 2024 The PRO-Robotech Authors.
+Copyright 2024 The Netguard Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -67,8 +67,6 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Netguard().V1beta1().HostBindings().Informer()}, nil
 	case v1beta1.SchemeGroupVersion.WithResource("ieagagrules"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Netguard().V1beta1().IEAgAgRules().Informer()}, nil
-	case v1beta1.SchemeGroupVersion.WithResource("networks"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Netguard().V1beta1().Networks().Informer()}, nil
 	case v1beta1.SchemeGroupVersion.WithResource("networkbindings"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Netguard().V1beta1().NetworkBindings().Informer()}, nil
 	case v1beta1.SchemeGroupVersion.WithResource("rules2ss"):
@@ -77,6 +75,10 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Netguard().V1beta1().Services().Informer()}, nil
 	case v1beta1.SchemeGroupVersion.WithResource("servicealiases"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Netguard().V1beta1().ServiceAliases().Informer()}, nil
+	case v1beta1.SchemeGroupVersion.WithResource("svcfqdnrules"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Netguard().V1beta1().SvcFqdnRules().Informer()}, nil
+	case v1beta1.SchemeGroupVersion.WithResource("svcsvcrules"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Netguard().V1beta1().SvcSvcRules().Informer()}, nil
 
 	}
 

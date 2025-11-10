@@ -69,8 +69,7 @@ func (v *IEAgAgRuleValidator) ValidatePortSpec(ctx context.Context, portSpec mod
 
 // ValidateForCreation валидирует правило перед созданием
 func (v *IEAgAgRuleValidator) ValidateForCreation(ctx context.Context, rule models.IEAgAgRule) error {
-	// PHASE 1: Check for duplicate entity (CRITICAL FIX for overwrite issue)
-	// This prevents creation of entities with the same namespace/name combination
+	// Phase 1: ensure the namespace/name combination is unused before creation.
 	keyExtractor := func(entity interface{}) string {
 		if ieagag, ok := entity.(*models.IEAgAgRule); ok {
 			return ieagag.Key()

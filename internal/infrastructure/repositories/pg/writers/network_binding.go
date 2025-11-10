@@ -2,38 +2,63 @@ package writers
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"k8s.io/klog/v2"
 
+	"netguard-pg-backend/internal/domain"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
+	"netguard-pg-backend/internal/infrastructure/repositories"
 )
 
 // SyncNetworkBindings syncs network bindings to PostgreSQL with K8s metadata support
 func (w *Writer) SyncNetworkBindings(ctx context.Context, networkBindings []models.NetworkBinding, scope ports.Scope, options ...ports.Option) error {
-	// Handle scoped sync - delete existing resources in scope first
-	if !scope.IsEmpty() {
-		if err := w.deleteNetworkBindingsInScope(ctx, scope); err != nil {
-			return errors.Wrap(err, "failed to delete network bindings in scope")
+	// Extract sync operation from options
+	syncOp := models.SyncOpUpsert // Default operation
+	var conditionOnly bool
+	for _, opt := range options {
+		if syncOption, ok := opt.(ports.SyncOption); ok {
+			syncOp = syncOption.Operation
+			break
+		}
+		if _, ok := opt.(ports.ConditionOnlyOperation); ok {
+			conditionOnly = true
+			break
 		}
 	}
 
-	// Upsert all provided network bindings
-	for i := range networkBindings {
-		// 🔧 CRITICAL FIX: Initialize metadata fields (UID, Generation, ObservedGeneration)
-		// This is what Memory backend does via ensureMetaFill() -> TouchOnCreate()
-		// Without this, PATCH operations fail because objInfo.UpdatedObject() needs UID
-		// IMPORTANT: Use index-based loop to modify original, not copy!
-		if networkBindings[i].Meta.UID == "" {
-			networkBindings[i].Meta.TouchOnCreate()
-		}
+	if conditionOnly {
+		return w.updateNetworkBindingConditionsOnly(ctx, networkBindings)
+	}
 
-		if err := w.upsertNetworkBinding(ctx, networkBindings[i]); err != nil {
-			return errors.Wrapf(err, "failed to upsert network binding %s/%s", networkBindings[i].Namespace, networkBindings[i].Name)
+	switch syncOp {
+	case models.SyncOpDelete:
+		// For DELETE operations, delete the specific bindings
+		var identifiers []models.ResourceIdentifier
+		for _, binding := range networkBindings {
+			identifiers = append(identifiers, models.ResourceIdentifier{
+				Namespace: binding.Namespace,
+				Name:      binding.Name,
+			})
+		}
+		if err := w.DeleteNetworkBindingsByIDs(ctx, identifiers); err != nil {
+			return errors.Wrap(err, "failed to delete network bindings")
+		}
+	case models.SyncOpUpsert, models.SyncOpFullSync:
+		// For UPSERT/FULLSYNC operations, upsert all provided network bindings
+		for i := range networkBindings {
+			// Don't call TouchOnCreate() here - let upsertNetworkBinding handle UID generation
+			// This ensures UID comes from database and matches Outbox entry
+
+			if err := w.upsertNetworkBinding(ctx, &networkBindings[i]); err != nil {
+				return errors.Wrapf(err, "failed to upsert network binding %s/%s", networkBindings[i].Namespace, networkBindings[i].Name)
+			}
 		}
 	}
 
@@ -41,7 +66,7 @@ func (w *Writer) SyncNetworkBindings(ctx context.Context, networkBindings []mode
 }
 
 // upsertNetworkBinding inserts or updates a network binding with full K8s metadata support
-func (w *Writer) upsertNetworkBinding(ctx context.Context, binding models.NetworkBinding) error {
+func (w *Writer) upsertNetworkBinding(ctx context.Context, binding *models.NetworkBinding) error {
 	// Marshal K8s metadata
 	labelsJSON, annotationsJSON, err := w.marshalLabelsAnnotations(binding.Meta.Labels, binding.Meta.Annotations)
 	if err != nil {
@@ -53,36 +78,21 @@ func (w *Writer) upsertNetworkBinding(ctx context.Context, binding models.Networ
 		return errors.Wrap(err, "failed to marshal conditions")
 	}
 
-	// First, check if network binding exists and get existing resource version
-	var existingResourceVersion sql.NullInt64
-	existingQuery := `SELECT resource_version FROM network_bindings WHERE namespace = $1 AND name = $2`
-	_ = w.tx.QueryRow(ctx, existingQuery, binding.Namespace, binding.Name).Scan(&existingResourceVersion)
-
 	var resourceVersion int64
-	if existingResourceVersion.Valid {
-		// UPDATE existing K8s metadata
-		metadataQuery := `
-			UPDATE k8s_metadata 
-			SET labels = $1, annotations = $2, conditions = $3, updated_at = NOW()
-			WHERE resource_version = $4
-			RETURNING resource_version`
-		err = w.tx.QueryRow(ctx, metadataQuery, labelsJSON, annotationsJSON, conditionsJSON, existingResourceVersion.Int64).Scan(&resourceVersion)
-		if err != nil {
-			return errors.Wrapf(err, "failed to update K8s metadata for network binding %s/%s", binding.Namespace, binding.Name)
-		}
-	} else {
-		// INSERT new K8s metadata
-		metadataQuery := `
-			INSERT INTO k8s_metadata (labels, annotations, finalizers, conditions)
-			VALUES ($1, $2, '{}', $3)
-			RETURNING resource_version`
-		err = w.tx.QueryRow(ctx, metadataQuery, labelsJSON, annotationsJSON, conditionsJSON).Scan(&resourceVersion)
-		if err != nil {
-			return errors.Wrapf(err, "failed to create K8s metadata for network binding %s/%s", binding.Namespace, binding.Name)
-		}
+	var uid string
+	metadataQuery := `
+		INSERT INTO k8s_metadata (labels, annotations, finalizers, conditions)
+		VALUES ($1, $2, '{}', $3)
+		RETURNING resource_version, uid`
+	err = w.tx.QueryRow(ctx, metadataQuery, labelsJSON, annotationsJSON, conditionsJSON).Scan(&resourceVersion, &uid)
+	if err != nil {
+		return errors.Wrapf(err, "failed to insert K8s metadata for network binding %s/%s", binding.Namespace, binding.Name)
 	}
 
-	// Then, upsert the network binding using the resource version
+	binding.Meta.UID = uid
+	binding.Meta.TouchOnWrite(strconv.FormatInt(resourceVersion, 10))
+
+	// Then, upsert the network binding using the NEW resource version
 	bindingQuery := `
 		INSERT INTO network_bindings (namespace, name, network_namespace, network_name, address_group_namespace, address_group_name, resource_version)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -96,13 +106,17 @@ func (w *Writer) upsertNetworkBinding(ctx context.Context, binding models.Networ
 	if err := w.exec(ctx, bindingQuery,
 		binding.Namespace,
 		binding.Name,
-		binding.Namespace, // NetworkRef is in same namespace as binding
+		binding.NetworkRef.Namespace,
 		binding.NetworkRef.Name,
-		binding.Namespace, // AddressGroupRef is in same namespace as binding
+		binding.AddressGroupRef.Namespace,
 		binding.AddressGroupRef.Name,
 		resourceVersion,
 	); err != nil {
 		return errors.Wrapf(err, "failed to upsert network binding %s/%s", binding.Namespace, binding.Name)
+	}
+
+	if err := w.createNetworkBindingOutboxEntry(ctx, binding); err != nil {
+		return errors.Wrap(err, "failed to create outbox entry for network binding")
 	}
 
 	return nil
@@ -146,12 +160,111 @@ func (w *Writer) DeleteNetworkBindingsByIDs(ctx context.Context, ids []models.Re
 		argIndex += 2
 	}
 
+	// Execute DELETE - trigger will intercept and apply Sync-First strategy
 	query := fmt.Sprintf(`
 		DELETE FROM network_bindings WHERE %s`,
 		strings.Join(conditions, " OR "))
 
 	if err := w.exec(ctx, query, args...); err != nil {
 		return errors.Wrap(err, "failed to delete network bindings by identifiers")
+	}
+
+	return nil
+}
+
+// createNetworkBindingOutboxEntry creates an outbox entry for NetworkBinding resource (PROCESS RESOURCE)
+func (w *Writer) createNetworkBindingOutboxEntry(ctx context.Context, binding *models.NetworkBinding) error {
+	affectedResources := []map[string]string{
+		{
+			"type":      "Network",
+			"namespace": binding.NetworkRef.Namespace,
+			"name":      binding.NetworkRef.Name,
+		},
+	}
+	affectedResourcesJSON, err := json.Marshal(affectedResources)
+	if err != nil {
+		return errors.Wrap(err, "failed to marshal affected resources")
+	}
+
+	// Build payload
+	payload := map[string]interface{}{
+		"namespace":         binding.Namespace,
+		"name":              binding.Name,
+		"network_ref":       binding.NetworkRef.Name,
+		"network_namespace": binding.NetworkRef.Namespace,
+		"ag_ref":            binding.AddressGroupRef.Name,
+		"ag_namespace":      binding.AddressGroupRef.Namespace,
+	}
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		return errors.Wrap(err, "failed to marshal network binding payload")
+	}
+
+	// Parse resource UUID from Meta.UID
+	resourceUUID, err := uuid.Parse(binding.Meta.UID)
+	if err != nil {
+		return errors.Wrapf(err, "invalid network binding UID: %s", binding.Meta.UID)
+	}
+
+	// Create outbox entry
+	outboxEntry := &domain.OutboxEntry{
+		ResourceType:      "NetworkBinding",
+		ResourceID:        resourceUUID,
+		ResourceNamespace: binding.Namespace,
+		ResourceName:      binding.Name,
+		Operation:         domain.SyncOperationCreate,
+		TargetSystem:      domain.TargetSystemInternal,
+		Payload:           payloadJSON,
+		AffectsResources:  affectedResourcesJSON,
+		Status:            domain.OutboxStatusPending,
+		MaxRetries:        5,
+	}
+
+	// Use OutboxRepository with existing transaction
+	outboxRepo := repositories.NewOutboxRepository(w.tx)
+	if err := outboxRepo.Create(ctx, outboxEntry); err != nil {
+		return errors.Wrap(err, "failed to persist outbox entry")
+	}
+
+	klog.V(4).InfoS("Created outbox entry for NetworkBinding",
+		"namespace", binding.Namespace,
+		"name", binding.Name,
+		"outbox_id", outboxEntry.ID,
+		"affected_resources", len(affectedResources))
+
+	return nil
+}
+
+// updateNetworkBindingConditionsOnly updates only conditions without creating Outbox entries
+// Used by ConditionManager to update Ready/PendingSync status
+func (w *Writer) updateNetworkBindingConditionsOnly(ctx context.Context, bindings []models.NetworkBinding) error {
+	for i := range bindings {
+		binding := &bindings[i]
+
+		// Marshal conditions
+		conditionsJSON, err := json.Marshal(binding.Meta.Conditions)
+		if err != nil {
+			return errors.Wrap(err, "failed to marshal conditions")
+		}
+
+		// Find existing resource_version
+		var existingResourceVersion int64
+		query := `SELECT resource_version FROM network_bindings WHERE namespace = $1 AND name = $2`
+		err = w.tx.QueryRow(ctx, query, binding.Namespace, binding.Name).Scan(&existingResourceVersion)
+		if err != nil {
+			return errors.Wrapf(err, "failed to find existing NetworkBinding %s/%s", binding.Namespace, binding.Name)
+		}
+
+		// Update only conditions in k8s_metadata (no new resource_version)
+		updateQuery := `UPDATE k8s_metadata SET conditions = $1 WHERE resource_version = $2`
+		if err := w.exec(ctx, updateQuery, conditionsJSON, existingResourceVersion); err != nil {
+			return errors.Wrapf(err, "failed to update conditions for NetworkBinding %s/%s", binding.Namespace, binding.Name)
+		}
+
+		klog.V(4).InfoS("Updated NetworkBinding conditions only",
+			"namespace", binding.Namespace,
+			"name", binding.Name,
+			"resource_version", existingResourceVersion)
 	}
 
 	return nil

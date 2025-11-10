@@ -3,7 +3,7 @@ package processors
 import (
 	"context"
 
-	"netguard-pg-backend/internal/sync/detector"
+	"netguard-pg-backend/internal/sync/monitor"
 )
 
 // EntityProcessor processes changes for a specific entity type
@@ -12,7 +12,7 @@ type EntityProcessor interface {
 	GetEntityType() string
 
 	// ProcessChanges processes changes for entities of this type
-	ProcessChanges(ctx context.Context, event detector.ChangeEvent) error
+	ProcessChanges(ctx context.Context, event monitor.SyncChangeEvent) error
 }
 
 // ProcessResult contains the result of processing changes
@@ -33,11 +33,11 @@ type ProcessResult struct {
 // EntityProcessorFunc is a function adapter for EntityProcessor interface
 type EntityProcessorFunc struct {
 	entityType  string
-	processFunc func(ctx context.Context, event detector.ChangeEvent) error
+	processFunc func(ctx context.Context, event monitor.SyncChangeEvent) error
 }
 
 // NewEntityProcessorFunc creates a new EntityProcessorFunc
-func NewEntityProcessorFunc(entityType string, processFunc func(ctx context.Context, event detector.ChangeEvent) error) EntityProcessor {
+func NewEntityProcessorFunc(entityType string, processFunc func(ctx context.Context, event monitor.SyncChangeEvent) error) EntityProcessor {
 	return &EntityProcessorFunc{
 		entityType:  entityType,
 		processFunc: processFunc,
@@ -50,7 +50,7 @@ func (f *EntityProcessorFunc) GetEntityType() string {
 }
 
 // ProcessChanges implements EntityProcessor interface
-func (f *EntityProcessorFunc) ProcessChanges(ctx context.Context, event detector.ChangeEvent) error {
+func (f *EntityProcessorFunc) ProcessChanges(ctx context.Context, event monitor.SyncChangeEvent) error {
 	return f.processFunc(ctx, event)
 }
 

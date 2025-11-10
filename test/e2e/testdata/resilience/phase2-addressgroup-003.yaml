@@ -1,0 +1,9 @@
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroup
+metadata:
+  name: test-resilient-003
+  namespace: incloud-sgroups
+spec:
+  defaultAction: DROP
+  logs: true
+  trace: false

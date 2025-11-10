@@ -21,7 +21,7 @@ type RuleS2SRegenerator interface {
 	// Called when AddressGroupBinding is created/updated/deleted
 	RegenerateIEAgAgRulesForAddressGroupBinding(ctx context.Context, bindingID models.ResourceIdentifier) error
 
-	// 🎯 NEW: NotifyServiceAddressGroupsChanged triggers RuleS2S condition recalculation when Service.AddressGroups changes
+	// NEW: NotifyServiceAddressGroupsChanged triggers RuleS2S condition recalculation when Service.AddressGroups changes
 	// This method enables the reactive dependency chain: AddressGroupBinding → Service.AddressGroups → RuleS2S conditions
 	// Called after updateServiceAddressGroups successfully updates a Service
 	NotifyServiceAddressGroupsChanged(ctx context.Context, serviceID models.ResourceIdentifier) error

@@ -10,8 +10,11 @@ const (
 	// SyncOperationFullSync - full synchronization (delete + insert + update)
 	SyncOperationFullSync SyncOperation = "FullSync"
 
-	// SyncOperationUpsert - insert and update only
+	// SyncOperationUpsert - insert and update only (for creation operations)
 	SyncOperationUpsert SyncOperation = "Upsert"
+
+	// SyncOperationUpdate - update only (for existing resources)
+	SyncOperationUpdate SyncOperation = "Update"
 
 	// SyncOperationDelete - delete only
 	SyncOperationDelete SyncOperation = "Delete"
@@ -36,6 +39,8 @@ const (
 	SyncSubjectTypeNetworkBindings      SyncSubjectType = "NetworkBindings"
 	SyncSubjectTypeHosts                SyncSubjectType = "Hosts"
 	SyncSubjectTypeHostBindings         SyncSubjectType = "HostBindings"
+	SyncSubjectTypeSvcSvcRules          SyncSubjectType = "SvcSvcRules" // NEW! Service-to-Service rules
+	SyncSubjectTypeSvcFqdnRules         SyncSubjectType = "SvcFqdnRules"
 )
 
 // SyncRequest represents a synchronization request

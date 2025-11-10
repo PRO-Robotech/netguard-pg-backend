@@ -14,7 +14,6 @@ import (
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 	"netguard-pg-backend/internal/sync/interfaces"
-	"netguard-pg-backend/internal/sync/types"
 )
 
 // NetworkConditionManagerInterface provides condition processing for networks
@@ -62,17 +61,14 @@ func (s *NetworkResourceService) CreateNetwork(ctx context.Context, network *mod
 		return fmt.Errorf("network already exists: %s", network.Key())
 	}
 
-	// Initialize metadata
 	network.GetMeta().TouchOnCreate()
 
-	// Create the network
 	writer, err := s.repo.Writer(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get writer: %w", err)
 	}
 	defer writer.Abort()
 
-	// Convert to slice for sync
 	networks := []models.Network{*network}
 	if err := writer.SyncNetworks(ctx, networks, ports.EmptyScope{}, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
 		return fmt.Errorf("failed to sync networks: %w", err)
@@ -82,19 +78,37 @@ func (s *NetworkResourceService) CreateNetwork(ctx context.Context, network *mod
 		return fmt.Errorf("failed to commit network creation: %w", err)
 	}
 
-	// Sync with external systems
-	syncErr := s.syncNetworkWithExternal(ctx, network, types.SyncOperationUpsert)
-
-	// Process conditions after sync (so sync result can be included in conditions)
+	// ConditionManager needs the ACTUAL database state, not the in-memory object
+	// Writer may have set Ready=False (PendingSGROUPSync), which must be preserved
 	if s.conditionManager != nil {
-		if err := s.conditionManager.ProcessNetworkConditions(ctx, network, syncErr); err != nil {
+		// Re-read the network from database to get Writer-applied conditions
+		reader, err := s.repo.Reader(ctx)
+		if err != nil {
+			klog.Errorf("Failed to get reader for condition processing %s/%s: %v",
+				network.Namespace, network.Name, err)
+			return nil // Don't fail the operation
+		}
+		defer reader.Close()
+
+		freshNetwork, err := reader.GetNetworkByID(ctx, models.ResourceIdentifier{
+			Namespace: network.Namespace,
+			Name:      network.Name,
+		})
+		if err != nil {
+			klog.Errorf("Failed to re-read network for condition processing %s/%s: %v",
+				network.Namespace, network.Name, err)
+			return nil // Don't fail the operation
+		}
+
+		// Process conditions with the FRESH network from database
+		if err := s.conditionManager.ProcessNetworkConditions(ctx, freshNetwork, nil); err != nil {
 			klog.Errorf("Failed to process network conditions for %s/%s: %v",
 				network.Namespace, network.Name, err)
 			// Don't fail the operation if condition processing fails
 		}
 	}
 
-	return syncErr
+	return nil
 }
 
 // UpdateNetwork updates an existing Network with business logic validation
@@ -121,17 +135,14 @@ func (s *NetworkResourceService) UpdateNetwork(ctx context.Context, network *mod
 		}
 	}
 
-	// Update metadata
 	network.GetMeta().TouchOnWrite(fmt.Sprintf("%d", time.Now().UnixNano()))
 
-	// Update the network
 	writer, err := s.repo.Writer(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get writer: %w", err)
 	}
 	defer writer.Abort()
 
-	// Convert to slice for sync
 	networks := []models.Network{*network}
 	if err := writer.SyncNetworks(ctx, networks, ports.EmptyScope{}, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
 		return fmt.Errorf("failed to sync networks: %w", err)
@@ -141,36 +152,48 @@ func (s *NetworkResourceService) UpdateNetwork(ctx context.Context, network *mod
 		return fmt.Errorf("failed to commit network update: %w", err)
 	}
 
-	// Sync with external systems
-	syncErr := s.syncNetworkWithExternal(ctx, network, types.SyncOperationUpsert)
-
-	// Process conditions after sync (so sync result can be included in conditions)
+	// ConditionManager needs the ACTUAL database state, not the in-memory object
+	// Writer may have set Ready=False (PendingSGROUPSync), which must be preserved
 	if s.conditionManager != nil {
-		if err := s.conditionManager.ProcessNetworkConditions(ctx, network, syncErr); err != nil {
+		// Re-read the network from database to get Writer-applied conditions
+		reader, err := s.repo.Reader(ctx)
+		if err != nil {
+			klog.Errorf("Failed to get reader for condition processing %s/%s: %v",
+				network.Namespace, network.Name, err)
+			return nil // Don't fail the operation
+		}
+		defer reader.Close()
+
+		freshNetwork, err := reader.GetNetworkByID(ctx, models.ResourceIdentifier{
+			Namespace: network.Namespace,
+			Name:      network.Name,
+		})
+		if err != nil {
+			klog.Errorf("Failed to re-read network for condition processing %s/%s: %v",
+				network.Namespace, network.Name, err)
+			return nil // Don't fail the operation
+		}
+
+		// Process conditions with the FRESH network from database
+		if err := s.conditionManager.ProcessNetworkConditions(ctx, freshNetwork, nil); err != nil {
 			klog.Errorf("Failed to process network conditions for %s/%s: %v",
 				network.Namespace, network.Name, err)
 			// Don't fail the operation if condition processing fails
 		}
 	}
 
-	return syncErr
+	return nil
 }
 
 // DeleteNetwork deletes a Network with cleanup logic
 func (s *NetworkResourceService) DeleteNetwork(ctx context.Context, id models.ResourceIdentifier) error {
-
-	// Check if Network exists
 	existing, err := s.getNetworkByID(ctx, id.Key())
-	if existing != nil {
-	}
 	if err != nil && !errors.Is(err, ports.ErrNotFound) {
 		return fmt.Errorf("failed to get network: %w", err)
 	}
 	if existing == nil || errors.Is(err, ports.ErrNotFound) {
-		// Network doesn't exist - delete is idempotent, so this is success
 		return nil
 	}
-
 
 	// Check if Network is bound and handle cleanup
 	if existing.IsBound {
@@ -228,13 +251,6 @@ func (s *NetworkResourceService) DeleteNetwork(ctx context.Context, id models.Re
 		return fmt.Errorf("failed to commit network deletion: %w", err)
 	}
 
-
-	// Sync deletion with external systems
-	err = s.syncNetworkWithExternal(ctx, existing, types.SyncOperationDelete)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -249,12 +265,6 @@ func (s *NetworkResourceService) GetNetwork(ctx context.Context, id models.Resou
 	network, err := reader.GetNetworkByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get network: %w", err)
-	}
-
-	if network != nil {
-		if network.BindingRef != nil {
-		} else {
-		}
 	}
 
 	return network, nil
@@ -294,7 +304,6 @@ func (s *NetworkResourceService) UpdateAddressGroup(ctx context.Context, address
 		return fmt.Errorf("failed to commit address group update: %w", err)
 	}
 
-	// REMOVE DUPLICATE SGROUPS SYNC - this will be handled by the calling function
 	return nil
 }
 
@@ -319,6 +328,56 @@ func (s *NetworkResourceService) ListNetworks(ctx context.Context, scope ports.S
 	return networks, nil
 }
 
+// SyncNetworks synchronizes multiple networks with the specified operation
+func (s *NetworkResourceService) SyncNetworks(ctx context.Context, networks []models.Network, scope ports.Scope, syncOp models.SyncOp) error {
+	writer, err := s.repo.Writer(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get writer: %w", err)
+	}
+	defer writer.Abort()
+
+	if err = writer.SyncNetworks(ctx, networks, scope, ports.WithSyncOp(syncOp)); err != nil {
+		return fmt.Errorf("failed to sync networks: %w", err)
+	}
+
+	if err = writer.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	// ConditionManager needs the ACTUAL database state, not the in-memory objects
+	// Writer may have set Ready=False (PendingSGROUPSync), which must be preserved
+	if s.conditionManager != nil && syncOp != models.SyncOpDelete {
+		reader, err := s.repo.Reader(ctx)
+		if err != nil {
+			klog.Errorf("Failed to get reader for batch condition processing: %v", err)
+			return nil // Don't fail the operation
+		}
+		defer reader.Close()
+
+		// Re-read each network from database and process conditions
+		for i := range networks {
+			freshNetwork, err := reader.GetNetworkByID(ctx, models.ResourceIdentifier{
+				Namespace: networks[i].Namespace,
+				Name:      networks[i].Name,
+			})
+			if err != nil {
+				klog.Errorf("Failed to re-read network %s/%s for condition processing: %v",
+					networks[i].Namespace, networks[i].Name, err)
+				continue // Skip this network but continue with others
+			}
+
+			// Process conditions with the FRESH network from database
+			if err := s.conditionManager.ProcessNetworkConditions(ctx, freshNetwork, nil); err != nil {
+				klog.Errorf("Failed to process conditions for %s/%s: %v",
+					freshNetwork.Namespace, freshNetwork.Name, err)
+				// Continue with other networks
+			}
+		}
+	}
+
+	return nil
+}
+
 // ValidateNetworkBinding validates that a NetworkBinding can be created for this Network
 func (s *NetworkResourceService) ValidateNetworkBinding(ctx context.Context, networkID models.ResourceIdentifier, bindingID models.ResourceIdentifier) error {
 
@@ -331,11 +390,8 @@ func (s *NetworkResourceService) ValidateNetworkBinding(ctx context.Context, net
 		return fmt.Errorf("network not found: %s", networkID.Key())
 	}
 
-	// Check if Network is already bound to a different binding
 	if network.IsBound {
-		// If bound to the same binding, that's valid
 		if network.BindingRef != nil {
-			// BindingRef.Name now contains only the name part, so compare with binding name
 			expectedName := bindingID.Name
 			actualName := network.BindingRef.Name
 
@@ -375,6 +431,10 @@ func (s *NetworkResourceService) ValidateNetworkBindingWithReader(ctx context.Co
 		return fmt.Errorf("network is already bound to another binding (expected: %s, actual: %s)", bindingID.Name, network.BindingRef.Name)
 	}
 
+	if !s.isNetworkReady(network) {
+		return fmt.Errorf("network is not ready yet (Ready=False): %s - binding can only be created between Ready resources", networkID.Key())
+	}
+
 	return nil
 }
 
@@ -403,15 +463,21 @@ func (s *NetworkResourceService) UpdateNetworkBinding(ctx context.Context, netwo
 	}
 
 	// Update binding references
-	network.BindingRef = &v1beta1.ObjectReference{
-		APIVersion: "netguard.sgroups.io/v1beta1",
-		Kind:       "NetworkBinding",
-		Name:       bindingID.Name, // Store only the name part for repository consistency
+	network.BindingRef = &v1beta1.NamespacedObjectReference{
+		ObjectReference: v1beta1.ObjectReference{
+			APIVersion: "netguard.sgroups.io/v1beta1",
+			Kind:       "NetworkBinding",
+			Name:       bindingID.Name,
+		},
+		Namespace: bindingID.Namespace,
 	}
-	network.AddressGroupRef = &v1beta1.ObjectReference{
-		APIVersion: "netguard.sgroups.io/v1beta1",
-		Kind:       "AddressGroup",
-		Name:       addressGroupID.Name,
+	network.AddressGroupRef = &v1beta1.NamespacedObjectReference{
+		ObjectReference: v1beta1.ObjectReference{
+			APIVersion: "netguard.sgroups.io/v1beta1",
+			Kind:       "AddressGroup",
+			Name:       addressGroupID.Name,
+		},
+		Namespace: addressGroupID.Namespace,
 	}
 	network.IsBound = true
 
@@ -421,7 +487,6 @@ func (s *NetworkResourceService) UpdateNetworkBinding(ctx context.Context, netwo
 	// Set success condition
 	utils.SetSyncSuccessCondition(network)
 
-	// Sync the updated network
 	networks := []models.Network{*network}
 	if err := writer.SyncNetworks(ctx, networks, ports.EmptyScope{}, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
 		return fmt.Errorf("failed to sync network binding: %w", err)
@@ -429,14 +494,6 @@ func (s *NetworkResourceService) UpdateNetworkBinding(ctx context.Context, netwo
 
 	if err := writer.Commit(); err != nil {
 		return fmt.Errorf("failed to commit network binding: %w", err)
-	}
-
-	// Sync with SGROUP
-	if s.syncManager != nil {
-		if syncErr := s.syncManager.SyncEntity(ctx, network, types.SyncOperationUpsert); syncErr != nil {
-			// Don't fail the operation, sync can be retried later
-		} else {
-		}
 	}
 
 	return nil
@@ -476,8 +533,6 @@ func (s *NetworkResourceService) RemoveNetworkBinding(ctx context.Context, netwo
 
 	// Set success condition
 	utils.SetSyncSuccessCondition(network)
-
-	// Sync the updated network
 	networks := []models.Network{*network}
 	if err := writer.SyncNetworks(ctx, networks, ports.EmptyScope{}, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
 		return fmt.Errorf("failed to sync network unbinding: %w", err)
@@ -487,18 +542,8 @@ func (s *NetworkResourceService) RemoveNetworkBinding(ctx context.Context, netwo
 		return fmt.Errorf("failed to commit network unbinding: %w", err)
 	}
 
-	// Sync with SGROUP
-	if s.syncManager != nil {
-		if syncErr := s.syncManager.SyncEntity(ctx, network, types.SyncOperationUpsert); syncErr != nil {
-			// Don't fail the operation, sync can be retried later
-		} else {
-		}
-	}
-
 	return nil
 }
-
-// Helper methods
 
 // removeNetworkFromAddressGroup removes a network from AddressGroup.Networks field
 func (s *NetworkResourceService) removeNetworkFromAddressGroup(ctx context.Context, addressGroupRef, networkRef models.ResourceIdentifier) error {
@@ -517,10 +562,7 @@ func (s *NetworkResourceService) removeNetworkFromAddressGroup(ctx context.Conte
 		return nil // AddressGroup doesn't exist, nothing to clean up
 	}
 
-	// Generate network name (namespace/name format) to match the pattern used in NetworkBinding
 	networkName := fmt.Sprintf("%s/%s", networkRef.Namespace, networkRef.Name)
-
-	// Remove network from AddressGroup.Networks.Items
 
 	var updatedNetworks []models.NetworkItem
 	found := false
@@ -542,7 +584,6 @@ func (s *NetworkResourceService) removeNetworkFromAddressGroup(ctx context.Conte
 		if err := s.UpdateAddressGroup(ctx, addressGroup); err != nil {
 			return fmt.Errorf("failed to update address group: %w", err)
 		}
-	} else {
 	}
 
 	return nil
@@ -582,64 +623,15 @@ func (s *NetworkResourceService) validateCIDR(cidr string) error {
 	return nil
 }
 
-// syncNetworkWithExternal syncs a Network with external systems
-func (s *NetworkResourceService) syncNetworkWithExternal(ctx context.Context, network *models.Network, operation types.SyncOperation) error {
-	syncKey := fmt.Sprintf("%s-%s", operation, network.Key())
-
-	// Check debouncing
-	if !s.syncTracker.ShouldSync(syncKey) {
-		return nil // Skip sync due to debouncing
+// isNetworkReady checks if Network has Ready=True condition
+func (s *NetworkResourceService) isNetworkReady(network *models.Network) bool {
+	if network == nil || network.Meta.Conditions == nil {
+		return false
 	}
-
-	// Execute sync with retry
-	err := utils.ExecuteWithRetry(ctx, s.retryConfig, func() error {
-		// Sync Network with SGROUP
-		if s.syncManager != nil {
-			if syncErr := s.syncManager.SyncEntity(ctx, network, operation); syncErr != nil {
-				return syncErr
-			}
+	for _, cond := range network.Meta.Conditions {
+		if cond.Type == "Ready" && cond.Status == "True" {
+			return true
 		}
-		return nil
-	})
-
-	if err != nil {
-		s.syncTracker.RecordFailure(syncKey, err)
-		utils.SetSyncFailedCondition(network, err)
-		return fmt.Errorf("failed to sync with external system: %w", err)
 	}
-
-	s.syncTracker.RecordSuccess(syncKey)
-	utils.SetSyncSuccessCondition(network)
-	return nil
-}
-
-// syncAddressGroupWithExternal syncs an AddressGroup with external systems
-func (s *NetworkResourceService) syncAddressGroupWithExternal(ctx context.Context, addressGroup *models.AddressGroup, operation string) error {
-	syncKey := fmt.Sprintf("%s-%s", operation, addressGroup.Key())
-
-	// Check debouncing
-	if !s.syncTracker.ShouldSync(syncKey) {
-		return nil // Skip sync due to debouncing
-	}
-
-	// Execute sync with retry
-	err := utils.ExecuteWithRetry(ctx, s.retryConfig, func() error {
-		// Sync AddressGroup with SGROUP
-		if s.syncManager != nil {
-			if syncErr := s.syncManager.SyncEntity(ctx, addressGroup, types.SyncOperationUpsert); syncErr != nil {
-				return syncErr
-			}
-		}
-		return nil
-	})
-
-	if err != nil {
-		s.syncTracker.RecordFailure(syncKey, err)
-		utils.SetSyncFailedCondition(addressGroup, err)
-		return fmt.Errorf("failed to sync with external system: %w", err)
-	}
-
-	s.syncTracker.RecordSuccess(syncKey)
-	utils.SetSyncSuccessCondition(addressGroup)
-	return nil
+	return false
 }

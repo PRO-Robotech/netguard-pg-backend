@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
-	"k8s.io/klog/v2"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
+
+	"github.com/pkg/errors"
 )
 
 // BaseValidator provides common validation functionality for all entity validators
@@ -63,97 +63,44 @@ func (v *BaseValidator) ValidateExists(ctx context.Context, id models.ResourceId
 	return nil
 }
 
-// CheckEntityExists verifies if an entity with the given ID already exists
-// This is specifically designed for creation validation to prevent duplicates
 func (v *BaseValidator) CheckEntityExists(ctx context.Context, id models.ResourceIdentifier, keyExtractor func(interface{}) string) (bool, interface{}, error) {
-	startTime := time.Now()
-
-	// Log validation start with detailed context
-	klog.V(2).Infof("🔍 VALIDATION: Checking existence for %s entity: %s", v.entityType, id.Key())
-
 	var foundEntity interface{}
 	exists := false
-	queryCount := 0
 
 	err := v.listFunction(ctx, func(entity interface{}) error {
-		queryCount++
 		if keyExtractor(entity) == id.Key() {
 			exists = true
 			foundEntity = entity
-			klog.V(3).Infof("🚨 CONFLICT: Found existing %s entity: %s", v.entityType, id.Key())
 		}
 		return nil
 	}, ports.NewResourceIdentifierScope(id))
 
-	duration := time.Since(startTime)
-
-	// Log performance metrics and results
 	if err != nil {
-		klog.Errorf("❌ VALIDATION ERROR: Failed existence check for %s %s after %v (queries: %d): %v",
-			v.entityType, id.Key(), duration, queryCount, err)
 		return false, nil, errors.Wrap(err, fmt.Sprintf("failed to check %s existence", v.entityType))
-	}
-
-	if exists {
-		klog.V(2).Infof("⚠️  VALIDATION CONFLICT: %s entity %s already exists (check took %v, queries: %d)",
-			v.entityType, id.Key(), duration, queryCount)
-	} else {
-		klog.V(2).Infof("✅ VALIDATION PASS: %s entity %s does not exist (check took %v, queries: %d)",
-			v.entityType, id.Key(), duration, queryCount)
 	}
 
 	return exists, foundEntity, nil
 }
 
-// ValidateEntityDoesNotExistForCreation performs comprehensive existence validation for entity creation
-// This is the main method that should be called during creation validation
 func (v *BaseValidator) ValidateEntityDoesNotExistForCreation(ctx context.Context, id models.ResourceIdentifier, keyExtractor func(interface{}) string) error {
-	startTime := time.Now()
-
-	// Log validation entry with full context
-	klog.V(1).Infof("🚀 CREATION VALIDATION: Starting existence validation for %s: %s", v.entityType, id.Key())
-
 	exists, foundEntity, err := v.CheckEntityExists(ctx, id, keyExtractor)
 	if err != nil {
-		klog.Errorf("❌ CREATION VALIDATION FAILED: Database error during existence check for %s %s: %v",
-			v.entityType, id.Key(), err)
 		return err
 	}
 
 	if exists {
-		// Generate detailed conflict information
 		conflictDetails := fmt.Sprintf("Entity was found in namespace '%s' with name '%s'", id.Namespace, id.Name)
 		suggestedAction := fmt.Sprintf("Use a different name or update the existing %s instead", v.entityType)
-
-		// Log detailed conflict information for troubleshooting
-		klog.Warningf("🚨 CREATION VALIDATION REJECTED: %s %s already exists - rejecting duplicate creation (validation took %v)",
-			v.entityType, id.Key(), time.Since(startTime))
-
-		if klog.V(3).Enabled() {
-			// In verbose mode, log details about the existing entity for debugging
-			klog.V(3).Infof("🔍 EXISTING ENTITY DETAILS: %+v", foundEntity)
-		}
-
 		return NewEntityAlreadyExistsError(v.entityType, id.Key(), foundEntity, conflictDetails, suggestedAction)
 	}
-
-	// Log successful validation
-	klog.V(1).Infof("✅ CREATION VALIDATION PASSED: %s %s is available for creation (validation took %v)",
-		v.entityType, id.Key(), time.Since(startTime))
 
 	return nil
 }
 
-// 🚀 VALIDATION PHASE 1: Ready Condition Framework
-// Based on k8s-controller webhook_utils.go:102-122 and validation.go:95-111
-
-// MetaProvider interface for accessing Meta field from any resource
 type MetaProvider interface {
 	GetMeta() *models.Meta
 }
 
-// IsReadyConditionTrue checks if the Ready condition is true for the given object
-// Ported from k8s-controller webhook_utils.go:102-122
 func (v *BaseValidator) IsReadyConditionTrue(obj interface{}) bool {
 	// Use type assertion to get Meta from the object
 	switch o := obj.(type) {
@@ -197,6 +144,10 @@ func (v *BaseValidator) IsReadyConditionTrue(obj interface{}) bool {
 		return o.Meta.IsReady()
 	case models.NetworkBinding:
 		return o.Meta.IsReady()
+	case *models.SvcSvcRule:
+		return o.Meta.IsReady()
+	case models.SvcSvcRule:
+		return o.Meta.IsReady()
 	case MetaProvider:
 		return o.GetMeta().IsReady()
 	default:
@@ -205,9 +156,6 @@ func (v *BaseValidator) IsReadyConditionTrue(obj interface{}) bool {
 	}
 }
 
-// ValidateSpecNotChangedWhenReady validates that the Spec hasn't changed during an update
-// if the Ready condition is true
-// Ported from k8s-controller webhook_utils.go:147-158
 func (v *BaseValidator) ValidateSpecNotChangedWhenReady(oldObj, newObj interface{}, oldSpec, newSpec interface{}) error {
 	// Check if specs are different
 	if !reflect.DeepEqual(oldSpec, newSpec) {
@@ -219,9 +167,6 @@ func (v *BaseValidator) ValidateSpecNotChangedWhenReady(oldObj, newObj interface
 	return nil
 }
 
-// ValidateFieldNotChangedWhenReady validates that a field hasn't changed during an update
-// if the Ready condition is true
-// Ported from k8s-controller webhook_utils.go:135-145
 func (v *BaseValidator) ValidateFieldNotChangedWhenReady(fieldName string, oldObj, newObj interface{}, oldValue, newValue interface{}) error {
 	if !reflect.DeepEqual(oldValue, newValue) {
 		// Check if the Ready condition is true in the old object
@@ -240,10 +185,6 @@ type ObjectReferencer interface {
 	GetNamespace() string
 }
 
-// 🚀 VALIDATION PHASE 2: Object Reference Immutability
-// Adapters for v1beta1.NamespacedObjectReference to implement ObjectReferencer interface
-
-// NamespacedObjectReferenceAdapter adapts v1beta1.NamespacedObjectReference to ObjectReferencer
 type NamespacedObjectReferenceAdapter struct {
 	Ref netguardv1beta1.NamespacedObjectReference
 }
@@ -264,9 +205,6 @@ func (a *NamespacedObjectReferenceAdapter) GetNamespace() string {
 	return a.Ref.Namespace
 }
 
-// ValidateObjectReferencesNotChangedWhenReady validates multiple object references haven't changed
-// during an update if the Ready condition is true
-// Ported from k8s-controller validation patterns
 func (v *BaseValidator) ValidateObjectReferencesNotChangedWhenReady(oldObj, newObj interface{}, referenceComparisons []ObjectReferenceComparison) error {
 	// Only validate if the old object is Ready
 	if !v.IsReadyConditionTrue(oldObj) {
@@ -281,16 +219,12 @@ func (v *BaseValidator) ValidateObjectReferencesNotChangedWhenReady(oldObj, newO
 	return nil
 }
 
-// ObjectReferenceComparison holds a single reference comparison
 type ObjectReferenceComparison struct {
 	OldRef    ObjectReferencer
 	NewRef    ObjectReferencer
 	FieldName string
 }
 
-// ValidateObjectReferenceNotChangedWhenReady validates that a reference hasn't changed during an update
-// if the Ready condition is true
-// Ported from k8s-controller validation.go:95-111
 func (v *BaseValidator) ValidateObjectReferenceNotChangedWhenReady(oldObj, newObj interface{}, oldRef, newRef ObjectReferencer, fieldName string) error {
 	// Check if any reference fields have changed
 	if oldRef.GetName() != newRef.GetName() ||

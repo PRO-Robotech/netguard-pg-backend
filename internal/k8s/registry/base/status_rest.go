@@ -150,7 +150,7 @@ func (s *StatusREST[K, D]) Update(ctx context.Context, name string, objInfo rest
 // Patch applies a patch to the status of a resource
 func (s *StatusREST[K, D]) Patch(ctx context.Context, name string, patchType types.PatchType, data []byte, options *metav1.PatchOptions, subresources ...string) (runtime.Object, error) {
 	namespace := utils.NamespaceFrom(ctx)
-	klog.V(1).InfoS("🚀 STATUS PATCH METHOD CALLED",
+	klog.V(3).InfoS("status patch requested",
 		"resource", s.resourceName,
 		"name", name,
 		"namespace", namespace,
@@ -158,7 +158,7 @@ func (s *StatusREST[K, D]) Patch(ctx context.Context, name string, patchType typ
 
 	// For Server-Side Apply CREATE operations, delegate to parent storage
 	if patchType == types.ApplyPatchType {
-		klog.V(1).InfoS("🔍 STATUS: Server-Side Apply detected, delegating to parent storage", "name", name)
+		klog.V(2).InfoS("status patch uses server-side apply, delegating to parent storage", "name", name)
 		return s.parent.Patch(ctx, name, patchType, data, options, subresources...)
 	}
 

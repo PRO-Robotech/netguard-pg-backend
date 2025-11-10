@@ -62,6 +62,10 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&HostList{},
 		&HostBinding{},
 		&HostBindingList{},
+		&SvcSvcRule{},
+		&SvcSvcRuleList{},
+		&SvcFqdnRule{},
+		&SvcFqdnRuleList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil
@@ -102,6 +106,10 @@ func addKnownTypesInternal(scheme *runtime.Scheme) error {
 		&HostList{},
 		&HostBinding{},
 		&HostBindingList{},
+		&SvcSvcRule{},
+		&SvcSvcRuleList{},
+		&SvcFqdnRule{},
+		&SvcFqdnRuleList{},
 	)
 	// do NOT call metav1.AddToGroupVersion for internal hub version to avoid
 	// duplicate registration of meta types like WatchEvent.

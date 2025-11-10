@@ -59,9 +59,6 @@ type SGroupGateway interface {
 	// Sync sends a synchronization request to sgroups
 	Sync(ctx context.Context, req *types.SyncRequest) error
 
-	// Health checks the health of sgroups service
-	Health(ctx context.Context) error
-
 	// GetStatuses returns a channel of timestamp updates from SGROUP
 	GetStatuses(ctx context.Context) (chan *timestamppb.Timestamp, error)
 
@@ -110,3 +107,12 @@ type SyncStats struct {
 	LastSyncTime    int64 // Unix timestamp
 	AverageLatency  int64 // milliseconds
 }
+
+// ConnectionListener определён в internal/sync/monitor package.
+// Используйте monitor.ConnectionListener для подписки на события подключения к SGROUP.
+//
+// Интерфейс ConnectionListener:
+//   - OnConnectionEvent(event ConnectionEvent) - обработка события связи с SGROUP
+//   - GetListenerName() string - имя listener для логирования
+//
+// Все методы вызываются асинхронно и должны быть thread-safe.

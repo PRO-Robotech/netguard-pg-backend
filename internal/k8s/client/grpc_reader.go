@@ -187,6 +187,25 @@ func (r *GRPCReader) GetServiceAliasByID(ctx context.Context, id models.Resource
 	return r.grpcClient.GetServiceAlias(ctx, id)
 }
 
+func (r *GRPCReader) ListSvcFqdnRules(ctx context.Context, consume func(models.SvcFqdnRule) error, scope ports.Scope) error {
+	rules, err := r.grpcClient.ListSvcFqdnRules(ctx, scope)
+	if err != nil {
+		return err
+	}
+
+	for _, rule := range rules {
+		if err := consume(rule); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *GRPCReader) GetSvcFqdnRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcFqdnRule, error) {
+	return r.grpcClient.GetSvcFqdnRule(ctx, id)
+}
+
 // GetAddressGroupBindingPolicyByID реализует ports.Reader интерфейс
 func (r *GRPCReader) GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
 	return r.grpcClient.GetAddressGroupBindingPolicy(ctx, id)
@@ -229,6 +248,23 @@ func (r *GRPCReader) GetNetworkByCIDR(ctx context.Context, cidr string) (*models
 	}
 
 	return nil, ports.ErrNotFound
+}
+
+func (r *GRPCReader) GetNetworksOverlappingCIDR(ctx context.Context, cidr string) ([]*models.Network, error) {
+	var overlappingNetworks []*models.Network
+	err := r.ListNetworks(ctx, func(network models.Network) error {
+		if network.CIDR == cidr {
+			networkCopy := network
+			overlappingNetworks = append(overlappingNetworks, &networkCopy)
+		}
+		return nil
+	}, ports.EmptyScope{})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return overlappingNetworks, nil
 }
 
 func (r *GRPCReader) ListHosts(ctx context.Context, consume func(models.Host) error, scope ports.Scope) error {
@@ -304,4 +340,24 @@ func (r *GRPCReader) ListNetworkBindings(ctx context.Context, consume func(model
 	}
 
 	return nil
+}
+
+// SvcSvcRule methods - delegated to GRPCBackendClient
+func (r *GRPCReader) ListSvcSvcRules(ctx context.Context, consume func(models.SvcSvcRule) error, scope ports.Scope) error {
+	rules, err := r.grpcClient.ListSvcSvcRules(ctx, scope)
+	if err != nil {
+		return err
+	}
+
+	for _, rule := range rules {
+		if err := consume(rule); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *GRPCReader) GetSvcSvcRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcSvcRule, error) {
+	return r.grpcClient.GetSvcSvcRule(ctx, id)
 }

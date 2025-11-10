@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"netguard-pg-backend/internal/domain/models"
 
-	"github.com/pkg/errors"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
+
+	"github.com/pkg/errors"
 )
 
 // ValidateExists checks if a service alias exists
@@ -52,8 +53,7 @@ func (v *ServiceAliasValidator) ValidateReferences(ctx context.Context, alias mo
 
 // ValidateForCreation validates a service alias before creation
 func (v *ServiceAliasValidator) ValidateForCreation(ctx context.Context, alias *models.ServiceAlias) error {
-	// PHASE 1: Check for duplicate entity (CRITICAL FIX for overwrite issue)
-	// This prevents creation of entities with the same namespace/name combination
+	// Phase 1: ensure the namespace/name combination is unused before creation.
 	keyExtractor := func(entity interface{}) string {
 		if sa, ok := entity.(*models.ServiceAlias); ok {
 			return sa.Key()
@@ -89,7 +89,7 @@ func (v *ServiceAliasValidator) ValidateForPostCommit(ctx context.Context, alias
 
 // ValidateForUpdate validates a service alias before update
 func (v *ServiceAliasValidator) ValidateForUpdate(ctx context.Context, oldAlias, newAlias models.ServiceAlias) error {
-	// 🚀 PHASE 1: Ready Condition Framework - Validate spec immutability when Ready=True
+	// PHASE 1: Ready Condition Framework - Validate spec immutability when Ready=True
 	// Ported from k8s-controller servicealias_webhook.go pattern
 
 	// Create alias spec structures for comparison
@@ -110,7 +110,7 @@ func (v *ServiceAliasValidator) ValidateForUpdate(ctx context.Context, oldAlias,
 		return err
 	}
 
-	// 🚀 PHASE 2: Object Reference Immutability - Validate service reference hasn't changed when Ready=True
+	// PHASE 2: Object Reference Immutability - Validate service reference hasn't changed when Ready=True
 	referenceComparisons := []ObjectReferenceComparison{
 		{
 			OldRef:    &NamespacedObjectReferenceAdapter{Ref: oldAlias.ServiceRef},

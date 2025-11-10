@@ -1,0 +1,137 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: netguard-apiserver
+  namespace: netguard-system
+  labels:
+    app: netguard-apiserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: netguard-apiserver
+  template:
+    metadata:
+      labels:
+        app: netguard-apiserver
+    spec:
+      serviceAccountName: netguard-apiserver
+      containers:
+        - name: apiserver
+          image: netguard/k8s-apiserver:latest
+          imagePullPolicy: IfNotPresent
+          command: [ "/root/k8s-apiserver" ]
+          args: 
+            - "--secure-port=8443"
+            - "--bind-address=0.0.0.0"
+            - "--tls-cert-file=/etc/certs/tls.crt" 
+            - "--tls-private-key-file=/etc/certs/tls.key"
+            - "--v=1"
+            - "--vmodule=storage=4,patch=4,fieldmanager=4,apiserver=0,httplog=0,request=0,filterlatency=0,apf=0"
+          ports:
+            - containerPort: 8443
+              name: https
+          env:
+            - name: BACKEND_ENDPOINT
+              value: "netguard-backend:9090"
+          volumeMounts:
+            - name: config
+              mountPath: /etc/netguard
+            - name: certs
+              mountPath: /etc/certs
+              readOnly: true
+          livenessProbe:
+            tcpSocket:
+              port: https
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: https
+            initialDelaySeconds: 5
+            periodSeconds: 5
+        - name: webhook
+          image: netguard/k8s-apiserver:latest
+          imagePullPolicy: IfNotPresent
+          command: ["/root/webhook-server"]
+          args:
+          - --bind-address=0.0.0.0
+          - --port=9443
+          - --tls-cert-file=/etc/certs/tls.crt
+          - --tls-private-key-file=/etc/certs/tls.key
+          env:
+            - name: BACKEND_ENDPOINT
+              value: "netguard-backend:9090"
+          ports:
+            - containerPort: 9443
+              name: webhook
+          volumeMounts:
+            - name: certs
+              mountPath: /etc/certs
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: webhook
+              scheme: HTTPS
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: webhook
+              scheme: HTTPS
+            initialDelaySeconds: 30
+            periodSeconds: 10
+      volumes:
+      - name: config
+        configMap:
+          name: netguard-apiserver-config
+      - name: certs
+        secret:
+          secretName: netguard-webhook-tls
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: netguard-apiserver
+  namespace: netguard-system
+  labels:
+    app.kubernetes.io/name: netguard-apiserver
+    app.kubernetes.io/component: aggregated-api
+    app.kubernetes.io/part-of: netguard
+spec:
+  type: ClusterIP
+  ports:
+  - name: https
+    port: 443
+    targetPort: https
+    protocol: TCP
+  - name: http
+    port: 80
+    targetPort: http
+    protocol: TCP
+  selector:
+    app: netguard-apiserver
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: netguard-apiserver-webhook
+  namespace: netguard-system
+  labels:
+    app.kubernetes.io/name: netguard-apiserver
+    app.kubernetes.io/component: admission-webhook
+    app.kubernetes.io/part-of: netguard
+spec:
+  type: ClusterIP
+  ports:
+  - name: webhook
+    port: 443
+    targetPort: webhook
+    protocol: TCP
+  selector:
+    app: netguard-apiserver 

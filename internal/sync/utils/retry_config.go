@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"netguard-pg-backend/internal/sync/interfaces"
@@ -33,6 +34,10 @@ func (re *retryExecutor) Execute(ctx context.Context, operation func() error) er
 		}
 
 		lastErr = err
+
+		if !isRetryableError(err) {
+			return err
+		}
 
 		// If this was the last attempt, don't wait
 		if attempt == re.config.MaxRetries {
@@ -106,4 +111,31 @@ func ExecuteWithRetry(ctx context.Context, config interfaces.RetryConfig, operat
 // ExecuteWithDefaultRetry is a convenience function that uses default retry configuration
 func ExecuteWithDefaultRetry(ctx context.Context, operation func() error) error {
 	return ExecuteWithRetry(ctx, DefaultRetryConfig(), operation)
+}
+
+func isRetryableError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errMsg := strings.ToLower(err.Error())
+
+	// Check for permanent database errors (no retry)
+	if strings.Contains(errMsg, "sqlstate 23") || // Integrity constraint violations (23xxx)
+		strings.Contains(errMsg, "constraint") && strings.Contains(errMsg, "violat") ||
+		strings.Contains(errMsg, "duplicate key") ||
+		strings.Contains(errMsg, "unique constraint") ||
+		strings.Contains(errMsg, "foreign key constraint") ||
+		strings.Contains(errMsg, "check constraint") ||
+		strings.Contains(errMsg, "exclusion constraint") {
+		return false
+	}
+
+	// Check for temporary errors (retry)
+	return strings.Contains(errMsg, "temporary") ||
+		strings.Contains(errMsg, "timeout") ||
+		strings.Contains(errMsg, "connection") ||
+		strings.Contains(errMsg, "network") ||
+		strings.Contains(errMsg, "unavailable") ||
+		strings.Contains(errMsg, "deadline exceeded")
 }

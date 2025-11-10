@@ -2,36 +2,41 @@ package writers
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"k8s.io/klog/v2"
 
+	"netguard-pg-backend/internal/domain"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
+	"netguard-pg-backend/internal/infrastructure/repositories"
 )
 
 // SyncHostBindings syncs host bindings to PostgreSQL with K8s metadata support
 func (w *Writer) SyncHostBindings(ctx context.Context, hostBindings []models.HostBinding, scope ports.Scope, options ...ports.Option) error {
 	// Extract sync operation from options
 	syncOp := models.SyncOpUpsert // Default operation
+	var conditionOnly bool
 	for _, opt := range options {
 		if syncOption, ok := opt.(ports.SyncOption); ok {
 			syncOp = syncOption.Operation
 			break
 		}
-	}
-
-	// Handle scoped sync - delete existing resources in scope first (for non-DELETE operations)
-	if !scope.IsEmpty() && syncOp != models.SyncOpDelete {
-		if err := w.deleteHostBindingsInScope(ctx, scope); err != nil {
-			return errors.Wrap(err, "failed to delete host bindings in scope")
+		if _, ok := opt.(ports.ConditionOnlyOperation); ok {
+			conditionOnly = true
+			break
 		}
 	}
 
-	// Handle operations based on sync operation
+	if conditionOnly {
+		return w.updateHostBindingConditionsOnly(ctx, hostBindings)
+	}
+
 	switch syncOp {
 	case models.SyncOpDelete:
 		// For DELETE operations, delete the specific bindings
@@ -47,13 +52,13 @@ func (w *Writer) SyncHostBindings(ctx context.Context, hostBindings []models.Hos
 		}
 	case models.SyncOpUpsert, models.SyncOpFullSync:
 		// For UPSERT/FULLSYNC operations, upsert all provided bindings
-		for _, hostBinding := range hostBindings {
-			if err := w.upsertHostBinding(ctx, hostBinding); err != nil {
+		for i := range hostBindings {
+			if err := w.upsertHostBinding(ctx, &hostBindings[i]); err != nil {
 				// Check for unique constraint violation (one binding per host)
 				if isUniqueViolation(err, "host_bindings_host_namespace_host_name_key") {
-					return errors.Errorf("host %s/%s is already bound to another address group", hostBinding.HostRef.Namespace, hostBinding.HostRef.Name)
+					return errors.Errorf("host %s/%s is already bound to another address group", hostBindings[i].HostRef.Namespace, hostBindings[i].HostRef.Name)
 				}
-				return errors.Wrapf(err, "failed to upsert host binding %s/%s", hostBinding.Namespace, hostBinding.Name)
+				return errors.Wrapf(err, "failed to upsert host binding %s/%s", hostBindings[i].Namespace, hostBindings[i].Name)
 			}
 		}
 	default:
@@ -64,7 +69,7 @@ func (w *Writer) SyncHostBindings(ctx context.Context, hostBindings []models.Hos
 }
 
 // upsertHostBinding inserts or updates a host binding with K8s metadata
-func (w *Writer) upsertHostBinding(ctx context.Context, hostBinding models.HostBinding) error {
+func (w *Writer) upsertHostBinding(ctx context.Context, hostBinding *models.HostBinding) error {
 	// Marshal K8s metadata
 	labelsJSON, annotationsJSON, err := w.marshalLabelsAnnotations(hostBinding.Meta.Labels, hostBinding.Meta.Annotations)
 	if err != nil {
@@ -76,36 +81,21 @@ func (w *Writer) upsertHostBinding(ctx context.Context, hostBinding models.HostB
 		return errors.Wrap(err, "failed to marshal conditions")
 	}
 
-	// First, check if host binding exists and get existing resource version
-	var existingResourceVersion sql.NullInt64
-	existingQuery := `SELECT resource_version FROM host_bindings WHERE namespace = $1 AND name = $2`
-	_ = w.tx.QueryRow(ctx, existingQuery, hostBinding.Namespace, hostBinding.Name).Scan(&existingResourceVersion)
-
 	var resourceVersion int64
-	if existingResourceVersion.Valid {
-		// UPDATE existing K8s metadata
-		metadataQuery := `
-			UPDATE k8s_metadata 
-			SET labels = $1, annotations = $2, conditions = $3, updated_at = NOW()
-			WHERE resource_version = $4
-			RETURNING resource_version`
-		err = w.tx.QueryRow(ctx, metadataQuery, labelsJSON, annotationsJSON, conditionsJSON, existingResourceVersion.Int64).Scan(&resourceVersion)
-		if err != nil {
-			return errors.Wrapf(err, "failed to update K8s metadata for host binding %s/%s", hostBinding.Namespace, hostBinding.Name)
-		}
-	} else {
-		// INSERT new K8s metadata
-		metadataQuery := `
-			INSERT INTO k8s_metadata (labels, annotations, conditions)
-			VALUES ($1, $2, $3)
-			RETURNING resource_version`
-		err = w.tx.QueryRow(ctx, metadataQuery, labelsJSON, annotationsJSON, conditionsJSON).Scan(&resourceVersion)
-		if err != nil {
-			return errors.Wrapf(err, "failed to insert K8s metadata for host binding %s/%s", hostBinding.Namespace, hostBinding.Name)
-		}
+	var uid string
+	metadataQuery := `
+		INSERT INTO k8s_metadata (labels, annotations, conditions)
+		VALUES ($1, $2, $3)
+		RETURNING resource_version, uid`
+	err = w.tx.QueryRow(ctx, metadataQuery, labelsJSON, annotationsJSON, conditionsJSON).Scan(&resourceVersion, &uid)
+	if err != nil {
+		return errors.Wrapf(err, "failed to insert K8s metadata for host binding %s/%s", hostBinding.Namespace, hostBinding.Name)
 	}
 
-	// UPSERT host binding record
+	hostBinding.Meta.UID = uid
+	hostBinding.Meta.TouchOnWrite(strconv.FormatInt(resourceVersion, 10))
+
+	// UPSERT host binding record with NEW resource version
 	hostBindingQuery := `
 		INSERT INTO host_bindings (
 			namespace, name,
@@ -128,6 +118,10 @@ func (w *Writer) upsertHostBinding(ctx context.Context, hostBinding models.HostB
 	)
 	if err != nil {
 		return errors.Wrapf(err, "failed to upsert host binding %s/%s", hostBinding.Namespace, hostBinding.Name)
+	}
+
+	if err := w.createHostBindingOutboxEntry(ctx, hostBinding); err != nil {
+		return errors.Wrap(err, "failed to create outbox entry for host binding")
 	}
 
 	return nil
@@ -186,6 +180,113 @@ func (w *Writer) DeleteHostBindingsByIDs(ctx context.Context, ids []models.Resou
 	_, err := w.tx.Exec(ctx, query, args...)
 	if err != nil {
 		return errors.Wrap(err, "failed to delete host bindings by IDs")
+	}
+
+	return nil
+}
+
+// createHostBindingOutboxEntry creates an outbox entry for HostBinding resource (PROCESS RESOURCE)
+func (w *Writer) createHostBindingOutboxEntry(ctx context.Context, binding *models.HostBinding) error {
+	affectedResources := []map[string]string{
+		{
+			"type":              "Host",
+			"resourceType":      "Host",
+			"namespace":         binding.HostRef.Namespace,
+			"resourceNamespace": binding.HostRef.Namespace,
+			"name":              binding.HostRef.Name,
+			"resourceName":      binding.HostRef.Name,
+		},
+		{
+			"type":              "AddressGroup",
+			"resourceType":      "AddressGroup",
+			"namespace":         binding.AddressGroupRef.Namespace,
+			"resourceNamespace": binding.AddressGroupRef.Namespace,
+			"name":              binding.AddressGroupRef.Name,
+			"resourceName":      binding.AddressGroupRef.Name,
+		},
+	}
+	affectedResourcesJSON, err := json.Marshal(affectedResources)
+	if err != nil {
+		return errors.Wrap(err, "failed to marshal affected resources")
+	}
+
+	// Build payload
+	payload := map[string]interface{}{
+		"namespace": binding.Namespace,
+		"name":      binding.Name,
+		"host_ref":  binding.HostRef.Name,
+		"ag_ref":    binding.AddressGroupRef.Name,
+	}
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		return errors.Wrap(err, "failed to marshal host binding payload")
+	}
+
+	// Parse resource UUID from Meta.UID
+	resourceUUID, err := uuid.Parse(binding.Meta.UID)
+	if err != nil {
+		return errors.Wrapf(err, "invalid host binding UID: %s", binding.Meta.UID)
+	}
+
+	// Create outbox entry
+	outboxEntry := &domain.OutboxEntry{
+		ResourceType:      "HostBinding",
+		ResourceID:        resourceUUID,
+		ResourceNamespace: binding.Namespace,
+		ResourceName:      binding.Name,
+		Operation:         domain.SyncOperationCreate,
+		TargetSystem:      domain.TargetSystemInternal,
+		Payload:           payloadJSON,
+		AffectsResources:  affectedResourcesJSON,
+		Status:            domain.OutboxStatusPending,
+		MaxRetries:        5,
+	}
+
+	// Use OutboxRepository with existing transaction
+	outboxRepo := repositories.NewOutboxRepository(w.tx)
+	if err := outboxRepo.Create(ctx, outboxEntry); err != nil {
+		return errors.Wrap(err, "failed to persist outbox entry")
+	}
+
+	klog.V(4).InfoS("Created outbox entry for HostBinding",
+		"namespace", binding.Namespace,
+		"name", binding.Name,
+		"outbox_id", outboxEntry.ID,
+		"affected_resources", len(affectedResources))
+
+	return nil
+}
+
+// updateHostBindingConditionsOnly updates only conditions without creating Outbox entries
+// Used by ConditionManager to update Ready/PendingSync status
+func (w *Writer) updateHostBindingConditionsOnly(ctx context.Context, bindings []models.HostBinding) error {
+	for i := range bindings {
+		binding := &bindings[i]
+
+		// Marshal conditions
+		conditionsJSON, err := json.Marshal(binding.Meta.Conditions)
+		if err != nil {
+			return errors.Wrap(err, "failed to marshal conditions")
+		}
+
+		// Find existing resource_version
+		var existingResourceVersion int64
+		query := `SELECT resource_version FROM host_bindings WHERE namespace = $1 AND name = $2`
+		err = w.tx.QueryRow(ctx, query, binding.Namespace, binding.Name).Scan(&existingResourceVersion)
+		if err != nil {
+			return errors.Wrapf(err, "failed to find existing HostBinding %s/%s", binding.Namespace, binding.Name)
+		}
+
+		// Update only conditions in k8s_metadata (no new resource_version)
+		updateQuery := `UPDATE k8s_metadata SET conditions = $1 WHERE resource_version = $2`
+		if err := w.exec(ctx, updateQuery, conditionsJSON, existingResourceVersion); err != nil {
+			return errors.Wrapf(err, "failed to update conditions for HostBinding %s/%s", binding.Namespace, binding.Name)
+		}
+
+		klog.V(4).InfoS("Updated HostBinding conditions only",
+			"namespace", binding.Namespace,
+			"name", binding.Name,
+			"resource_version", existingResourceVersion)
 	}
 
 	return nil

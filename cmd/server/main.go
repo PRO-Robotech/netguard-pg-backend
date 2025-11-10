@@ -2,36 +2,41 @@ package main
 
 import (
 	"context"
-	"log"
 	"flag"
+	"log"
 	"net"
 	"net/http"
+	"netguard-pg-backend/internal/api/netguard"
+	"netguard-pg-backend/internal/app/server"
+	"netguard-pg-backend/internal/application/services"
+	"netguard-pg-backend/internal/application/services/conditions"
+	"netguard-pg-backend/internal/config"
+	"netguard-pg-backend/internal/domain/ports"
+	"netguard-pg-backend/internal/domain/registry"
+	"netguard-pg-backend/internal/infrastructure/repositories"
+	"netguard-pg-backend/internal/infrastructure/repositories/pg"
+	"netguard-pg-backend/internal/sync/adapters"
+	"netguard-pg-backend/internal/sync/clients"
+	"netguard-pg-backend/internal/sync/interfaces"
+	"netguard-pg-backend/internal/sync/manager"
+	"netguard-pg-backend/internal/sync/monitor"
+	"netguard-pg-backend/internal/sync/processors"
+	"netguard-pg-backend/internal/sync/syncers"
+	"netguard-pg-backend/internal/sync/synchronizer"
+	"netguard-pg-backend/internal/sync/types"
+	"netguard-pg-backend/internal/sync/worker"
+	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"netguard-pg-backend/internal/api/netguard"
-	"netguard-pg-backend/internal/app/server"
-	"netguard-pg-backend/internal/application/services"
-	"netguard-pg-backend/internal/config"
-	"netguard-pg-backend/internal/domain/ports"
-	"netguard-pg-backend/internal/infrastructure/repositories/mem"
-	"netguard-pg-backend/internal/infrastructure/repositories/pg"
-	"netguard-pg-backend/internal/sync"
-	"netguard-pg-backend/internal/sync/adapters"
-	"netguard-pg-backend/internal/sync/clients"
-	"netguard-pg-backend/internal/sync/interfaces"
-	"netguard-pg-backend/internal/sync/manager"
-	"netguard-pg-backend/internal/sync/syncers"
-	"netguard-pg-backend/internal/sync/types"
-
 	"github.com/go-logr/stdr"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
-
-	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
 )
 
 var (
@@ -45,91 +50,96 @@ var (
 
 func main() {
 	flag.Parse()
-
-	// Load configuration
 	cfg, err := config.NewConfig(*configPath)
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
-
-	// Validate configuration
 	if err := cfg.Validate(); err != nil {
 		log.Fatalf("Configuration validation failed: %v", err)
 	}
-
-	// Override config values with command line flags if provided
 	if *grpcAddr != "" {
 		cfg.Settings.GRPCAddr = *grpcAddr
 	}
 	if *httpAddr != "" {
 		cfg.Settings.HTTPAddr = *httpAddr
 	}
-
+	zapLogger, err := zap.NewProduction()
+	if err != nil {
+		log.Fatalf("Failed to create logger: %v", err)
+	}
+	defer zapLogger.Sync()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	// Setup signal handling
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		_ = <-sigCh
-		cancel()
-	}()
-
-	// Create registry
-	var registry ports.Registry
+	var pgRegistry *pg.Registry
 	if *memoryDB {
-		registry = mem.NewRegistry()
+		log.Fatal("OutboxWorker requires PostgreSQL, cannot use memory database")
 	} else if *pgURI != "" {
-
-		// Migrations are now handled by separate Goose container (sgroups pattern)
-		// The --migrate flag is deprecated but kept for compatibility
-		if *migrateDB {
-			log.Println("⚠️  DEPRECATED: --migrate flag is no longer needed. Migrations are handled by separate Goose container.")
-			log.Println("✅ Assuming migrations were completed by the netguard-migrations Kubernetes Job")
-		}
-
-		// Create PostgreSQL registry (fixed after Docker image cache issue)
-		log.Println("Creating PostgreSQL registry...")
-		pgRegistry, err := pg.NewRegistryFromURI(ctx, *pgURI)
+		pgRegistry, err = pg.NewRegistryFromURI(ctx, *pgURI)
 		if err != nil {
 			log.Fatalf("Failed to create PostgreSQL registry: %v", err)
 		}
 		if pgRegistry == nil {
 			log.Fatalf("PostgreSQL registry is nil!")
 		}
-		log.Println("PostgreSQL registry created successfully")
-		registry = pgRegistry
 	} else {
 		log.Fatal("Either --memory or --pg-uri must be specified")
 	}
-	defer registry.Close()
-
-	// Setup sync manager
-	syncManager := setupSyncManager(ctx, cfg)
-
-	// Setup reverse sync system (SGROUP -> NETGUARD synchronization)
-	reverseSyncSystem := setupReverseSyncSystem(ctx, cfg, registry, syncManager)
-
-	// Create condition manager (needed for facade)
-	conditionManager := services.NewConditionManager(registry)
-
-	// Create facade service (new architecture)
-	netguardFacade := services.NewNetguardFacade(registry, conditionManager, syncManager)
-
-	// Using immediate force sync approach instead of finalizers
-
-	// Setup gRPC server
+	defer pgRegistry.Close()
+	if err := registry.ValidateRegistry(); err != nil {
+		zapLogger.Fatal("invalid resource registry", zap.Error(err))
+	}
+	var sgroupsClient interfaces.SGroupGateway
+	var connMonitor *monitor.SGroupConnectionMonitor
+	if cfg.Sync.Enabled {
+		client, err := clients.NewSGroupsClient(cfg.Sync.SGroups)
+		if err != nil {
+			log.Fatalf("Failed to create sgroups client: %v", err)
+		}
+		sgroupsClient = client
+		defer sgroupsClient.Close()
+		connMonitor = monitor.NewSGroupConnectionMonitor(
+			sgroupsClient,
+			monitor.ConnectionMonitorConfig{
+				ReconnectInterval: 5 * time.Second,
+				MaxReconnectDelay: 60 * time.Second,
+				BackoffMultiplier: 2.0,
+			},
+			zapLogger,
+		)
+		connMonitor.Start()
+		defer connMonitor.Stop()
+		if cfg.Sync.Required {
+			zapLogger.Info("Waiting for SGROUP connection (required mode)...")
+			if err := connMonitor.WaitForConnection(10 * time.Second); err != nil {
+				log.Fatalf("SGROUP connection required but not established: %v", err)
+			}
+			zapLogger.Info("SGROUP connection established")
+		} else {
+			if connMonitor.IsConnected() {
+				zapLogger.Info("SGROUP connection established")
+			} else {
+				zapLogger.Warn("SGROUP not connected, will retry in background")
+			}
+		}
+	}
+	syncManager := setupSyncManager(ctx, cfg, sgroupsClient, zapLogger)
+	reverseSyncSystem := setupReverseSyncSystem(ctx, cfg, pgRegistry, sgroupsClient, connMonitor, zapLogger)
+	outboxRepo := repositories.NewOutboxRepository(pgRegistry.Pool())
+	conditionManager := conditions.NewConditionManager(pgRegistry, outboxRepo)
+	netguardFacade := services.NewNetguardFacade(pgRegistry, conditionManager, syncManager)
+	var outboxWorker *worker.OutboxWorker
+	if syncManager != nil {
+		outboxWorker = setupOutboxWorker(ctx, cfg, pgRegistry, syncManager, conditionManager, connMonitor, netguardFacade.AddressGroupResourceService(), zapLogger)
+	}
 	grpcServer := grpc.NewServer()
-	netguardServer := netguard.NewNetguardServiceServer(netguardFacade)
+	netguardServer := netguard.NewServiceServer(netguardFacade)
 	netguardpb.RegisterNetguardServiceServer(grpcServer, netguardServer)
-
-	// Register gRPC health check service
 	healthServer := health.NewServer()
 	grpc_health_v1.RegisterHealthServer(grpcServer, healthServer)
 	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
-
-	// Start gRPC server
+	healthServer.SetServingStatus("liveness", grpc_health_v1.HealthCheckResponse_SERVING)
 	lis, err := net.Listen("tcp", cfg.Settings.GRPCAddr)
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
@@ -139,165 +149,229 @@ func main() {
 			log.Fatalf("Failed to serve gRPC: %v", err)
 		}
 	}()
-
-	// Setup HTTP server with gRPC-Gateway
-	httpServer, err := server.SetupServer(ctx, cfg.Settings.GRPCAddr, cfg.Settings.HTTPAddr, netguardFacade)
+	httpServer, httpMux, err := server.SetupServer(ctx, cfg.Settings.GRPCAddr, cfg.Settings.HTTPAddr, netguardFacade)
 	if err != nil {
 		log.Fatalf("Failed to setup server: %v", err)
 	}
-
-	// Start HTTP server
+	if connMonitor != nil {
+		healthListener := server.NewHealthEndpointListener()
+		connMonitor.Subscribe(healthListener)
+		httpMux.HandleFunc("/healthz/sync", healthListener.ServeHTTP)
+	}
+	if outboxWorker != nil {
+		httpMux.HandleFunc("/healthz/worker", outboxWorker.HealthHandler)
+	}
+	workerConfig := worker.LoadFromEnv()
+	if workerConfig.MetricsEnabled {
+		httpMux.Handle("/metrics", promhttp.Handler())
+	}
 	go func() {
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Failed to serve HTTP: %v", err)
 		}
 	}()
-
-	// Wait for context cancellation
-	<-ctx.Done()
-
-	// Gracefully stop services
-
-	// Stop reverse sync system first
-	if reverseSyncSystem != nil {
-		if err := reverseSyncSystem.Stop(); err != nil {
+	<-sigCh
+	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
+	healthServer.SetServingStatus("liveness", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutdownCancel()
+	if outboxWorker != nil {
+		outboxWorker.Stop()
+		select {
+		case <-outboxWorker.Done():
+		case <-shutdownCtx.Done():
 		}
 	}
-
-	// Stop gRPC and HTTP servers
+	if reverseSyncSystem != nil {
+		if err := reverseSyncSystem.Stop(); err != nil {
+			zapLogger.Error("failed to stop reverse sync system", zap.Error(err))
+		}
+	}
 	grpcServer.GracefulStop()
-	if err := httpServer.Shutdown(context.Background()); err != nil {
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		zapLogger.Error("HTTP server shutdown failed", zap.Error(err))
 	}
 }
-
-// setupSyncManager creates and configures the sync manager for sgroups integration
-func setupSyncManager(ctx context.Context, cfg *config.Config) interfaces.SyncManager {
-	// Use sync configuration from loaded config
-	syncConfig := cfg.Sync
-
-	// Validate configuration
-	if err := syncConfig.Validate(); err != nil {
+func setupSyncManager(ctx context.Context, cfg *config.Config, sgroupsClient interfaces.SGroupGateway, logger *zap.Logger) interfaces.SyncManager {
+	if sgroupsClient == nil {
 		return nil
 	}
-
-	// Skip sync setup if disabled
+	syncConfig := cfg.Sync
+	if err := syncConfig.Validate(); err != nil {
+		logger.Error("sync config validation failed", zap.Error(err))
+		return nil
+	}
 	if !syncConfig.Enabled {
 		return nil
 	}
-
-	// Create SGroups client
-	sgroupsClient, err := clients.NewSGroupsClient(syncConfig.SGroups)
-	if err != nil {
-		return nil
-	}
-
-	// Test connection to sgroups
-	if err := sgroupsClient.Health(ctx); err != nil {
-		return nil
-	}
-
-	// Create logger for sync manager
-	logger := stdr.New(log.Default())
-
-	// Create sync manager
-	syncManager := manager.NewSyncManager(sgroupsClient, logger)
-
-	// Register AddressGroup syncer
-	addressGroupSyncer := syncers.NewAddressGroupSyncer(sgroupsClient, logger)
+	logrLogger := stdr.New(log.Default())
+	syncManager := manager.NewSyncManager(sgroupsClient, logrLogger)
+	addressGroupSyncer := syncers.NewAddressGroupSyncer(sgroupsClient, logrLogger)
 	if err := syncManager.RegisterSyncer(types.SyncSubjectTypeGroups, addressGroupSyncer); err != nil {
+		logger.Error("failed to register AddressGroup syncer", zap.Error(err))
 		return nil
 	}
-
-	// Register Network syncer
-	networkSyncer := syncers.NewNetworkSyncer(sgroupsClient, logger)
+	networkSyncer := syncers.NewNetworkSyncer(sgroupsClient, logrLogger)
 	if err := syncManager.RegisterSyncer(types.SyncSubjectTypeNetworks, networkSyncer); err != nil {
+		logger.Error("failed to register Network syncer", zap.Error(err))
 		return nil
 	}
-
-	// Register Host syncer
-	hostSyncer := syncers.NewHostSyncer(sgroupsClient, logger)
+	hostSyncer := syncers.NewHostSyncer(sgroupsClient, logrLogger)
 	if err := syncManager.RegisterSyncer(types.SyncSubjectTypeHosts, hostSyncer); err != nil {
+		logger.Error("failed to register Host syncer", zap.Error(err))
 		return nil
 	}
-
-	// Register IEAgAgRule syncer
-	ieagagRuleSyncer := syncers.NewIEAgAgRuleSyncer(sgroupsClient, logger)
+	ieagagRuleSyncer := syncers.NewIEAgAgRuleSyncer(sgroupsClient, logrLogger)
 	if err := syncManager.RegisterSyncer(types.SyncSubjectTypeIEAgAgRules, ieagagRuleSyncer); err != nil {
+		logger.Error("failed to register IEAgAgRule syncer", zap.Error(err))
 		return nil
 	}
-
-	// Start sync manager
+	serviceSyncer := syncers.NewServiceSyncer(sgroupsClient, logrLogger)
+	if err := syncManager.RegisterSyncer(types.SyncSubjectTypeServices, serviceSyncer); err != nil {
+		logger.Error("failed to register Service syncer", zap.Error(err))
+		return nil
+	}
+	svcSvcRuleSyncer := syncers.NewSvcSvcRuleSyncer(sgroupsClient, logrLogger)
+	if err := syncManager.RegisterSyncer(types.SyncSubjectTypeSvcSvcRules, svcSvcRuleSyncer); err != nil {
+		logger.Error("failed to register SvcSvcRule syncer", zap.Error(err))
+		return nil
+	}
+	svcFqdnRuleSyncer := syncers.NewSvcFqdnRuleSyncer(sgroupsClient, logrLogger)
+	if err := syncManager.RegisterSyncer(types.SyncSubjectTypeSvcFqdnRules, svcFqdnRuleSyncer); err != nil {
+		logger.Error("failed to register SvcFqdnRule syncer", zap.Error(err))
+		return nil
+	}
 	if err := syncManager.Start(ctx); err != nil {
+		logger.Error("failed to start sync manager", zap.Error(err))
 		return nil
 	}
-
 	return syncManager
 }
-
-// setupReverseSyncSystem creates and configures the reverse sync system for SGROUP -> NETGUARD synchronization
-func setupReverseSyncSystem(ctx context.Context, cfg *config.Config, registry ports.Registry, syncManager interfaces.SyncManager) *sync.ReverseSyncSystem {
-
-	// Skip setup if sync manager is not available (sync disabled)
-	if syncManager == nil {
+func setupReverseSyncSystem(
+	ctx context.Context,
+	cfg *config.Config,
+	pgRegistry *pg.Registry,
+	sgroupsClient interfaces.SGroupGateway,
+	connMonitor *monitor.SGroupConnectionMonitor,
+	logger *zap.Logger,
+) *manager.ReverseSyncManager {
+	if sgroupsClient == nil || connMonitor == nil {
+		logger.Info("Reverse sync disabled: sgroups client or connection monitor not available")
 		return nil
 	}
-
-	// Validate reverse sync configuration
 	if err := cfg.ReverseSync.Validate(); err != nil {
+		logger.Error("Invalid reverse sync configuration", zap.Error(err))
 		return nil
 	}
-
-	// Create SGROUP gateway using existing sync configuration
-	sgroupsClient, err := clients.NewSGroupsClient(cfg.Sync.SGroups)
-	if err != nil {
-		return nil
-	}
-
-	// Test connection to SGROUP
-	if err := sgroupsClient.Health(ctx); err != nil {
-		return nil
-	}
-
-	// Create PostgreSQL adapters
-	hostReader := adapters.NewPostgreSQLHostReader(registry)
-	hostWriter := adapters.NewPostgreSQLHostWriter(registry)
-
-	// Create reverse sync system
-	reverseSyncSystem, err := sync.NewReverseSyncSystem(
-		sgroupsClient,
+	reverseSyncSystem := manager.NewReverseSyncManager(
+		connMonitor,
+		cfg.ReverseSync.Manager,
+	)
+	hostReader := adapters.NewPostgreSQLHostReader(pgRegistry)
+	hostWriter := adapters.NewPostgreSQLHostWriter(pgRegistry)
+	sgroupHostReader := sgroupsClient
+	hostSyncConfig := synchronizer.DefaultHostSyncConfig()
+	hostSynchronizer := synchronizer.NewHostSynchronizer(
 		hostReader,
 		hostWriter,
-		cfg.ReverseSync,
+		sgroupHostReader,
+		hostSyncConfig,
 	)
-	if err != nil {
+	hostProcessorConfig := processors.DefaultHostProcessorConfig()
+	hostProcessorConfig.EnableFullSyncOnChange = true
+	hostProcessor := processors.NewHostProcessor(
+		hostSynchronizer,
+		hostProcessorConfig,
+	)
+	if err := reverseSyncSystem.RegisterProcessor(hostProcessor); err != nil {
+		logger.Error("Failed to register HostProcessor", zap.Error(err))
 		return nil
 	}
-
-	// Start reverse sync system
+	logger.Info("HostProcessor registered successfully for reverse sync")
 	go func() {
 		if err := reverseSyncSystem.Start(ctx); err != nil {
+			logger.Error("Failed to start reverse sync system", zap.Error(err))
 			return
 		}
-
-		// Log system statistics periodically
+		logger.Info("Reverse sync system started successfully")
 		if cfg.ReverseSync.System.EnableMetrics {
 			go func() {
 				ticker := time.NewTicker(60 * time.Second)
 				defer ticker.Stop()
-
 				for {
 					select {
 					case <-ctx.Done():
 						return
 					case <-ticker.C:
 						if reverseSyncSystem.IsRunning() {
-							_ = reverseSyncSystem.GetStats()
+							stats := reverseSyncSystem.GetStats()
+							processorCount := reverseSyncSystem.GetProcessorCount()
+							logger.Info("Reverse sync statistics",
+								zap.Int("processors", processorCount),
+								zap.Int64("total_events", stats.TotalEvents),
+								zap.Int64("processed_events", stats.ProcessedEvents),
+								zap.Int64("failed_events", stats.FailedEvents))
 						}
 					}
 				}
 			}()
 		}
 	}()
-
 	return reverseSyncSystem
+}
+func setupOutboxWorker(
+	ctx context.Context,
+	cfg *config.Config,
+	pgRegistry *pg.Registry,
+	syncManager interfaces.SyncManager,
+	conditionManager ports.ConditionManager,
+	connMonitor *monitor.SGroupConnectionMonitor,
+	portMappingRegenerator worker.PortMappingRegenerator,
+	logger *zap.Logger,
+) *worker.OutboxWorker {
+	workerConfig := worker.LoadFromEnv()
+	if err := workerConfig.Validate(); err != nil {
+		logger.Fatal("invalid worker config", zap.Error(err))
+	}
+	if !workerConfig.Enabled {
+		return nil
+	}
+	pool := pgRegistry.Pool()
+	if pool == nil {
+		logger.Fatal("cannot get database pool from registry")
+	}
+	logrLogger := stdr.New(log.Default())
+	sgroupsClient, err := clients.NewSGroupsClient(cfg.Sync.SGroups)
+	if err != nil {
+		logger.Fatal("failed to create sgroups client for worker", zap.Error(err))
+	}
+	hostSyncer := syncers.NewHostSyncer(sgroupsClient, logrLogger)
+	addressGroupSyncer := syncers.NewAddressGroupSyncer(sgroupsClient, logrLogger)
+	networkSyncer := syncers.NewNetworkSyncer(sgroupsClient, logrLogger)
+	serviceSyncer := syncers.NewServiceSyncer(sgroupsClient, logrLogger)
+	svcSvcRuleSyncer := syncers.NewSvcSvcRuleSyncer(sgroupsClient, logrLogger)
+	svcFqdnRuleSyncer := syncers.NewSvcFqdnRuleSyncer(sgroupsClient, logrLogger)
+	outboxWorker := worker.NewOutboxWorker(
+		pool,
+		pgRegistry,
+		hostSyncer,
+		addressGroupSyncer,
+		networkSyncer,
+		serviceSyncer,
+		svcSvcRuleSyncer,
+		svcFqdnRuleSyncer,
+		conditionManager,
+		logger,
+		workerConfig,
+		connMonitor,
+		portMappingRegenerator,
+	)
+	go func() {
+		if err := outboxWorker.Start(ctx); err != nil {
+			if err != context.Canceled {
+				logger.Error("OutboxWorker failed", zap.Error(err))
+			}
+		}
+	}()
+	return outboxWorker
 }

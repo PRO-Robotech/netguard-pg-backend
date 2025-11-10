@@ -12,7 +12,6 @@ import (
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 	"netguard-pg-backend/internal/sync/interfaces"
-	"netguard-pg-backend/internal/sync/types"
 )
 
 // HostBindingConditionManagerInterface provides condition processing for host bindings
@@ -54,9 +53,6 @@ func NewHostBindingResourceService(
 func (s *HostBindingResourceService) CreateHostBinding(ctx context.Context, hostBinding *models.HostBinding) error {
 	hostRef := models.ResourceIdentifier{Name: hostBinding.HostRef.Name, Namespace: hostBinding.HostRef.Namespace}
 	addressGroupRef := models.ResourceIdentifier{Name: hostBinding.AddressGroupRef.Name, Namespace: hostBinding.AddressGroupRef.Namespace}
-
-	// Initialize metadata
-	hostBinding.GetMeta().TouchOnCreate()
 
 	// Create the host binding
 	writer, err := s.repo.Writer(ctx)
@@ -103,11 +99,13 @@ func (s *HostBindingResourceService) CreateHostBinding(ctx context.Context, host
 	}
 
 	if err := s.hostResourceService.UpdateHostBinding(ctx, hostRef, bindingID, addressGroupRef); err != nil {
+		return fmt.Errorf("failed to update host binding status: %w", err)
 	}
 
 	// Process conditions after binding operations
 	if s.conditionManager != nil {
 		if err := s.conditionManager.ProcessHostBindingConditions(ctx, hostBinding, nil); err != nil {
+			// Don't fail the operation if condition processing fails
 		}
 	}
 
@@ -225,65 +223,14 @@ func (s *HostBindingResourceService) DeleteHostBinding(ctx context.Context, id m
 		return fmt.Errorf("failed to commit deletion transaction: %w", err)
 	}
 
-
 	hostID := models.ResourceIdentifier{
 		Namespace: existingBinding.HostRef.Namespace,
 		Name:      existingBinding.HostRef.Name,
 	}
-
-	// Get reader to load the Host
-	readerForHost, err := s.repo.Reader(ctx)
-	if err != nil {
-	} else {
-		defer readerForHost.Close()
-
-		host, err := readerForHost.GetHostByID(ctx, hostID)
-		if err != nil {
-		} else {
-			host.IsBound = false
-			host.BindingRef = nil
-			host.AddressGroupRef = nil
-			host.AddressGroupName = ""
-
-			// Save updated Host to storage
-			writerForHost, err := s.repo.Writer(ctx)
-			if err != nil {
-			} else {
-				defer writerForHost.Abort()
-
-				// Use SyncHosts with UPSERT to update the Host
-				if err := writerForHost.SyncHosts(ctx, []models.Host{*host}, ports.EmptyScope{}, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
-				} else {
-					if err := writerForHost.Commit(); err != nil {
-					} else {
-						if err := s.hostResourceService.syncManager.SyncEntity(ctx, host, types.SyncOperationUpsert); err != nil {
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// Get the affected AddressGroup
-	addressGroupID := models.ResourceIdentifier{
-		Namespace: existingBinding.AddressGroupRef.Namespace,
-		Name:      existingBinding.AddressGroupRef.Name,
-	}
-
-	// Get reader to load the AddressGroup
-	readerForAG, err := s.repo.Reader(ctx)
-	if err != nil {
-		// Don't fail the entire operation, just log the warning
-	} else {
-		defer readerForAG.Close()
-
-		// Load the AddressGroup
-		addressGroup, err := readerForAG.GetAddressGroupByID(ctx, addressGroupID)
-		if err != nil {
-		} else {
-			if err := s.addressGroupResourceService.syncManager.SyncEntity(ctx, addressGroup, types.SyncOperationUpsert); err != nil {
-			}
-		}
+	if err := s.hostResourceService.UpdateHostBinding(ctx, hostID, models.ResourceIdentifier{}, models.ResourceIdentifier{}); err != nil {
+		// Log warning but don't fail - the HostBinding is already deleted
+		// The Host will still have stale binding references but that's better than failing the entire operation
+		// User can manually update the Host if needed
 	}
 
 	return nil
@@ -340,42 +287,33 @@ func (s *HostBindingResourceService) ListHostBindings(ctx context.Context, scope
 
 // SyncHostBindings synchronizes multiple host bindings with the specified operation
 func (s *HostBindingResourceService) SyncHostBindings(ctx context.Context, hostBindings []models.HostBinding, scope ports.Scope, syncOp models.SyncOp) error {
-
-	switch syncOp {
-	case models.SyncOpFullSync:
-		return s.fullSyncHostBindings(ctx, hostBindings, scope)
-	case models.SyncOpUpsert:
-		return s.upsertHostBindings(ctx, hostBindings)
-	case models.SyncOpDelete:
-		return s.deleteHostBindings(ctx, hostBindings)
-	default:
-		return fmt.Errorf("unsupported sync operation: %v", syncOp)
+	// Get writer from registry
+	writer, err := s.repo.Writer(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get writer: %w", err)
 	}
-}
-
-// fullSyncHostBindings performs a full synchronization of host bindings
-func (s *HostBindingResourceService) fullSyncHostBindings(ctx context.Context, hostBindings []models.HostBinding, scope ports.Scope) error {
-
-	return s.upsertHostBindings(ctx, hostBindings)
-}
-
-// upsertHostBindings creates or updates multiple host bindings
-func (s *HostBindingResourceService) upsertHostBindings(ctx context.Context, hostBindings []models.HostBinding) error {
-
-	for _, hostBinding := range hostBindings {
-		if err := s.CreateHostBinding(ctx, &hostBinding); err != nil {
-			return fmt.Errorf("failed to create host binding %s: %w", hostBinding.Key(), err)
+	defer func() {
+		if err != nil {
+			writer.Abort()
 		}
+	}()
+
+	// Call writer.SyncHostBindings directly with the bindings and syncOp
+	if err = writer.SyncHostBindings(ctx, hostBindings, scope, ports.WithSyncOp(syncOp)); err != nil {
+		return fmt.Errorf("failed to sync host bindings: %w", err)
 	}
 
-	return nil
-}
+	// Commit transaction
+	if err = writer.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
 
-// deleteHostBindings deletes multiple host bindings
-func (s *HostBindingResourceService) deleteHostBindings(ctx context.Context, hostBindings []models.HostBinding) error {
-	for _, hostBinding := range hostBindings {
-		if err := s.DeleteHostBinding(ctx, hostBinding.SelfRef.ResourceIdentifier); err != nil {
-			return fmt.Errorf("failed to delete host binding %s: %w", hostBinding.Key(), err)
+	// Process conditions for each binding if needed (skip for DELETE operations)
+	if syncOp != models.SyncOpDelete && s.conditionManager != nil {
+		for i := range hostBindings {
+			if err := s.conditionManager.ProcessHostBindingConditions(ctx, &hostBindings[i], nil); err != nil {
+				// Don't fail the operation if condition processing fails
+			}
 		}
 	}
 
@@ -442,9 +380,6 @@ func (s *HostBindingResourceService) SyncStatusUpdate(ctx context.Context, resou
 		return nil
 	}
 
-
-	// TODO: Implement sync status update when interface is clarified
-
 	return nil
 }
 
@@ -459,27 +394,26 @@ func (s *HostBindingResourceService) validateHostBindingWithReader(ctx context.C
 		return fmt.Errorf("host not found: %s", hostID.Key())
 	}
 
-	// Check if Host is already bound to a different binding
-	if host.IsBound {
-		// If bound to the same binding, that's valid
-		if host.BindingRef != nil {
-			expectedName := bindingID.Name
-			actualName := host.BindingRef.Name
+	// Check if Host is Ready (can only bind Ready resources)
+	if !s.isHostReady(host) {
+		return fmt.Errorf("host is not ready yet (Ready=False): %s - binding can only be created between Ready resources", hostID.Key())
+	}
 
-			if actualName == expectedName {
-				return nil
-			}
-			return fmt.Errorf("host is already bound to another binding (expected: %s, actual: %s)", bindingID.Name, actualName)
-		} else {
-			// Host is bound but BindingRef is nil - means it's bound via AddressGroup.spec.hosts
-			return fmt.Errorf("host is already bound to AddressGroup via spec.hosts - cannot create HostBinding")
+	if host.IsBound {
+		// Host is already bound - get the binding details for error message
+		agRefInfo := "unknown"
+		if host.AddressGroupRef != nil {
+			// Host.AddressGroupRef is NamespacedObjectReference (has Namespace field)
+			agRefInfo = fmt.Sprintf("%s/%s", host.AddressGroupRef.Namespace, host.AddressGroupRef.Name)
 		}
+		return fmt.Errorf("host %s is already bound to address group %s (each host can only be bound to one address group)",
+			hostID.Key(), agRefInfo)
 	}
 
 	return nil
 }
 
-// validateAddressGroupWithReader validates that an AddressGroup exists
+// validateAddressGroupWithReader validates that an AddressGroup exists and is Ready
 func (s *HostBindingResourceService) validateAddressGroupWithReader(ctx context.Context, reader ports.Reader, addressGroupID models.ResourceIdentifier) error {
 	// Check if AddressGroup exists using provided reader
 	addressGroup, err := reader.GetAddressGroupByID(ctx, addressGroupID)
@@ -488,6 +422,10 @@ func (s *HostBindingResourceService) validateAddressGroupWithReader(ctx context.
 	}
 	if addressGroup == nil {
 		return fmt.Errorf("address group not found: %s", addressGroupID.Key())
+	}
+
+	if !s.isAddressGroupReady(addressGroup) {
+		return fmt.Errorf("address group is not ready yet (Ready=False): %s - binding can only be created between Ready resources", addressGroupID.Key())
 	}
 
 	return nil
@@ -538,4 +476,30 @@ func (s *HostBindingResourceService) getHostBindingByHostID(ctx context.Context,
 	}
 
 	return foundBinding, nil
+}
+
+// isHostReady checks if Host has Ready=True condition
+func (s *HostBindingResourceService) isHostReady(host *models.Host) bool {
+	if host == nil || host.Meta.Conditions == nil {
+		return false
+	}
+	for _, cond := range host.Meta.Conditions {
+		if cond.Type == "Ready" && cond.Status == "True" {
+			return true
+		}
+	}
+	return false
+}
+
+// isAddressGroupReady checks if AddressGroup has Ready=True condition
+func (s *HostBindingResourceService) isAddressGroupReady(ag *models.AddressGroup) bool {
+	if ag == nil || ag.Meta.Conditions == nil {
+		return false
+	}
+	for _, cond := range ag.Meta.Conditions {
+		if cond.Type == "Ready" && cond.Status == "True" {
+			return true
+		}
+	}
+	return false
 }

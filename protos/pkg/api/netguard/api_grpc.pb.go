@@ -46,6 +46,11 @@ const (
 	NetguardService_GetHost_FullMethodName                         = "/netguard.v1.NetguardService/GetHost"
 	NetguardService_ListHostBindings_FullMethodName                = "/netguard.v1.NetguardService/ListHostBindings"
 	NetguardService_GetHostBinding_FullMethodName                  = "/netguard.v1.NetguardService/GetHostBinding"
+	NetguardService_ListSvcSvcRules_FullMethodName                 = "/netguard.v1.NetguardService/ListSvcSvcRules"
+	NetguardService_GetSvcSvcRule_FullMethodName                   = "/netguard.v1.NetguardService/GetSvcSvcRule"
+	NetguardService_ListSvcFqdnRules_FullMethodName                = "/netguard.v1.NetguardService/ListSvcFqdnRules"
+	NetguardService_GetSvcFqdnRule_FullMethodName                  = "/netguard.v1.NetguardService/GetSvcFqdnRule"
+	NetguardService_MarkForDeletion_FullMethodName                 = "/netguard.v1.NetguardService/MarkForDeletion"
 )
 
 // NetguardServiceClient is the client API for NetguardService service.
@@ -106,6 +111,18 @@ type NetguardServiceClient interface {
 	ListHostBindings(ctx context.Context, in *ListHostBindingsReq, opts ...grpc.CallOption) (*ListHostBindingsResp, error)
 	// GetHostBinding - gets a specific host binding by ID
 	GetHostBinding(ctx context.Context, in *GetHostBindingReq, opts ...grpc.CallOption) (*GetHostBindingResp, error)
+	// ListSvcSvcRules - gets list of SvcSvcRules
+	ListSvcSvcRules(ctx context.Context, in *ListSvcSvcRulesReq, opts ...grpc.CallOption) (*ListSvcSvcRulesResp, error)
+	// GetSvcSvcRule - gets a specific SvcSvcRule by ID
+	GetSvcSvcRule(ctx context.Context, in *GetSvcSvcRuleReq, opts ...grpc.CallOption) (*GetSvcSvcRuleResp, error)
+	// ListSvcFqdnRules - gets list of SvcFqdnRules
+	ListSvcFqdnRules(ctx context.Context, in *ListSvcFqdnRulesReq, opts ...grpc.CallOption) (*ListSvcFqdnRulesResp, error)
+	// GetSvcFqdnRule - gets a specific SvcFqdnRule by ID
+	GetSvcFqdnRule(ctx context.Context, in *GetSvcFqdnRuleReq, opts ...grpc.CallOption) (*GetSvcFqdnRuleResp, error)
+	// MarkForDeletion - soft delete: marks resource for deletion without immediate physical removal
+	// Sets deletionTimestamp and Ready=False (Terminating) status
+	// Physical deletion happens after SGROUP synchronization
+	MarkForDeletion(ctx context.Context, in *MarkForDeletionReq, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type netguardServiceClient struct {
@@ -376,6 +393,56 @@ func (c *netguardServiceClient) GetHostBinding(ctx context.Context, in *GetHostB
 	return out, nil
 }
 
+func (c *netguardServiceClient) ListSvcSvcRules(ctx context.Context, in *ListSvcSvcRulesReq, opts ...grpc.CallOption) (*ListSvcSvcRulesResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSvcSvcRulesResp)
+	err := c.cc.Invoke(ctx, NetguardService_ListSvcSvcRules_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *netguardServiceClient) GetSvcSvcRule(ctx context.Context, in *GetSvcSvcRuleReq, opts ...grpc.CallOption) (*GetSvcSvcRuleResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSvcSvcRuleResp)
+	err := c.cc.Invoke(ctx, NetguardService_GetSvcSvcRule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *netguardServiceClient) ListSvcFqdnRules(ctx context.Context, in *ListSvcFqdnRulesReq, opts ...grpc.CallOption) (*ListSvcFqdnRulesResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSvcFqdnRulesResp)
+	err := c.cc.Invoke(ctx, NetguardService_ListSvcFqdnRules_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *netguardServiceClient) GetSvcFqdnRule(ctx context.Context, in *GetSvcFqdnRuleReq, opts ...grpc.CallOption) (*GetSvcFqdnRuleResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSvcFqdnRuleResp)
+	err := c.cc.Invoke(ctx, NetguardService_GetSvcFqdnRule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *netguardServiceClient) MarkForDeletion(ctx context.Context, in *MarkForDeletionReq, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, NetguardService_MarkForDeletion_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // NetguardServiceServer is the server API for NetguardService service.
 // All implementations must embed UnimplementedNetguardServiceServer
 // for forward compatibility.
@@ -434,6 +501,18 @@ type NetguardServiceServer interface {
 	ListHostBindings(context.Context, *ListHostBindingsReq) (*ListHostBindingsResp, error)
 	// GetHostBinding - gets a specific host binding by ID
 	GetHostBinding(context.Context, *GetHostBindingReq) (*GetHostBindingResp, error)
+	// ListSvcSvcRules - gets list of SvcSvcRules
+	ListSvcSvcRules(context.Context, *ListSvcSvcRulesReq) (*ListSvcSvcRulesResp, error)
+	// GetSvcSvcRule - gets a specific SvcSvcRule by ID
+	GetSvcSvcRule(context.Context, *GetSvcSvcRuleReq) (*GetSvcSvcRuleResp, error)
+	// ListSvcFqdnRules - gets list of SvcFqdnRules
+	ListSvcFqdnRules(context.Context, *ListSvcFqdnRulesReq) (*ListSvcFqdnRulesResp, error)
+	// GetSvcFqdnRule - gets a specific SvcFqdnRule by ID
+	GetSvcFqdnRule(context.Context, *GetSvcFqdnRuleReq) (*GetSvcFqdnRuleResp, error)
+	// MarkForDeletion - soft delete: marks resource for deletion without immediate physical removal
+	// Sets deletionTimestamp and Ready=False (Terminating) status
+	// Physical deletion happens after SGROUP synchronization
+	MarkForDeletion(context.Context, *MarkForDeletionReq) (*emptypb.Empty, error)
 	mustEmbedUnimplementedNetguardServiceServer()
 }
 
@@ -521,6 +600,21 @@ func (UnimplementedNetguardServiceServer) ListHostBindings(context.Context, *Lis
 }
 func (UnimplementedNetguardServiceServer) GetHostBinding(context.Context, *GetHostBindingReq) (*GetHostBindingResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetHostBinding not implemented")
+}
+func (UnimplementedNetguardServiceServer) ListSvcSvcRules(context.Context, *ListSvcSvcRulesReq) (*ListSvcSvcRulesResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListSvcSvcRules not implemented")
+}
+func (UnimplementedNetguardServiceServer) GetSvcSvcRule(context.Context, *GetSvcSvcRuleReq) (*GetSvcSvcRuleResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSvcSvcRule not implemented")
+}
+func (UnimplementedNetguardServiceServer) ListSvcFqdnRules(context.Context, *ListSvcFqdnRulesReq) (*ListSvcFqdnRulesResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListSvcFqdnRules not implemented")
+}
+func (UnimplementedNetguardServiceServer) GetSvcFqdnRule(context.Context, *GetSvcFqdnRuleReq) (*GetSvcFqdnRuleResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSvcFqdnRule not implemented")
+}
+func (UnimplementedNetguardServiceServer) MarkForDeletion(context.Context, *MarkForDeletionReq) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MarkForDeletion not implemented")
 }
 func (UnimplementedNetguardServiceServer) mustEmbedUnimplementedNetguardServiceServer() {}
 func (UnimplementedNetguardServiceServer) testEmbeddedByValue()                         {}
@@ -1011,6 +1105,96 @@ func _NetguardService_GetHostBinding_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NetguardService_ListSvcSvcRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSvcSvcRulesReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).ListSvcSvcRules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_ListSvcSvcRules_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).ListSvcSvcRules(ctx, req.(*ListSvcSvcRulesReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NetguardService_GetSvcSvcRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSvcSvcRuleReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).GetSvcSvcRule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_GetSvcSvcRule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).GetSvcSvcRule(ctx, req.(*GetSvcSvcRuleReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NetguardService_ListSvcFqdnRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSvcFqdnRulesReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).ListSvcFqdnRules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_ListSvcFqdnRules_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).ListSvcFqdnRules(ctx, req.(*ListSvcFqdnRulesReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NetguardService_GetSvcFqdnRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSvcFqdnRuleReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).GetSvcFqdnRule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_GetSvcFqdnRule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).GetSvcFqdnRule(ctx, req.(*GetSvcFqdnRuleReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NetguardService_MarkForDeletion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MarkForDeletionReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).MarkForDeletion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_MarkForDeletion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).MarkForDeletion(ctx, req.(*MarkForDeletionReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // NetguardService_ServiceDesc is the grpc.ServiceDesc for NetguardService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1121,6 +1305,26 @@ var NetguardService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetHostBinding",
 			Handler:    _NetguardService_GetHostBinding_Handler,
+		},
+		{
+			MethodName: "ListSvcSvcRules",
+			Handler:    _NetguardService_ListSvcSvcRules_Handler,
+		},
+		{
+			MethodName: "GetSvcSvcRule",
+			Handler:    _NetguardService_GetSvcSvcRule_Handler,
+		},
+		{
+			MethodName: "ListSvcFqdnRules",
+			Handler:    _NetguardService_ListSvcFqdnRules_Handler,
+		},
+		{
+			MethodName: "GetSvcFqdnRule",
+			Handler:    _NetguardService_GetSvcFqdnRule_Handler,
+		},
+		{
+			MethodName: "MarkForDeletion",
+			Handler:    _NetguardService_MarkForDeletion_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

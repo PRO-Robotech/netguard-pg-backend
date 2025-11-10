@@ -57,12 +57,20 @@ func (w *MutationWebhook) Handle(ctx context.Context, req *admissionv1.Admission
 		return w.mutateAddressGroupPortMapping(ctx, req)
 	case "RuleS2S":
 		return w.mutateRuleS2S(ctx, req)
+	case "SvcSvcRule":
+		return w.mutateSvcSvcRule(ctx, req)
+	case "SvcFqdnRule":
+		return w.mutateSvcFqdnRule(ctx, req)
 	case "ServiceAlias":
 		return w.mutateServiceAlias(ctx, req)
 	case "AddressGroupBindingPolicy":
 		return w.mutateAddressGroupBindingPolicy(ctx, req)
 	case "IEAgAgRule":
 		return w.mutateIEAgAgRule(ctx, req)
+	case "HostBinding":
+		return w.mutateHostBinding(ctx, req)
+	case "NetworkBinding":
+		return w.mutateNetworkBinding(ctx, req)
 	default:
 		return &admissionv1.AdmissionResponse{
 			UID:     req.UID,
@@ -98,6 +106,16 @@ func (w *MutationWebhook) mutateService(ctx context.Context, req *admissionv1.Ad
 		})
 	}
 
+	for i := range service.Spec.AddressGroups {
+		if service.Spec.AddressGroups[i].Namespace == "" {
+			patches = append(patches, map[string]interface{}{
+				"op":    "replace",
+				"path":  fmt.Sprintf("/spec/addressGroups/%d/namespace", i),
+				"value": service.Namespace,
+			})
+		}
+	}
+
 	return w.createPatchResponse(req.UID, patches)
 }
 
@@ -126,6 +144,16 @@ func (w *MutationWebhook) mutateAddressGroup(ctx context.Context, req *admission
 			"path":  "/spec/defaultAction",
 			"value": "ACCEPT", // Default to ACCEPT action
 		})
+	}
+
+	for i := range addressGroup.Spec.Hosts {
+		if addressGroup.Spec.Hosts[i].Namespace == "" {
+			patches = append(patches, map[string]interface{}{
+				"op":    "replace",
+				"path":  fmt.Sprintf("/spec/hosts/%d/namespace", i),
+				"value": addressGroup.Namespace,
+			})
+		}
 	}
 
 	return w.createPatchResponse(req.UID, patches)
@@ -230,6 +258,79 @@ func (w *MutationWebhook) mutateRuleS2S(ctx context.Context, req *admissionv1.Ad
 	return w.createPatchResponse(req.UID, patches)
 }
 
+// mutateSvcSvcRule applies mutations to SvcSvcRule resources
+func (w *MutationWebhook) mutateSvcSvcRule(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
+	var rule netguardv1beta1.SvcSvcRule
+	if err := runtime.DecodeInto(w.decoder, req.Object.Raw, &rule); err != nil {
+		return w.errorResponse(req.UID, fmt.Sprintf("Failed to decode SvcSvcRule: %v", err))
+	}
+
+	var patches []map[string]interface{}
+
+	// Add managed-by label
+	patches = append(patches, w.addManagedByLabel(&rule)...)
+
+	// Add created-by annotation
+	patches = append(patches, w.addCreatedByAnnotation(&rule)...)
+
+	// Normalize namespace in ServiceFrom if empty
+	if rule.Spec.ServiceFrom.Namespace == "" {
+		patches = append(patches, map[string]interface{}{
+			"op":    "add",
+			"path":  "/spec/serviceFrom/namespace",
+			"value": rule.Namespace,
+		})
+	}
+
+	// Normalize namespace in ServiceTo if empty
+	if rule.Spec.ServiceTo.Namespace == "" {
+		patches = append(patches, map[string]interface{}{
+			"op":    "add",
+			"path":  "/spec/serviceTo/namespace",
+			"value": rule.Namespace,
+		})
+	}
+
+	return w.createPatchResponse(req.UID, patches)
+}
+
+// mutateSvcFqdnRule applies defaulting logic to SvcFqdnRule resources.
+func (w *MutationWebhook) mutateSvcFqdnRule(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
+	var rule netguardv1beta1.SvcFqdnRule
+	if err := runtime.DecodeInto(w.decoder, req.Object.Raw, &rule); err != nil {
+		return w.errorResponse(req.UID, fmt.Sprintf("Failed to decode SvcFqdnRule: %v", err))
+	}
+
+	var patches []map[string]interface{}
+
+	patches = append(patches, w.addManagedByLabel(&rule)...)
+	patches = append(patches, w.addCreatedByAnnotation(&rule)...)
+
+	if rule.Spec.ServiceFrom.Namespace == "" {
+		patches = append(patches, map[string]interface{}{
+			"op":    "add",
+			"path":  "/spec/serviceFrom/namespace",
+			"value": rule.Namespace,
+		})
+	}
+	if rule.Spec.ServiceFrom.APIVersion == "" {
+		patches = append(patches, map[string]interface{}{
+			"op":    "add",
+			"path":  "/spec/serviceFrom/apiVersion",
+			"value": "netguard.sgroups.io/v1beta1",
+		})
+	}
+	if rule.Spec.ServiceFrom.Kind == "" {
+		patches = append(patches, map[string]interface{}{
+			"op":    "add",
+			"path":  "/spec/serviceFrom/kind",
+			"value": "Service",
+		})
+	}
+
+	return w.createPatchResponse(req.UID, patches)
+}
+
 // mutateServiceAlias applies mutations to ServiceAlias resources
 func (w *MutationWebhook) mutateServiceAlias(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
 	var alias netguardv1beta1.ServiceAlias
@@ -314,8 +415,77 @@ func (w *MutationWebhook) mutateIEAgAgRule(ctx context.Context, req *admissionv1
 	// Add created-by annotation
 	patches = append(patches, w.addCreatedByAnnotation(&rule)...)
 
-	// Add finalizer for graceful deletion
-	patches = append(patches, w.addFinalizer(&rule, "netguard.sgroups.io/backend-sync")...)
+	return w.createPatchResponse(req.UID, patches)
+}
+
+// mutateHostBinding applies mutations to HostBinding resources
+func (w *MutationWebhook) mutateHostBinding(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
+	var binding netguardv1beta1.HostBinding
+	if err := runtime.DecodeInto(w.decoder, req.Object.Raw, &binding); err != nil {
+		return w.errorResponse(req.UID, fmt.Sprintf("Failed to decode HostBinding: %v", err))
+	}
+
+	var patches []map[string]interface{}
+
+	// Add managed-by label
+	patches = append(patches, w.addManagedByLabel(&binding)...)
+
+	// Add created-by annotation
+	patches = append(patches, w.addCreatedByAnnotation(&binding)...)
+
+	// Normalize namespace in HostRef if empty - HostBinding and Host must be in same namespace
+	if binding.Spec.HostRef.Namespace == "" {
+		patches = append(patches, map[string]interface{}{
+			"op":    "replace",
+			"path":  "/spec/hostRef/namespace",
+			"value": binding.Namespace,
+		})
+	}
+
+	// Normalize namespace in AddressGroupRef if empty - HostBinding and AddressGroup must be in same namespace
+	if binding.Spec.AddressGroupRef.Namespace == "" {
+		patches = append(patches, map[string]interface{}{
+			"op":    "replace",
+			"path":  "/spec/addressGroupRef/namespace",
+			"value": binding.Namespace,
+		})
+	}
+
+	return w.createPatchResponse(req.UID, patches)
+}
+
+// mutateNetworkBinding applies mutations to NetworkBinding resources
+func (w *MutationWebhook) mutateNetworkBinding(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
+	var binding netguardv1beta1.NetworkBinding
+	if err := runtime.DecodeInto(w.decoder, req.Object.Raw, &binding); err != nil {
+		return w.errorResponse(req.UID, fmt.Sprintf("Failed to decode NetworkBinding: %v", err))
+	}
+
+	var patches []map[string]interface{}
+
+	// Add managed-by label
+	patches = append(patches, w.addManagedByLabel(&binding)...)
+
+	// Add created-by annotation
+	patches = append(patches, w.addCreatedByAnnotation(&binding)...)
+
+	// Normalize namespace in NetworkRef if empty - NetworkBinding and Network must be in same namespace
+	if binding.Spec.NetworkRef.Namespace == "" {
+		patches = append(patches, map[string]interface{}{
+			"op":    "replace",
+			"path":  "/spec/networkRef/namespace",
+			"value": binding.Namespace,
+		})
+	}
+
+	// Normalize namespace in AddressGroupRef if empty - NetworkBinding and AddressGroup must be in same namespace
+	if binding.Spec.AddressGroupRef.Namespace == "" {
+		patches = append(patches, map[string]interface{}{
+			"op":    "replace",
+			"path":  "/spec/addressGroupRef/namespace",
+			"value": binding.Namespace,
+		})
+	}
 
 	return w.createPatchResponse(req.UID, patches)
 }

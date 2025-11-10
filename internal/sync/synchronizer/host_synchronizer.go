@@ -52,7 +52,6 @@ func (s *hostSynchronizer) SyncHosts(ctx context.Context, namespace string) (*ty
 		return result, fmt.Errorf("failed to find hosts without IPSet: %w", err)
 	}
 
-
 	if len(hosts) == 0 {
 		return result, nil
 	}
@@ -70,7 +69,6 @@ func (s *hostSynchronizer) SyncHosts(ctx context.Context, namespace string) (*ty
 	// Process in batches
 	batches := s.createBatches(uuids, s.config.BatchSize)
 	result.SetDetail("batch_count", len(batches))
-
 
 	for _, batch := range batches {
 
@@ -141,7 +139,6 @@ func (s *hostSynchronizer) SyncAllHosts(ctx context.Context) (*types.HostSyncRes
 	if err != nil {
 		return result, fmt.Errorf("failed to find hosts without IPSet: %w", err)
 	}
-
 
 	if len(hosts) == 0 {
 		return result, nil
@@ -218,7 +215,6 @@ func (s *hostSynchronizer) syncHostBatch(ctx context.Context, uuids []string, ho
 		}
 		return result, err
 	}
-
 
 	// Create map of UUID -> SGROUP Host
 	sgroupHostMap := make(map[string]*pb.Host)

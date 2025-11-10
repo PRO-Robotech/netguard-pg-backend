@@ -1,5 +1,5 @@
 /*
-Copyright 2024 The PRO-Robotech Authors.
+Copyright 2024 The Netguard Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -35,11 +35,12 @@ type NetguardV1beta1Interface interface {
 	HostsGetter
 	HostBindingsGetter
 	IEAgAgRulesGetter
-	NetworksGetter
 	NetworkBindingsGetter
 	RuleS2SsGetter
 	ServicesGetter
 	ServiceAliasesGetter
+	SvcFqdnRulesGetter
+	SvcSvcRulesGetter
 }
 
 // NetguardV1beta1Client is used to interact with features provided by the netguard.sgroups.io group.
@@ -75,10 +76,6 @@ func (c *NetguardV1beta1Client) IEAgAgRules(namespace string) IEAgAgRuleInterfac
 	return newIEAgAgRules(c, namespace)
 }
 
-func (c *NetguardV1beta1Client) Networks(namespace string) NetworkInterface {
-	return newNetworks(c, namespace)
-}
-
 func (c *NetguardV1beta1Client) NetworkBindings(namespace string) NetworkBindingInterface {
 	return newNetworkBindings(c, namespace)
 }
@@ -93,6 +90,14 @@ func (c *NetguardV1beta1Client) Services(namespace string) ServiceInterface {
 
 func (c *NetguardV1beta1Client) ServiceAliases(namespace string) ServiceAliasInterface {
 	return newServiceAliases(c, namespace)
+}
+
+func (c *NetguardV1beta1Client) SvcFqdnRules(namespace string) SvcFqdnRuleInterface {
+	return newSvcFqdnRules(c, namespace)
+}
+
+func (c *NetguardV1beta1Client) SvcSvcRules(namespace string) SvcSvcRuleInterface {
+	return newSvcSvcRules(c, namespace)
 }
 
 // NewForConfig creates a new NetguardV1beta1Client for the given config.

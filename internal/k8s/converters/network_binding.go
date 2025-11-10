@@ -44,14 +44,14 @@ func (c *NetworkBindingConverter) ToDomain(ctx context.Context, k8sObj *netguard
 		},
 	}
 
-	// Convert NetworkItem from the main struct
-	binding.NetworkItem = models.NetworkItem{
-		Name:       k8sObj.NetworkItem.Name,
-		CIDR:       k8sObj.NetworkItem.CIDR,
-		ApiVersion: k8sObj.NetworkItem.ApiVersion,
-		Kind:       k8sObj.NetworkItem.Kind,
-		Namespace:  k8sObj.NetworkItem.Namespace,
-	}
+	//// Convert NetworkItem from the main struct
+	//binding.NetworkItem = models.NetworkItem{
+	//	Name:       k8sObj.NetworkItem.Name,
+	//	CIDR:       k8sObj.NetworkItem.CIDR,
+	//	ApiVersion: k8sObj.NetworkItem.ApiVersion,
+	//	Kind:       k8sObj.NetworkItem.Kind,
+	//	Namespace:  k8sObj.NetworkItem.Namespace,
+	//}
 
 	return binding, nil
 }
@@ -84,13 +84,13 @@ func (c *NetworkBindingConverter) FromDomain(ctx context.Context, domainObj *mod
 		Status: netguardv1beta1.NetworkBindingStatus{
 			Conditions: domainObj.Meta.Conditions,
 		},
-		NetworkItem: netguardv1beta1.NetworkItem{
-			Name:       domainObj.NetworkItem.Name,
-			CIDR:       domainObj.NetworkItem.CIDR,
-			ApiVersion: domainObj.NetworkItem.ApiVersion,
-			Kind:       domainObj.NetworkItem.Kind,
-			Namespace:  domainObj.NetworkItem.Namespace,
-		},
+		//NetworkItem: netguardv1beta1.NetworkItem{
+		//	Name:       domainObj.NetworkItem.Name,
+		//	CIDR:       domainObj.NetworkItem.CIDR,
+		//	ApiVersion: domainObj.NetworkItem.ApiVersion,
+		//	Kind:       domainObj.NetworkItem.Kind,
+		//	Namespace:  domainObj.NetworkItem.Namespace,
+		//},
 	}
 
 	return k8sObj, nil

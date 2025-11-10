@@ -22,11 +22,11 @@ type Host struct {
 	UUID string `json:"uuid"`
 
 	// Status
-	HostName         string                   `json:"hostName,omitempty"`
-	AddressGroupName string                   `json:"addressGroupName,omitempty"`
-	IsBound          bool                     `json:"isBound"`
-	BindingRef       *v1beta1.ObjectReference `json:"bindingRef,omitempty"`
-	AddressGroupRef  *v1beta1.ObjectReference `json:"addressGroupRef,omitempty"`
+	HostName         string                             `json:"hostName,omitempty"`
+	AddressGroupName string                             `json:"addressGroupName,omitempty"`
+	IsBound          bool                               `json:"isBound"`
+	BindingRef       *v1beta1.NamespacedObjectReference `json:"bindingRef,omitempty"`
+	AddressGroupRef  *v1beta1.NamespacedObjectReference `json:"addressGroupRef,omitempty"`
 
 	// IPList from SGROUP synchronization (matching K8s CRD format)
 	IpList []IPItem `json:"ipList,omitempty"`
@@ -66,12 +66,12 @@ func (h *Host) GetMeta() *Meta {
 }
 
 // SetBindingRef sets the reference to the HostBinding
-func (h *Host) SetBindingRef(ref *v1beta1.ObjectReference) {
+func (h *Host) SetBindingRef(ref *v1beta1.NamespacedObjectReference) {
 	h.BindingRef = ref
 }
 
 // SetAddressGroupRef sets the reference to the AddressGroup
-func (h *Host) SetAddressGroupRef(ref *v1beta1.ObjectReference) {
+func (h *Host) SetAddressGroupRef(ref *v1beta1.NamespacedObjectReference) {
 	h.AddressGroupRef = ref
 }
 
@@ -218,12 +218,16 @@ func (h *Host) ToSGroupsProto() (interface{}, error) {
 	if h.IsBound && h.AddressGroupRef != nil {
 		// Use AddressGroup name as SgName when host is bound
 		sgName = h.AddressGroupRef.Name
-		if h.Namespace != "" && sgName != "" {
+		// Use namespace from AddressGroupRef if available, otherwise fallback to host namespace
+		refNamespace := h.AddressGroupRef.Namespace
+		if refNamespace == "" {
+			refNamespace = h.Namespace
+		}
+		if refNamespace != "" && sgName != "" {
 			// Include namespace in SgName for uniqueness
-			sgName = fmt.Sprintf("%s/%s", h.Namespace, sgName)
+			sgName = fmt.Sprintf("%s/%s", refNamespace, sgName)
 		}
 	}
-
 
 	// Convert to sgroups protobuf element
 	protoHost := &pb.Host{

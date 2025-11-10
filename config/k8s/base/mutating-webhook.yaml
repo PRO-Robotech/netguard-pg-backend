@@ -2,7 +2,7 @@
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
-  name: netguard-mutator
+  name: netguard-mutatingwebhookconfiguration
   labels:
     app.kubernetes.io/name: netguard-apiserver
     app.kubernetes.io/component: admission-webhook
@@ -18,8 +18,8 @@ webhooks:
   
   clientConfig:
     service:
-      name: netguard-apiserver-webhook
-      namespace: netguard-system
+      name: netguard-webhook
+      namespace: incloud-sgroups
       path: /mutate
     # CA bundle будет заполнен cert-manager или вручную
     caBundle: ""
@@ -48,8 +48,8 @@ webhooks:
   
   clientConfig:
     service:
-      name: netguard-apiserver-webhook
-      namespace: netguard-system
+      name: netguard-webhook
+      namespace: incloud-sgroups
       path: /mutate
     caBundle: ""
   
@@ -72,8 +72,8 @@ webhooks:
   
   clientConfig:
     service:
-      name: netguard-apiserver-webhook
-      namespace: netguard-system
+      name: netguard-webhook
+      namespace: incloud-sgroups
       path: /mutate
     caBundle: ""
   
@@ -96,8 +96,8 @@ webhooks:
   
   clientConfig:
     service:
-      name: netguard-apiserver-webhook
-      namespace: netguard-system
+      name: netguard-webhook
+      namespace: incloud-sgroups
       path: /mutate
     caBundle: ""
   
@@ -120,8 +120,8 @@ webhooks:
   
   clientConfig:
     service:
-      name: netguard-apiserver-webhook
-      namespace: netguard-system
+      name: netguard-webhook
+      namespace: incloud-sgroups
       path: /mutate
     caBundle: ""
   
@@ -144,8 +144,8 @@ webhooks:
   
   clientConfig:
     service:
-      name: netguard-apiserver-webhook
-      namespace: netguard-system
+      name: netguard-webhook
+      namespace: incloud-sgroups
       path: /mutate
     caBundle: ""
   
@@ -168,8 +168,8 @@ webhooks:
   
   clientConfig:
     service:
-      name: netguard-apiserver-webhook
-      namespace: netguard-system
+      name: netguard-webhook
+      namespace: incloud-sgroups
       path: /mutate
     caBundle: ""
   
@@ -189,21 +189,93 @@ webhooks:
   admissionReviewVersions: ["v1", "v1beta1"]
   # Порядок вызова - 100
   # order: 100
-  
+
   clientConfig:
     service:
-      name: netguard-apiserver-webhook
-      namespace: netguard-system
+      name: netguard-webhook
+      namespace: incloud-sgroups
       path: /mutate
     caBundle: ""
-  
+
   rules:
   - operations: ["CREATE", "UPDATE"]
     apiGroups: ["netguard.sgroups.io"]
     apiVersions: ["v1beta1"]
     resources: ["ieagagrules"]
     scope: "Namespaced"
-  
+
+  failurePolicy: Fail
+  sideEffects: None
+  namespaceSelector: {}
+  timeoutSeconds: 10
+
+- name: hostbinding.netguard.sgroups.io
+  admissionReviewVersions: ["v1", "v1beta1"]
+  # Порядок вызова - 100
+  # order: 100
+
+  clientConfig:
+    service:
+      name: netguard-webhook
+      namespace: incloud-sgroups
+      path: /mutate
+    caBundle: ""
+
+  rules:
+  - operations: ["CREATE", "UPDATE"]
+    apiGroups: ["netguard.sgroups.io"]
+    apiVersions: ["v1beta1"]
+    resources: ["hostbindings"]
+    scope: "Namespaced"
+
+  failurePolicy: Fail
+  sideEffects: None
+  namespaceSelector: {}
+  timeoutSeconds: 10
+
+- name: networkbinding.netguard.sgroups.io
+  admissionReviewVersions: ["v1", "v1beta1"]
+  # Порядок вызова - 100
+  # order: 100
+
+  clientConfig:
+    service:
+      name: netguard-webhook
+      namespace: incloud-sgroups
+      path: /mutate
+    caBundle: ""
+
+  rules:
+  - operations: ["CREATE", "UPDATE"]
+    apiGroups: ["netguard.sgroups.io"]
+    apiVersions: ["v1beta1"]
+    resources: ["networkbindings"]
+    scope: "Namespaced"
+
+  failurePolicy: Fail
+  sideEffects: None
+  namespaceSelector: {}
+  timeoutSeconds: 10
+
+- name: svcsvcrule.netguard.sgroups.io
+  admissionReviewVersions: ["v1", "v1beta1"]
+  # Порядок вызова - 100
+  # order: 100
+
+  clientConfig:
+    service:
+      name: netguard-webhook
+      namespace: incloud-sgroups
+      path: /mutate
+    caBundle: ""
+
+  rules:
+  - operations: ["CREATE", "UPDATE"]
+    apiGroups: ["netguard.sgroups.io"]
+    apiVersions: ["v1beta1"]
+    resources: ["svcsvcrules"]
+    scope: "Namespaced"
+
   failurePolicy: Fail
   sideEffects: None
   namespaceSelector: {}

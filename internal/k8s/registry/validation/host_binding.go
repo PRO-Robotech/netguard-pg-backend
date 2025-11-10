@@ -33,7 +33,7 @@ func (v *HostBindingValidator) ValidateCreate(ctx context.Context, obj *v1beta1.
 	allErrs = append(allErrs, v.validateMetadata(obj)...)
 
 	// Validate spec
-	allErrs = append(allErrs, v.validateSpec(obj.Spec, field.NewPath("spec"))...)
+	allErrs = append(allErrs, v.validateSpec(obj.Spec, obj.Namespace, field.NewPath("spec"))...)
 
 	return allErrs
 }
@@ -78,7 +78,7 @@ func (v *HostBindingValidator) validateMetadata(obj *v1beta1.HostBinding) field.
 }
 
 // validateSpec validates the HostBinding spec
-func (v *HostBindingValidator) validateSpec(spec v1beta1.HostBindingSpec, fldPath *field.Path) field.ErrorList {
+func (v *HostBindingValidator) validateSpec(spec v1beta1.HostBindingSpec, parentNamespace string, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
 	// Validate HostRef - required
@@ -87,7 +87,19 @@ func (v *HostBindingValidator) validateSpec(spec v1beta1.HostBindingSpec, fldPat
 	// Validate AddressGroupRef - required
 	allErrs = append(allErrs, v.validateObjectReference(spec.AddressGroupRef, fldPath.Child("addressGroupRef"), "AddressGroup")...)
 
-	// Validate that HostRef and AddressGroupRef are different (they're in same namespace by definition since ObjectReference doesn't have namespace)
+	// Validate that HostRef namespace matches parent namespace
+	if spec.HostRef.Namespace != "" && spec.HostRef.Namespace != parentNamespace {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("hostRef").Child("namespace"), spec.HostRef.Namespace,
+			fmt.Sprintf("hostRef namespace must match HostBinding namespace (%s)", parentNamespace)))
+	}
+
+	// Validate that AddressGroupRef namespace matches parent namespace
+	if spec.AddressGroupRef.Namespace != "" && spec.AddressGroupRef.Namespace != parentNamespace {
+		allErrs = append(allErrs, field.Invalid(fldPath.Child("addressGroupRef").Child("namespace"), spec.AddressGroupRef.Namespace,
+			fmt.Sprintf("addressGroupRef namespace must match HostBinding namespace (%s)", parentNamespace)))
+	}
+
+	// Validate that HostRef and AddressGroupRef are different (they're in same namespace by definition)
 	if spec.HostRef.Name == spec.AddressGroupRef.Name {
 		allErrs = append(allErrs, field.Invalid(fldPath.Child("addressGroupRef"), spec.AddressGroupRef, "addressGroupRef cannot reference the same resource as hostRef"))
 	}
@@ -104,10 +116,8 @@ func (v *HostBindingValidator) validateObjectReference(objRef v1beta1.Namespaced
 		allErrs = append(allErrs, field.Required(fldPath.Child("name"), "name is required"))
 	}
 
-	// Namespace is required
-	if objRef.Namespace == "" {
-		allErrs = append(allErrs, field.Required(fldPath.Child("namespace"), "namespace is required"))
-	}
+	// Namespace will be filled by mutation webhook if empty, so we don't require it here
+	// The validateSpec function already checks that namespace matches parent namespace if provided
 
 	// Validate Kind if specified
 	if objRef.Kind != "" && objRef.Kind != expectedKind {

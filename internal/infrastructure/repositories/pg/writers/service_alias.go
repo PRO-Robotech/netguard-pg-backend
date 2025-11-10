@@ -10,7 +10,7 @@ package writers
 // - Phase 7: RuleS2S methods → writers/rule_s2s.go
 // - Phase 8: IEAgAgRule methods → writers/ieagag_rule.go (FINAL - HIGHEST COMPLEXITY)
 //
-// 🎆 POSTGRESQL MODULAR ARCHITECTURE COMPLETE!
+// POSTGRESQL MODULAR ARCHITECTURE COMPLETE!
 // All 10 NetGuard resources now have full PostgreSQL support with:
 // ✅ Modular file organization
 // ✅ JSONB marshaling/unmarshaling for complex fields

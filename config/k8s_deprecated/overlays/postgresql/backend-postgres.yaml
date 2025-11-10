@@ -1,0 +1,122 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: netguard-backend
+  namespace: netguard-system
+  labels:
+    app: netguard-backend
+    variant: postgresql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: netguard-backend
+  template:
+    metadata:
+      labels:
+        app: netguard-backend
+        variant: postgresql
+    spec:
+      # Wait for PostgreSQL to be ready
+      initContainers:
+      - name: wait-for-postgres
+        image: postgres:15
+        command:
+        - /bin/sh
+        - -c 
+        - |
+          echo "Waiting for PostgreSQL to be ready..."
+          until pg_isready -h postgresql -U postgres; do
+            echo "PostgreSQL is not ready yet. Waiting..."
+            sleep 2
+          done
+          echo "PostgreSQL is ready!"
+        env:
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: postgres-password
+      containers:
+      - name: backend
+        image: netguard/pg-backend:latest
+        imagePullPolicy: IfNotPresent
+        command: ["/root/server"]
+        args:
+        - --pg-uri
+        - postgres://netguard:netguard@postgresql:5432/netguard?sslmode=disable
+        # --migrate flag REMOVED - migrations handled by separate Job (sgroups pattern)
+        - --grpc-addr=:9090
+        - --http-addr=:8080
+        ports:
+        - containerPort: 9090
+          name: grpc
+        - containerPort: 8080
+          name: http
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: database-url
+        - name: LOG_LEVEL
+          value: "info"
+        - name: BACKEND_MODE
+          value: "postgresql"
+        resources:
+          requests:
+            memory: "256Mi"           # Higher resource requirements for PostgreSQL mode
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "nc -z localhost 9090"
+          initialDelaySeconds: 30     # Reduced delay - no migrations in backend
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "nc -z localhost 9090"
+          initialDelaySeconds: 15     # Reduced delay - migrations handled separately
+          periodSeconds: 5
+          timeoutSeconds: 10
+        # Health check for database connectivity
+        startupProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - "nc -z localhost 9090"
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 12        # Allow up to 2 minutes for startup
+          
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: netguard-backend
+  namespace: netguard-system
+  labels:
+    app: netguard-backend
+    variant: postgresql
+spec:
+  type: ClusterIP
+  ports:
+  - name: grpc
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  selector:
+    app: netguard-backend

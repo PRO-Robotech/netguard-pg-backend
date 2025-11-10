@@ -8,7 +8,6 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog/v2"
 )
 
 // NetworkConverter converts between Network K8s objects and domain models
@@ -59,15 +58,6 @@ func (c *NetworkConverter) FromDomain(ctx context.Context, domainObj *models.Net
 		return nil, nil
 	}
 
-	// Debug logging
-	klog.Infof("🔍 CONVERTER FromDomain: Network[%s] has %d conditions, IsBound=%t", domainObj.Key(), len(domainObj.Meta.Conditions), domainObj.IsBound)
-	if domainObj.BindingRef != nil {
-	} else {
-	}
-	if domainObj.AddressGroupRef != nil {
-	} else {
-	}
-
 	k8sObj := &netguardv1beta1.Network{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Network",
@@ -80,6 +70,7 @@ func (c *NetworkConverter) FromDomain(ctx context.Context, domainObj *models.Net
 			ResourceVersion:   domainObj.Meta.ResourceVersion,
 			Generation:        domainObj.Meta.Generation,
 			CreationTimestamp: domainObj.Meta.CreationTS,
+			DeletionTimestamp: domainObj.Meta.DeletionTS,
 			Labels:            domainObj.Meta.Labels,
 			Annotations:       domainObj.Meta.Annotations,
 		},

@@ -822,7 +822,6 @@ func (w *writer) DeleteAddressGroupBindingsByIDs(ctx context.Context, ids []mode
 		}
 	}
 
-
 	return nil
 }
 
@@ -1009,6 +1008,32 @@ func (w *writer) DeleteIEAgAgRulesByIDs(ctx context.Context, ids []models.Resour
 		delete(w.ieAgAgRules, id.Key())
 	}
 
+	return nil
+}
+
+// Stub methods for SvcSvcRule - not implemented in memory repository yet
+func (w *writer) SyncSvcSvcRules(ctx context.Context, rules []models.SvcSvcRule, scope ports.Scope, opts ...ports.Option) error {
+	// Stub implementation - do nothing
+	return nil
+}
+
+func (w *writer) DeleteSvcSvcRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	// Stub implementation - do nothing
+	return nil
+}
+
+func (w *writer) SyncSvcFqdnRules(ctx context.Context, rules []models.SvcFqdnRule, scope ports.Scope, opts ...ports.Option) error {
+	// Stub implementation for in-memory registry
+	return nil
+}
+
+func (w *writer) DeleteSvcFqdnRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	// Stub implementation for in-memory registry
+	return nil
+}
+
+func (w *writer) MarkForDeletionWithStatus(namespace, name, kind string) error {
+	// In-memory registry performs immediate deletion; no-op here
 	return nil
 }
 

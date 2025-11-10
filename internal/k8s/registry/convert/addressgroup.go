@@ -136,9 +136,9 @@ func convertHostReferencesToDomain(k8sHostRefs []netguardv1beta1.HostReference) 
 	domainHostRefs := make([]models.HostReference, len(k8sHostRefs))
 	for i, k8sRef := range k8sHostRefs {
 		domainHostRefs[i] = models.HostReference{
-			ObjectReference: k8sRef.ObjectReference,
-			UUID:            k8sRef.UUID,
-			Source:          models.HostRegistrationSource(k8sRef.Source),
+			Ref:    k8sRef.Ref,
+			UUID:   k8sRef.UUID,
+			Source: models.HostRegistrationSource(k8sRef.Source),
 		}
 	}
 	return domainHostRefs
@@ -153,9 +153,9 @@ func convertHostReferencesToK8s(domainHostRefs []models.HostReference) []netguar
 	k8sHostRefs := make([]netguardv1beta1.HostReference, len(domainHostRefs))
 	for i, domainRef := range domainHostRefs {
 		k8sHostRefs[i] = netguardv1beta1.HostReference{
-			ObjectReference: domainRef.ObjectReference,
-			UUID:            domainRef.UUID,
-			Source:          netguardv1beta1.HostRegistrationSource(domainRef.Source),
+			Ref:    domainRef.Ref,
+			UUID:   domainRef.UUID,
+			Source: netguardv1beta1.HostRegistrationSource(domainRef.Source),
 		}
 	}
 	return k8sHostRefs

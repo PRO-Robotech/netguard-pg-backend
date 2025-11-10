@@ -10,7 +10,6 @@ import (
 	"netguard-pg-backend/internal/patterns"
 )
 
-// MockRegistry implements a test-friendly in-memory registry
 type MockRegistry struct {
 	mu         sync.RWMutex
 	readers    map[string]*MockReader
@@ -20,7 +19,6 @@ type MockRegistry struct {
 }
 
 func (m *MockRegistry) ReaderWithReadCommitted(ctx context.Context) (ports.Reader, error) {
-	//TODO implement me
 	panic("implement me")
 }
 
@@ -191,6 +189,22 @@ func (r *MockReader) ListAddressGroups(ctx context.Context, consume func(models.
 	return nil
 }
 
+func (r *MockReader) ListSvcSvcRules(ctx context.Context, consume func(models.SvcSvcRule) error, scope ports.Scope) error {
+	return nil
+}
+
+func (r *MockReader) GetSvcSvcRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcSvcRule, error) {
+	return nil, ports.ErrNotFound
+}
+
+func (r *MockReader) ListSvcFqdnRules(ctx context.Context, consume func(models.SvcFqdnRule) error, scope ports.Scope) error {
+	return nil
+}
+
+func (r *MockReader) GetSvcFqdnRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcFqdnRule, error) {
+	return nil, ports.ErrNotFound
+}
+
 // Network operations
 func (r *MockReader) GetNetworkByID(ctx context.Context, id models.ResourceIdentifier) (*models.Network, error) {
 	key := fmt.Sprintf("network_%s", id.Key())
@@ -329,6 +343,10 @@ func (r *MockReader) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceId
 
 func (r *MockReader) GetNetworkByCIDR(ctx context.Context, cidr string) (*models.Network, error) {
 	return nil, ports.ErrNotFound
+}
+
+func (r *MockReader) GetNetworksOverlappingCIDR(ctx context.Context, cidr string) ([]*models.Network, error) {
+	return nil, nil
 }
 
 func (r *MockReader) GetSyncStatus(ctx context.Context) (*models.SyncStatus, error) {
@@ -501,6 +519,26 @@ func (w *MockWriter) DeleteRuleS2SByIDs(ctx context.Context, ids []models.Resour
 		delete(w.data, key)
 		w.deletedKeys[key] = true // Track deletion
 	}
+	return nil
+}
+
+func (w *MockWriter) SyncSvcSvcRules(ctx context.Context, rules []models.SvcSvcRule, scope ports.Scope, opts ...ports.Option) error {
+	return nil
+}
+
+func (w *MockWriter) DeleteSvcSvcRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	return nil
+}
+
+func (w *MockWriter) SyncSvcFqdnRules(ctx context.Context, rules []models.SvcFqdnRule, scope ports.Scope, opts ...ports.Option) error {
+	return nil
+}
+
+func (w *MockWriter) DeleteSvcFqdnRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	return nil
+}
+
+func (w *MockWriter) MarkForDeletionWithStatus(namespace, name, kind string) error {
 	return nil
 }
 

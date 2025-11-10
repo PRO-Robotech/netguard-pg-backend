@@ -51,8 +51,14 @@ func (c *NetworkBindingConverter) FromDomain(ctx context.Context, domainObj *mod
 		TypeMeta:   CreateStandardTypeMetaForResource("NetworkBinding"),
 		ObjectMeta: ConvertMetadataFromDomain(domainObj.Meta, domainObj.ResourceIdentifier.Name, domainObj.ResourceIdentifier.Namespace),
 		Spec: netguardv1beta1.NetworkBindingSpec{
-			NetworkRef:      EnsureObjectReferenceFields(domainObj.NetworkRef, "Network"),
-			AddressGroupRef: EnsureObjectReferenceFields(domainObj.AddressGroupRef, "AddressGroup"),
+			NetworkRef: netguardv1beta1.NamespacedObjectReference{
+				ObjectReference: EnsureObjectReferenceFields(domainObj.NetworkRef.ObjectReference, "Network"),
+				Namespace:       domainObj.NetworkRef.Namespace,
+			},
+			AddressGroupRef: netguardv1beta1.NamespacedObjectReference{
+				ObjectReference: EnsureObjectReferenceFields(domainObj.AddressGroupRef.ObjectReference, "AddressGroup"),
+				Namespace:       domainObj.AddressGroupRef.Namespace,
+			},
 		},
 	}
 

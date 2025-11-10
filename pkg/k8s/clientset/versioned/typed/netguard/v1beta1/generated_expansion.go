@@ -1,5 +1,5 @@
 /*
-Copyright 2024 The PRO-Robotech Authors.
+Copyright 2024 The Netguard Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -32,8 +32,6 @@ type HostBindingExpansion interface{}
 
 type IEAgAgRuleExpansion interface{}
 
-type NetworkExpansion interface{}
-
 type NetworkBindingExpansion interface{}
 
 type RuleS2SExpansion interface{}
@@ -41,3 +39,7 @@ type RuleS2SExpansion interface{}
 type ServiceExpansion interface{}
 
 type ServiceAliasExpansion interface{}
+
+type SvcFqdnRuleExpansion interface{}
+
+type SvcSvcRuleExpansion interface{}

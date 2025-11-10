@@ -97,13 +97,10 @@ func (s *ValidationService) ValidateAddressGroupForCreation(ctx context.Context,
 	validator := validation.NewDependencyValidator(reader)
 	addressGroupValidator := validator.GetAddressGroupValidator()
 
-	// PHASE 1: Standard validation (existence, references, etc)
 	if err := addressGroupValidator.ValidateForCreation(ctx, addressGroup); err != nil {
 		return errors.Wrapf(err, "address group validation failed for creation: %s", addressGroup.Key())
 	}
 
-	// PHASE 2: SGROUP synchronization pre-validation (new!)
-	// This tests if hosts can be synchronized with SGROUP before saving to database
 	if err := addressGroupValidator.ValidateSgroupSyncForHosts(ctx, addressGroup.Hosts, addressGroup.ResourceIdentifier, s.syncManager); err != nil {
 		return errors.Wrapf(err, "SGROUP synchronization validation failed for address group creation: %s", addressGroup.Key())
 	}
@@ -127,9 +124,6 @@ func (s *ValidationService) ValidateAddressGroupForUpdate(ctx context.Context, o
 		return errors.Wrapf(err, "address group validation failed for update: %s", newAddressGroup.Key())
 	}
 
-	// PHASE 2: SGROUP synchronization pre-validation (new!)
-	// This tests if NEW hosts can be synchronized with SGROUP before saving to database
-	// Only validate new or changed hosts to avoid unnecessary SGROUP calls
 	newHostsToValidate := getNewOrChangedHosts(oldAddressGroup.Hosts, newAddressGroup.Hosts)
 	if len(newHostsToValidate) > 0 {
 		if err := addressGroupValidator.ValidateSgroupSyncForHosts(ctx, newHostsToValidate, newAddressGroup.ResourceIdentifier, s.syncManager); err != nil {
@@ -513,6 +507,65 @@ func (s *ValidationService) ValidateNetworkForDeletion(ctx context.Context, netw
 }
 
 // =============================================================================
+// SvcSvcRule Validation
+// =============================================================================
+
+// ValidateSvcSvcRuleForCreation validates a SvcSvcRule for creation
+func (s *ValidationService) ValidateSvcSvcRuleForCreation(ctx context.Context, rule models.SvcSvcRule) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	validator := validation.NewDependencyValidator(reader)
+	ruleValidator := validator.GetSvcSvcRuleValidator()
+
+	if err := ruleValidator.ValidateForCreation(ctx, rule); err != nil {
+		return errors.Wrapf(err, "SvcSvcRule validation failed for creation: %s", rule.Key())
+	}
+
+	return nil
+}
+
+// ValidateSvcSvcRuleForUpdate validates a SvcSvcRule for update
+func (s *ValidationService) ValidateSvcSvcRuleForUpdate(ctx context.Context, oldRule, newRule models.SvcSvcRule) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	validator := validation.NewDependencyValidator(reader)
+	ruleValidator := validator.GetSvcSvcRuleValidator()
+
+	if err := ruleValidator.ValidateForUpdate(ctx, oldRule, newRule); err != nil {
+		return errors.Wrapf(err, "SvcSvcRule validation failed for update: %s", newRule.Key())
+	}
+
+	return nil
+}
+
+// ValidateSvcSvcRuleForDeletion validates a SvcSvcRule for deletion
+func (s *ValidationService) ValidateSvcSvcRuleForDeletion(ctx context.Context, rule models.SvcSvcRule) error {
+	reader, err := s.registry.Reader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get reader")
+	}
+	defer reader.Close()
+
+	validator := validation.NewDependencyValidator(reader)
+	ruleValidator := validator.GetSvcSvcRuleValidator()
+
+	// Basic existence check for deletion - rule should exist
+	if err := ruleValidator.ValidateExists(ctx, rule.SelfRef.ResourceIdentifier); err != nil {
+		return errors.Wrapf(err, "SvcSvcRule validation failed for deletion: %s", rule.Key())
+	}
+
+	return nil
+}
+
+// =============================================================================
 // NetworkBinding Validation
 // =============================================================================
 
@@ -638,7 +691,6 @@ func (s *ValidationService) ValidateMultipleResourcesForOperation(ctx context.Co
 // Validation With Existing Reader
 // =============================================================================
 
-// ValidateWithReader provides validation using an existing reader (for performance optimization)
 type ValidateWithReaderOptions struct {
 	Reader ports.Reader
 }
@@ -746,9 +798,7 @@ func (s *ValidationService) ValidateResourceDependencies(ctx context.Context, re
 // Helper Functions
 // =============================================================================
 
-// getNewOrChangedHosts returns hosts that are new or changed compared to old hosts list
-// This is used to avoid unnecessary SGROUP validation calls for hosts that haven't changed
-func getNewOrChangedHosts(oldHosts, newHosts []netguardv1beta1.ObjectReference) []netguardv1beta1.ObjectReference {
+func getNewOrChangedHosts(oldHosts, newHosts []netguardv1beta1.NamespacedObjectReference) []netguardv1beta1.NamespacedObjectReference {
 	if len(oldHosts) == 0 {
 		// All hosts are new
 		return newHosts
@@ -766,7 +816,7 @@ func getNewOrChangedHosts(oldHosts, newHosts []netguardv1beta1.ObjectReference) 
 	}
 
 	// Find new hosts that weren't in the old list
-	var newOrChangedHosts []netguardv1beta1.ObjectReference
+	var newOrChangedHosts []netguardv1beta1.NamespacedObjectReference
 	for _, newHost := range newHosts {
 		if !oldHostsMap[newHost.Name] {
 			// This is a new host, needs validation

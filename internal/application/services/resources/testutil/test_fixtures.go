@@ -3,9 +3,10 @@ package testutil
 import (
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // TestFixtures provides consistent test data for all test suites
@@ -142,15 +143,21 @@ var TestFixtures = struct {
 				Namespace: "test-namespace",
 			},
 		},
-		NetworkRef: v1beta1.ObjectReference{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "Network",
-			Name:       "test-network",
+		NetworkRef: v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "Network",
+				Name:       "test-network",
+			},
+			Namespace: "test-namespace",
 		},
-		AddressGroupRef: v1beta1.ObjectReference{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "AddressGroup",
-			Name:       "test-address-group",
+		AddressGroupRef: v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "AddressGroup",
+				Name:       "test-address-group",
+			},
+			Namespace: "test-namespace",
 		},
 		Meta: models.Meta{
 			CreationTS: metav1.NewTime(time.Now()),
@@ -297,15 +304,21 @@ func CreateTestNetworkBinding(name, namespace, networkName, addressGroupName str
 				Namespace: namespace,
 			},
 		},
-		NetworkRef: v1beta1.ObjectReference{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "Network",
-			Name:       networkName,
+		NetworkRef: v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "Network",
+				Name:       networkName,
+			},
+			Namespace: namespace,
 		},
-		AddressGroupRef: v1beta1.ObjectReference{
-			APIVersion: "netguard.sgroups.io/v1beta1",
-			Kind:       "AddressGroup",
-			Name:       addressGroupName,
+		AddressGroupRef: v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: "netguard.sgroups.io/v1beta1",
+				Kind:       "AddressGroup",
+				Name:       addressGroupName,
+			},
+			Namespace: namespace,
 		},
 		Meta: models.Meta{
 			CreationTS: metav1.NewTime(time.Now()),

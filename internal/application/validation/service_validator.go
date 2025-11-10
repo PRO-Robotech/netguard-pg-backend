@@ -23,8 +23,20 @@ func (v *ServiceValidator) ValidateReferences(ctx context.Context, service model
 	agValidator := NewAddressGroupValidator(v.reader)
 
 	for _, agRef := range service.AddressGroups {
-		if err := agValidator.ValidateExists(ctx, models.ResourceIdentifier{Name: agRef.Name, Namespace: agRef.Namespace}); err != nil {
+		agID := models.ResourceIdentifier{Name: agRef.Name, Namespace: agRef.Namespace}
+
+		if err := agValidator.ValidateExists(ctx, agID); err != nil {
 			return errors.Wrapf(err, "invalid address group reference in service %s", service.Key())
+		}
+
+		// ========================================
+		// ========================================
+		ag, err := v.reader.GetAddressGroupByID(ctx, agID)
+		if err != nil {
+			return errors.Wrapf(err, "failed to get address group %s for Ready check", agID.Key())
+		}
+		if !isAddressGroupReadyForService(ag) {
+			return fmt.Errorf("address group is not ready yet (Ready=False): %s - service can only reference Ready address groups", agID.Key())
 		}
 	}
 
@@ -43,6 +55,48 @@ func (v *ServiceValidator) ValidateNoDuplicateAddressGroups(addressGroups []mode
 			return fmt.Errorf("duplicate AddressGroup in spec.addressGroups: %s", key)
 		}
 		seen[key] = true
+	}
+
+	return nil
+}
+
+// ValidateNoAddressGroupConflictsWithBindings checks that AddressGroups from Service.spec.addressGroups
+// do NOT conflict with AddressGroups already bound via AddressGroupBindings
+func (v *ServiceValidator) ValidateNoAddressGroupConflictsWithBindings(ctx context.Context, service models.Service) error {
+	// Build map of AG from spec for quick lookup
+	specAGs := make(map[string]bool)
+	for _, ag := range service.AddressGroups {
+		key := fmt.Sprintf("%s/%s", ag.Namespace, ag.Name)
+		specAGs[key] = true
+	}
+
+	if len(specAGs) == 0 {
+		return nil
+	}
+
+	// Find all AddressGroupBindings for this Service
+	var conflictingAGs []string
+	err := v.reader.ListAddressGroupBindings(ctx, func(binding models.AddressGroupBinding) error {
+		// Only check bindings for this service
+		if binding.ServiceRefKey() != service.Key() {
+			return nil
+		}
+
+		// Check if this binding's AG is also in spec
+		agKey := fmt.Sprintf("%s/%s", binding.AddressGroupRef.Namespace, binding.AddressGroupRef.Name)
+		if specAGs[agKey] {
+			conflictingAGs = append(conflictingAGs, agKey)
+		}
+
+		return nil
+	}, nil)
+
+	if err != nil {
+		return errors.Wrap(err, "failed to list address group bindings for conflict check")
+	}
+
+	if len(conflictingAGs) > 0 {
+		return fmt.Errorf("AddressGroup conflict: the following AddressGroups are already bound via AddressGroupBinding and cannot be added to spec.addressGroups: %v", conflictingAGs)
 	}
 
 	return nil
@@ -99,26 +153,15 @@ func (v *ServiceValidator) ValidateNoDuplicatePorts(ingressPorts []models.Ingres
 	return nil
 }
 
-// ValidateWithoutDuplicateCheck validates service without checking for duplicate entity
-// Used in two scenarios:
-// 1. SyncServices - BEFORE commit to catch validation errors early
-// 2. ConditionManager - AFTER commit to set status conditions
 func (v *ServiceValidator) ValidateWithoutDuplicateCheck(ctx context.Context, service models.Service) error {
-	// PHASE 1: Skip duplicate entity check
-	// For SyncServices: entity may not exist yet or may be updating
-	// For ConditionManager: entity already committed to database
-
-	// PHASE 2: Validate references (existing validation)
 	if err := v.ValidateReferences(ctx, service); err != nil {
 		return err
 	}
 
-	// PHASE 3: Validate internal port consistency (existing validation)
 	if err := v.ValidateNoDuplicatePorts(service.IngressPorts); err != nil {
 		return err
 	}
 
-	// PHASE 4: Validate port conflicts with other services (CRITICAL)
 	if err := v.CheckPortOverlaps(ctx, service); err != nil {
 		return err
 	}
@@ -195,10 +238,7 @@ func (v *ServiceValidator) CheckPortOverlaps(ctx context.Context, service models
 	return nil
 }
 
-// ValidateForCreation validates a service before creation
 func (v *ServiceValidator) ValidateForCreation(ctx context.Context, service models.Service) error {
-	// PHASE 1: Check for duplicate entity (CRITICAL FIX for overwrite issue)
-	// This prevents creation of entities with the same namespace/name combination
 	keyExtractor := func(entity interface{}) string {
 		if svc, ok := entity.(*models.Service); ok {
 			return svc.Key()
@@ -207,25 +247,25 @@ func (v *ServiceValidator) ValidateForCreation(ctx context.Context, service mode
 	}
 
 	if err := v.BaseValidator.ValidateEntityDoesNotExistForCreation(ctx, service.ResourceIdentifier, keyExtractor); err != nil {
-		return err // Return the detailed EntityAlreadyExistsError with logging and context
+		return err
 	}
 
-	// PHASE 2.5: Validate no duplicate AddressGroups
 	if err := v.ValidateNoDuplicateAddressGroups(service.AddressGroups); err != nil {
 		return err
 	}
 
-	// PHASE 3: Validate references
+	if err := v.ValidateNoAddressGroupConflictsWithBindings(ctx, service); err != nil {
+		return err
+	}
+
 	if err := v.ValidateReferences(ctx, service); err != nil {
 		return err
 	}
 
-	// PHASE 4: Validate internal port consistency (existing validation)
 	if err := v.ValidateNoDuplicatePorts(service.IngressPorts); err != nil {
 		return err
 	}
 
-	// PHASE 5: Validate port conflicts with other services (existing validation)
 	if err := v.CheckPortOverlaps(ctx, service); err != nil {
 		return err
 	}
@@ -283,11 +323,10 @@ func (v *ServiceValidator) ValidateForUpdate(ctx context.Context, oldService, ne
 		return err
 	}
 
-	// 🎯 SERVICE BUSINESS RULE: Services CAN modify ports and description when Ready=True
-	// This matches k8s-controller service_webhook.go behavior - NO Ready=True spec blocking
-	// Only AddressGroupBinding, ServiceAlias, RuleS2S have spec immutability when Ready=True
-
-	// Continue with existing validation logic (port overlaps, duplicates, references)
+	// Validate no conflicts between spec.addressGroups and existing bindings
+	if err := v.ValidateNoAddressGroupConflictsWithBindings(ctx, newService); err != nil {
+		return err
+	}
 
 	// Проверяем ссылки
 	if err := v.ValidateReferences(ctx, newService); err != nil {
@@ -320,9 +359,7 @@ func (v *ServiceValidator) ValidateForUpdate(ctx context.Context, oldService, ne
 	return nil
 }
 
-// CheckDependencies checks if there are dependencies before deleting a service
 func (v *ServiceValidator) CheckDependencies(ctx context.Context, id models.ResourceIdentifier) error {
-	// PHASE 1: Check ServiceAliases referencing the service to be deleted
 	hasAliases := false
 	err := v.reader.ListServiceAliases(ctx, func(alias models.ServiceAlias) error {
 		if alias.ServiceRefKey() == id.Key() {
@@ -339,20 +376,50 @@ func (v *ServiceValidator) CheckDependencies(ctx context.Context, id models.Reso
 		return NewDependencyExistsError("service", id.Key(), "service_alias")
 	}
 
-	// PHASE 2: Check if service has any associated AddressGroups (from spec or bindings)
 	service, err := v.reader.GetServiceByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, ports.ErrNotFound) {
-			// Service doesn't exist, nothing to check
 			return nil
 		}
 		return errors.Wrap(err, "failed to get service for dependency check")
 	}
 
-	// If xAggregatedAddressGroups is not empty, cannot delete
 	if len(service.AggregatedAddressGroups) > 0 {
 		return NewDependencyExistsError("service", id.Key(), "address_groups")
 	}
 
+	// Also check AddressGroupBinding references to avoid deleting services that are still bound.
+	hasBindings := false
+	err = v.reader.ListAddressGroupBindings(ctx, func(binding models.AddressGroupBinding) error {
+		if binding.ServiceRef.Namespace == id.Namespace && binding.ServiceRef.Name == id.Name {
+			hasBindings = true
+		}
+		return nil
+	}, nil)
+
+	if err != nil {
+		return errors.Wrap(err, "failed to check address group bindings")
+	}
+
+	if hasBindings {
+		return NewDependencyExistsError("service", id.Key(), "address_group_bindings")
+	}
+
 	return nil
+}
+
+// ========================================
+// ========================================
+
+// isAddressGroupReadyForService checks if AddressGroup has Ready=True condition
+func isAddressGroupReadyForService(ag *models.AddressGroup) bool {
+	if ag == nil || ag.Meta.Conditions == nil {
+		return false
+	}
+	for _, cond := range ag.Meta.Conditions {
+		if cond.Type == "Ready" && cond.Status == "True" {
+			return true
+		}
+	}
+	return false
 }

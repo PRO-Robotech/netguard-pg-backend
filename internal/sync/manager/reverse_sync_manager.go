@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"netguard-pg-backend/internal/sync/detector"
+	"netguard-pg-backend/internal/sync/monitor"
 )
 
 // EntityProcessorInterface defines the interface for entity processors
@@ -15,22 +15,24 @@ type EntityProcessorInterface interface {
 	GetEntityType() string
 
 	// ProcessChanges processes changes for entities of this type
-	ProcessChanges(ctx context.Context, event detector.ChangeEvent) error
+	ProcessChanges(ctx context.Context, event monitor.SyncChangeEvent) error
 }
 
 // ReverseSyncManager manages the reverse synchronization system
+// It implements monitor.ConnectionListener to react to SGROUP connection events
 type ReverseSyncManager struct {
 	mu sync.RWMutex
 
 	// Components
-	changeDetector detector.ChangeDetector
-	processors     map[string]EntityProcessorInterface
-	config         ReverseSyncConfig
+	connectionMonitor *monitor.SGroupConnectionMonitor
+	processors        map[string]EntityProcessorInterface
+	config            ReverseSyncConfig
 
 	// State
-	isRunning bool
-	ctx       context.Context
-	cancel    context.CancelFunc
+	isRunning   bool
+	isConnected bool // tracks SGROUP connection state
+	ctx         context.Context
+	cancel      context.CancelFunc
 
 	// Statistics
 	stats ReverseSyncStats
@@ -97,13 +99,14 @@ func DefaultReverseSyncConfig() ReverseSyncConfig {
 
 // NewReverseSyncManager creates a new reverse sync manager
 func NewReverseSyncManager(
-	changeDetector detector.ChangeDetector,
+	connectionMonitor *monitor.SGroupConnectionMonitor,
 	config ReverseSyncConfig,
 ) *ReverseSyncManager {
 	return &ReverseSyncManager{
-		changeDetector: changeDetector,
-		processors:     make(map[string]EntityProcessorInterface),
-		config:         config,
+		connectionMonitor: connectionMonitor,
+		processors:        make(map[string]EntityProcessorInterface),
+		config:            config,
+		isConnected:       false,
 		stats: ReverseSyncStats{
 			EntityCounts: make(map[string]EntityStats),
 		},
@@ -164,17 +167,9 @@ func (m *ReverseSyncManager) Start(ctx context.Context) error {
 		m.stats.StartTime = time.Now()
 	}
 
-	// Subscribe to change detector
-	err := m.changeDetector.Subscribe(m)
-	if err != nil {
-		return fmt.Errorf("failed to subscribe to change detector: %w", err)
-	}
-
-	// Start change detector
-	err = m.changeDetector.Start(m.ctx)
-	if err != nil {
-		m.changeDetector.Unsubscribe(m)
-		return fmt.Errorf("failed to start change detector: %w", err)
+	// Subscribe to connection monitor
+	if m.connectionMonitor != nil {
+		m.connectionMonitor.Subscribe(m)
 	}
 
 	m.isRunning = true
@@ -201,14 +196,9 @@ func (m *ReverseSyncManager) Stop() error {
 		m.cancel()
 	}
 
-	// Stop change detector
-	err := m.changeDetector.Stop()
-	if err != nil {
-	}
-
-	// Unsubscribe from change detector
-	err = m.changeDetector.Unsubscribe(m)
-	if err != nil {
+	// Unsubscribe from connection monitor
+	if m.connectionMonitor != nil {
+		m.connectionMonitor.Unsubscribe("ReverseSyncManager")
 	}
 
 	m.isRunning = false
@@ -216,12 +206,57 @@ func (m *ReverseSyncManager) Stop() error {
 	return nil
 }
 
-// OnChange implements detector.ChangeHandler interface
-func (m *ReverseSyncManager) OnChange(ctx context.Context, event detector.ChangeEvent) error {
+// OnConnectionEvent implements monitor.ConnectionListener interface
+func (m *ReverseSyncManager) OnConnectionEvent(event monitor.ConnectionEvent) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	switch event.Type {
+	case monitor.EventConnected:
+		m.isConnected = true
+		// Connection established - ready to process changes
+
+	case monitor.EventDisconnected:
+		m.isConnected = false
+		// Connection lost - stop processing until reconnection
+
+	case monitor.EventTimestamp:
+		// Only process if connected and running
+		if !m.isConnected || !m.isRunning {
+			return
+		}
+
+		// Convert ConnectionEvent to SyncChangeEvent
+		syncEvent := monitor.SyncChangeEvent{
+			Timestamp: event.Timestamp.AsTime(),
+			Source:    "sgroup",
+			Metadata:  map[string]interface{}{},
+		}
+
+		// Process change event asynchronously (don't block the listener)
+		go m.processChange(syncEvent)
+	}
+}
+
+// GetListenerName implements monitor.ConnectionListener interface
+func (m *ReverseSyncManager) GetListenerName() string {
+	return "ReverseSyncManager"
+}
+
+// processChange processes a sync change event
+func (m *ReverseSyncManager) processChange(event monitor.SyncChangeEvent) {
 	startTime := time.Now()
 
 	m.updateEventStats(event)
 
+	// Use manager context for processing
+	m.mu.RLock()
+	ctx := m.ctx
+	m.mu.RUnlock()
+
+	if ctx == nil {
+		return
+	}
 
 	// Create processing context with timeout
 	processCtx, cancel := context.WithTimeout(ctx, m.config.ProcessingTimeout)
@@ -278,33 +313,19 @@ func (m *ReverseSyncManager) OnChange(ctx context.Context, event detector.Change
 	// Handle errors
 	if len(processingErrors) > 0 {
 		m.updateFailedEventStats()
-
-		var errorMsg string
-		for i, err := range processingErrors {
-			if i == 0 {
-				errorMsg = err.Error()
-			} else {
-				errorMsg += "; " + err.Error()
-			}
-		}
-
-		return fmt.Errorf("processing failed for some entities: %s", errorMsg)
+	} else {
+		m.updateProcessedEventStats()
 	}
-
-	m.updateProcessedEventStats()
-
-	return nil
 }
 
 // processWithProcessor processes an event with a specific processor
 func (m *ReverseSyncManager) processWithProcessor(
 	ctx context.Context,
 	processor EntityProcessorInterface,
-	event detector.ChangeEvent,
+	event monitor.SyncChangeEvent,
 	entityType string,
 ) error {
 	startTime := time.Now()
-
 
 	err := processor.ProcessChanges(ctx, event)
 
@@ -392,7 +413,7 @@ func (m *ReverseSyncManager) performHealthCheck() {
 }
 
 // updateEventStats updates event statistics
-func (m *ReverseSyncManager) updateEventStats(event detector.ChangeEvent) {
+func (m *ReverseSyncManager) updateEventStats(event monitor.SyncChangeEvent) {
 	if !m.config.EnableStatistics {
 		return
 	}

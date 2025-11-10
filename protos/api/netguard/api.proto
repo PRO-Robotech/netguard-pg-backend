@@ -59,6 +59,14 @@ message Service {
   repeated AddressGroupRef address_groups = 5;
   Meta meta = 6;
   repeated AddressGroupReference aggregated_address_groups = 7;
+
+  // XSvcSvcRules - READ-ONLY field populated by PostgreSQL triggers
+  // Contains all service-to-service rules where this Service participates
+  XSvcSvcRules x_svcsvc_rules = 8;
+
+  // XSvcFqdnRules - READ-ONLY field populated by PostgreSQL triggers
+  // Contains all service-to-FQDN rules where this Service participates as source
+  XSvcFqdnRules x_svcfqdn_rules = 9;
 }
 
 // IngressPort - defines a port configuration for ingress traffic
@@ -88,8 +96,9 @@ message ObjectReference {
 
 // HostReference represents a reference to a Host with additional metadata
 message HostReference {
-  // Reference to the Host object (namespace is implied from AddressGroup context)
-  ObjectReference ref = 1;
+  // Reference to the Host object
+  // Host namespace MUST match AddressGroup namespace
+  NamespacedObjectReference ref = 1;
 
   // UUID of the host (for efficient lookup and SGroup sync)
   string uuid = 2;
@@ -120,6 +129,21 @@ message NamespacedObjectReference {
 
   // Namespace of the referenced object
   string namespace = 4;
+}
+
+// XSvcSvcRules - READ-ONLY field for Service resource containing all rules where Service participates
+message XSvcSvcRules {
+  // AsServiceFrom contains rules where this Service is the source
+  repeated ResourceIdentifier as_service_from = 1;
+
+  // AsServiceTo contains rules where this Service is the destination
+  repeated ResourceIdentifier as_service_to = 2;
+}
+
+// XSvcFqdnRules - READ-ONLY field for Service resource containing all FQDN rules referencing the Service
+message XSvcFqdnRules {
+  // Rules where this Service is referenced by SvcFqdnRule as source
+  repeated ResourceIdentifier rules = 1;
 }
 
 // Condition - kubernetes condition for resource status
@@ -179,6 +203,10 @@ message Meta {
   // ManagedFields stores Server-Side Apply field ownership information
   // Compatible with k8s.io/apimachinery/pkg/apis/meta/v1.ManagedFieldsEntry
   repeated ManagedFieldsEntry managed_fields = 10;
+
+  // DeletionTimestamp is set when resource is being deleted (soft delete)
+  // Null value means resource is not being deleted
+  google.protobuf.Timestamp deletion_ts = 11;
 }
 
 // AddressGroupRef - reference to an address group
@@ -227,7 +255,7 @@ message Network {
 
   // Status fields
   bool is_bound = 4;                               // Whether the network is bound to an AddressGroup
-  ObjectReference binding_ref = 5;                 // Reference to the NetworkBinding
+  NamespacedObjectReference binding_ref = 5;       // Reference to the NetworkBinding
   NamespacedObjectReference address_group_ref = 6; // Reference to the bound AddressGroup
 }
 
@@ -245,7 +273,10 @@ message AddressGroup {
   bool trace = 4;                 // Whether to enable trace
   repeated NetworkItem networks = 5; // Networks associated with this address group
   Meta meta = 6;
-  repeated ObjectReference hosts = 7; // Hosts that belong to this address group (exclusively)
+  // Hosts that belong exclusively to this AddressGroup
+  // Each host can belong to only one AddressGroup
+  // Host namespace MUST match AddressGroup namespace
+  repeated NamespacedObjectReference hosts = 7;
   string address_group_name = 8;  // Computed address group name (e.g., "namespace/name")
   repeated HostReference aggregated_hosts = 9; // All hosts from any source (spec + HostBinding)
 }
@@ -271,8 +302,8 @@ message NetworkBinding {
     }
   };
   ResourceIdentifier self_ref = 1;
-  ObjectReference network_ref = 2;  // Reference to the Network resource
-  ObjectReference address_group_ref = 3;  // Reference to the AddressGroup resource
+  NamespacedObjectReference network_ref = 2;  // Reference to the Network resource
+  NamespacedObjectReference address_group_ref = 3;  // Reference to the AddressGroup resource
   NetworkItem network_item = 4;  // Network item details
   Meta meta = 5;
 }
@@ -296,8 +327,8 @@ message Host {
   string host_name_sync = 4;                   // Host name for synchronization (avoiding conflict with hostname)
   string address_group_name = 5;               // Name of bound AddressGroup
   bool is_bound = 6;                           // Whether the host is bound to an AddressGroup
-  ObjectReference binding_ref = 7;             // Reference to the HostBinding
-  ObjectReference address_group_ref = 8;       // Reference to the bound AddressGroup
+  NamespacedObjectReference binding_ref = 7;   // Reference to the HostBinding (includes namespace)
+  NamespacedObjectReference address_group_ref = 8; // Reference to the bound AddressGroup (includes namespace)
   repeated IPItem ip_list = 10;                // List of IP addresses from SGROUP synchronization
 
   Meta meta = 11;
@@ -419,6 +450,48 @@ message PortSpec {
   string destination = 2;
 }
 
+// SvcSvcRule - service-to-service firewall rule
+message SvcSvcRule {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      required: ["self_ref", "service_from", "service_to", "action"]
+    }
+  };
+  ResourceIdentifier self_ref = 1;
+  ResourceIdentifier service_from = 2;  // Source service reference
+  ResourceIdentifier service_to = 3;    // Destination service reference
+  RuleAction action = 4;                // Firewall action (ACCEPT or DROP)
+  int32 priority = 5;                   // Rule priority (0-1000, lower = higher priority)
+  bool logs = 6;                        // Enable traffic logging
+  bool trace = 7;                       // Enable detailed tracing
+  Meta meta = 8;                        // Kubernetes metadata
+}
+
+// FqdnPortSpec - port specification for service-to-FQDN rules
+message FqdnPortSpec {
+  string port = 1;  // Single port or port range (e.g., "80", "1000-2000", "443,8080")
+}
+
+// SvcFqdnRule - service-to-FQDN firewall rule
+message SvcFqdnRule {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      required: ["self_ref", "service_from", "fqdn", "transport"]
+    }
+  };
+  ResourceIdentifier self_ref = 1;
+  NamespacedObjectReference service_from = 2; // Source service reference (NamespacedObjectReference)
+  string fqdn = 3;                            // Target FQDN hostname
+  Networks.NetIP.Transport transport = 4;     // Transport protocol (TCP/UDP)
+  repeated FqdnPortSpec ports = 5;            // Port expressions (normalized)
+  bool logs = 6;                              // Enable logging
+  bool trace = 7;                             // Enable tracing
+  RuleAction action = 8;                      // Firewall action (ACCEPT/DROP)
+  int32 priority = 9;                         // Rule priority (0-1000)
+  string description = 10;                    // Optional description (Netguard-only)
+  Meta meta = 11;                             // Kubernetes metadata
+}
+
 // SyncStatusResp - sync status
 message SyncStatusResp {
   google.protobuf.Timestamp updated_at = 1;
@@ -497,6 +570,16 @@ message SyncHosts {
 // SyncHostBindings - subject of Host Bindings to sync
 message SyncHostBindings {
   repeated HostBinding host_bindings = 1;
+}
+
+// SyncSvcSvcRules - subject of SvcSvcRules to sync
+message SyncSvcSvcRules {
+  repeated SvcSvcRule svcsvc_rules = 1;
+}
+
+// SyncSvcFqdnRules - subject of SvcFqdnRules to sync
+message SyncSvcFqdnRules {
+  repeated SvcFqdnRule svcfqdn_rules = 1;
 }
 
 
@@ -742,6 +825,46 @@ message GetHostBindingResp {
   HostBinding host_binding = 1;
 }
 
+// ListSvcSvcRulesReq - request to list SvcSvcRules
+message ListSvcSvcRulesReq {
+  repeated ResourceIdentifier identifiers = 1;
+}
+
+// ListSvcSvcRulesResp - response with list of SvcSvcRules
+message ListSvcSvcRulesResp {
+  repeated SvcSvcRule items = 1;
+}
+
+// GetSvcSvcRuleReq - request to get a specific SvcSvcRule
+message GetSvcSvcRuleReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetSvcSvcRuleResp - response with a specific SvcSvcRule
+message GetSvcSvcRuleResp {
+  SvcSvcRule svcsvc_rule = 1;
+}
+
+// ListSvcFqdnRulesReq - request to list SvcFqdnRules
+message ListSvcFqdnRulesReq {
+  repeated ResourceIdentifier identifiers = 1;
+}
+
+// ListSvcFqdnRulesResp - response with list of SvcFqdnRules
+message ListSvcFqdnRulesResp {
+  repeated SvcFqdnRule items = 1;
+}
+
+// GetSvcFqdnRuleReq - request to get a specific SvcFqdnRule
+message GetSvcFqdnRuleReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetSvcFqdnRuleResp - response with a specific SvcFqdnRule
+message GetSvcFqdnRuleResp {
+  SvcFqdnRule svcfqdn_rule = 1;
+}
+
 // SyncReq - request to sync
 message SyncReq {
   // Sync operation to apply
@@ -785,7 +908,24 @@ message SyncReq {
     // Subject of Host Bindings
     SyncHostBindings host_bindings = 13;
 
+    // Subject of SvcSvcRules
+    SyncSvcSvcRules svcsvc_rules = 14;
+
+    // Subject of SvcFqdnRules
+    SyncSvcFqdnRules svcfqdn_rules = 15;
   }
+}
+
+// MarkForDeletionReq - request to mark a resource for soft deletion
+message MarkForDeletionReq {
+  // Namespace of the resource
+  string namespace = 1;
+
+  // Name of the resource
+  string name = 2;
+
+  // Kind of the resource (e.g., "AddressGroup", "Host", "Network")
+  string kind = 3;
 }
 
 // Service definition
@@ -1052,6 +1192,59 @@ service NetguardService {
     };
     option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
       description: "GetHostBinding: gets a specific host binding by ID";
+    };
+  }
+
+  // ListSvcSvcRules - gets list of SvcSvcRules
+  rpc ListSvcSvcRules(ListSvcSvcRulesReq) returns (ListSvcSvcRulesResp) {
+    option (google.api.http) = {
+      get: "/v1/svcsvc-rules"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "ListSvcSvcRules: gets list of service-to-service rules";
+    };
+  }
+
+  // GetSvcSvcRule - gets a specific SvcSvcRule by ID
+  rpc GetSvcSvcRule(GetSvcSvcRuleReq) returns (GetSvcSvcRuleResp) {
+    option (google.api.http) = {
+      get: "/v1/svcsvc-rules/{identifier.namespace}/{identifier.name}"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "GetSvcSvcRule: gets a specific service-to-service rule by ID";
+    };
+  }
+
+  // ListSvcFqdnRules - gets list of SvcFqdnRules
+  rpc ListSvcFqdnRules(ListSvcFqdnRulesReq) returns (ListSvcFqdnRulesResp) {
+    option (google.api.http) = {
+      get: "/v1/svcfqdn-rules"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "ListSvcFqdnRules: gets list of service-to-FQDN rules";
+    };
+  }
+
+  // GetSvcFqdnRule - gets a specific SvcFqdnRule by ID
+  rpc GetSvcFqdnRule(GetSvcFqdnRuleReq) returns (GetSvcFqdnRuleResp) {
+    option (google.api.http) = {
+      get: "/v1/svcfqdn-rules/{identifier.namespace}/{identifier.name}"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "GetSvcFqdnRule: gets a specific service-to-FQDN rule by ID";
+    };
+  }
+
+  // MarkForDeletion - soft delete: marks resource for deletion without immediate physical removal
+  // Sets deletionTimestamp and Ready=False (Terminating) status
+  // Physical deletion happens after SGROUP synchronization
+  rpc MarkForDeletion(MarkForDeletionReq) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/v1/resources/{namespace}/{name}/mark-for-deletion"
+      body: "*"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "MarkForDeletion: marks a resource for soft deletion";
     };
   }
 }

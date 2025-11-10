@@ -1,5 +1,5 @@
 /*
-Copyright 2024 The PRO-Robotech Authors.
+Copyright 2024 The Netguard Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -74,14 +74,6 @@ type IEAgAgRuleListerExpansion interface{}
 // IEAgAgRuleNamespaceLister.
 type IEAgAgRuleNamespaceListerExpansion interface{}
 
-// NetworkListerExpansion allows custom methods to be added to
-// NetworkLister.
-type NetworkListerExpansion interface{}
-
-// NetworkNamespaceListerExpansion allows custom methods to be added to
-// NetworkNamespaceLister.
-type NetworkNamespaceListerExpansion interface{}
-
 // NetworkBindingListerExpansion allows custom methods to be added to
 // NetworkBindingLister.
 type NetworkBindingListerExpansion interface{}
@@ -113,3 +105,19 @@ type ServiceAliasListerExpansion interface{}
 // ServiceAliasNamespaceListerExpansion allows custom methods to be added to
 // ServiceAliasNamespaceLister.
 type ServiceAliasNamespaceListerExpansion interface{}
+
+// SvcFqdnRuleListerExpansion allows custom methods to be added to
+// SvcFqdnRuleLister.
+type SvcFqdnRuleListerExpansion interface{}
+
+// SvcFqdnRuleNamespaceListerExpansion allows custom methods to be added to
+// SvcFqdnRuleNamespaceLister.
+type SvcFqdnRuleNamespaceListerExpansion interface{}
+
+// SvcSvcRuleListerExpansion allows custom methods to be added to
+// SvcSvcRuleLister.
+type SvcSvcRuleListerExpansion interface{}
+
+// SvcSvcRuleNamespaceListerExpansion allows custom methods to be added to
+// SvcSvcRuleNamespaceLister.
+type SvcSvcRuleNamespaceListerExpansion interface{}

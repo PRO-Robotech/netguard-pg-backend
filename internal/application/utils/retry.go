@@ -119,6 +119,18 @@ func IsRetryableError(err error) bool {
 		return false
 	}
 
+	errMsg := strings.ToLower(err.Error())
+
+	if strings.Contains(errMsg, "sqlstate 23") || // Integrity constraint violations (23xxx)
+		strings.Contains(errMsg, "constraint") && strings.Contains(errMsg, "violat") ||
+		strings.Contains(errMsg, "duplicate key") ||
+		strings.Contains(errMsg, "unique constraint") ||
+		strings.Contains(errMsg, "foreign key constraint") ||
+		strings.Contains(errMsg, "check constraint") ||
+		strings.Contains(errMsg, "exclusion constraint") {
+		return false
+	}
+
 	// Проверяем gRPC ошибки
 	if st, ok := status.FromError(err); ok {
 		switch st.Code() {
@@ -127,6 +139,12 @@ func IsRetryableError(err error) bool {
 		case codes.Internal:
 			// Проверяем сообщение об ошибке для временных ошибок
 			msg := strings.ToLower(st.Message())
+			// Сначала исключаем постоянные ошибки
+			if strings.Contains(msg, "sqlstate 23") ||
+				strings.Contains(msg, "constraint") && strings.Contains(msg, "violat") {
+				return false
+			}
+			// Затем проверяем временные
 			return strings.Contains(msg, "temporary") ||
 				strings.Contains(msg, "timeout") ||
 				strings.Contains(msg, "connection") ||
@@ -134,8 +152,7 @@ func IsRetryableError(err error) bool {
 		}
 	}
 
-	// Проверяем обычные ошибки
-	errMsg := strings.ToLower(err.Error())
+	// Проверяем обычные ошибки на временные проблемы
 	return strings.Contains(errMsg, "temporary") ||
 		strings.Contains(errMsg, "timeout") ||
 		strings.Contains(errMsg, "connection") ||

@@ -128,13 +128,11 @@ func (c *sgroupsClient) Sync(ctx context.Context, req *types.SyncRequest) error 
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
 
-	// Convert sync request to protobuf format
 	pbReq, err := c.convertSyncRequestToProto(req)
 	if err != nil {
 		return fmt.Errorf("failed to convert sync request to proto: %w", err)
 	}
 
-	// Real GRPC call to sgroups service
 	_, err = c.client.Sync(ctx, pbReq)
 	return err
 }
@@ -178,17 +176,6 @@ func (c *sgroupsClient) GetStatuses(ctx context.Context) (chan *timestamppb.Time
 	return statusChan, nil
 }
 
-// Health checks the health of sgroups service
-func (c *sgroupsClient) Health(ctx context.Context) error {
-	// Create context with timeout
-	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
-	defer cancel()
-
-	// Real health check using SyncStatuses
-	_, err := c.client.SyncStatuses(ctx, &emptypb.Empty{})
-	return err
-}
-
 // GetHostsByUUIDs retrieves hosts from SGROUP by their UUIDs
 func (c *sgroupsClient) GetHostsByUUIDs(ctx context.Context, uuids []string) ([]*pb.Host, error) {
 	// Create context with timeout
@@ -197,9 +184,9 @@ func (c *sgroupsClient) GetHostsByUUIDs(ctx context.Context, uuids []string) ([]
 
 	// Create request with ByUID filter
 	req := &pb.ListHostsReq{
-		Criteria: &pb.ListHostsReq_ByUuid{
-			ByUuid: &pb.ListHostsReq_ByUID{
-				UIDs: uuids,
+		Criteria: &pb.ListHostsReq_ByUUID_{
+			ByUUID: &pb.ListHostsReq_ByUUID{
+				UUIDs: uuids,
 			},
 		},
 	}
@@ -323,6 +310,26 @@ func (c *sgroupsClient) convertSyncRequestToProto(req *types.SyncRequest) (*pb.S
 			}
 		} else {
 			return nil, fmt.Errorf("invalid data type for IEAgAgRules subject, expected *pb.SyncIESgSgRules or *models.IEAgAgRule, got %T", req.Data)
+		}
+	case types.SyncSubjectTypeServices:
+		// Support batch SyncServices
+		if services, ok := req.Data.(*pb.SyncServices); ok {
+			pbReq.Subject = &pb.SyncReq_Services{Services: services}
+		} else {
+			return nil, fmt.Errorf("invalid data type for Services subject, expected *pb.SyncServices, got %T", req.Data)
+		}
+	case types.SyncSubjectTypeSvcSvcRules:
+		// Support batch SyncSvcSvcRules
+		if rules, ok := req.Data.(*pb.SyncSvcSvcRules); ok {
+			pbReq.Subject = &pb.SyncReq_ServiceRules{ServiceRules: rules}
+		} else {
+			return nil, fmt.Errorf("invalid data type for SvcSvcRules subject, expected *pb.SyncSvcSvcRules, got %T", req.Data)
+		}
+	case types.SyncSubjectTypeSvcFqdnRules:
+		if rules, ok := req.Data.(*pb.SyncSvcFqdnRules); ok {
+			pbReq.Subject = &pb.SyncReq_SvcFqdnRules{SvcFqdnRules: rules}
+		} else {
+			return nil, fmt.Errorf("invalid data type for SvcFqdnRules subject, expected *pb.SyncSvcFqdnRules, got %T", req.Data)
 		}
 	default:
 		return nil, fmt.Errorf("unknown subject type: %s", req.SubjectType)

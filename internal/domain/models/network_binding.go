@@ -18,8 +18,8 @@ type NetworkBinding struct {
 	SelfRef
 
 	// Specification
-	NetworkRef      v1beta1.ObjectReference `json:"networkRef"`
-	AddressGroupRef v1beta1.ObjectReference `json:"addressGroupRef"`
+	NetworkRef      v1beta1.NamespacedObjectReference `json:"networkRef"`
+	AddressGroupRef v1beta1.NamespacedObjectReference `json:"addressGroupRef"`
 
 	// NetworkItem contains the network information
 	NetworkItem NetworkItem `json:"networkItem"`
@@ -29,7 +29,7 @@ type NetworkBinding struct {
 }
 
 // NewNetworkBinding creates a new NetworkBinding with default values
-func NewNetworkBinding(name, namespace string, networkRef, addressGroupRef v1beta1.ObjectReference) *NetworkBinding {
+func NewNetworkBinding(name, namespace string, networkRef, addressGroupRef v1beta1.NamespacedObjectReference) *NetworkBinding {
 	return &NetworkBinding{
 		SelfRef: SelfRef{
 			ResourceIdentifier: ResourceIdentifier{

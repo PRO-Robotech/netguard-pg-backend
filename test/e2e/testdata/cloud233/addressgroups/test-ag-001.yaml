@@ -1,0 +1,12 @@
+apiVersion: netguard.sgroups.io/v1beta1
+kind: AddressGroup
+metadata:
+  name: test-ag-001
+  namespace: incloud-sgroups
+  labels:
+    test: cloud233
+    scenario: ag-create-sync
+spec:
+  defaultAction: ACCEPT
+  logs: false
+  trace: false

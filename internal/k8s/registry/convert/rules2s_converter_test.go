@@ -111,17 +111,17 @@ func TestRuleS2SConverter_IEAgAgRuleRefs_Conversion(t *testing.T) {
 			Traffic: models.INGRESS,
 			Trace:   true, // Set trace to true for the test
 			ServiceLocalRef: netguardv1beta1.NamespacedObjectReference{
-			ObjectReference: netguardv1beta1.ObjectReference{
-				Name: "backend",
+				ObjectReference: netguardv1beta1.ObjectReference{
+					Name: "backend",
+				},
+				Namespace: "default",
 			},
-			Namespace: "default",
-		},
 			ServiceRef: netguardv1beta1.NamespacedObjectReference{
-		ObjectReference: netguardv1beta1.ObjectReference{
-			Name: "frontend",
-		},
-		Namespace: "default",
-	},
+				ObjectReference: netguardv1beta1.ObjectReference{
+					Name: "frontend",
+				},
+				Namespace: "default",
+			},
 			IEAgAgRuleRefs: []netguardv1beta1.NamespacedObjectReference{
 				{ObjectReference: netguardv1beta1.ObjectReference{Name: "ieagag-rule-1"}, Namespace: "default"},
 				{ObjectReference: netguardv1beta1.ObjectReference{Name: "ieagag-rule-2"}, Namespace: "default"},
@@ -170,17 +170,17 @@ func TestRuleS2SConverter_IEAgAgRuleRefs_Conversion(t *testing.T) {
 			},
 			Traffic: models.EGRESS,
 			ServiceLocalRef: netguardv1beta1.NamespacedObjectReference{
-			ObjectReference: netguardv1beta1.ObjectReference{
-				Name: "backend",
+				ObjectReference: netguardv1beta1.ObjectReference{
+					Name: "backend",
+				},
+				Namespace: "default",
 			},
-			Namespace: "default",
-		},
 			ServiceRef: netguardv1beta1.NamespacedObjectReference{
-		ObjectReference: netguardv1beta1.ObjectReference{
-			Name: "frontend",
-		},
-		Namespace: "default",
-	},
+				ObjectReference: netguardv1beta1.ObjectReference{
+					Name: "frontend",
+				},
+				Namespace: "default",
+			},
 			IEAgAgRuleRefs: []netguardv1beta1.NamespacedObjectReference{}, // Пустые рефы
 		}
 
@@ -275,17 +275,17 @@ func TestRuleS2SConverter_TrafficEnum_Conversion(t *testing.T) {
 					},
 					Traffic: tc.domainTraffic,
 					ServiceLocalRef: netguardv1beta1.NamespacedObjectReference{
-			ObjectReference: netguardv1beta1.ObjectReference{
-				Name: "backend",
-			},
-			Namespace: "default",
-		},
+						ObjectReference: netguardv1beta1.ObjectReference{
+							Name: "backend",
+						},
+						Namespace: "default",
+					},
 					ServiceRef: netguardv1beta1.NamespacedObjectReference{
-		ObjectReference: netguardv1beta1.ObjectReference{
-			Name: "frontend",
-		},
-		Namespace: "default",
-	},
+						ObjectReference: netguardv1beta1.ObjectReference{
+							Name: "frontend",
+						},
+						Namespace: "default",
+					},
 				}
 
 				// Act
@@ -336,17 +336,17 @@ func TestRuleS2SConverter_TrafficEnum_Conversion(t *testing.T) {
 			},
 			Traffic: "INVALID_TRAFFIC", // Невалидное значение
 			ServiceLocalRef: netguardv1beta1.NamespacedObjectReference{
-			ObjectReference: netguardv1beta1.ObjectReference{
-				Name: "backend",
+				ObjectReference: netguardv1beta1.ObjectReference{
+					Name: "backend",
+				},
+				Namespace: "default",
 			},
-			Namespace: "default",
-		},
 			ServiceRef: netguardv1beta1.NamespacedObjectReference{
-		ObjectReference: netguardv1beta1.ObjectReference{
-			Name: "frontend",
-		},
-		Namespace: "default",
-	},
+				ObjectReference: netguardv1beta1.ObjectReference{
+					Name: "frontend",
+				},
+				Namespace: "default",
+			},
 		}
 
 		// Act
@@ -371,17 +371,17 @@ func TestRuleS2SConverter_RoundTrip_PreservesData(t *testing.T) {
 			},
 			Traffic: models.INGRESS,
 			ServiceLocalRef: netguardv1beta1.NamespacedObjectReference{
-			ObjectReference: netguardv1beta1.ObjectReference{
-				Name: "backend",
+				ObjectReference: netguardv1beta1.ObjectReference{
+					Name: "backend",
+				},
+				Namespace: "default",
 			},
-			Namespace: "default",
-		},
 			ServiceRef: netguardv1beta1.NamespacedObjectReference{
-		ObjectReference: netguardv1beta1.ObjectReference{
-			Name: "frontend",
-		},
-		Namespace: "default",
-	},
+				ObjectReference: netguardv1beta1.ObjectReference{
+					Name: "frontend",
+				},
+				Namespace: "default",
+			},
 			IEAgAgRuleRefs: []netguardv1beta1.NamespacedObjectReference{
 				{ObjectReference: netguardv1beta1.ObjectReference{Name: "ieagag-rule-1"}, Namespace: "default"},
 				{ObjectReference: netguardv1beta1.ObjectReference{Name: "ieagag-rule-2"}, Namespace: "default"},
@@ -454,17 +454,17 @@ func TestRuleS2SConverter_Trace_Conversion(t *testing.T) {
 			},
 			Traffic: models.INGRESS,
 			ServiceLocalRef: netguardv1beta1.NamespacedObjectReference{
-			ObjectReference: netguardv1beta1.ObjectReference{
-				Name: "backend",
+				ObjectReference: netguardv1beta1.ObjectReference{
+					Name: "backend",
+				},
+				Namespace: "default",
 			},
-			Namespace: "default",
-		},
 			ServiceRef: netguardv1beta1.NamespacedObjectReference{
-		ObjectReference: netguardv1beta1.ObjectReference{
-			Name: "frontend",
-		},
-		Namespace: "default",
-	},
+				ObjectReference: netguardv1beta1.ObjectReference{
+					Name: "frontend",
+				},
+				Namespace: "default",
+			},
 			Trace: true, // Test trace enabled
 		}
 

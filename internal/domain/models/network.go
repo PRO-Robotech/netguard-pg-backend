@@ -18,10 +18,10 @@ type Network struct {
 	CIDR string `json:"cidr"`
 
 	// Status
-	NetworkName     string                   `json:"networkName,omitempty"`
-	IsBound         bool                     `json:"isBound"`
-	BindingRef      *v1beta1.ObjectReference `json:"bindingRef,omitempty"`
-	AddressGroupRef *v1beta1.ObjectReference `json:"addressGroupRef,omitempty"`
+	NetworkName     string                             `json:"networkName,omitempty"`
+	IsBound         bool                               `json:"isBound"`
+	BindingRef      *v1beta1.NamespacedObjectReference `json:"bindingRef,omitempty"`
+	AddressGroupRef *v1beta1.NamespacedObjectReference `json:"addressGroupRef,omitempty"`
 
 	// Metadata
 	Meta Meta `json:"meta"`
@@ -63,12 +63,12 @@ func (n *Network) SetNetworkName(name string) {
 }
 
 // SetBindingRef sets the reference to the NetworkBinding
-func (n *Network) SetBindingRef(ref *v1beta1.ObjectReference) {
+func (n *Network) SetBindingRef(ref *v1beta1.NamespacedObjectReference) {
 	n.BindingRef = ref
 }
 
 // SetAddressGroupRef sets the reference to the AddressGroup
-func (n *Network) SetAddressGroupRef(ref *v1beta1.ObjectReference) {
+func (n *Network) SetAddressGroupRef(ref *v1beta1.NamespacedObjectReference) {
 	n.AddressGroupRef = ref
 }
 

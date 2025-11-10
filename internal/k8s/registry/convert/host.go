@@ -24,7 +24,6 @@ func (c *HostConverter) ToDomain(ctx context.Context, k8sObj *netguardv1beta1.Ho
 		return nil, err
 	}
 
-	// Create domain host with standard metadata conversion
 	domainHost := &models.Host{
 		SelfRef: models.SelfRef{
 			ResourceIdentifier: models.ResourceIdentifier{
@@ -32,12 +31,13 @@ func (c *HostConverter) ToDomain(ctx context.Context, k8sObj *netguardv1beta1.Ho
 				Namespace: k8sObj.Namespace,
 			},
 		},
-		UUID:            k8sObj.Spec.UUID,
-		HostName:        k8sObj.Status.HostName,
-		IsBound:         k8sObj.Status.IsBound,
-		BindingRef:      k8sObj.Status.BindingRef,
-		AddressGroupRef: k8sObj.Status.AddressGroupRef,
-		Meta:            ConvertMetadataToDomain(k8sObj.ObjectMeta, k8sObj.Status.Conditions, k8sObj.Status.ObservedGeneration),
+		UUID:             k8sObj.Spec.UUID,
+		HostName:         k8sObj.Status.HostName,
+		AddressGroupName: k8sObj.Status.AddressGroupName,
+		IsBound:          k8sObj.Status.IsBound,
+		BindingRef:       k8sObj.Status.BindingRef,
+		AddressGroupRef:  k8sObj.Status.AddressGroupRef,
+		Meta:             ConvertMetadataToDomain(k8sObj.ObjectMeta, k8sObj.Status.Conditions, k8sObj.Status.ObservedGeneration),
 	}
 
 	// Convert IPList from K8s to domain format
@@ -65,10 +65,11 @@ func (c *HostConverter) FromDomain(ctx context.Context, domainObj *models.Host) 
 			UUID: domainObj.UUID,
 		},
 		Status: netguardv1beta1.HostStatus{
-			HostName:        domainObj.HostName,
-			IsBound:         domainObj.IsBound,
-			BindingRef:      domainObj.BindingRef,
-			AddressGroupRef: domainObj.AddressGroupRef,
+			HostName:         domainObj.HostName,
+			AddressGroupName: domainObj.AddressGroupName,
+			IsBound:          domainObj.IsBound,
+			BindingRef:       domainObj.BindingRef,
+			AddressGroupRef:  domainObj.AddressGroupRef,
 		},
 	}
 
@@ -81,7 +82,6 @@ func (c *HostConverter) FromDomain(ctx context.Context, domainObj *models.Host) 
 	} else {
 	}
 
-	// Convert status using standard helper
 	conditions, observedGeneration := ConvertStatusFromDomain(domainObj.Meta)
 	k8sHost.Status.ObservedGeneration = observedGeneration
 	k8sHost.Status.Conditions = conditions

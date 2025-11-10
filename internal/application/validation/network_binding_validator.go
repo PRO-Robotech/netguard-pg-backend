@@ -2,6 +2,7 @@ package validation
 
 import (
 	"context"
+	"fmt"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -44,6 +45,10 @@ func (v *NetworkBindingValidator) ValidateReferences(ctx context.Context, bindin
 		return errors.Errorf("network %s not found", networkID.Key())
 	}
 
+	if !isNetworkReady(network) {
+		return errors.Errorf("network %s is not ready yet (Ready=False) - binding can only be created between Ready resources", networkID.Key())
+	}
+
 	// Validate AddressGroup reference
 	addressGroupID := models.ResourceIdentifier{Name: binding.AddressGroupRef.Name, Namespace: binding.Namespace}
 	addressGroup, err := v.reader.GetAddressGroupByID(ctx, addressGroupID)
@@ -54,12 +59,15 @@ func (v *NetworkBindingValidator) ValidateReferences(ctx context.Context, bindin
 		return errors.Errorf("address group %s not found", addressGroupID.Key())
 	}
 
+	if !isAddressGroupReady(addressGroup) {
+		return errors.Errorf("address group %s is not ready yet (Ready=False) - binding can only be created between Ready resources", addressGroupID.Key())
+	}
+
 	return nil
 }
 
 // ValidateForCreation validates a network binding for creation
 func (v *NetworkBindingValidator) ValidateForCreation(ctx context.Context, binding models.NetworkBinding) error {
-	// PHASE 1: Check for duplicate entity (CRITICAL FIX for overwrite issue)
 	// This prevents creation of entities with the same namespace/name combination
 	keyExtractor := func(entity interface{}) string {
 		if nb, ok := entity.(*models.NetworkBinding); ok {
@@ -72,9 +80,23 @@ func (v *NetworkBindingValidator) ValidateForCreation(ctx context.Context, bindi
 		return err // Return the detailed EntityAlreadyExistsError with logging and context
 	}
 
-	// PHASE 2: Validate references (existing validation)
 	if err := v.ValidateReferences(ctx, binding); err != nil {
 		return err
+	}
+
+	networkID := models.ResourceIdentifier{Name: binding.NetworkRef.Name, Namespace: binding.Namespace}
+	network, err := v.reader.GetNetworkByID(ctx, networkID)
+	if err != nil {
+		return errors.Wrap(err, "failed to get network")
+	}
+	if network != nil && network.IsBound {
+		// Network is already bound - get the binding details for error message
+		agRefInfo := "unknown"
+		if network.AddressGroupRef != nil {
+			agRefInfo = fmt.Sprintf("%s/%s", binding.Namespace, network.AddressGroupRef.Name)
+		}
+		return errors.Errorf("network %s is already bound to address group %s (each network can only be bound to one address group)",
+			networkID.Key(), agRefInfo)
 	}
 
 	return nil
@@ -83,10 +105,8 @@ func (v *NetworkBindingValidator) ValidateForCreation(ctx context.Context, bindi
 // ValidateForPostCommit validates a network binding after it has been committed to database
 // This skips duplicate checking since the entity already exists in the database
 func (v *NetworkBindingValidator) ValidateForPostCommit(ctx context.Context, binding models.NetworkBinding) error {
-	// PHASE 1: Skip duplicate entity check (entity is already committed)
 	// This method is called AFTER the entity is saved to database, so existence is expected
 
-	// PHASE 2: Validate references (existing validation)
 	if err := v.ValidateReferences(ctx, binding); err != nil {
 		return err
 	}
@@ -129,8 +149,31 @@ func (v *NetworkBindingValidator) ValidateForUpdate(ctx context.Context, oldBind
 
 // CheckDependencies checks if the network binding can be deleted
 func (v *NetworkBindingValidator) CheckDependencies(ctx context.Context, id models.ResourceIdentifier) error {
-	// Network bindings don't have dependencies that would prevent deletion
-	// The cleanup of related resources (like updating Network.IsBound status)
-	// should be handled by the application service
 	return nil
+}
+
+// isNetworkReady checks if Network has Ready=True condition
+func isNetworkReady(network *models.Network) bool {
+	if network == nil || network.Meta.Conditions == nil {
+		return false
+	}
+	for _, cond := range network.Meta.Conditions {
+		if cond.Type == "Ready" && cond.Status == "True" {
+			return true
+		}
+	}
+	return false
+}
+
+// isAddressGroupReady checks if AddressGroup has Ready=True condition
+func isAddressGroupReady(ag *models.AddressGroup) bool {
+	if ag == nil || ag.Meta.Conditions == nil {
+		return false
+	}
+	for _, cond := range ag.Meta.Conditions {
+		if cond.Type == "Ready" && cond.Status == "True" {
+			return true
+		}
+	}
+	return false
 }

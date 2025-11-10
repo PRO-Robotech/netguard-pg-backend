@@ -120,10 +120,6 @@ func (s *NetworkSyncer) Sync(ctx context.Context, entity interfaces.SyncableEnti
 		return fmt.Errorf("failed to sync Network with sgroups: %w", err)
 	}
 
-	s.logger.V(1).Info("Successfully synced Network",
-		"key", entity.GetSyncKey(),
-		"operation", operation)
-
 	return nil
 }
 
@@ -180,11 +176,6 @@ func (s *NetworkSyncer) SyncBatch(ctx context.Context, entities []interfaces.Syn
 	if err := s.gateway.Sync(ctx, syncReq); err != nil {
 		return fmt.Errorf("failed to sync Network batch with sgroups: %w", err)
 	}
-
-	s.logger.Info("Successfully synced Network batch",
-		"count", len(protoNetworks),
-		"operation", operation,
-		"keys", entityKeys)
 
 	return nil
 }
