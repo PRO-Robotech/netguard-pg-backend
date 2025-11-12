@@ -45,9 +45,6 @@ func (b *SQLBuilder) BuildCombinedWHERE(
 	labelSelectors []*netguardpb.LabelSelector,
 	startParamNum int,
 ) (whereClause string, args []interface{}, err error) {
-	fmt.Printf("🔍 BuildCombinedWHERE CALLED: table=%s, alias=%s, identifiers=%d, fieldSelectors=%d, labelSelectors=%d\n",
-		table, tableAlias, len(identifiers), len(fieldSelectors), len(labelSelectors))
-
 	var clauses []string
 	paramNum := startParamNum
 
@@ -105,12 +102,10 @@ func (b *SQLBuilder) BuildCombinedWHERE(
 
 	// 4. Combine with AND
 	if len(clauses) == 0 {
-		fmt.Printf("🔍 BuildCombinedWHERE: No clauses generated\n")
 		return "", nil, nil
 	}
 
 	whereClause = strings.Join(clauses, " AND ")
-	fmt.Printf("🔍 BuildCombinedWHERE RESULT: WHERE=%s, args=%v\n", whereClause, args)
 	return whereClause, args, nil
 }
 

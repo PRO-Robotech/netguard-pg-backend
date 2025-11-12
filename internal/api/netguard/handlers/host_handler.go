@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"fmt"
 
 	"netguard-pg-backend/internal/api/netguard/converters"
 	"netguard-pg-backend/internal/application/services"
@@ -25,19 +24,7 @@ func NewHostHandler(service *services.NetguardFacade) *HostHandler {
 
 // ListHosts gets list of hosts
 func (h *HostHandler) ListHosts(ctx context.Context, req *netguardpb.ListHostsReq) (*netguardpb.ListHostsResp, error) {
-	// DEBUG: Log incoming request
-	println("🔍 ListHosts CALLED")
-	println("🔍   Identifiers count:", len(req.Identifiers))
-	if req.ListOptions != nil {
-		println("🔍   ListOptions present: YES")
-		println("🔍   FieldSelectors:", len(req.ListOptions.FieldSelectors))
-		println("🔍   LabelSelectors:", len(req.ListOptions.LabelSelectors))
-	} else {
-		println("🔍   ListOptions present: NO")
-	}
-
 	scope := h.buildScopeWithOptions(req.Identifiers, req.ListOptions)
-	println("🔍   Scope type:", fmt.Sprintf("%T", scope))
 
 	hosts, err := h.service.GetHosts(ctx, scope)
 	if err != nil {

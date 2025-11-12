@@ -125,6 +125,9 @@ func addKnownTypesInternal(scheme *runtime.Scheme) error {
 //	kubectl get hosts --field-selector=status.addressGroupRef.name=example
 //	kubectl get networks --field-selector=status.isBound=true
 //	kubectl get networks --field-selector=status.addressGroupRef.name=example
+//	kubectl get hostbindings --field-selector=spec.addressGroupRef.name=example
+//	kubectl get networkbindings --field-selector=spec.networkRef.name=example
+//	kubectl get addressgroupbindings --field-selector=spec.serviceRef.name=example
 //
 // Without registration, kubectl returns error: "field label not supported"
 func addFieldLabelConversionFuncs(scheme *runtime.Scheme) error {
@@ -142,6 +145,33 @@ func addFieldLabelConversionFuncs(scheme *runtime.Scheme) error {
 	if err := scheme.AddFieldLabelConversionFunc(
 		SchemeGroupVersion.WithKind("Network"),
 		NetworkFieldLabelConversion,
+	); err != nil {
+		return err
+	}
+
+	// Register field label conversion function for HostBinding resource
+	// This enables custom field selectors for HostBinding spec fields
+	if err := scheme.AddFieldLabelConversionFunc(
+		SchemeGroupVersion.WithKind("HostBinding"),
+		HostBindingFieldLabelConversion,
+	); err != nil {
+		return err
+	}
+
+	// Register field label conversion function for NetworkBinding resource
+	// This enables custom field selectors for NetworkBinding spec fields
+	if err := scheme.AddFieldLabelConversionFunc(
+		SchemeGroupVersion.WithKind("NetworkBinding"),
+		NetworkBindingFieldLabelConversion,
+	); err != nil {
+		return err
+	}
+
+	// Register field label conversion function for AddressGroupBinding resource
+	// This enables custom field selectors for AddressGroupBinding spec fields
+	if err := scheme.AddFieldLabelConversionFunc(
+		SchemeGroupVersion.WithKind("AddressGroupBinding"),
+		AddressGroupBindingFieldLabelConversion,
 	); err != nil {
 		return err
 	}
