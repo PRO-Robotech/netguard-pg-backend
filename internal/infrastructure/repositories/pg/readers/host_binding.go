@@ -21,7 +21,11 @@ func (r *Reader) ListHostBindings(ctx context.Context, consume func(models.HostB
 		       m.created_at, m.updated_at, m.deletion_timestamp
 		FROM host_bindings hb
 		INNER JOIN k8s_metadata m ON hb.resource_version = m.resource_version`
-	whereClause, args := utils.BuildScopeFilter(scope, "hb")
+	whereClause, args, err := utils.BuildScopeFilterWithTable(scope, "host_bindings", "hb")
+	if err != nil {
+		return errors.Wrap(err, "failed to build scope filter")
+	}
+
 	if whereClause != "" {
 		query += " WHERE " + whereClause
 	} else {

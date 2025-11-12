@@ -85,8 +85,29 @@ func (c *GRPCBackendClient) ListServices(ctx context.Context, scope ports.Scope)
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
 	var identifiers []*netguardpb.ResourceIdentifier
+	var listOptions *netguardpb.ListOptions
+
 	if scope != nil {
-		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+		// Handle FieldSelectorScope (contains identifiers + selectors)
+		if fss, ok := scope.(ports.FieldSelectorScope); ok {
+			// Extract identifiers
+			if len(fss.Identifiers) > 0 {
+				for _, id := range fss.Identifiers {
+					identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
+						Namespace: id.Namespace,
+						Name:      id.Name,
+					})
+				}
+			}
+			// Extract field/label selectors
+			if len(fss.FieldSelectors) > 0 || len(fss.LabelSelectors) > 0 {
+				listOptions = &netguardpb.ListOptions{
+					FieldSelectors: fss.FieldSelectors,
+					LabelSelectors: fss.LabelSelectors,
+				}
+			}
+		} else if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+			// Fallback to ResourceIdentifierScope (no selectors)
 			for _, id := range ris.Identifiers {
 				identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
 					Namespace: id.Namespace,
@@ -97,6 +118,7 @@ func (c *GRPCBackendClient) ListServices(ctx context.Context, scope ports.Scope)
 	}
 	req := &netguardpb.ListServicesReq{
 		Identifiers: identifiers,
+		ListOptions: listOptions,
 	}
 	resp, err := c.client.ListServices(ctx, req)
 	if err != nil {
@@ -181,8 +203,29 @@ func (c *GRPCBackendClient) ListAddressGroups(ctx context.Context, scope ports.S
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
 	var identifiers []*netguardpb.ResourceIdentifier
+	var listOptions *netguardpb.ListOptions
+
 	if scope != nil {
-		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+		// Handle FieldSelectorScope (contains identifiers + selectors)
+		if fss, ok := scope.(ports.FieldSelectorScope); ok {
+			// Extract identifiers
+			if len(fss.Identifiers) > 0 {
+				for _, id := range fss.Identifiers {
+					identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
+						Namespace: id.Namespace,
+						Name:      id.Name,
+					})
+				}
+			}
+			// Extract field/label selectors
+			if len(fss.FieldSelectors) > 0 || len(fss.LabelSelectors) > 0 {
+				listOptions = &netguardpb.ListOptions{
+					FieldSelectors: fss.FieldSelectors,
+					LabelSelectors: fss.LabelSelectors,
+				}
+			}
+		} else if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+			// Fallback to ResourceIdentifierScope (no selectors)
 			for _, id := range ris.Identifiers {
 				identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
 					Namespace: id.Namespace,
@@ -193,6 +236,7 @@ func (c *GRPCBackendClient) ListAddressGroups(ctx context.Context, scope ports.S
 	}
 	req := &netguardpb.ListAddressGroupsReq{
 		Identifiers: identifiers,
+		ListOptions: listOptions,
 	}
 	resp, err := c.client.ListAddressGroups(ctx, req)
 	if err != nil {
@@ -277,8 +321,29 @@ func (c *GRPCBackendClient) ListAddressGroupBindings(ctx context.Context, scope 
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
 	var identifiers []*netguardpb.ResourceIdentifier
+	var listOptions *netguardpb.ListOptions
+
 	if scope != nil {
-		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+		// Handle FieldSelectorScope (contains identifiers + selectors)
+		if fss, ok := scope.(ports.FieldSelectorScope); ok {
+			// Extract identifiers
+			if len(fss.Identifiers) > 0 {
+				for _, id := range fss.Identifiers {
+					identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
+						Namespace: id.Namespace,
+						Name:      id.Name,
+					})
+				}
+			}
+			// Extract field/label selectors
+			if len(fss.FieldSelectors) > 0 || len(fss.LabelSelectors) > 0 {
+				listOptions = &netguardpb.ListOptions{
+					FieldSelectors: fss.FieldSelectors,
+					LabelSelectors: fss.LabelSelectors,
+				}
+			}
+		} else if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+			// Fallback to ResourceIdentifierScope (no selectors)
 			for _, id := range ris.Identifiers {
 				identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
 					Namespace: id.Namespace,
@@ -289,6 +354,7 @@ func (c *GRPCBackendClient) ListAddressGroupBindings(ctx context.Context, scope 
 	}
 	req := &netguardpb.ListAddressGroupBindingsReq{
 		Identifiers: identifiers,
+		ListOptions: listOptions,
 	}
 	resp, err := c.client.ListAddressGroupBindings(ctx, req)
 	if err != nil {
@@ -377,8 +443,29 @@ func (c *GRPCBackendClient) ListAddressGroupPortMappings(ctx context.Context, sc
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
 	var identifiers []*netguardpb.ResourceIdentifier
+	var listOptions *netguardpb.ListOptions
+
 	if scope != nil {
-		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+		// Handle FieldSelectorScope (contains identifiers + selectors)
+		if fss, ok := scope.(ports.FieldSelectorScope); ok {
+			// Extract identifiers
+			if len(fss.Identifiers) > 0 {
+				for _, id := range fss.Identifiers {
+					identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
+						Namespace: id.Namespace,
+						Name:      id.Name,
+					})
+				}
+			}
+			// Extract field/label selectors
+			if len(fss.FieldSelectors) > 0 || len(fss.LabelSelectors) > 0 {
+				listOptions = &netguardpb.ListOptions{
+					FieldSelectors: fss.FieldSelectors,
+					LabelSelectors: fss.LabelSelectors,
+				}
+			}
+		} else if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+			// Fallback to ResourceIdentifierScope (no selectors)
 			for _, id := range ris.Identifiers {
 				identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
 					Namespace: id.Namespace,
@@ -389,6 +476,7 @@ func (c *GRPCBackendClient) ListAddressGroupPortMappings(ctx context.Context, sc
 	}
 	req := &netguardpb.ListAddressGroupPortMappingsReq{
 		Identifiers: identifiers,
+		ListOptions: listOptions,
 	}
 	resp, err := c.client.ListAddressGroupPortMappings(ctx, req)
 	if err != nil {
@@ -473,8 +561,29 @@ func (c *GRPCBackendClient) ListRuleS2S(ctx context.Context, scope ports.Scope) 
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
 	var identifiers []*netguardpb.ResourceIdentifier
+	var listOptions *netguardpb.ListOptions
+
 	if scope != nil {
-		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+		// Handle FieldSelectorScope (contains identifiers + selectors)
+		if fss, ok := scope.(ports.FieldSelectorScope); ok {
+			// Extract identifiers
+			if len(fss.Identifiers) > 0 {
+				for _, id := range fss.Identifiers {
+					identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
+						Namespace: id.Namespace,
+						Name:      id.Name,
+					})
+				}
+			}
+			// Extract field/label selectors
+			if len(fss.FieldSelectors) > 0 || len(fss.LabelSelectors) > 0 {
+				listOptions = &netguardpb.ListOptions{
+					FieldSelectors: fss.FieldSelectors,
+					LabelSelectors: fss.LabelSelectors,
+				}
+			}
+		} else if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+			// Fallback to ResourceIdentifierScope (no selectors)
 			for _, id := range ris.Identifiers {
 				identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
 					Namespace: id.Namespace,
@@ -485,6 +594,7 @@ func (c *GRPCBackendClient) ListRuleS2S(ctx context.Context, scope ports.Scope) 
 	}
 	req := &netguardpb.ListRuleS2SReq{
 		Identifiers: identifiers,
+		ListOptions: listOptions,
 	}
 	resp, err := c.client.ListRuleS2S(ctx, req)
 	if err != nil {
@@ -570,8 +680,29 @@ func (c *GRPCBackendClient) ListServiceAliases(ctx context.Context, scope ports.
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
 	var identifiers []*netguardpb.ResourceIdentifier
+	var listOptions *netguardpb.ListOptions
+
 	if scope != nil {
-		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+		// Handle FieldSelectorScope (contains identifiers + selectors)
+		if fss, ok := scope.(ports.FieldSelectorScope); ok {
+			// Extract identifiers
+			if len(fss.Identifiers) > 0 {
+				for _, id := range fss.Identifiers {
+					identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
+						Namespace: id.Namespace,
+						Name:      id.Name,
+					})
+				}
+			}
+			// Extract field/label selectors
+			if len(fss.FieldSelectors) > 0 || len(fss.LabelSelectors) > 0 {
+				listOptions = &netguardpb.ListOptions{
+					FieldSelectors: fss.FieldSelectors,
+					LabelSelectors: fss.LabelSelectors,
+				}
+			}
+		} else if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+			// Fallback to ResourceIdentifierScope (no selectors)
 			for _, id := range ris.Identifiers {
 				identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
 					Namespace: id.Namespace,
@@ -582,6 +713,7 @@ func (c *GRPCBackendClient) ListServiceAliases(ctx context.Context, scope ports.
 	}
 	req := &netguardpb.ListServiceAliasesReq{
 		Identifiers: identifiers,
+		ListOptions: listOptions,
 	}
 	resp, err := c.client.ListServiceAliases(ctx, req)
 	if err != nil {
@@ -664,8 +796,29 @@ func (c *GRPCBackendClient) ListAddressGroupBindingPolicies(ctx context.Context,
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
 	var identifiers []*netguardpb.ResourceIdentifier
+	var listOptions *netguardpb.ListOptions
+
 	if scope != nil {
-		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+		// Handle FieldSelectorScope (contains identifiers + selectors)
+		if fss, ok := scope.(ports.FieldSelectorScope); ok {
+			// Extract identifiers
+			if len(fss.Identifiers) > 0 {
+				for _, id := range fss.Identifiers {
+					identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
+						Namespace: id.Namespace,
+						Name:      id.Name,
+					})
+				}
+			}
+			// Extract field/label selectors
+			if len(fss.FieldSelectors) > 0 || len(fss.LabelSelectors) > 0 {
+				listOptions = &netguardpb.ListOptions{
+					FieldSelectors: fss.FieldSelectors,
+					LabelSelectors: fss.LabelSelectors,
+				}
+			}
+		} else if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+			// Fallback to ResourceIdentifierScope (no selectors)
 			for _, id := range ris.Identifiers {
 				identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
 					Namespace: id.Namespace,
@@ -676,6 +829,7 @@ func (c *GRPCBackendClient) ListAddressGroupBindingPolicies(ctx context.Context,
 	}
 	req := &netguardpb.ListAddressGroupBindingPoliciesReq{
 		Identifiers: identifiers,
+		ListOptions: listOptions,
 	}
 	resp, err := c.client.ListAddressGroupBindingPolicies(ctx, req)
 	if err != nil {
@@ -761,8 +915,29 @@ func (c *GRPCBackendClient) ListIEAgAgRules(ctx context.Context, scope ports.Sco
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
 	var identifiers []*netguardpb.ResourceIdentifier
+	var listOptions *netguardpb.ListOptions
+
 	if scope != nil {
-		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+		// Handle FieldSelectorScope (contains identifiers + selectors)
+		if fss, ok := scope.(ports.FieldSelectorScope); ok {
+			// Extract identifiers
+			if len(fss.Identifiers) > 0 {
+				for _, id := range fss.Identifiers {
+					identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
+						Namespace: id.Namespace,
+						Name:      id.Name,
+					})
+				}
+			}
+			// Extract field/label selectors
+			if len(fss.FieldSelectors) > 0 || len(fss.LabelSelectors) > 0 {
+				listOptions = &netguardpb.ListOptions{
+					FieldSelectors: fss.FieldSelectors,
+					LabelSelectors: fss.LabelSelectors,
+				}
+			}
+		} else if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+			// Fallback to ResourceIdentifierScope (no selectors)
 			for _, id := range ris.Identifiers {
 				identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
 					Namespace: id.Namespace,
@@ -773,6 +948,7 @@ func (c *GRPCBackendClient) ListIEAgAgRules(ctx context.Context, scope ports.Sco
 	}
 	req := &netguardpb.ListIEAgAgRulesReq{
 		Identifiers: identifiers,
+		ListOptions: listOptions,
 	}
 	resp, err := c.client.ListIEAgAgRules(ctx, req)
 	if err != nil {
@@ -822,8 +998,29 @@ func (c *GRPCBackendClient) ListNetworks(ctx context.Context, scope ports.Scope)
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
 	var identifiers []*netguardpb.ResourceIdentifier
+	var listOptions *netguardpb.ListOptions
+
 	if scope != nil {
-		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+		// Handle FieldSelectorScope (contains identifiers + selectors)
+		if fss, ok := scope.(ports.FieldSelectorScope); ok {
+			// Extract identifiers
+			if len(fss.Identifiers) > 0 {
+				for _, id := range fss.Identifiers {
+					identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
+						Namespace: id.Namespace,
+						Name:      id.Name,
+					})
+				}
+			}
+			// Extract field/label selectors
+			if len(fss.FieldSelectors) > 0 || len(fss.LabelSelectors) > 0 {
+				listOptions = &netguardpb.ListOptions{
+					FieldSelectors: fss.FieldSelectors,
+					LabelSelectors: fss.LabelSelectors,
+				}
+			}
+		} else if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+			// Fallback to ResourceIdentifierScope (no selectors)
 			for _, id := range ris.Identifiers {
 				identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
 					Namespace: id.Namespace,
@@ -834,6 +1031,7 @@ func (c *GRPCBackendClient) ListNetworks(ctx context.Context, scope ports.Scope)
 	}
 	req := &netguardpb.ListNetworksReq{
 		Identifiers: identifiers,
+		ListOptions: listOptions,
 	}
 	resp, err := c.client.ListNetworks(ctx, req)
 	if err != nil {
@@ -890,8 +1088,29 @@ func (c *GRPCBackendClient) ListNetworkBindings(ctx context.Context, scope ports
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
 	var identifiers []*netguardpb.ResourceIdentifier
+	var listOptions *netguardpb.ListOptions
+
 	if scope != nil {
-		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+		// Handle FieldSelectorScope (contains identifiers + selectors)
+		if fss, ok := scope.(ports.FieldSelectorScope); ok {
+			// Extract identifiers
+			if len(fss.Identifiers) > 0 {
+				for _, id := range fss.Identifiers {
+					identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
+						Namespace: id.Namespace,
+						Name:      id.Name,
+					})
+				}
+			}
+			// Extract field/label selectors
+			if len(fss.FieldSelectors) > 0 || len(fss.LabelSelectors) > 0 {
+				listOptions = &netguardpb.ListOptions{
+					FieldSelectors: fss.FieldSelectors,
+					LabelSelectors: fss.LabelSelectors,
+				}
+			}
+		} else if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+			// Fallback to ResourceIdentifierScope (no selectors)
 			for _, id := range ris.Identifiers {
 				identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
 					Namespace: id.Namespace,
@@ -902,6 +1121,7 @@ func (c *GRPCBackendClient) ListNetworkBindings(ctx context.Context, scope ports
 	}
 	req := &netguardpb.ListNetworkBindingsReq{
 		Identifiers: identifiers,
+		ListOptions: listOptions,
 	}
 	resp, err := c.client.ListNetworkBindings(ctx, req)
 	if err != nil {
@@ -993,16 +1213,40 @@ func (c *GRPCBackendClient) ListSvcSvcRules(ctx context.Context, scope ports.Sco
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
 	var identifiers []*netguardpb.ResourceIdentifier
-	if resourceScope, ok := scope.(ports.ResourceIdentifierScope); ok {
-		for _, id := range resourceScope.Identifiers {
-			identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
-				Namespace: id.Namespace,
-				Name:      id.Name,
-			})
+	var listOptions *netguardpb.ListOptions
+
+	if scope != nil {
+		// Handle FieldSelectorScope (contains identifiers + selectors)
+		if fss, ok := scope.(ports.FieldSelectorScope); ok {
+			// Extract identifiers
+			if len(fss.Identifiers) > 0 {
+				for _, id := range fss.Identifiers {
+					identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
+						Namespace: id.Namespace,
+						Name:      id.Name,
+					})
+				}
+			}
+			// Extract field/label selectors
+			if len(fss.FieldSelectors) > 0 || len(fss.LabelSelectors) > 0 {
+				listOptions = &netguardpb.ListOptions{
+					FieldSelectors: fss.FieldSelectors,
+					LabelSelectors: fss.LabelSelectors,
+				}
+			}
+		} else if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+			// Fallback to ResourceIdentifierScope (no selectors)
+			for _, id := range ris.Identifiers {
+				identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
+					Namespace: id.Namespace,
+					Name:      id.Name,
+				})
+			}
 		}
 	}
 	req := &netguardpb.ListSvcSvcRulesReq{
 		Identifiers: identifiers,
+		ListOptions: listOptions,
 	}
 	resp, err := c.client.ListSvcSvcRules(ctx, req)
 	if err != nil {
@@ -1042,16 +1286,40 @@ func (c *GRPCBackendClient) ListSvcFqdnRules(ctx context.Context, scope ports.Sc
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
 	var identifiers []*netguardpb.ResourceIdentifier
-	if resourceScope, ok := scope.(ports.ResourceIdentifierScope); ok {
-		for _, identifier := range resourceScope.Identifiers {
-			identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
-				Namespace: identifier.Namespace,
-				Name:      identifier.Name,
-			})
+	var listOptions *netguardpb.ListOptions
+
+	if scope != nil {
+		// Handle FieldSelectorScope (contains identifiers + selectors)
+		if fss, ok := scope.(ports.FieldSelectorScope); ok {
+			// Extract identifiers
+			if len(fss.Identifiers) > 0 {
+				for _, id := range fss.Identifiers {
+					identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
+						Namespace: id.Namespace,
+						Name:      id.Name,
+					})
+				}
+			}
+			// Extract field/label selectors
+			if len(fss.FieldSelectors) > 0 || len(fss.LabelSelectors) > 0 {
+				listOptions = &netguardpb.ListOptions{
+					FieldSelectors: fss.FieldSelectors,
+					LabelSelectors: fss.LabelSelectors,
+				}
+			}
+		} else if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+			// Fallback to ResourceIdentifierScope (no selectors)
+			for _, id := range ris.Identifiers {
+				identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
+					Namespace: id.Namespace,
+					Name:      id.Name,
+				})
+			}
 		}
 	}
 	req := &netguardpb.ListSvcFqdnRulesReq{
 		Identifiers: identifiers,
+		ListOptions: listOptions,
 	}
 	resp, err := c.client.ListSvcFqdnRules(ctx, req)
 	if err != nil {
@@ -1458,8 +1726,29 @@ func (c *GRPCBackendClient) ListHosts(ctx context.Context, scope ports.Scope) ([
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
 	var identifiers []*netguardpb.ResourceIdentifier
+	var listOptions *netguardpb.ListOptions
+
 	if scope != nil {
-		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+		// Handle FieldSelectorScope (contains identifiers + selectors)
+		if fss, ok := scope.(ports.FieldSelectorScope); ok {
+			// Extract identifiers
+			if len(fss.Identifiers) > 0 {
+				for _, id := range fss.Identifiers {
+					identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
+						Namespace: id.Namespace,
+						Name:      id.Name,
+					})
+				}
+			}
+			// Extract field/label selectors
+			if len(fss.FieldSelectors) > 0 || len(fss.LabelSelectors) > 0 {
+				listOptions = &netguardpb.ListOptions{
+					FieldSelectors: fss.FieldSelectors,
+					LabelSelectors: fss.LabelSelectors,
+				}
+			}
+		} else if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+			// Fallback to ResourceIdentifierScope (no selectors)
 			for _, id := range ris.Identifiers {
 				identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
 					Namespace: id.Namespace,
@@ -1470,6 +1759,7 @@ func (c *GRPCBackendClient) ListHosts(ctx context.Context, scope ports.Scope) ([
 	}
 	req := &netguardpb.ListHostsReq{
 		Identifiers: identifiers,
+		ListOptions: listOptions,
 	}
 	resp, err := c.client.ListHosts(ctx, req)
 	if err != nil {
@@ -1526,8 +1816,29 @@ func (c *GRPCBackendClient) ListHostBindings(ctx context.Context, scope ports.Sc
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
 	var identifiers []*netguardpb.ResourceIdentifier
+	var listOptions *netguardpb.ListOptions
+
 	if scope != nil {
-		if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+		// Handle FieldSelectorScope (contains identifiers + selectors)
+		if fss, ok := scope.(ports.FieldSelectorScope); ok {
+			// Extract identifiers
+			if len(fss.Identifiers) > 0 {
+				for _, id := range fss.Identifiers {
+					identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
+						Namespace: id.Namespace,
+						Name:      id.Name,
+					})
+				}
+			}
+			// Extract field/label selectors
+			if len(fss.FieldSelectors) > 0 || len(fss.LabelSelectors) > 0 {
+				listOptions = &netguardpb.ListOptions{
+					FieldSelectors: fss.FieldSelectors,
+					LabelSelectors: fss.LabelSelectors,
+				}
+			}
+		} else if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+			// Fallback to ResourceIdentifierScope (no selectors)
 			for _, id := range ris.Identifiers {
 				identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
 					Namespace: id.Namespace,
@@ -1538,6 +1849,7 @@ func (c *GRPCBackendClient) ListHostBindings(ctx context.Context, scope ports.Sc
 	}
 	req := &netguardpb.ListHostBindingsReq{
 		Identifiers: identifiers,
+		ListOptions: listOptions,
 	}
 	resp, err := c.client.ListHostBindings(ctx, req)
 	if err != nil {

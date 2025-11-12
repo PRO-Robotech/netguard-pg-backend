@@ -24,7 +24,7 @@ func NewRuleHandler(service *services.NetguardFacade) *RuleHandler {
 
 // ListRuleS2S gets list of rule s2s
 func (h *RuleHandler) ListRuleS2S(ctx context.Context, req *netguardpb.ListRuleS2SReq) (*netguardpb.ListRuleS2SResp, error) {
-	scope := h.buildScope(req.Identifiers)
+	scope := h.buildScopeWithOptions(req.Identifiers, req.ListOptions)
 
 	rules, err := h.service.GetRuleS2S(ctx, scope)
 	if err != nil {
@@ -55,7 +55,7 @@ func (h *RuleHandler) GetRuleS2S(ctx context.Context, req *netguardpb.GetRuleS2S
 
 // ListIEAgAgRules gets list of IEAgAgRules
 func (h *RuleHandler) ListIEAgAgRules(ctx context.Context, req *netguardpb.ListIEAgAgRulesReq) (*netguardpb.ListIEAgAgRulesResp, error) {
-	scope := h.buildScope(req.Identifiers)
+	scope := h.buildScopeWithOptions(req.Identifiers, req.ListOptions)
 
 	rules, err := h.service.GetIEAgAgRules(ctx, scope)
 	if err != nil {
@@ -96,4 +96,31 @@ func (h *RuleHandler) buildScope(identifiers []*netguardpb.ResourceIdentifier) p
 	}
 
 	return ports.NewResourceIdentifierScope(ids...)
+}
+
+// buildScopeWithOptions creates a scope from resource identifiers and list options
+func (h *RuleHandler) buildScopeWithOptions(identifiers []*netguardpb.ResourceIdentifier, listOpts *netguardpb.ListOptions) ports.Scope {
+	// Extract identifiers
+	var ids []models.ResourceIdentifier
+	if len(identifiers) > 0 {
+		ids = make([]models.ResourceIdentifier, 0, len(identifiers))
+		for _, id := range identifiers {
+			ids = append(ids, converters.ResourceIdentifierFromPB(id))
+		}
+	}
+
+	// Check if we have field or label selectors
+	if listOpts != nil && (len(listOpts.FieldSelectors) > 0 || len(listOpts.LabelSelectors) > 0) {
+		return ports.FieldSelectorScope{
+			Identifiers:    ids,
+			FieldSelectors: listOpts.FieldSelectors,
+			LabelSelectors: listOpts.LabelSelectors,
+		}
+	}
+
+	// Fall back to ResourceIdentifierScope or EmptyScope
+	if len(ids) > 0 {
+		return ports.NewResourceIdentifierScope(ids...)
+	}
+	return ports.EmptyScope{}
 }

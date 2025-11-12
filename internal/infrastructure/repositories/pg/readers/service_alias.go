@@ -18,7 +18,11 @@ func (r *Reader) ListServiceAliases(ctx context.Context, consume func(models.Ser
 			   m.created_at, m.updated_at, m.deletion_timestamp
 		FROM service_aliases sa
 		INNER JOIN k8s_metadata m ON sa.resource_version = m.resource_version`
-	whereClause, args := utils.BuildScopeFilter(scope, "sa")
+	whereClause, args, err := utils.BuildScopeFilterWithTable(scope, "service_aliases", "sa")
+	if err != nil {
+		return errors.Wrap(err, "failed to build scope filter")
+	}
+
 	if whereClause != "" {
 		query += " WHERE " + whereClause
 	} else {

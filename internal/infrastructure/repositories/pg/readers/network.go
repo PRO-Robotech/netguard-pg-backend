@@ -21,7 +21,11 @@ func (r *Reader) ListNetworks(ctx context.Context, consume func(models.Network) 
 			   m.created_at, m.updated_at, m.deletion_timestamp
 		FROM networks n
 		INNER JOIN k8s_metadata m ON n.resource_version = m.resource_version`
-	whereClause, args := utils.BuildScopeFilter(scope, "n")
+	whereClause, args, err := utils.BuildScopeFilterWithTable(scope, "networks", "n")
+	if err != nil {
+		return errors.Wrap(err, "failed to build scope filter")
+	}
+
 	if whereClause != "" {
 		query += " WHERE " + whereClause
 	} else {

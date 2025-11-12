@@ -11,6 +11,7 @@ import (
 	"netguard-pg-backend/internal/k8s/registry/base/fieldmanager"
 	"netguard-pg-backend/internal/k8s/registry/base/patch"
 	"netguard-pg-backend/internal/k8s/registry/utils"
+	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
 	"reflect"
 	"strings"
 	"time"
@@ -113,7 +114,59 @@ func (s *BaseStorage[K, D]) Get(ctx context.Context, name string, options *metav
 	return k8sObj, nil
 }
 func (s *BaseStorage[K, D]) List(ctx context.Context, options *internalversion.ListOptions) (runtime.Object, error) {
+	// Extract namespace scope
 	scope := utils.ScopeFromContext(ctx)
+
+	// Parse field selectors and label selectors from K8s ListOptions
+	var fieldSelectors []*netguardpb.FieldSelector
+	var labelSelectors []*netguardpb.LabelSelector
+
+	if options != nil {
+		// Parse field selector if present
+		if options.FieldSelector != nil {
+			fieldSelectorStr := options.FieldSelector.String()
+			parsed, err := ParseFieldSelectors(fieldSelectorStr)
+			if err != nil {
+				return nil, fmt.Errorf("invalid field selector: %w", err)
+			}
+			fieldSelectors = parsed
+		}
+
+		// Parse label selector if present
+		if options.LabelSelector != nil {
+			labelSelectorStr := options.LabelSelector.String()
+			parsed, err := ParseLabelSelectors(labelSelectorStr)
+			if err != nil {
+				return nil, fmt.Errorf("invalid label selector: %w", err)
+			}
+			labelSelectors = parsed
+		}
+	}
+
+	// If we have field or label selectors, convert scope to FieldSelectorScope
+	if len(fieldSelectors) > 0 || len(labelSelectors) > 0 {
+		klog.V(2).InfoS("List: parsing field/label selectors",
+			"resource", s.resourceName,
+			"fieldSelectorsCount", len(fieldSelectors),
+			"labelSelectorsCount", len(labelSelectors))
+
+		// Convert basic scope to FieldSelectorScope
+		var identifiers []models.ResourceIdentifier
+		if idScope, ok := scope.(ports.ResourceIdentifierScope); ok {
+			identifiers = idScope.Identifiers
+		}
+
+		scope = ports.FieldSelectorScope{
+			Identifiers:    identifiers,
+			FieldSelectors: fieldSelectors,
+			LabelSelectors: labelSelectors,
+		}
+
+		klog.V(2).InfoS("List: created FieldSelectorScope",
+			"resource", s.resourceName,
+			"scope", scope.String())
+	}
+
 	domainObjs, err := s.listFromBackend(ctx, scope)
 	if err != nil {
 		return nil, err

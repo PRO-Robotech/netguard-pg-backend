@@ -22,7 +22,7 @@ func Resource(resource string) schema.GroupResource {
 
 var (
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
-	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes, addKnownTypesInternal)
+	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes, addKnownTypesInternal, addFieldLabelConversionFuncs)
 	// AddToScheme adds the types in this group-version to the given scheme.
 	AddToScheme = SchemeBuilder.AddToScheme
 )
@@ -113,5 +113,38 @@ func addKnownTypesInternal(scheme *runtime.Scheme) error {
 	)
 	// do NOT call metav1.AddToGroupVersion for internal hub version to avoid
 	// duplicate registration of meta types like WatchEvent.
+	return nil
+}
+
+// addFieldLabelConversionFuncs registers field label conversion functions for resources.
+// This allows kubectl to use custom field selectors beyond the default metadata.name and metadata.namespace.
+//
+// For example, after registration, these queries work:
+//
+//	kubectl get hosts --field-selector=status.isBound=true
+//	kubectl get hosts --field-selector=status.addressGroupRef.name=example
+//	kubectl get networks --field-selector=status.isBound=true
+//	kubectl get networks --field-selector=status.addressGroupRef.name=example
+//
+// Without registration, kubectl returns error: "field label not supported"
+func addFieldLabelConversionFuncs(scheme *runtime.Scheme) error {
+	// Register field label conversion function for Host resource
+	// This enables custom field selectors for Host status fields
+	if err := scheme.AddFieldLabelConversionFunc(
+		SchemeGroupVersion.WithKind("Host"),
+		HostFieldLabelConversion,
+	); err != nil {
+		return err
+	}
+
+	// Register field label conversion function for Network resource
+	// This enables custom field selectors for Network status fields
+	if err := scheme.AddFieldLabelConversionFunc(
+		SchemeGroupVersion.WithKind("Network"),
+		NetworkFieldLabelConversion,
+	); err != nil {
+		return err
+	}
+
 	return nil
 }

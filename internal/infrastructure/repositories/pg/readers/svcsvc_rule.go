@@ -29,14 +29,17 @@ func (r *Reader) ListSvcSvcRules(ctx context.Context, consume func(models.SvcSvc
 		       m.created_at, m.updated_at, m.deletion_timestamp
 		FROM svc_svc_rules sr
 		INNER JOIN k8s_metadata m ON sr.resource_version = m.resource_version`
-	whereClause, args := utils.BuildScopeFilter(scope, "sr")
+	whereClause, args, err := utils.BuildScopeFilterWithTable(scope, "svc_svc_rules", "sr")
+	if err != nil {
+		return errors.Wrap(err, "failed to build scope filter")
+	}
+
 	if whereClause != "" {
 		query += " WHERE " + whereClause
 	} else {
 	}
 	query += " ORDER BY sr.namespace, sr.name"
 	var rows pgx.Rows
-	var err error
 	maxRetries := 3
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		rows, err = r.query(ctx, query, args...)

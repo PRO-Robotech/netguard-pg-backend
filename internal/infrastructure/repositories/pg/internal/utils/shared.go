@@ -8,6 +8,7 @@ import (
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
+	"netguard-pg-backend/internal/infrastructure/repositories/pg/internal/sql_builder"
 
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -43,6 +44,46 @@ func BuildScopeFilter(scope ports.Scope, tableAlias string) (string, []interface
 		return "(" + strings.Join(conditions, " OR ") + ")", args
 	default:
 		return "", nil
+	}
+}
+
+// BuildScopeFilterWithTable builds a WHERE clause for the given scope using table name and alias
+// This function supports FieldSelectorScope and uses the SQL Builder for field selectors
+func BuildScopeFilterWithTable(scope ports.Scope, table string, tableAlias string) (string, []interface{}, error) {
+	fmt.Printf("🔍 BuildScopeFilterWithTable CALLED: scope=%T, table=%s, alias=%s\n", scope, table, tableAlias)
+
+	if scope == nil || scope.IsEmpty() {
+		fmt.Printf("🔍 BuildScopeFilterWithTable: scope is nil or empty\n")
+		return "", nil, nil
+	}
+
+	switch s := scope.(type) {
+	case ports.ResourceIdentifierScope:
+		fmt.Printf("🔍 BuildScopeFilterWithTable: ResourceIdentifierScope with %d identifiers\n", len(s.Identifiers))
+		clause, args := BuildScopeFilter(s, tableAlias)
+		return clause, args, nil
+
+	case ports.FieldSelectorScope:
+		fmt.Printf("🔍 BuildScopeFilterWithTable: FieldSelectorScope with %d fieldSelectors, %d labelSelectors\n",
+			len(s.FieldSelectors), len(s.LabelSelectors))
+		builder := sql_builder.NewSQLBuilder()
+		whereClause, args, err := builder.BuildCombinedWHERE(
+			table,
+			tableAlias,
+			s.Identifiers,
+			s.FieldSelectors,
+			s.LabelSelectors,
+			1, // Start with $1
+		)
+		if err != nil {
+			return "", nil, errors.Wrapf(err, "failed to build WHERE clause for field selectors")
+		}
+		return whereClause, args, nil
+
+	default:
+		// Fallback to old behavior
+		clause, args := BuildScopeFilter(scope, tableAlias)
+		return clause, args, nil
 	}
 }
 

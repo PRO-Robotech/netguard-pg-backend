@@ -588,6 +588,7 @@ message SyncSvcFqdnRules {
 // ListServicesReq - request to list services
 message ListServicesReq {
   repeated ResourceIdentifier identifiers = 1;
+  ListOptions list_options = 2;
 }
 
 // ListServicesResp - response with list of services
@@ -608,6 +609,7 @@ message GetServiceResp {
 // ListAddressGroupsReq - request to list address groups
 message ListAddressGroupsReq {
   repeated ResourceIdentifier identifiers = 1;
+  ListOptions list_options = 2;
 }
 
 // ListAddressGroupsResp - response with list of address groups
@@ -628,6 +630,7 @@ message GetAddressGroupResp {
 // ListAddressGroupBindingsReq - request to list address group bindings
 message ListAddressGroupBindingsReq {
   repeated ResourceIdentifier identifiers = 1;
+  ListOptions list_options = 2;
 }
 
 // ListAddressGroupBindingsResp - response with list of address group bindings
@@ -638,6 +641,7 @@ message ListAddressGroupBindingsResp {
 // ListAddressGroupPortMappingsReq - request to list address group port mappings
 message ListAddressGroupPortMappingsReq {
   repeated ResourceIdentifier identifiers = 1;
+  ListOptions list_options = 2;
 }
 
 // ListAddressGroupPortMappingsResp - response with list of address group port mappings
@@ -648,6 +652,7 @@ message ListAddressGroupPortMappingsResp {
 // ListRuleS2SReq - request to list rule s2s
 message ListRuleS2SReq {
   repeated ResourceIdentifier identifiers = 1;
+  ListOptions list_options = 2;
 }
 
 // ListRuleS2SResp - response with list of rule s2s
@@ -658,6 +663,7 @@ message ListRuleS2SResp {
 // ListServiceAliasesReq - request to list service aliases
 message ListServiceAliasesReq {
   repeated ResourceIdentifier identifiers = 1;
+  ListOptions list_options = 2;
 }
 
 // ListServiceAliasesResp - response with list of service aliases
@@ -708,6 +714,7 @@ message GetServiceAliasResp {
 // ListAddressGroupBindingPoliciesReq - request to list address group binding policies
 message ListAddressGroupBindingPoliciesReq {
   repeated ResourceIdentifier identifiers = 1;
+  ListOptions list_options = 2;
 }
 
 // ListAddressGroupBindingPoliciesResp - response with list of address group binding policies
@@ -728,6 +735,7 @@ message GetAddressGroupBindingPolicyResp {
 // ListIEAgAgRulesReq - request to list IEAgAgRules
 message ListIEAgAgRulesReq {
   repeated ResourceIdentifier identifiers = 1;
+  ListOptions list_options = 2;
 }
 
 // ListIEAgAgRulesResp - response with list of IEAgAgRules
@@ -748,6 +756,7 @@ message GetIEAgAgRuleResp {
 // ListNetworksReq - request to list networks
 message ListNetworksReq {
   repeated ResourceIdentifier identifiers = 1;
+  ListOptions list_options = 2;
 }
 
 // ListNetworksResp - response with list of networks
@@ -768,6 +777,7 @@ message GetNetworkResp {
 // ListNetworkBindingsReq - request to list network bindings
 message ListNetworkBindingsReq {
   repeated ResourceIdentifier identifiers = 1;
+  ListOptions list_options = 2;
 }
 
 // ListNetworkBindingsResp - response with list of network bindings
@@ -788,6 +798,7 @@ message GetNetworkBindingResp {
 // ListHostsReq - request to list hosts
 message ListHostsReq {
   repeated ResourceIdentifier identifiers = 1;
+  ListOptions list_options = 2;
 }
 
 // ListHostsResp - response with list of hosts
@@ -808,6 +819,7 @@ message GetHostResp {
 // ListHostBindingsReq - request to list host bindings
 message ListHostBindingsReq {
   repeated ResourceIdentifier identifiers = 1;
+  ListOptions list_options = 2;
 }
 
 // ListHostBindingsResp - response with list of host bindings
@@ -828,6 +840,7 @@ message GetHostBindingResp {
 // ListSvcSvcRulesReq - request to list SvcSvcRules
 message ListSvcSvcRulesReq {
   repeated ResourceIdentifier identifiers = 1;
+  ListOptions list_options = 2;
 }
 
 // ListSvcSvcRulesResp - response with list of SvcSvcRules
@@ -848,6 +861,7 @@ message GetSvcSvcRuleResp {
 // ListSvcFqdnRulesReq - request to list SvcFqdnRules
 message ListSvcFqdnRulesReq {
   repeated ResourceIdentifier identifiers = 1;
+  ListOptions list_options = 2;
 }
 
 // ListSvcFqdnRulesResp - response with list of SvcFqdnRules
