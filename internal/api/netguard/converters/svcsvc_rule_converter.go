@@ -49,6 +49,7 @@ func ConvertSvcSvcRule(r *netguardpb.SvcSvcRule) models.SvcSvcRule {
 	result.Priority = r.Priority
 	result.Logs = r.Logs
 	result.Trace = r.Trace
+	result.Description = r.Description
 
 	return result
 }
@@ -68,11 +69,12 @@ func ConvertSvcSvcRuleToPB(r models.SvcSvcRule) *netguardpb.SvcSvcRule {
 			Name:      r.ServiceToRef.Name,
 			Namespace: r.ServiceToRef.Namespace,
 		},
-		Action:   ConvertActionToPB(r.Action),
-		Priority: r.Priority,
-		Logs:     r.Logs,
-		Trace:    r.Trace,
-		Meta:     ConvertMetaToPB(r.Meta),
+		Action:      ConvertActionToPB(r.Action),
+		Priority:    r.Priority,
+		Logs:        r.Logs,
+		Trace:       r.Trace,
+		Description: r.Description,
+		Meta:        ConvertMetaToPB(r.Meta),
 	}
 
 	return pb

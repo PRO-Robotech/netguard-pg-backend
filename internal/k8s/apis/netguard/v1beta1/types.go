@@ -967,6 +967,10 @@ type SvcSvcRuleSpec struct {
 	// Trace - enable detailed tracing
 	// +optional
 	Trace bool `json:"trace"`
+
+	// Description - optional human-readable description (Netguard-only)
+	// +optional
+	Description string `json:"description,omitempty"`
 }
 
 // SvcSvcRuleStatus defines the observed state

@@ -2240,6 +2240,10 @@
           "type": "boolean",
           "title": "Enable detailed tracing"
         },
+        "description": {
+          "type": "string",
+          "title": "Optional description (Netguard-only)"
+        },
         "meta": {
           "$ref": "#/definitions/v1Meta",
           "title": "Kubernetes metadata"

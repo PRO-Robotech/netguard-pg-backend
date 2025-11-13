@@ -464,7 +464,8 @@ message SvcSvcRule {
   int32 priority = 5;                   // Rule priority (0-1000, lower = higher priority)
   bool logs = 6;                        // Enable traffic logging
   bool trace = 7;                       // Enable detailed tracing
-  Meta meta = 8;                        // Kubernetes metadata
+  string description = 8;               // Optional description (Netguard-only)
+  Meta meta = 9;                        // Kubernetes metadata
 }
 
 // FqdnPortSpec - port specification for service-to-FQDN rules
