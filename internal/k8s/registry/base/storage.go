@@ -11,8 +11,10 @@ import (
 	"netguard-pg-backend/internal/k8s/registry/base/fieldmanager"
 	"netguard-pg-backend/internal/k8s/registry/base/patch"
 	"netguard-pg-backend/internal/k8s/registry/utils"
+	watchpkg "netguard-pg-backend/internal/k8s/registry/watch"
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 	"unsafe"
@@ -40,6 +42,7 @@ type BaseStorage[K runtime.Object, D any] struct {
 	converter    Converter[K, D]
 	validator    Validator[K]
 	watcher      *watch.Broadcaster
+	watchCache   *watchpkg.WatchCache // New: K8s-compatible watch cache
 	resourceName string
 	kindName     string
 	isNamespaced bool
@@ -56,6 +59,9 @@ func NewBaseStorage[K runtime.Object, D any](
 	kindName string,
 	isNamespaced bool,
 ) *BaseStorage[K, D] {
+	// Create watch cache for K8s-compatible watch support
+	watchCache := watchpkg.NewWatchCache(resourceName, 10000)
+
 	return &BaseStorage[K, D]{
 		NewFunc:      newFunc,
 		NewListFunc:  newListFunc,
@@ -63,6 +69,7 @@ func NewBaseStorage[K runtime.Object, D any](
 		converter:    converter,
 		validator:    validator,
 		watcher:      watcher,
+		watchCache:   watchCache,
 		resourceName: resourceName,
 		kindName:     kindName,
 		isNamespaced: isNamespaced,
@@ -278,6 +285,16 @@ func (s *BaseStorage[K, D]) Create(ctx context.Context, obj runtime.Object, crea
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert created domain object to k8s object: %w", err)
 	}
+
+	// Update watch cache with new object
+	if rv := s.extractResourceVersion(createdK8sObj); rv > 0 {
+		if err := s.watchCache.Add(createdK8sObj, rv); err != nil {
+			klog.ErrorS(err, "Failed to add object to watch cache",
+				"resource", s.resourceName,
+				"name", getObjectName(createdK8sObj))
+		}
+	}
+
 	s.broadcastWatchEvent(watch.Added, createdK8sObj)
 	return createdK8sObj, nil
 }
@@ -502,6 +519,16 @@ func (s *BaseStorage[K, D]) Update(ctx context.Context, name string, objInfo res
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to convert updated domain object to k8s object: %w", err)
 	}
+
+	// Update watch cache with modified object
+	if rv := s.extractResourceVersion(resultK8sObj); rv > 0 {
+		if err := s.watchCache.Update(resultK8sObj, rv); err != nil {
+			klog.ErrorS(err, "Failed to update object in watch cache",
+				"resource", s.resourceName,
+				"name", getObjectName(resultK8sObj))
+		}
+	}
+
 	s.broadcastWatchEvent(watch.Modified, resultK8sObj)
 	klog.InfoS("✅ BaseStorage.Update SUCCESS",
 		"resource", s.resourceName,
@@ -630,6 +657,16 @@ func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValid
 					"namespace", namespace,
 					"error", accessorErr.Error())
 			}
+
+			// Update watch cache with deleted object (synthetic)
+			if rv := s.extractResourceVersion(k8sObj); rv > 0 {
+				if err := s.watchCache.Update(k8sObj, rv); err != nil {
+					klog.ErrorS(err, "Failed to update object in watch cache",
+						"resource", s.resourceName,
+						"name", getObjectName(k8sObj))
+				}
+			}
+
 			s.broadcastWatchEvent(watch.Modified, k8sObj)
 			return k8sObj, true, nil
 		}
@@ -648,6 +685,16 @@ func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValid
 		"resource", s.resourceName,
 		"name", name,
 		"namespace", namespace)
+
+	// Update watch cache (soft delete = Modified event with deletionTimestamp)
+	if rv := s.extractResourceVersion(updatedK8sObj); rv > 0 {
+		if err := s.watchCache.Update(updatedK8sObj, rv); err != nil {
+			klog.ErrorS(err, "Failed to update object in watch cache",
+				"resource", s.resourceName,
+				"name", getObjectName(updatedK8sObj))
+		}
+	}
+
 	s.broadcastWatchEvent(watch.Modified, updatedK8sObj)
 	klog.InfoS("🎉 DELETE: Soft delete completed - resource marked for deletion",
 		"resource", s.resourceName,
@@ -849,15 +896,94 @@ func (s *BaseStorage[K, D]) Patch(ctx context.Context, name string, patchType ty
 			}
 		}
 	}
+
+	// Update watch cache with patched object
+	if rv := s.extractResourceVersion(finalK8sObj); rv > 0 {
+		if err := s.watchCache.Update(finalK8sObj, rv); err != nil {
+			klog.ErrorS(err, "Failed to update object in watch cache after patch",
+				"resource", s.resourceName,
+				"name", getObjectName(finalK8sObj))
+		}
+	}
+
 	s.broadcastWatchEvent(watch.Modified, finalK8sObj)
 	return finalK8sObj, nil
 }
 func (s *BaseStorage[K, D]) Watch(ctx context.Context, options *internalversion.ListOptions) (watch.Interface, error) {
-	watchInterface, err := s.watcher.Watch()
-	if err != nil {
-		return nil, err
+	// Parse resourceVersion from options
+	resourceVersion := int64(0)
+	if options != nil && options.ResourceVersion != "" {
+		rv, err := strconv.ParseInt(options.ResourceVersion, 10, 64)
+		if err != nil {
+			return nil, errors.NewBadRequest(fmt.Sprintf("invalid resourceVersion: %s", options.ResourceVersion))
+		}
+		resourceVersion = rv
 	}
-	return watchInterface, nil
+
+	// Get resourceVersionMatch
+	resourceVersionMatch := ""
+	if options != nil {
+		resourceVersionMatch = string(options.ResourceVersionMatch)
+	}
+
+	// Determine sendInitialEvents based on resourceVersionMatch
+	sendInitialEvents := false
+	switch resourceVersionMatch {
+	case "NotOlderThan":
+		// Всегда отправлять initial events с NotOlderThan
+		sendInitialEvents = true
+	case "Exact":
+		// Отправлять только если явно указано
+		sendInitialEvents = (resourceVersion > 0)
+	default:
+		// Legacy behavior: RV="" или "0" = отправить current state
+		sendInitialEvents = (resourceVersion == 0)
+	}
+
+	// Check for allowWatchBookmarks
+	allowWatchBookmarks := false
+	if options != nil {
+		// K8s uses AllowWatchBookmarks field in ListOptions
+		// In internalversion it's part of the options
+		allowWatchBookmarks = true // Enable by default for reliability
+	}
+
+	// Parse timeoutSeconds
+	timeoutSeconds := int64(0)
+	if options != nil && options.TimeoutSeconds != nil {
+		timeoutSeconds = *options.TimeoutSeconds
+	}
+
+	// Create watch options
+	watchOpts := &watchpkg.WatchOptions{
+		ResourceVersion:      resourceVersion,
+		ResourceVersionMatch: resourceVersionMatch,
+		ListOptions:          options,
+		SendInitialEvents:    sendInitialEvents,
+		AllowWatchBookmarks:  allowWatchBookmarks,
+		TimeoutSeconds:       timeoutSeconds,
+	}
+
+	// Create and return cache watcher
+	watcher, err := watchpkg.NewCacheWatcher(ctx, s.watchCache, watchOpts)
+	if err != nil {
+		klog.ErrorS(err, "Failed to create cache watcher",
+			"resource", s.resourceName,
+			"resourceVersion", resourceVersion,
+			"resourceVersionMatch", resourceVersionMatch)
+		return nil, errors.NewInternalError(fmt.Errorf("failed to create watcher: %w", err))
+	}
+
+	klog.V(4).InfoS("Created watch",
+		"resource", s.resourceName,
+		"resourceVersion", resourceVersion,
+		"resourceVersionMatch", resourceVersionMatch,
+		"namespace", utils.NamespaceFrom(ctx),
+		"sendInitialEvents", sendInitialEvents,
+		"allowBookmarks", allowWatchBookmarks,
+		"timeoutSeconds", timeoutSeconds)
+
+	return watcher, nil
 }
 func (s *BaseStorage[K, D]) getFromBackend(ctx context.Context, namespace, name string) (*D, error) {
 	id := models.NewResourceIdentifier(name, models.WithNamespace(namespace))
