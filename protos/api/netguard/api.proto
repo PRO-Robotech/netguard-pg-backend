@@ -279,6 +279,7 @@ message AddressGroup {
   repeated NamespacedObjectReference hosts = 7;
   string address_group_name = 8;  // Computed address group name (e.g., "namespace/name")
   repeated HostReference aggregated_hosts = 9; // All hosts from any source (spec + HostBinding)
+  string description = 10;  // Optional description (Netguard-only)
 }
 
 // AddressGroupBinding - binding between a service and an address group

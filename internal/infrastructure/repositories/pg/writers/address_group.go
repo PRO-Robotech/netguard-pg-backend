@@ -163,7 +163,7 @@ func (w *Writer) upsertAddressGroup(ctx context.Context, ag models.AddressGroup)
 		string(ag.DefaultAction),
 		ag.Logs,
 		ag.Trace,
-		"",
+		ag.Description,
 		networksJSON,
 		hostsJSON,
 		resourceVersion,
