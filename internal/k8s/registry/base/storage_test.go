@@ -505,7 +505,6 @@ func TestBaseStorage_InterfaceAssertion(t *testing.T) {
 	var _ rest.Updater = storage
 	var _ rest.Patcher = storage
 	var _ rest.GracefulDeleter = storage
-	var _ rest.Watcher = storage
 }
 
 func TestNewBaseStorage(t *testing.T) {

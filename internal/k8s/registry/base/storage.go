@@ -76,7 +76,6 @@ var _ rest.Creater = &BaseStorage[runtime.Object, any]{}
 var _ rest.Updater = &BaseStorage[runtime.Object, any]{}
 var _ rest.Patcher = &BaseStorage[runtime.Object, any]{}
 var _ rest.GracefulDeleter = &BaseStorage[runtime.Object, any]{}
-var _ rest.Watcher = &BaseStorage[runtime.Object, any]{}
 
 func (s *BaseStorage[K, D]) New() runtime.Object {
 	return s.NewFunc()
@@ -798,13 +797,6 @@ func (s *BaseStorage[K, D]) Patch(ctx context.Context, name string, patchType ty
 	}
 	s.broadcastWatchEvent(watch.Modified, finalK8sObj)
 	return finalK8sObj, nil
-}
-func (s *BaseStorage[K, D]) Watch(ctx context.Context, options *internalversion.ListOptions) (watch.Interface, error) {
-	watchInterface, err := s.watcher.Watch()
-	if err != nil {
-		return nil, err
-	}
-	return watchInterface, nil
 }
 func (s *BaseStorage[K, D]) getFromBackend(ctx context.Context, namespace, name string) (*D, error) {
 	id := models.NewResourceIdentifier(name, models.WithNamespace(namespace))
@@ -1596,12 +1588,10 @@ func extractPatchDataFromObjInfo(objInfo rest.UpdatedObjectInfo) (*PatchData, bo
 var (
 	_ rest.Storage           = &BaseStorage[runtime.Object, any]{}
 	_ rest.Scoper            = &BaseStorage[runtime.Object, any]{}
-	_ rest.StandardStorage   = &BaseStorage[runtime.Object, any]{}
 	_ rest.CollectionDeleter = &BaseStorage[runtime.Object, any]{}
 	_ rest.Patcher           = &BaseStorage[runtime.Object, any]{}
 	_ rest.Getter            = &BaseStorage[runtime.Object, any]{}
 	_ rest.Lister            = &BaseStorage[runtime.Object, any]{}
 	_ rest.CreaterUpdater    = &BaseStorage[runtime.Object, any]{}
 	_ rest.GracefulDeleter   = &BaseStorage[runtime.Object, any]{}
-	_ rest.Watcher           = &BaseStorage[runtime.Object, any]{}
 )
