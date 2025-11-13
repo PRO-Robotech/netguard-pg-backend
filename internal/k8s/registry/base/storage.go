@@ -449,7 +449,7 @@ func (s *BaseStorage[K, D]) Update(ctx context.Context, name string, objInfo res
 		return nil, false, fmt.Errorf("failed to convert updated domain object to k8s object: %w", err)
 	}
 	s.broadcastWatchEvent(watch.Modified, resultK8sObj)
-	ц
+
 	return resultK8sObj, false, nil
 }
 func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions) (runtime.Object, bool, error) {
