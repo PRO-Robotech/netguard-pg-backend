@@ -74,6 +74,7 @@ func NewHostBindingStorage(backendClient client.BackendClient) *HostBindingStora
 		func() *netguardv1beta1.HostBinding { return &netguardv1beta1.HostBinding{} },
 		func() runtime.Object { return &netguardv1beta1.HostBindingList{} },
 		backendOps,
+		backendClient,
 		converter,
 		validator,
 		watcher,

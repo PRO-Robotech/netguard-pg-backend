@@ -3,10 +3,12 @@ package client
 import (
 	"context"
 	"fmt"
+
 	"netguard-pg-backend/internal/application/validation"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
+	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
 )
 
 type MockBackendClient struct {
@@ -622,4 +624,60 @@ func (m *MockBackendClient) UpdateSvcFqdnRuleMeta(ctx context.Context, id models
 }
 func (m *MockBackendClient) MarkForDeletion(ctx context.Context, namespace, name, kind string) error {
 	return fmt.Errorf("not implemented")
+}
+
+func (m *MockBackendClient) WatchServices(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchServicesClient, error) {
+	return nil, fmt.Errorf("watch not implemented in mock backend")
+}
+
+func (m *MockBackendClient) WatchAddressGroups(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchAddressGroupsClient, error) {
+	return nil, fmt.Errorf("watch not implemented in mock backend")
+}
+
+func (m *MockBackendClient) WatchAddressGroupBindings(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchAddressGroupBindingsClient, error) {
+	return nil, fmt.Errorf("watch not implemented in mock backend")
+}
+
+func (m *MockBackendClient) WatchAddressGroupPortMappings(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchAddressGroupPortMappingsClient, error) {
+	return nil, fmt.Errorf("watch not implemented in mock backend")
+}
+
+func (m *MockBackendClient) WatchRuleS2S(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchRuleS2SClient, error) {
+	return nil, fmt.Errorf("watch not implemented in mock backend")
+}
+
+func (m *MockBackendClient) WatchServiceAliases(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchServiceAliasesClient, error) {
+	return nil, fmt.Errorf("watch not implemented in mock backend")
+}
+
+func (m *MockBackendClient) WatchAddressGroupBindingPolicies(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchAddressGroupBindingPoliciesClient, error) {
+	return nil, fmt.Errorf("watch not implemented in mock backend")
+}
+
+func (m *MockBackendClient) WatchHosts(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchHostsClient, error) {
+	return nil, fmt.Errorf("watch not implemented in mock backend")
+}
+
+func (m *MockBackendClient) WatchHostBindings(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchHostBindingsClient, error) {
+	return nil, fmt.Errorf("watch not implemented in mock backend")
+}
+
+func (m *MockBackendClient) WatchNetworks(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchNetworksClient, error) {
+	return nil, fmt.Errorf("watch not implemented in mock backend")
+}
+
+func (m *MockBackendClient) WatchNetworkBindings(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchNetworkBindingsClient, error) {
+	return nil, fmt.Errorf("watch not implemented in mock backend")
+}
+
+func (m *MockBackendClient) WatchIEAgAgRules(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchIEAgAgRulesClient, error) {
+	return nil, fmt.Errorf("watch not implemented in mock backend")
+}
+
+func (m *MockBackendClient) WatchSvcSvcRules(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchSvcSvcRulesClient, error) {
+	return nil, fmt.Errorf("watch not implemented in mock backend")
+}
+
+func (m *MockBackendClient) WatchSvcFqdnRules(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchSvcFqdnRulesClient, error) {
+	return nil, fmt.Errorf("watch not implemented in mock backend")
 }

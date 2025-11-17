@@ -35,6 +35,7 @@ func NewSvcFqdnRuleStorage(backendClient client.BackendClient) *SvcFqdnRuleStora
 		func() *netguardv1beta1.SvcFqdnRule { return &netguardv1beta1.SvcFqdnRule{} },
 		func() runtime.Object { return &netguardv1beta1.SvcFqdnRuleList{} },
 		backendOps,
+		backendClient,
 		converter,
 		validator,
 		watcher,

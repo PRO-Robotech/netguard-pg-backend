@@ -10,14 +10,10 @@ import (
 
 	"netguard-pg-backend/internal/domain/models"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
-	"netguard-pg-backend/internal/k8s/registry/base"
 )
 
 // IEAgAgRuleConverter implements conversion between k8s IEAgAgRule and domain IEAgAgRule
 type IEAgAgRuleConverter struct{}
-
-// Compile-time interface assertion
-var _ base.Converter[*netguardv1beta1.IEAgAgRule, *models.IEAgAgRule] = &IEAgAgRuleConverter{}
 
 // ToDomain converts a Kubernetes IEAgAgRule object to a domain IEAgAgRule model
 func (c *IEAgAgRuleConverter) ToDomain(ctx context.Context, k8sObj *netguardv1beta1.IEAgAgRule) (*models.IEAgAgRule, error) {

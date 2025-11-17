@@ -230,6 +230,10 @@ func (m *MockBackendOperations) Delete(ctx context.Context, id models.ResourceId
 	return nil
 }
 
+func (m *MockBackendOperations) MarkForDeletion(ctx context.Context, namespace, name, kind string) error {
+	return nil
+}
+
 // Helper function to create a test BaseStorage
 func createTestStorage() *BaseStorage[*MockK8sObject, *MockDomain] {
 	return &BaseStorage[*MockK8sObject, *MockDomain]{
@@ -520,6 +524,7 @@ func TestNewBaseStorage(t *testing.T) {
 		newFunc,
 		newListFunc,
 		backendOps,
+		nil,
 		converter,
 		validator,
 		watcher,

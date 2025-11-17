@@ -38,6 +38,7 @@ func NewAddressGroupBindingStorage(backendClient client.BackendClient) *AddressG
 		func() *netguardv1beta1.AddressGroupBinding { return &netguardv1beta1.AddressGroupBinding{} },
 		func() runtime.Object { return &netguardv1beta1.AddressGroupBindingList{} },
 		backendOps,
+		backendClient,
 		converter,
 		validator,
 		watcher,

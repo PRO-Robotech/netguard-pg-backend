@@ -38,6 +38,7 @@ func NewIEAgAgRuleStorage(backendClient client.BackendClient) *IEAgAgRuleStorage
 		func() *netguardv1beta1.IEAgAgRule { return &netguardv1beta1.IEAgAgRule{} },
 		func() runtime.Object { return &netguardv1beta1.IEAgAgRuleList{} },
 		backendOps,
+		backendClient,
 		converter,
 		validator,
 		watcher,

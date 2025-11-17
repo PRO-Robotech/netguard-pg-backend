@@ -9,14 +9,10 @@ import (
 
 	"netguard-pg-backend/internal/domain/models"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
-	"netguard-pg-backend/internal/k8s/registry/base"
 )
 
 // HostBindingConverter implements conversion between k8s HostBinding and domain HostBinding
 type HostBindingConverter struct{}
-
-// Compile-time interface assertion
-var _ base.Converter[*netguardv1beta1.HostBinding, *models.HostBinding] = &HostBindingConverter{}
 
 // ToDomain converts a Kubernetes HostBinding object to a domain HostBinding model
 func (c *HostBindingConverter) ToDomain(ctx context.Context, k8sObj *netguardv1beta1.HostBinding) (*models.HostBinding, error) {

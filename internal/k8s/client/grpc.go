@@ -2447,3 +2447,59 @@ func (c *GRPCBackendClient) MarkForDeletion(ctx context.Context, namespace, name
 
 	return nil
 }
+
+func (c *GRPCBackendClient) WatchServices(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchServicesClient, error) {
+	return c.client.WatchServices(ctx, req)
+}
+
+func (c *GRPCBackendClient) WatchAddressGroups(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchAddressGroupsClient, error) {
+	return c.client.WatchAddressGroups(ctx, req)
+}
+
+func (c *GRPCBackendClient) WatchAddressGroupBindings(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchAddressGroupBindingsClient, error) {
+	return c.client.WatchAddressGroupBindings(ctx, req)
+}
+
+func (c *GRPCBackendClient) WatchAddressGroupPortMappings(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchAddressGroupPortMappingsClient, error) {
+	return c.client.WatchAddressGroupPortMappings(ctx, req)
+}
+
+func (c *GRPCBackendClient) WatchRuleS2S(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchRuleS2SClient, error) {
+	return c.client.WatchRuleS2S(ctx, req)
+}
+
+func (c *GRPCBackendClient) WatchServiceAliases(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchServiceAliasesClient, error) {
+	return c.client.WatchServiceAliases(ctx, req)
+}
+
+func (c *GRPCBackendClient) WatchAddressGroupBindingPolicies(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchAddressGroupBindingPoliciesClient, error) {
+	return c.client.WatchAddressGroupBindingPolicies(ctx, req)
+}
+
+func (c *GRPCBackendClient) WatchHosts(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchHostsClient, error) {
+	return c.client.WatchHosts(ctx, req)
+}
+
+func (c *GRPCBackendClient) WatchHostBindings(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchHostBindingsClient, error) {
+	return c.client.WatchHostBindings(ctx, req)
+}
+
+func (c *GRPCBackendClient) WatchNetworks(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchNetworksClient, error) {
+	return c.client.WatchNetworks(ctx, req)
+}
+
+func (c *GRPCBackendClient) WatchNetworkBindings(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchNetworkBindingsClient, error) {
+	return c.client.WatchNetworkBindings(ctx, req)
+}
+
+func (c *GRPCBackendClient) WatchIEAgAgRules(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchIEAgAgRulesClient, error) {
+	return c.client.WatchIEAgAgRules(ctx, req)
+}
+
+func (c *GRPCBackendClient) WatchSvcSvcRules(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchSvcSvcRulesClient, error) {
+	return c.client.WatchSvcSvcRules(ctx, req)
+}
+
+func (c *GRPCBackendClient) WatchSvcFqdnRules(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchSvcFqdnRulesClient, error) {
+	return c.client.WatchSvcFqdnRules(ctx, req)
+}

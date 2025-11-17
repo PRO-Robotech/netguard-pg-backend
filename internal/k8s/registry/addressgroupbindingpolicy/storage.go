@@ -38,6 +38,7 @@ func NewAddressGroupBindingPolicyStorage(backendClient client.BackendClient) *Ad
 		func() *netguardv1beta1.AddressGroupBindingPolicy { return &netguardv1beta1.AddressGroupBindingPolicy{} },
 		func() runtime.Object { return &netguardv1beta1.AddressGroupBindingPolicyList{} },
 		backendOps,
+		backendClient,
 		converter,
 		validator,
 		watcher,

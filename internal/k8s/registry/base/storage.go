@@ -3,24 +3,18 @@ package base
 import (
 	"context"
 	"encoding/json"
+	stdErrors "errors"
 	"fmt"
 	"math/rand"
-	"netguard-pg-backend/internal/domain/models"
-	"netguard-pg-backend/internal/domain/ports"
-	"netguard-pg-backend/internal/k8s/middleware"
-	"netguard-pg-backend/internal/k8s/registry/base/fieldmanager"
-	"netguard-pg-backend/internal/k8s/registry/base/patch"
-	"netguard-pg-backend/internal/k8s/registry/utils"
-	watchpkg "netguard-pg-backend/internal/k8s/registry/watch"
-	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 	"unsafe"
 
 	jsonpatch "github.com/evanphx/json-patch/v5"
-	"k8s.io/apimachinery/pkg/api/errors"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,25 +27,36 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/klog/v2"
 	sigyaml "sigs.k8s.io/yaml"
+
+	"netguard-pg-backend/internal/domain/models"
+	"netguard-pg-backend/internal/domain/ports"
+	backendclient "netguard-pg-backend/internal/k8s/client"
+	"netguard-pg-backend/internal/k8s/middleware"
+	"netguard-pg-backend/internal/k8s/registry/base/fieldmanager"
+	"netguard-pg-backend/internal/k8s/registry/base/patch"
+	"netguard-pg-backend/internal/k8s/registry/utils"
+	watchpkg "netguard-pg-backend/internal/k8s/registry/watch"
+	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
 )
 
 type BaseStorage[K runtime.Object, D any] struct {
-	NewFunc      func() K
-	NewListFunc  func() runtime.Object
-	backendOps   BackendOperations[D]
-	converter    Converter[K, D]
-	validator    Validator[K]
-	watcher      *watch.Broadcaster
-	watchCache   *watchpkg.WatchCache // New: K8s-compatible watch cache
-	resourceName string
-	kindName     string
-	isNamespaced bool
+	NewFunc       func() K
+	NewListFunc   func() runtime.Object
+	backendOps    BackendOperations[D]
+	backendClient backendclient.BackendClient
+	converter     Converter[K, D]
+	validator     Validator[K]
+	watcher       *watch.Broadcaster
+	resourceName  string
+	kindName      string
+	isNamespaced  bool
 }
 
 func NewBaseStorage[K runtime.Object, D any](
 	newFunc func() K,
 	newListFunc func() runtime.Object,
 	backendOps BackendOperations[D],
+	backendClient backendclient.BackendClient,
 	converter Converter[K, D],
 	validator Validator[K],
 	watcher *watch.Broadcaster,
@@ -59,20 +64,17 @@ func NewBaseStorage[K runtime.Object, D any](
 	kindName string,
 	isNamespaced bool,
 ) *BaseStorage[K, D] {
-	// Create watch cache for K8s-compatible watch support
-	watchCache := watchpkg.NewWatchCache(resourceName, 10000)
-
 	return &BaseStorage[K, D]{
-		NewFunc:      newFunc,
-		NewListFunc:  newListFunc,
-		backendOps:   backendOps,
-		converter:    converter,
-		validator:    validator,
-		watcher:      watcher,
-		watchCache:   watchCache,
-		resourceName: resourceName,
-		kindName:     kindName,
-		isNamespaced: isNamespaced,
+		NewFunc:       newFunc,
+		NewListFunc:   newListFunc,
+		backendOps:    backendOps,
+		backendClient: backendClient,
+		converter:     converter,
+		validator:     validator,
+		watcher:       watcher,
+		resourceName:  resourceName,
+		kindName:      kindName,
+		isNamespaced:  isNamespaced,
 	}
 }
 
@@ -106,7 +108,7 @@ func (s *BaseStorage[K, D]) Get(ctx context.Context, name string, options *metav
 			"error", err.Error())
 		if isNotFoundError(err) {
 			klog.V(1).InfoS("get: returning Kubernetes NotFound error", "name", name)
-			return nil, errors.NewNotFound(
+			return nil, apierrors.NewNotFound(
 				schema.GroupResource{Group: "netguard.sgroups.io", Resource: s.resourceName},
 				name,
 			)
@@ -259,7 +261,7 @@ func (s *BaseStorage[K, D]) Create(ctx context.Context, obj runtime.Object, crea
 		return nil, fmt.Errorf("expected %T, got %T", s.NewFunc(), obj)
 	}
 	if errs := s.validator.ValidateCreate(ctx, k8sObj); len(errs) > 0 {
-		return nil, errors.NewInvalid(
+		return nil, apierrors.NewInvalid(
 			schema.GroupKind{Group: "netguard.sgroups.io", Kind: s.kindName},
 			getObjectName(k8sObj),
 			errs,
@@ -286,15 +288,6 @@ func (s *BaseStorage[K, D]) Create(ctx context.Context, obj runtime.Object, crea
 		return nil, fmt.Errorf("failed to convert created domain object to k8s object: %w", err)
 	}
 
-	// Update watch cache with new object
-	if rv := s.extractResourceVersion(createdK8sObj); rv > 0 {
-		if err := s.watchCache.Add(createdK8sObj, rv); err != nil {
-			klog.ErrorS(err, "Failed to add object to watch cache",
-				"resource", s.resourceName,
-				"name", getObjectName(createdK8sObj))
-		}
-	}
-
 	s.broadcastWatchEvent(watch.Added, createdK8sObj)
 	return createdK8sObj, nil
 }
@@ -307,7 +300,7 @@ func (s *BaseStorage[K, D]) Update(ctx context.Context, name string, objInfo res
 		"forceAllowCreate", forceAllowCreate)
 	currentDomainObj, err := s.getFromBackend(ctx, namespace, name)
 	if err != nil {
-		if errors.IsNotFound(err) && forceAllowCreate {
+		if apierrors.IsNotFound(err) && forceAllowCreate {
 			obj, err := objInfo.UpdatedObject(ctx, nil)
 			if err != nil {
 				return nil, false, err
@@ -489,14 +482,14 @@ func (s *BaseStorage[K, D]) Update(ctx context.Context, name string, objInfo res
 			"name", name,
 			"namespace", namespace,
 			"deletionTimestamp", deletionTimestamp.String())
-		return nil, false, errors.NewConflict(
+		return nil, false, apierrors.NewConflict(
 			schema.GroupResource{Group: "netguard.sgroups.io", Resource: s.resourceName},
 			name,
 			fmt.Errorf("object is being deleted, update rejected to prevent deletion conflicts"),
 		)
 	}
 	if errs := s.validator.ValidateUpdate(ctx, finalK8sObj, currentK8sObj); len(errs) > 0 {
-		return nil, false, errors.NewInvalid(
+		return nil, false, apierrors.NewInvalid(
 			schema.GroupKind{Group: "netguard.sgroups.io", Kind: s.kindName},
 			getObjectName(finalK8sObj),
 			errs,
@@ -518,15 +511,6 @@ func (s *BaseStorage[K, D]) Update(ctx context.Context, name string, objInfo res
 	resultK8sObj, err := s.converter.FromDomain(ctx, *updatedDomainObj)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to convert updated domain object to k8s object: %w", err)
-	}
-
-	// Update watch cache with modified object
-	if rv := s.extractResourceVersion(resultK8sObj); rv > 0 {
-		if err := s.watchCache.Update(resultK8sObj, rv); err != nil {
-			klog.ErrorS(err, "Failed to update object in watch cache",
-				"resource", s.resourceName,
-				"name", getObjectName(resultK8sObj))
-		}
 	}
 
 	s.broadcastWatchEvent(watch.Modified, resultK8sObj)
@@ -586,7 +570,7 @@ func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValid
 			"name", name,
 			"namespace", namespace,
 			"validationErrors", len(errs))
-		return nil, false, errors.NewInvalid(
+		return nil, false, apierrors.NewInvalid(
 			schema.GroupKind{Group: "netguard.sgroups.io", Kind: s.kindName},
 			getObjectName(k8sObj),
 			errs,
@@ -658,15 +642,6 @@ func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValid
 					"error", accessorErr.Error())
 			}
 
-			// Update watch cache with deleted object (synthetic)
-			if rv := s.extractResourceVersion(k8sObj); rv > 0 {
-				if err := s.watchCache.Update(k8sObj, rv); err != nil {
-					klog.ErrorS(err, "Failed to update object in watch cache",
-						"resource", s.resourceName,
-						"name", getObjectName(k8sObj))
-				}
-			}
-
 			s.broadcastWatchEvent(watch.Modified, k8sObj)
 			return k8sObj, true, nil
 		}
@@ -685,15 +660,6 @@ func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValid
 		"resource", s.resourceName,
 		"name", name,
 		"namespace", namespace)
-
-	// Update watch cache (soft delete = Modified event with deletionTimestamp)
-	if rv := s.extractResourceVersion(updatedK8sObj); rv > 0 {
-		if err := s.watchCache.Update(updatedK8sObj, rv); err != nil {
-			klog.ErrorS(err, "Failed to update object in watch cache",
-				"resource", s.resourceName,
-				"name", getObjectName(updatedK8sObj))
-		}
-	}
 
 	s.broadcastWatchEvent(watch.Modified, updatedK8sObj)
 	klog.InfoS("🎉 DELETE: Soft delete completed - resource marked for deletion",
@@ -816,7 +782,7 @@ func (s *BaseStorage[K, D]) Patch(ctx context.Context, name string, patchType ty
 		currentDomainObj, err := s.getFromBackend(ctx, namespace, name)
 		if err != nil {
 			if isNotFoundError(err) {
-				return nil, errors.NewNotFound(
+				return nil, apierrors.NewNotFound(
 					schema.GroupResource{Group: "netguard.sgroups.io", Resource: s.resourceName},
 					name,
 				)
@@ -864,7 +830,7 @@ func (s *BaseStorage[K, D]) Patch(ctx context.Context, name string, patchType ty
 		return nil, fmt.Errorf("expected %T, got %T", s.NewFunc(), patchedObj)
 	}
 	if errs := s.validator.ValidateUpdate(ctx, patchedK8sObj, currentK8sObj); len(errs) > 0 {
-		return nil, errors.NewInvalid(
+		return nil, apierrors.NewInvalid(
 			schema.GroupKind{Group: "netguard.sgroups.io", Kind: s.kindName},
 			getObjectName(patchedK8sObj),
 			errs,
@@ -897,91 +863,34 @@ func (s *BaseStorage[K, D]) Patch(ctx context.Context, name string, patchType ty
 		}
 	}
 
-	// Update watch cache with patched object
-	if rv := s.extractResourceVersion(finalK8sObj); rv > 0 {
-		if err := s.watchCache.Update(finalK8sObj, rv); err != nil {
-			klog.ErrorS(err, "Failed to update object in watch cache after patch",
-				"resource", s.resourceName,
-				"name", getObjectName(finalK8sObj))
-		}
-	}
-
 	s.broadcastWatchEvent(watch.Modified, finalK8sObj)
 	return finalK8sObj, nil
 }
 func (s *BaseStorage[K, D]) Watch(ctx context.Context, options *internalversion.ListOptions) (watch.Interface, error) {
-	// Parse resourceVersion from options
-	resourceVersion := int64(0)
-	if options != nil && options.ResourceVersion != "" {
-		rv, err := strconv.ParseInt(options.ResourceVersion, 10, 64)
-		if err != nil {
-			return nil, errors.NewBadRequest(fmt.Sprintf("invalid resourceVersion: %s", options.ResourceVersion))
-		}
-		resourceVersion = rv
+	if s.backendClient == nil {
+		return nil, apierrors.NewInternalError(fmt.Errorf("watch not configured for resource %s", s.resourceName))
 	}
 
-	// Get resourceVersionMatch
-	resourceVersionMatch := ""
-	if options != nil {
-		resourceVersionMatch = string(options.ResourceVersionMatch)
-	}
+	req := s.buildWatchRequest(ctx, options)
 
-	// Determine sendInitialEvents based on resourceVersionMatch
-	sendInitialEvents := false
-	switch resourceVersionMatch {
-	case "NotOlderThan":
-		// Всегда отправлять initial events с NotOlderThan
-		sendInitialEvents = true
-	case "Exact":
-		// Отправлять только если явно указано
-		sendInitialEvents = (resourceVersion > 0)
-	default:
-		// Legacy behavior: RV="" или "0" = отправить current state
-		sendInitialEvents = (resourceVersion == 0)
-	}
-
-	// Check for allowWatchBookmarks
-	allowWatchBookmarks := false
-	if options != nil {
-		// K8s uses AllowWatchBookmarks field in ListOptions
-		// In internalversion it's part of the options
-		allowWatchBookmarks = true // Enable by default for reliability
-	}
-
-	// Parse timeoutSeconds
-	timeoutSeconds := int64(0)
-	if options != nil && options.TimeoutSeconds != nil {
-		timeoutSeconds = *options.TimeoutSeconds
-	}
-
-	// Create watch options
-	watchOpts := &watchpkg.WatchOptions{
-		ResourceVersion:      resourceVersion,
-		ResourceVersionMatch: resourceVersionMatch,
-		ListOptions:          options,
-		SendInitialEvents:    sendInitialEvents,
-		AllowWatchBookmarks:  allowWatchBookmarks,
-		TimeoutSeconds:       timeoutSeconds,
-	}
-
-	// Create and return cache watcher
-	watcher, err := watchpkg.NewCacheWatcher(ctx, s.watchCache, watchOpts)
+	stream, err := s.startWatchStream(ctx, req)
 	if err != nil {
-		klog.ErrorS(err, "Failed to create cache watcher",
-			"resource", s.resourceName,
-			"resourceVersion", resourceVersion,
-			"resourceVersionMatch", resourceVersionMatch)
-		return nil, errors.NewInternalError(fmt.Errorf("failed to create watcher: %w", err))
+		return nil, s.translateWatchError(err)
 	}
 
-	klog.V(4).InfoS("Created watch",
+	watcher, err := watchpkg.NewGRPCWatcher(s.resourceName, stream)
+	if err != nil {
+		return nil, apierrors.NewInternalError(fmt.Errorf("failed to initialize gRPC watch: %w", err))
+	}
+
+	klog.V(4).InfoS("Created gRPC watch",
 		"resource", s.resourceName,
-		"resourceVersion", resourceVersion,
-		"resourceVersionMatch", resourceVersionMatch,
-		"namespace", utils.NamespaceFrom(ctx),
-		"sendInitialEvents", sendInitialEvents,
-		"allowBookmarks", allowWatchBookmarks,
-		"timeoutSeconds", timeoutSeconds)
+		"namespace", req.Namespace,
+		"resourceVersion", req.ResourceVersion,
+		"resourceVersionMatch", req.ResourceVersionMatch,
+		"timeoutSeconds", req.TimeoutSeconds,
+		"labelSelector", req.LabelSelector,
+		"fieldSelector", req.FieldSelector)
 
 	return watcher, nil
 }
@@ -1108,6 +1017,99 @@ func (s *BaseStorage[K, D]) broadcastWatchEvent(eventType watch.EventType, obj r
 	if s.watcher != nil {
 		s.watcher.Action(eventType, obj)
 	}
+}
+
+func (s *BaseStorage[K, D]) buildWatchRequest(ctx context.Context, options *internalversion.ListOptions) *netguardpb.WatchRequest {
+	req := &netguardpb.WatchRequest{
+		Namespace: utils.NamespaceFrom(ctx),
+	}
+
+	if options == nil {
+		req.ResourceVersion = "0"
+		return req
+	}
+
+	if options.ResourceVersion == "" {
+		req.ResourceVersion = "0"
+	} else {
+		req.ResourceVersion = options.ResourceVersion
+	}
+
+	req.ResourceVersionMatch = string(options.ResourceVersionMatch)
+
+	if options.TimeoutSeconds != nil {
+		req.TimeoutSeconds = int64(*options.TimeoutSeconds)
+	}
+
+	if options.LabelSelector != nil {
+		req.LabelSelector = options.LabelSelector.String()
+	}
+
+	if options.FieldSelector != nil {
+		req.FieldSelector = options.FieldSelector.String()
+	}
+
+	return req
+}
+
+func (s *BaseStorage[K, D]) startWatchStream(ctx context.Context, req *netguardpb.WatchRequest) (watchpkg.Stream, error) {
+	switch s.resourceName {
+	case "services":
+		return s.backendClient.WatchServices(ctx, req)
+	case "addressgroups":
+		return s.backendClient.WatchAddressGroups(ctx, req)
+	case "addressgroupbindings":
+		return s.backendClient.WatchAddressGroupBindings(ctx, req)
+	case "addressgroupportmappings":
+		return s.backendClient.WatchAddressGroupPortMappings(ctx, req)
+	case "addressgroupbindingpolicies":
+		return s.backendClient.WatchAddressGroupBindingPolicies(ctx, req)
+	case "rules2s":
+		return s.backendClient.WatchRuleS2S(ctx, req)
+	case "servicealiases":
+		return s.backendClient.WatchServiceAliases(ctx, req)
+	case "hosts":
+		return s.backendClient.WatchHosts(ctx, req)
+	case "hostbindings":
+		return s.backendClient.WatchHostBindings(ctx, req)
+	case "networks":
+		return s.backendClient.WatchNetworks(ctx, req)
+	case "networkbindings":
+		return s.backendClient.WatchNetworkBindings(ctx, req)
+	case "ieagagrules":
+		return s.backendClient.WatchIEAgAgRules(ctx, req)
+	case "svcsvcrules":
+		return s.backendClient.WatchSvcSvcRules(ctx, req)
+	case "svcfqdnrules":
+		return s.backendClient.WatchSvcFqdnRules(ctx, req)
+	default:
+		return nil, fmt.Errorf("watch not supported for resource %s", s.resourceName)
+	}
+}
+
+func (s *BaseStorage[K, D]) translateWatchError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	if stdErrors.Is(err, context.Canceled) || stdErrors.Is(err, context.DeadlineExceeded) {
+		return err
+	}
+
+	if st, ok := status.FromError(err); ok {
+		switch st.Code() {
+		case codes.InvalidArgument:
+			return apierrors.NewBadRequest(st.Message())
+		case codes.NotFound:
+			return apierrors.NewNotFound(schema.GroupResource{Group: "netguard.sgroups.io", Resource: s.resourceName}, "")
+		case codes.PermissionDenied, codes.Unauthenticated:
+			return apierrors.NewForbidden(schema.GroupResource{Group: "netguard.sgroups.io", Resource: s.resourceName}, "", err)
+		case codes.FailedPrecondition, codes.AlreadyExists:
+			return apierrors.NewConflict(schema.GroupResource{Group: "netguard.sgroups.io", Resource: s.resourceName}, "", err)
+		}
+	}
+
+	return apierrors.NewInternalError(fmt.Errorf("watch stream failed: %w", err))
 }
 func (s *BaseStorage[K, D]) hasDeletionTimestampSet(domainObj *D) bool {
 	k8sObj, err := s.converter.FromDomain(context.Background(), *domainObj)
@@ -1541,7 +1543,7 @@ func isNotFoundError(err error) bool {
 	errMsg := err.Error()
 	isEntityNotFound := strings.Contains(errMsg, "entity not found")
 	isGeneralNotFound := strings.Contains(errMsg, "not found")
-	isK8sNotFound := errors.IsNotFound(err)
+	isK8sNotFound := apierrors.IsNotFound(err)
 	klog.V(1).InfoS("🔍 DEBUG: isNotFoundError check",
 		"errorMsg", errMsg,
 		"entityNotFound", isEntityNotFound,

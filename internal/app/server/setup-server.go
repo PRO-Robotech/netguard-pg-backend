@@ -13,13 +13,14 @@ import (
 
 	"netguard-pg-backend/internal/api/netguard"
 	"netguard-pg-backend/internal/application/services"
+	"netguard-pg-backend/internal/config"
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
 )
 
-func SetupServer(ctx context.Context, grpcAddr string, httpAddr string, service *services.NetguardFacade) (*http.Server, *http.ServeMux, error) {
+func SetupServer(ctx context.Context, grpcAddr string, httpAddr string, service *services.NetguardFacade, watchCfg config.WatchConfig) (*http.Server, *http.ServeMux, error) {
 	// Create gRPC server
 	grpcServer := grpc.NewServer()
-	netguardServer := netguard.NewServiceServer(service)
+	netguardServer := netguard.NewServiceServer(service, watchCfg)
 	netguardpb.RegisterNetguardServiceServer(grpcServer, netguardServer)
 
 	gwmux := runtime.NewServeMux(

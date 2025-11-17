@@ -202,6 +202,8 @@ func (wc *WatchCache) addEventLocked(eventType watch.EventType, obj runtime.Obje
 		}
 	}
 
+	recordCacheEvent(wc.resourceType, string(eventType))
+
 	klog.V(6).InfoS("Added watch event to cache",
 		"resourceType", wc.resourceType,
 		"eventType", eventType,
@@ -319,7 +321,7 @@ func (wc *WatchCache) matchesFilters(obj runtime.Object, listOpts *metainternalv
 	}
 
 	// Label selector
-	if listOpts.LabelSelector != nil && listOpts.LabelSelector != labels.Everything() {
+	if listOpts.LabelSelector != nil && !listOpts.LabelSelector.Empty() {
 		objMeta, err := getObjectMeta(obj)
 		if err != nil {
 			return false
@@ -330,7 +332,7 @@ func (wc *WatchCache) matchesFilters(obj runtime.Object, listOpts *metainternalv
 	}
 
 	// Field selector
-	if listOpts.FieldSelector != nil && listOpts.FieldSelector != fields.Everything() {
+	if listOpts.FieldSelector != nil && !listOpts.FieldSelector.Empty() {
 		objMeta, err := getObjectMeta(obj)
 		if err != nil {
 			return false
@@ -444,4 +446,20 @@ type ObjectMeta struct {
 	Name      string
 	Namespace string
 	Labels    map[string]string
+}
+
+// GetCachedObject возвращает объект из текущего состояния кэша.
+func (wc *WatchCache) GetCachedObject(namespace, name string) runtime.Object {
+	key := name
+	if namespace != "" {
+		key = fmt.Sprintf("%s/%s", namespace, name)
+	}
+
+	wc.mu.RLock()
+	defer wc.mu.RUnlock()
+
+	if cached, ok := wc.currentObjects[key]; ok && cached != nil && cached.Object != nil {
+		return cached.Object.DeepCopyObject()
+	}
+	return nil
 }

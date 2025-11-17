@@ -9,8 +9,10 @@ import (
 	"time"
 
 	"github.com/lib/pq"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
+
+	"netguard-pg-backend/internal/domain/models"
+	"netguard-pg-backend/internal/watch/converters"
 )
 
 // PGNotifier слушает PostgreSQL NOTIFY события и обновляет watch cache
@@ -28,7 +30,7 @@ type PGNotifier struct {
 	caches map[string]*WatchCache
 
 	// converters - мапа конвертеров для каждого типа ресурса
-	converters map[string]ResourceConverter
+	converters map[string]converters.ResourceConverter
 
 	// ctx - контекст для остановки
 	ctx    context.Context
@@ -39,15 +41,6 @@ type PGNotifier struct {
 
 	// channel - имя PostgreSQL канала для NOTIFY
 	channel string
-}
-
-// ResourceConverter конвертирует данные из PostgreSQL в K8s объект
-type ResourceConverter interface {
-	// ConvertFromDB конвертирует DB row в K8s объект
-	ConvertFromDB(data map[string]interface{}) (runtime.Object, error)
-
-	// GetResourceType возвращает тип ресурса (Host, Service, etc)
-	GetResourceType() string
 }
 
 // PGNotification представляет NOTIFY сообщение из PostgreSQL
@@ -101,7 +94,7 @@ func NewPGNotifier(
 		db:         db,
 		listener:   listener,
 		caches:     make(map[string]*WatchCache),
-		converters: make(map[string]ResourceConverter),
+		converters: make(map[string]converters.ResourceConverter),
 		ctx:        notifierCtx,
 		cancel:     cancel,
 		done:       make(chan struct{}),
@@ -124,11 +117,11 @@ func NewPGNotifier(
 }
 
 // RegisterCache регистрирует watch cache для типа ресурса
-func (pgn *PGNotifier) RegisterCache(cache *WatchCache, converter ResourceConverter) {
+func (pgn *PGNotifier) RegisterCache(cache *WatchCache, converter converters.ResourceConverter) {
 	pgn.mu.Lock()
 	defer pgn.mu.Unlock()
 
-	resourceType := converter.GetResourceType()
+	resourceType := converter.ResourceType()
 	pgn.caches[resourceType] = cache
 	pgn.converters[resourceType] = converter
 
@@ -210,6 +203,8 @@ func (pgn *PGNotifier) handleNotification(notification *pq.Notification) error {
 	}
 
 	// Обрабатываем событие в зависимости от операции
+	recordPGNotifyEvent(pgNotif.ResourceType, pgNotif.Operation)
+
 	switch pgNotif.Operation {
 	case "INSERT", "UPDATE":
 		return pgn.handleInsertOrUpdate(cache, converter, &pgNotif)
@@ -223,16 +218,17 @@ func (pgn *PGNotifier) handleNotification(notification *pq.Notification) error {
 // handleInsertOrUpdate обрабатывает INSERT/UPDATE событие
 func (pgn *PGNotifier) handleInsertOrUpdate(
 	cache *WatchCache,
-	converter ResourceConverter,
+	converter converters.ResourceConverter,
 	notification *PGNotification,
 ) error {
-	// Конвертируем данные в K8s объект
-	obj, err := converter.ConvertFromDB(notification.Data)
+	id := models.NewResourceIdentifier(notification.Name, models.WithNamespace(notification.Namespace))
+
+	obj, err := converter.Convert(pgn.ctx, id)
 	if err != nil {
-		return fmt.Errorf("failed to convert from DB: %w", err)
+		recordPGNotifyError()
+		return fmt.Errorf("failed to convert resource %s/%s: %w", notification.Namespace, notification.Name, err)
 	}
 
-	// Определяем тип события
 	if notification.Operation == "INSERT" {
 		return cache.Add(obj, notification.ResourceVersion)
 	}
@@ -242,27 +238,23 @@ func (pgn *PGNotifier) handleInsertOrUpdate(
 // handleDelete обрабатывает DELETE событие
 func (pgn *PGNotifier) handleDelete(
 	cache *WatchCache,
-	converter ResourceConverter,
+	converter converters.ResourceConverter,
 	notification *PGNotification,
 ) error {
-	// Для DELETE нам нужен объект для события
-	// Если Data есть, используем его; иначе создаем минимальный объект
-	var obj runtime.Object
-	var err error
+	id := models.NewResourceIdentifier(notification.Name, models.WithNamespace(notification.Namespace))
 
-	if notification.Data != nil && len(notification.Data) > 0 {
-		obj, err = converter.ConvertFromDB(notification.Data)
-		if err != nil {
-			return fmt.Errorf("failed to convert from DB: %w", err)
-		}
-	} else {
-		// Создаем минимальный объект с namespace/name
-		// TODO: implement minimal object creation
-		klog.V(4).InfoS("DELETE notification without data",
+	obj, err := converter.Convert(pgn.ctx, id)
+	if err != nil {
+		klog.V(4).InfoS("Failed to fetch deleted object, attempting cache lookup",
 			"resourceType", notification.ResourceType,
 			"namespace", notification.Namespace,
-			"name", notification.Name)
-		return nil
+			"name", notification.Name,
+			"error", err.Error())
+		recordPGNotifyError()
+		obj = cache.GetCachedObject(id.Namespace, id.Name)
+		if obj == nil {
+			return fmt.Errorf("cached object not found for deleted resource %s/%s", id.Namespace, id.Name)
+		}
 	}
 
 	return cache.Delete(obj, notification.ResourceVersion)

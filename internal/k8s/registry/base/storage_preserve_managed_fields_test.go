@@ -446,6 +446,7 @@ func createTestServiceStorage() *BaseStorage[*netguardv1beta1.Service, *models.S
 		func() *netguardv1beta1.Service { return &netguardv1beta1.Service{} },
 		func() runtime.Object { return &netguardv1beta1.ServiceList{} },
 		&mockBackendOps{},
+		nil,
 		&mockConverter{},
 		&mockValidator{},
 		watch.NewBroadcaster(100, watch.DropIfChannelFull),
@@ -490,6 +491,10 @@ func (m *mockBackendOps) Update(ctx context.Context, obj **models.Service) error
 }
 
 func (m *mockBackendOps) Delete(ctx context.Context, id models.ResourceIdentifier) error {
+	return nil
+}
+
+func (m *mockBackendOps) MarkForDeletion(ctx context.Context, namespace, name, kind string) error {
 	return nil
 }
 

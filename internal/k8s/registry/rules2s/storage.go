@@ -38,6 +38,7 @@ func NewRuleS2SStorage(backendClient client.BackendClient) *RuleS2SStorage {
 		func() *netguardv1beta1.RuleS2S { return &netguardv1beta1.RuleS2S{} },
 		func() runtime.Object { return &netguardv1beta1.RuleS2SList{} },
 		backendOps,
+		backendClient,
 		converter,
 		validator,
 		watcher,

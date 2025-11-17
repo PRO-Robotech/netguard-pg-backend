@@ -8,14 +8,10 @@ import (
 
 	"netguard-pg-backend/internal/domain/models"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
-	"netguard-pg-backend/internal/k8s/registry/base"
 )
 
 // NetworkConverter implements conversion between k8s Network and domain Network
 type NetworkConverter struct{}
-
-// Compile-time interface assertion
-var _ base.Converter[*netguardv1beta1.Network, *models.Network] = &NetworkConverter{}
 
 // ToDomain converts a Kubernetes Network object to a domain Network model
 func (c *NetworkConverter) ToDomain(ctx context.Context, k8sObj *netguardv1beta1.Network) (*models.Network, error) {

@@ -71,6 +71,46 @@ func ConvertRuleS2S(r *netguardpb.RuleS2S) models.RuleS2S {
 	return result
 }
 
+// ConvertIEAgAgRule converts protobuf IEAgAgRule to domain model
+func ConvertIEAgAgRule(r *netguardpb.IEAgAgRule) models.IEAgAgRule {
+	if r == nil {
+		return models.IEAgAgRule{}
+	}
+
+	result := models.IEAgAgRule{
+		SelfRef:   models.NewSelfRef(GetSelfRef(r.GetSelfRef())),
+		Meta:      ConvertMeta(r.GetMeta()),
+		Transport: ConvertTransportFromPB(r.GetTransport()),
+		Traffic:   ConvertTrafficFromPB(r.GetTraffic()),
+		Action:    ConvertActionFromPB(r.GetAction()),
+		Logs:      r.GetLogs(),
+		Trace:     r.GetTrace(),
+		Priority:  r.GetPriority(),
+	}
+
+	if ref := r.GetAddressGroupLocal(); ref != nil {
+		result.AddressGroupLocal = convertAddressGroupRefFromProto(ref)
+	}
+	if ref := r.GetAddressGroup(); ref != nil {
+		result.AddressGroup = convertAddressGroupRefFromProto(ref)
+	}
+
+	if ports := r.GetPorts(); len(ports) > 0 {
+		result.Ports = make([]models.PortSpec, len(ports))
+		for i, port := range ports {
+			if port == nil {
+				continue
+			}
+			result.Ports[i] = models.PortSpec{
+				Source:      port.GetSource(),
+				Destination: port.GetDestination(),
+			}
+		}
+	}
+
+	return result
+}
+
 // ConvertRuleS2SToPB converts domain model to protobuf RuleS2S
 func ConvertRuleS2SToPB(r models.RuleS2S) *netguardpb.RuleS2S {
 	pb := &netguardpb.RuleS2S{
@@ -194,4 +234,27 @@ func ConvertIEAgAgRuleToPB(rule models.IEAgAgRule) *netguardpb.IEAgAgRule {
 	}
 
 	return result
+}
+
+func convertAddressGroupRefFromProto(ref *netguardpb.AddressGroupRef) v1beta1.NamespacedObjectReference {
+	if ref == nil {
+		return v1beta1.NamespacedObjectReference{}
+	}
+
+	if obj := ref.GetObjectRef(); obj != nil {
+		return v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: obj.ApiVersion,
+				Kind:       obj.Kind,
+				Name:       obj.Name,
+			},
+			Namespace: obj.Namespace,
+		}
+	}
+
+	if id := ref.GetIdentifier(); id != nil {
+		return NewNamespacedObjectReference(KindAddressGroup, id.GetName(), id.GetNamespace())
+	}
+
+	return v1beta1.NamespacedObjectReference{}
 }

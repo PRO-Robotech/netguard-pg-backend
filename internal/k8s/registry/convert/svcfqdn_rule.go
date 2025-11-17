@@ -9,13 +9,10 @@ import (
 
 	"netguard-pg-backend/internal/domain/models"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
-	"netguard-pg-backend/internal/k8s/registry/base"
 )
 
 // SvcFqdnRuleConverter converts between K8s SvcFqdnRule objects and domain models
 type SvcFqdnRuleConverter struct{}
-
-var _ base.Converter[*netguardv1beta1.SvcFqdnRule, *models.SvcFqdnRule] = &SvcFqdnRuleConverter{}
 
 func NewSvcFqdnRuleConverter() *SvcFqdnRuleConverter {
 	return &SvcFqdnRuleConverter{}

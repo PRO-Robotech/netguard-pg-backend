@@ -72,6 +72,7 @@ func NewHostStorage(backendClient client.BackendClient) *HostStorage {
 		func() *netguardv1beta1.Host { return &netguardv1beta1.Host{} },
 		func() runtime.Object { return &netguardv1beta1.HostList{} },
 		backendOps,
+		backendClient,
 		converter,
 		validator,
 		watcher,

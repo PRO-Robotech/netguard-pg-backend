@@ -38,6 +38,7 @@ func NewServiceAliasStorage(backendClient client.BackendClient) *ServiceAliasSto
 		func() *netguardv1beta1.ServiceAlias { return &netguardv1beta1.ServiceAlias{} },
 		func() runtime.Object { return &netguardv1beta1.ServiceAliasList{} },
 		backendOps,
+		backendClient,
 		converter,
 		validator,
 		watcher,

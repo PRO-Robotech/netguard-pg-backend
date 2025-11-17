@@ -101,3 +101,11 @@ reverse_sync:
     metrics_port: 8090
     graceful_shutdown_timeout: "30s"
     environment: "production"
+
+# Конфигурация watch механизма
+watch:
+  cache_size: 10000
+  pg_channel: "k8s_resource_changes"
+  poll_interval: "500ms"
+  bookmark_interval: "30s"
+  allow_bookmarks: true

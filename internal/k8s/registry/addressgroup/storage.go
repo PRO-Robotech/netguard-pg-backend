@@ -38,6 +38,7 @@ func NewAddressGroupStorage(backendClient client.BackendClient) *AddressGroupSto
 		func() *netguardv1beta1.AddressGroup { return &netguardv1beta1.AddressGroup{} },
 		func() runtime.Object { return &netguardv1beta1.AddressGroupList{} },
 		backendOps,
+		backendClient,
 		converter,
 		validator,
 		watcher,

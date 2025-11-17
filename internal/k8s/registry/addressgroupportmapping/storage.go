@@ -38,6 +38,7 @@ func NewAddressGroupPortMappingStorage(backendClient client.BackendClient) *Addr
 		func() *netguardv1beta1.AddressGroupPortMapping { return &netguardv1beta1.AddressGroupPortMapping{} },
 		func() runtime.Object { return &netguardv1beta1.AddressGroupPortMappingList{} },
 		backendOps,
+		backendClient,
 		converter,
 		validator,
 		watcher,

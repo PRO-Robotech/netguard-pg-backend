@@ -9,14 +9,10 @@ import (
 
 	"netguard-pg-backend/internal/domain/models"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
-	"netguard-pg-backend/internal/k8s/registry/base"
 )
 
 // RuleS2SConverter implements conversion between k8s RuleS2S and domain RuleS2S
 type RuleS2SConverter struct{}
-
-// Compile-time interface assertion
-var _ base.Converter[*netguardv1beta1.RuleS2S, *models.RuleS2S] = &RuleS2SConverter{}
 
 // ToDomain converts a Kubernetes RuleS2S object to a domain RuleS2S model
 func (c *RuleS2SConverter) ToDomain(ctx context.Context, k8sObj *netguardv1beta1.RuleS2S) (*models.RuleS2S, error) {

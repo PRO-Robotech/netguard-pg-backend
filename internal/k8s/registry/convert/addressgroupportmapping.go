@@ -11,14 +11,10 @@ import (
 
 	"netguard-pg-backend/internal/domain/models"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
-	"netguard-pg-backend/internal/k8s/registry/base"
 )
 
 // AddressGroupPortMappingConverter implements conversion between k8s AddressGroupPortMapping and domain AddressGroupPortMapping
 type AddressGroupPortMappingConverter struct{}
-
-// Compile-time interface assertion
-var _ base.Converter[*netguardv1beta1.AddressGroupPortMapping, *models.AddressGroupPortMapping] = &AddressGroupPortMappingConverter{}
 
 // ToDomain converts a Kubernetes AddressGroupPortMapping object to a domain AddressGroupPortMapping model
 func (c *AddressGroupPortMappingConverter) ToDomain(ctx context.Context, k8sObj *netguardv1beta1.AddressGroupPortMapping) (*models.AddressGroupPortMapping, error) {

@@ -9,14 +9,10 @@ import (
 
 	"netguard-pg-backend/internal/domain/models"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
-	"netguard-pg-backend/internal/k8s/registry/base"
 )
 
 // AddressGroupConverter implements conversion between k8s AddressGroup and domain AddressGroup
 type AddressGroupConverter struct{}
-
-// Compile-time interface assertion
-var _ base.Converter[*netguardv1beta1.AddressGroup, *models.AddressGroup] = &AddressGroupConverter{}
 
 // ToDomain converts a Kubernetes AddressGroup object to a domain AddressGroup model
 func (c *AddressGroupConverter) ToDomain(ctx context.Context, k8sObj *netguardv1beta1.AddressGroup) (*models.AddressGroup, error) {

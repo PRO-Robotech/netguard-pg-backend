@@ -9,14 +9,10 @@ import (
 
 	"netguard-pg-backend/internal/domain/models"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
-	"netguard-pg-backend/internal/k8s/registry/base"
 )
 
 // ServiceAliasConverter implements conversion between k8s ServiceAlias and domain ServiceAlias
 type ServiceAliasConverter struct{}
-
-// Compile-time interface assertion
-var _ base.Converter[*netguardv1beta1.ServiceAlias, *models.ServiceAlias] = &ServiceAliasConverter{}
 
 // ToDomain converts a Kubernetes ServiceAlias object to a domain ServiceAlias model
 func (c *ServiceAliasConverter) ToDomain(ctx context.Context, k8sObj *netguardv1beta1.ServiceAlias) (*models.ServiceAlias, error) {

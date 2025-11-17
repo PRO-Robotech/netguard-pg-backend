@@ -38,6 +38,7 @@ func NewSvcSvcRuleStorage(backendClient client.BackendClient) *SvcSvcRuleStorage
 		func() *netguardv1beta1.SvcSvcRule { return &netguardv1beta1.SvcSvcRule{} },
 		func() runtime.Object { return &netguardv1beta1.SvcSvcRuleList{} },
 		backendOps,
+		backendClient,
 		converter,
 		validator,
 		watcher,
