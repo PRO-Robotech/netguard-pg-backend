@@ -1089,6 +1089,10 @@
             "$ref": "#/definitions/v1HostReference"
           },
           "title": "All hosts from any source (spec + HostBinding)"
+        },
+        "description": {
+          "type": "string",
+          "title": "Optional description (Netguard-only)"
         }
       },
       "title": "AddressGroup - represents an address group configuration for Netguard",
@@ -2239,6 +2243,10 @@
         "trace": {
           "type": "boolean",
           "title": "Enable detailed tracing"
+        },
+        "description": {
+          "type": "string",
+          "title": "Optional description (Netguard-only)"
         },
         "meta": {
           "$ref": "#/definitions/v1Meta",

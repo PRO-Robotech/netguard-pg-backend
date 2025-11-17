@@ -221,7 +221,13 @@ func durationShortHumanDuration(d time.Duration) string {
 }
 
 // Ensure HostStorage implements the required interfaces
-var _ rest.StandardStorage = &HostStorage{}
+var _ rest.Storage = &HostStorage{}
+var _ rest.Scoper = &HostStorage{}
+var _ rest.Getter = &HostStorage{}
+var _ rest.Lister = &HostStorage{}
+var _ rest.Creater = &HostStorage{}
+var _ rest.Updater = &HostStorage{}
+var _ rest.GracefulDeleter = &HostStorage{}
 var _ rest.CollectionDeleter = &HostStorage{}
 var _ rest.KindProvider = &HostStorage{}
 var _ rest.SingularNameProvider = &HostStorage{}

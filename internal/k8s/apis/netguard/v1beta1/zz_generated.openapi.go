@@ -3578,6 +3578,13 @@ func schema_k8s_apis_netguard_v1beta1_AddressGroupSpec(ref common.ReferenceCallb
 							Format:      "",
 						},
 					},
+					"description": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Description - optional human-readable description (Netguard-only)",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"hosts": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Hosts that belong exclusively to this AddressGroup Each host can belong to only one AddressGroup Host namespace MUST match AddressGroup namespace",
@@ -6293,6 +6300,13 @@ func schema_k8s_apis_netguard_v1beta1_SvcSvcRuleSpec(ref common.ReferenceCallbac
 							Description: "Trace - enable detailed tracing",
 							Default:     false,
 							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"description": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Description - optional human-readable description (Netguard-only)",
+							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
