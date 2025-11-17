@@ -265,6 +265,10 @@ type AddressGroupSpec struct {
 	// +optional
 	Trace bool `json:"trace"`
 
+	// Description - optional human-readable description (Netguard-only)
+	// +optional
+	Description string `json:"description,omitempty"`
+
 	// Hosts that belong exclusively to this AddressGroup
 	// Each host can belong to only one AddressGroup
 	// Host namespace MUST match AddressGroup namespace
@@ -967,6 +971,10 @@ type SvcSvcRuleSpec struct {
 	// Trace - enable detailed tracing
 	// +optional
 	Trace bool `json:"trace"`
+
+	// Description - optional human-readable description (Netguard-only)
+	// +optional
+	Description string `json:"description,omitempty"`
 }
 
 // SvcSvcRuleStatus defines the observed state

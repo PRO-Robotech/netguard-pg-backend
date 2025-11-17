@@ -90,6 +90,7 @@ type AddressGroup struct {
 	DefaultAction    RuleAction    `json:"defaultAction"`              // Default action for the address group (ACCEPT/DROP)
 	Logs             bool          `json:"logs,omitempty"`             // Whether to enable logs
 	Trace            bool          `json:"trace,omitempty"`            // Whether to enable trace
+	Description      string        `json:"description,omitempty"`      // Optional description (Netguard-only, not synced to SGROUPS)
 	Networks         []NetworkItem `json:"networks,omitempty"`         // Networks associated with this address group
 	AddressGroupName string        `json:"addressGroupName,omitempty"` // Name used in sgroups synchronization
 

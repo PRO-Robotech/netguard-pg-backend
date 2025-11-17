@@ -18,6 +18,7 @@ type SvcSvcRule struct {
 	Priority       int32                             // 0-1000
 	Logs           bool                              // Enable logging
 	Trace          bool                              // Enable tracing
+	Description    string                            // Optional description
 	Meta           Meta                              // K8s metadata (resourceVersion, etc.)
 }
 

@@ -264,6 +264,7 @@ func convertAddressGroupFromProto(protoAG *netguardpb.AddressGroup) models.Addre
 		DefaultAction:    defaultAction,
 		Logs:             protoAG.Logs,
 		Trace:            protoAG.Trace,
+		Description:      protoAG.Description,
 		AddressGroupName: protoAG.AddressGroupName,
 	}
 	if protoAG.Meta != nil {
@@ -354,6 +355,7 @@ func convertAddressGroupToProto(addressGroup models.AddressGroup) *netguardpb.Ad
 		DefaultAction: defaultAction,
 		Logs:          addressGroup.Logs,
 		Trace:         addressGroup.Trace,
+		Description:   addressGroup.Description,
 		Meta: &netguardpb.Meta{
 			Uid:             addressGroup.Meta.UID,
 			ResourceVersion: addressGroup.Meta.ResourceVersion,
@@ -1064,10 +1066,11 @@ func convertSvcSvcRuleFromProto(proto *netguardpb.SvcSvcRule) models.SvcSvcRule 
 			},
 			Namespace: proto.ServiceTo.Namespace,
 		},
-		Action:   models.RuleAction(proto.Action.String()),
-		Priority: proto.Priority,
-		Logs:     proto.Logs,
-		Trace:    proto.Trace,
+		Action:      models.RuleAction(proto.Action.String()),
+		Priority:    proto.Priority,
+		Logs:        proto.Logs,
+		Trace:       proto.Trace,
+		Description: proto.Description,
 	}
 	if proto.Meta != nil {
 		rule.Meta = models.Meta{
@@ -1104,10 +1107,11 @@ func convertSvcSvcRuleToProto(m models.SvcSvcRule) *netguardpb.SvcSvcRule {
 			Name:      m.ServiceToRef.Name,
 			Namespace: m.ServiceToRef.Namespace,
 		},
-		Action:   netguardpb.RuleAction(netguardpb.RuleAction_value[string(m.Action)]),
-		Priority: m.Priority,
-		Logs:     m.Logs,
-		Trace:    m.Trace,
+		Action:      netguardpb.RuleAction(netguardpb.RuleAction_value[string(m.Action)]),
+		Priority:    m.Priority,
+		Logs:        m.Logs,
+		Trace:       m.Trace,
+		Description: m.Description,
 	}
 	if !m.Meta.CreationTS.IsZero() {
 		proto.Meta = &netguardpb.Meta{
