@@ -363,7 +363,13 @@ func durationShortHumanDuration(d time.Duration) string {
 }
 
 // Ensure HostBindingStorage implements the required interfaces
-var _ rest.StandardStorage = &HostBindingStorage{}
+var _ rest.Storage = &HostBindingStorage{}
+var _ rest.Scoper = &HostBindingStorage{}
+var _ rest.Getter = &HostBindingStorage{}
+var _ rest.Lister = &HostBindingStorage{}
+var _ rest.Creater = &HostBindingStorage{}
+var _ rest.Updater = &HostBindingStorage{}
+var _ rest.GracefulDeleter = &HostBindingStorage{}
 var _ rest.CollectionDeleter = &HostBindingStorage{}
 var _ rest.KindProvider = &HostBindingStorage{}
 var _ rest.SingularNameProvider = &HostBindingStorage{}

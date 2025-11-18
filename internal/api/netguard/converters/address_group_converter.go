@@ -13,6 +13,7 @@ func ConvertAddressGroup(ag *netguardpb.AddressGroup) models.AddressGroup {
 		DefaultAction: ConvertActionFromPB(ag.DefaultAction),
 		Logs:          ag.Logs,
 		Trace:         ag.Trace,
+		Description:   ag.Description,
 		Meta:          ConvertMeta(ag.Meta),
 	}
 
@@ -65,6 +66,7 @@ func ConvertAddressGroupToPB(ag models.AddressGroup) *netguardpb.AddressGroup {
 		DefaultAction:    defaultAction,
 		Logs:             ag.Logs,
 		Trace:            ag.Trace,
+		Description:      ag.Description,
 		AddressGroupName: ag.AddressGroupName,
 		Meta:             ConvertMetaToPB(ag.Meta),
 	}

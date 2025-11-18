@@ -13,8 +13,11 @@ import (
 type Storage interface {
 	rest.Storage
 	rest.Scoper
-	rest.StandardStorage
-	rest.Watcher
+	rest.Getter
+	rest.Lister
+	rest.Creater
+	rest.Updater
+	rest.GracefulDeleter
 }
 
 // BaseStorage provides common functionality for all storage implementations
