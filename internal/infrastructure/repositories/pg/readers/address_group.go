@@ -19,7 +19,11 @@ func (r *Reader) ListAddressGroups(ctx context.Context, consume func(models.Addr
 			   m.created_at, m.updated_at, m.deletion_timestamp
 		FROM address_groups ag
 		INNER JOIN k8s_metadata m ON ag.resource_version = m.resource_version`
-	whereClause, args := utils.BuildScopeFilter(scope, "ag")
+	whereClause, args, err := utils.BuildScopeFilterWithTable(scope, "address_groups", "ag")
+	if err != nil {
+		return errors.Wrap(err, "failed to build scope filter")
+	}
+
 	if whereClause != "" {
 		query += " WHERE " + whereClause
 	}

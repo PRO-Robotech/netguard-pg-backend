@@ -39,6 +39,30 @@
             }
           }
         },
+        "parameters": [
+          {
+            "name": "listOptions.namespace",
+            "description": "Namespace filter (empty = all namespaces)\nDEPRECATED: Use field_selectors with \"metadata.namespace\" instead for consistency",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.continueToken",
+            "description": "Pagination token for retrieving next page of results",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.limit",
+            "description": "Limit number of results (0 = no limit)",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
         "tags": [
           "NetguardService"
         ]
@@ -101,6 +125,30 @@
             }
           }
         },
+        "parameters": [
+          {
+            "name": "listOptions.namespace",
+            "description": "Namespace filter (empty = all namespaces)\nDEPRECATED: Use field_selectors with \"metadata.namespace\" instead for consistency",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.continueToken",
+            "description": "Pagination token for retrieving next page of results",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.limit",
+            "description": "Limit number of results (0 = no limit)",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
         "tags": [
           "NetguardService"
         ]
@@ -163,6 +211,30 @@
             }
           }
         },
+        "parameters": [
+          {
+            "name": "listOptions.namespace",
+            "description": "Namespace filter (empty = all namespaces)\nDEPRECATED: Use field_selectors with \"metadata.namespace\" instead for consistency",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.continueToken",
+            "description": "Pagination token for retrieving next page of results",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.limit",
+            "description": "Limit number of results (0 = no limit)",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
         "tags": [
           "NetguardService"
         ]
@@ -225,6 +297,30 @@
             }
           }
         },
+        "parameters": [
+          {
+            "name": "listOptions.namespace",
+            "description": "Namespace filter (empty = all namespaces)\nDEPRECATED: Use field_selectors with \"metadata.namespace\" instead for consistency",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.continueToken",
+            "description": "Pagination token for retrieving next page of results",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.limit",
+            "description": "Limit number of results (0 = no limit)",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
         "tags": [
           "NetguardService"
         ]
@@ -287,6 +383,30 @@
             }
           }
         },
+        "parameters": [
+          {
+            "name": "listOptions.namespace",
+            "description": "Namespace filter (empty = all namespaces)\nDEPRECATED: Use field_selectors with \"metadata.namespace\" instead for consistency",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.continueToken",
+            "description": "Pagination token for retrieving next page of results",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.limit",
+            "description": "Limit number of results (0 = no limit)",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
         "tags": [
           "NetguardService"
         ]
@@ -349,6 +469,30 @@
             }
           }
         },
+        "parameters": [
+          {
+            "name": "listOptions.namespace",
+            "description": "Namespace filter (empty = all namespaces)\nDEPRECATED: Use field_selectors with \"metadata.namespace\" instead for consistency",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.continueToken",
+            "description": "Pagination token for retrieving next page of results",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.limit",
+            "description": "Limit number of results (0 = no limit)",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
         "tags": [
           "NetguardService"
         ]
@@ -411,6 +555,30 @@
             }
           }
         },
+        "parameters": [
+          {
+            "name": "listOptions.namespace",
+            "description": "Namespace filter (empty = all namespaces)\nDEPRECATED: Use field_selectors with \"metadata.namespace\" instead for consistency",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.continueToken",
+            "description": "Pagination token for retrieving next page of results",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.limit",
+            "description": "Limit number of results (0 = no limit)",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
         "tags": [
           "NetguardService"
         ]
@@ -473,6 +641,30 @@
             }
           }
         },
+        "parameters": [
+          {
+            "name": "listOptions.namespace",
+            "description": "Namespace filter (empty = all namespaces)\nDEPRECATED: Use field_selectors with \"metadata.namespace\" instead for consistency",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.continueToken",
+            "description": "Pagination token for retrieving next page of results",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.limit",
+            "description": "Limit number of results (0 = no limit)",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
         "tags": [
           "NetguardService"
         ]
@@ -535,6 +727,30 @@
             }
           }
         },
+        "parameters": [
+          {
+            "name": "listOptions.namespace",
+            "description": "Namespace filter (empty = all namespaces)\nDEPRECATED: Use field_selectors with \"metadata.namespace\" instead for consistency",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.continueToken",
+            "description": "Pagination token for retrieving next page of results",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.limit",
+            "description": "Limit number of results (0 = no limit)",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
         "tags": [
           "NetguardService"
         ]
@@ -653,6 +869,30 @@
             }
           }
         },
+        "parameters": [
+          {
+            "name": "listOptions.namespace",
+            "description": "Namespace filter (empty = all namespaces)\nDEPRECATED: Use field_selectors with \"metadata.namespace\" instead for consistency",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.continueToken",
+            "description": "Pagination token for retrieving next page of results",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.limit",
+            "description": "Limit number of results (0 = no limit)",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
         "tags": [
           "NetguardService"
         ]
@@ -715,6 +955,30 @@
             }
           }
         },
+        "parameters": [
+          {
+            "name": "listOptions.namespace",
+            "description": "Namespace filter (empty = all namespaces)\nDEPRECATED: Use field_selectors with \"metadata.namespace\" instead for consistency",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.continueToken",
+            "description": "Pagination token for retrieving next page of results",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.limit",
+            "description": "Limit number of results (0 = no limit)",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
         "tags": [
           "NetguardService"
         ]
@@ -777,6 +1041,30 @@
             }
           }
         },
+        "parameters": [
+          {
+            "name": "listOptions.namespace",
+            "description": "Namespace filter (empty = all namespaces)\nDEPRECATED: Use field_selectors with \"metadata.namespace\" instead for consistency",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.continueToken",
+            "description": "Pagination token for retrieving next page of results",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.limit",
+            "description": "Limit number of results (0 = no limit)",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
         "tags": [
           "NetguardService"
         ]
@@ -839,6 +1127,30 @@
             }
           }
         },
+        "parameters": [
+          {
+            "name": "listOptions.namespace",
+            "description": "Namespace filter (empty = all namespaces)\nDEPRECATED: Use field_selectors with \"metadata.namespace\" instead for consistency",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.continueToken",
+            "description": "Pagination token for retrieving next page of results",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.limit",
+            "description": "Limit number of results (0 = no limit)",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
         "tags": [
           "NetguardService"
         ]
@@ -901,6 +1213,30 @@
             }
           }
         },
+        "parameters": [
+          {
+            "name": "listOptions.namespace",
+            "description": "Namespace filter (empty = all namespaces)\nDEPRECATED: Use field_selectors with \"metadata.namespace\" instead for consistency",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.continueToken",
+            "description": "Pagination token for retrieving next page of results",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.limit",
+            "description": "Limit number of results (0 = no limit)",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
         "tags": [
           "NetguardService"
         ]
@@ -1233,6 +1569,42 @@
       },
       "title": "Condition - kubernetes condition for resource status"
     },
+    "v1FieldOperator": {
+      "type": "string",
+      "enum": [
+        "FIELD_OPERATOR_UNSPECIFIED",
+        "FIELD_OPERATOR_EQUALS",
+        "FIELD_OPERATOR_NOT_EQUALS",
+        "FIELD_OPERATOR_IN",
+        "FIELD_OPERATOR_NOT_IN",
+        "FIELD_OPERATOR_CONTAINS",
+        "FIELD_OPERATOR_STARTS_WITH",
+        "FIELD_OPERATOR_ENDS_WITH",
+        "FIELD_OPERATOR_EXISTS",
+        "FIELD_OPERATOR_NOT_EXISTS"
+      ],
+      "default": "FIELD_OPERATOR_UNSPECIFIED",
+      "description": "- FIELD_OPERATOR_EQUALS: Basic comparison operators\n\n= (equality)\n - FIELD_OPERATOR_NOT_EQUALS: != (inequality)\n - FIELD_OPERATOR_IN: Set membership operators\n\nIN (value in list) - value format: \"val1,val2,val3\"\n - FIELD_OPERATOR_NOT_IN: NOT IN (value not in list) - value format: \"val1,val2,val3\"\n - FIELD_OPERATOR_CONTAINS: String matching operators\n\nLIKE %value% (substring match)\n - FIELD_OPERATOR_STARTS_WITH: LIKE value% (prefix match)\n - FIELD_OPERATOR_ENDS_WITH: LIKE %value (suffix match)\n - FIELD_OPERATOR_EXISTS: Null checking operators\n\nIS NOT NULL (field has value)\n - FIELD_OPERATOR_NOT_EXISTS: IS NULL (field is null)",
+      "title": "FieldOperator defines the comparison operation for field selectors"
+    },
+    "v1FieldSelector": {
+      "type": "object",
+      "properties": {
+        "field": {
+          "type": "string",
+          "title": "Field path in Kubernetes style\nExamples: \"metadata.name\", \"status.addressGroupRef.name\""
+        },
+        "operator": {
+          "$ref": "#/definitions/v1FieldOperator",
+          "title": "Comparison operator"
+        },
+        "value": {
+          "type": "string",
+          "title": "Value to compare (string representation, backend will cast if needed)"
+        }
+      },
+      "title": "FieldSelector allows filtering resources by field values"
+    },
     "v1FqdnPortSpec": {
       "type": "object",
       "properties": {
@@ -1548,6 +1920,42 @@
       },
       "title": "IngressPort - defines a port configuration for ingress traffic"
     },
+    "v1LabelOperator": {
+      "type": "string",
+      "enum": [
+        "LABEL_OPERATOR_UNSPECIFIED",
+        "LABEL_OPERATOR_EQUALS",
+        "LABEL_OPERATOR_NOT_EQUALS",
+        "LABEL_OPERATOR_IN",
+        "LABEL_OPERATOR_NOT_IN",
+        "LABEL_OPERATOR_EXISTS",
+        "LABEL_OPERATOR_NOT_EXISTS"
+      ],
+      "default": "LABEL_OPERATOR_UNSPECIFIED",
+      "description": "- LABEL_OPERATOR_EQUALS: Equality-based selectors\n\nkey=value (label key equals value)\n - LABEL_OPERATOR_NOT_EQUALS: key!=value (label key not equals value)\n - LABEL_OPERATOR_IN: Set-based selectors\n\nkey in (value1, value2, ...) (label key's value is in the set)\n - LABEL_OPERATOR_NOT_IN: key notin (value1, value2, ...) (label key's value is not in the set)\n - LABEL_OPERATOR_EXISTS: Existence selectors\n\nkey exists (label key is present, any value)\n - LABEL_OPERATOR_NOT_EXISTS: !key (label key is not present)",
+      "title": "LabelOperator defines the operation for label selectors"
+    },
+    "v1LabelSelector": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "title": "Label key to match"
+        },
+        "operator": {
+          "$ref": "#/definitions/v1LabelOperator",
+          "title": "Operator for label matching"
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "Values for the operation (for IN/NOT_IN operators, multiple values; for EQUALS/NOT_EQUALS, single value)\nFor EXISTS/NOT_EXISTS operators, values are ignored"
+        }
+      },
+      "title": "LabelSelector allows filtering resources by labels"
+    },
     "v1ListAddressGroupBindingPoliciesResp": {
       "type": "object",
       "properties": {
@@ -1664,6 +2072,41 @@
         }
       },
       "title": "ListNetworksResp - response with list of networks"
+    },
+    "v1ListOptions": {
+      "type": "object",
+      "properties": {
+        "namespace": {
+          "type": "string",
+          "title": "Namespace filter (empty = all namespaces)\nDEPRECATED: Use field_selectors with \"metadata.namespace\" instead for consistency"
+        },
+        "fieldSelectors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1FieldSelector"
+          },
+          "title": "Field selectors for filtering (AND logic between multiple selectors)\nReturns all resources matching ALL specified field conditions\nExample: [{field: \"metadata.namespace\", operator: EQUALS, value: \"prod\"},\n          {field: \"status.isBound\", operator: EQUALS, value: \"true\"}]"
+        },
+        "labelSelectors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1LabelSelector"
+          },
+          "title": "Label selectors for filtering by labels (AND logic between multiple selectors)\nReturns all resources matching ALL specified label conditions\nExample: [{key: \"env\", operator: EQUALS, values: [\"prod\"]},\n          {key: \"tier\", operator: IN, values: [\"frontend\", \"backend\"]}]"
+        },
+        "continueToken": {
+          "type": "string",
+          "title": "Pagination token for retrieving next page of results"
+        },
+        "limit": {
+          "type": "integer",
+          "format": "int32",
+          "title": "Limit number of results (0 = no limit)"
+        }
+      },
+      "title": "ListOptions specifies filtering and pagination options for List operations"
     },
     "v1ListRuleS2SResp": {
       "type": "object",

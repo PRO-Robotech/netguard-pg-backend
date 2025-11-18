@@ -21,14 +21,17 @@ func (r *Reader) ListAddressGroupBindings(ctx context.Context, consume func(mode
 		FROM address_group_bindings agb
 		INNER JOIN k8s_metadata m ON agb.resource_version = m.resource_version
 		WHERE m.deletion_timestamp IS NULL`
-	whereClause, args := utils.BuildScopeFilter(scope, "agb")
+	whereClause, args, err := utils.BuildScopeFilterWithTable(scope, "address_group_bindings", "agb")
+	if err != nil {
+		return errors.Wrap(err, "failed to build scope filter")
+	}
+
 	if whereClause != "" {
 		query += " AND " + whereClause
 	} else {
 	}
 	query += " ORDER BY agb.namespace, agb.name"
 	var rows pgx.Rows
-	var err error
 	maxRetries := 3
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		rows, err = r.query(ctx, query, args...)
