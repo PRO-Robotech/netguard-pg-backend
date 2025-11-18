@@ -91,6 +91,7 @@ func (r *Reader) scanAddressGroup(rows pgx.Rows) (models.AddressGroup, error) {
 	if err != nil {
 		return addressGroup, err
 	}
+	addressGroup.Description = description
 	if len(networksJSON) > 0 {
 		if err := json.Unmarshal(networksJSON, &addressGroup.Networks); err != nil {
 			return addressGroup, errors.Wrap(err, "failed to unmarshal networks")
@@ -157,6 +158,7 @@ func (r *Reader) scanAddressGroupRow(row pgx.Row) (*models.AddressGroup, error) 
 	if err != nil {
 		return nil, err
 	}
+	addressGroup.Description = description
 	if len(networksJSON) > 0 {
 		if err := json.Unmarshal(networksJSON, &addressGroup.Networks); err != nil {
 			return nil, errors.Wrap(err, "failed to unmarshal networks")

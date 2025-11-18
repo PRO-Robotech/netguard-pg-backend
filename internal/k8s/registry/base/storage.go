@@ -77,7 +77,6 @@ var _ rest.Creater = &BaseStorage[runtime.Object, any]{}
 var _ rest.Updater = &BaseStorage[runtime.Object, any]{}
 var _ rest.Patcher = &BaseStorage[runtime.Object, any]{}
 var _ rest.GracefulDeleter = &BaseStorage[runtime.Object, any]{}
-var _ rest.Watcher = &BaseStorage[runtime.Object, any]{}
 
 func (s *BaseStorage[K, D]) New() runtime.Object {
 	return s.NewFunc()
@@ -503,22 +502,12 @@ func (s *BaseStorage[K, D]) Update(ctx context.Context, name string, objInfo res
 		return nil, false, fmt.Errorf("failed to convert updated domain object to k8s object: %w", err)
 	}
 	s.broadcastWatchEvent(watch.Modified, resultK8sObj)
-	klog.InfoS("✅ BaseStorage.Update SUCCESS",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace)
+
 	return resultK8sObj, false, nil
 }
 func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions) (runtime.Object, bool, error) {
 	namespace := utils.NamespaceFrom(ctx)
-	klog.InfoS("🔥 DELETE METHOD CALLED - STARTING DELETE OPERATION",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace)
-	klog.InfoS("🔍 DELETE: Getting object from backend",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace)
+
 	domainObj, err := s.getFromBackend(ctx, namespace, name)
 	if err != nil {
 		klog.InfoS("❌ DELETE: Failed to get object from backend",
@@ -528,14 +517,7 @@ func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValid
 			"error", err.Error())
 		return nil, false, err
 	}
-	klog.InfoS("✅ DELETE: Successfully got object from backend",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace)
-	klog.InfoS("🔄 DELETE: Converting domain object to k8s object",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace)
+
 	k8sObj, err := s.converter.FromDomain(ctx, *domainObj)
 	if err != nil {
 		klog.InfoS("❌ DELETE: Failed to convert domain object to k8s object",
@@ -545,35 +527,16 @@ func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValid
 			"error", err.Error())
 		return nil, false, fmt.Errorf("failed to convert domain object to k8s object: %w", err)
 	}
-	klog.InfoS("✅ DELETE: Successfully converted domain object to k8s object",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace)
-	klog.InfoS("🔍 DELETE: Validating deletion",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace)
+
 	if errs := s.validator.ValidateDelete(ctx, k8sObj); len(errs) > 0 {
-		klog.InfoS("❌ DELETE: Validation failed",
-			"resource", s.resourceName,
-			"name", name,
-			"namespace", namespace,
-			"validationErrors", len(errs))
 		return nil, false, errors.NewInvalid(
 			schema.GroupKind{Group: "netguard.sgroups.io", Kind: s.kindName},
 			getObjectName(k8sObj),
 			errs,
 		)
 	}
-	klog.InfoS("✅ DELETE: Validation passed",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace)
+
 	if deleteValidation != nil {
-		klog.InfoS("🔍 DELETE: Running additional validation",
-			"resource", s.resourceName,
-			"name", name,
-			"namespace", namespace)
 		if err := deleteValidation(ctx, k8sObj); err != nil {
 			klog.InfoS("❌ DELETE: Additional validation failed",
 				"resource", s.resourceName,
@@ -582,15 +545,8 @@ func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValid
 				"error", err.Error())
 			return nil, false, err
 		}
-		klog.InfoS("✅ DELETE: Additional validation passed",
-			"resource", s.resourceName,
-			"name", name,
-			"namespace", namespace)
 	}
-	klog.InfoS("🗑️ DELETE: Marking for deletion (soft delete)",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace)
+
 	err = s.markForDeletionInBackend(ctx, namespace, name)
 	if err != nil {
 		klog.InfoS("❌ DELETE: markForDeletionInBackend failed",
@@ -600,14 +556,6 @@ func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValid
 			"error", err.Error())
 		return nil, false, err
 	}
-	klog.InfoS("✅ DELETE: Marked for deletion successfully",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace)
-	klog.InfoS("🔄 DELETE: Fetching updated object after marking for deletion",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace)
 	updatedDomainObj, err := s.getFromBackend(ctx, namespace, name)
 	if err != nil {
 		klog.InfoS("❌ DELETE: Failed to fetch updated object",
@@ -644,23 +592,11 @@ func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValid
 			"error", err.Error())
 		return nil, false, err
 	}
-	klog.InfoS("📡 DELETE: Broadcasting watch.Modified event (soft delete)",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace)
 	s.broadcastWatchEvent(watch.Modified, updatedK8sObj)
-	klog.InfoS("🎉 DELETE: Soft delete completed - resource marked for deletion",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace,
-		"message", "Resource will be physically deleted after SGROUP sync by OutboxWorker")
 	return updatedK8sObj, true, nil
 }
 func (s *BaseStorage[K, D]) DeleteCollection(ctx context.Context, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions, listOptions *internalversion.ListOptions) (runtime.Object, error) {
 	namespace := utils.NamespaceFrom(ctx)
-	klog.InfoS("🗑️🗑️🗑️ DELETE COLLECTION STARTED",
-		"resource", s.resourceName,
-		"namespace", namespace)
 	listObj, err := s.List(ctx, listOptions)
 	if err != nil {
 		klog.InfoS("❌ DELETE COLLECTION: Failed to list resources",
@@ -720,12 +656,6 @@ func (s *BaseStorage[K, D]) DeleteCollection(ctx context.Context, deleteValidati
 }
 func (s *BaseStorage[K, D]) Patch(ctx context.Context, name string, patchType types.PatchType, data []byte, options *metav1.PatchOptions, subresources ...string) (runtime.Object, error) {
 	namespace := utils.NamespaceFrom(ctx)
-	klog.InfoS("🚀🚀🚀 PATCH OPERATION STARTED - DEFINITELY BEING CALLED",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace,
-		"patchType", string(patchType),
-		"dataSize", len(data))
 	patchData := &PatchData{
 		PatchType: patchType,
 		Data:      data,
@@ -734,10 +664,6 @@ func (s *BaseStorage[K, D]) Patch(ctx context.Context, name string, patchType ty
 		Namespace: namespace,
 	}
 	ctx = WithPatchData(ctx, patchData)
-	klog.InfoS("✅ Patch data stored in context for fallback use",
-		"resource", s.resourceName,
-		"patchType", string(patchType),
-		"dataSize", len(data))
 	var currentK8sObj K
 	var isCreateOperation bool
 	if patchType == types.ApplyPatchType {
@@ -852,22 +778,8 @@ func (s *BaseStorage[K, D]) Patch(ctx context.Context, name string, patchType ty
 	s.broadcastWatchEvent(watch.Modified, finalK8sObj)
 	return finalK8sObj, nil
 }
-func (s *BaseStorage[K, D]) Watch(ctx context.Context, options *internalversion.ListOptions) (watch.Interface, error) {
-	watchInterface, err := s.watcher.Watch()
-	if err != nil {
-		return nil, err
-	}
-	return watchInterface, nil
-}
 func (s *BaseStorage[K, D]) getFromBackend(ctx context.Context, namespace, name string) (*D, error) {
 	id := models.NewResourceIdentifier(name, models.WithNamespace(namespace))
-	getBackendStartTime := time.Now()
-	klog.InfoS("🚀 getFromBackend CALLED - ENHANCED TRACKING",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace,
-		"timestamp", getBackendStartTime.Format("15:04:05.000000"),
-		"identifier", fmt.Sprintf("%+v", id))
 	result, err := s.backendOps.Get(ctx, id)
 	if err != nil {
 		klog.V(1).InfoS("getFromBackend error",
@@ -916,9 +828,6 @@ func (s *BaseStorage[K, D]) createInBackend(ctx context.Context, obj *D) (*D, er
 	return obj, nil
 }
 func (s *BaseStorage[K, D]) updateInBackend(ctx context.Context, obj *D) (*D, error) {
-	klog.InfoS("🔧 updateInBackend CALLED",
-		"resource", s.resourceName,
-		"objType", fmt.Sprintf("%T", obj))
 	err := s.backendOps.Update(ctx, obj)
 	if err != nil {
 		klog.InfoS("❌ updateInBackend FAILED",
@@ -927,8 +836,6 @@ func (s *BaseStorage[K, D]) updateInBackend(ctx context.Context, obj *D) (*D, er
 			"errorType", fmt.Sprintf("%T", err))
 		return nil, err
 	}
-	klog.InfoS("✅ updateInBackend SUCCESS",
-		"resource", s.resourceName)
 	return obj, nil
 }
 func (s *BaseStorage[K, D]) deleteFromBackend(ctx context.Context, namespace, name string) error {
@@ -1649,12 +1556,10 @@ func extractPatchDataFromObjInfo(objInfo rest.UpdatedObjectInfo) (*PatchData, bo
 var (
 	_ rest.Storage           = &BaseStorage[runtime.Object, any]{}
 	_ rest.Scoper            = &BaseStorage[runtime.Object, any]{}
-	_ rest.StandardStorage   = &BaseStorage[runtime.Object, any]{}
 	_ rest.CollectionDeleter = &BaseStorage[runtime.Object, any]{}
 	_ rest.Patcher           = &BaseStorage[runtime.Object, any]{}
 	_ rest.Getter            = &BaseStorage[runtime.Object, any]{}
 	_ rest.Lister            = &BaseStorage[runtime.Object, any]{}
 	_ rest.CreaterUpdater    = &BaseStorage[runtime.Object, any]{}
 	_ rest.GracefulDeleter   = &BaseStorage[runtime.Object, any]{}
-	_ rest.Watcher           = &BaseStorage[runtime.Object, any]{}
 )
