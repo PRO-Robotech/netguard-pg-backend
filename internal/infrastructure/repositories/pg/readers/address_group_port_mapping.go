@@ -18,7 +18,11 @@ func (r *Reader) ListAddressGroupPortMappings(ctx context.Context, consume func(
 			   m.created_at, m.updated_at, m.deletion_timestamp
 		FROM address_group_port_mappings agpm
 		INNER JOIN k8s_metadata m ON agpm.resource_version = m.resource_version`
-	whereClause, args := utils.BuildScopeFilter(scope, "agpm")
+	whereClause, args, err := utils.BuildScopeFilterWithTable(scope, "address_group_port_mappings", "agpm")
+	if err != nil {
+		return errors.Wrap(err, "failed to build scope filter")
+	}
+
 	if whereClause != "" {
 		query += " WHERE " + whereClause
 	} else {

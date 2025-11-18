@@ -26,7 +26,7 @@ func NewAddressGroupHandler(service *services.NetguardFacade) *AddressGroupHandl
 
 // ListAddressGroups gets list of address groups
 func (h *AddressGroupHandler) ListAddressGroups(ctx context.Context, req *netguardpb.ListAddressGroupsReq) (*netguardpb.ListAddressGroupsResp, error) {
-	scope := h.buildScope(req.GetIdentifiers())
+	scope := h.buildScopeWithOptions(req.GetIdentifiers(), req.ListOptions)
 
 	addressGroups, err := h.service.GetAddressGroups(ctx, scope)
 	if err != nil {
@@ -57,7 +57,7 @@ func (h *AddressGroupHandler) GetAddressGroup(ctx context.Context, req *netguard
 
 // ListAddressGroupBindings gets list of address group bindings
 func (h *AddressGroupHandler) ListAddressGroupBindings(ctx context.Context, req *netguardpb.ListAddressGroupBindingsReq) (*netguardpb.ListAddressGroupBindingsResp, error) {
-	scope := h.buildScope(req.Identifiers)
+	scope := h.buildScopeWithOptions(req.Identifiers, req.ListOptions)
 
 	bindings, err := h.service.GetAddressGroupBindings(ctx, scope)
 	if err != nil {
@@ -88,7 +88,7 @@ func (h *AddressGroupHandler) GetAddressGroupBinding(ctx context.Context, req *n
 
 // ListAddressGroupPortMappings gets list of address group port mappings
 func (h *AddressGroupHandler) ListAddressGroupPortMappings(ctx context.Context, req *netguardpb.ListAddressGroupPortMappingsReq) (*netguardpb.ListAddressGroupPortMappingsResp, error) {
-	scope := h.buildScope(req.Identifiers)
+	scope := h.buildScopeWithOptions(req.Identifiers, req.ListOptions)
 
 	mappings, err := h.service.GetAddressGroupPortMappings(ctx, scope)
 	if err != nil {
@@ -122,7 +122,7 @@ func (h *AddressGroupHandler) GetAddressGroupPortMapping(ctx context.Context, re
 
 // ListAddressGroupBindingPolicies gets list of address group binding policies
 func (h *AddressGroupHandler) ListAddressGroupBindingPolicies(ctx context.Context, req *netguardpb.ListAddressGroupBindingPoliciesReq) (*netguardpb.ListAddressGroupBindingPoliciesResp, error) {
-	scope := h.buildScope(req.Identifiers)
+	scope := h.buildScopeWithOptions(req.Identifiers, req.ListOptions)
 
 	policies, err := h.service.GetAddressGroupBindingPolicies(ctx, scope)
 	if err != nil {
@@ -163,4 +163,31 @@ func (h *AddressGroupHandler) buildScope(identifiers []*netguardpb.ResourceIdent
 	}
 
 	return ports.NewResourceIdentifierScope(ids...)
+}
+
+// buildScopeWithOptions creates a scope from resource identifiers and list options
+func (h *AddressGroupHandler) buildScopeWithOptions(identifiers []*netguardpb.ResourceIdentifier, listOpts *netguardpb.ListOptions) ports.Scope {
+	// Extract identifiers
+	var ids []models.ResourceIdentifier
+	if len(identifiers) > 0 {
+		ids = make([]models.ResourceIdentifier, 0, len(identifiers))
+		for _, id := range identifiers {
+			ids = append(ids, converters.ResourceIdentifierFromPB(id))
+		}
+	}
+
+	// Check if we have field or label selectors
+	if listOpts != nil && (len(listOpts.FieldSelectors) > 0 || len(listOpts.LabelSelectors) > 0) {
+		return ports.FieldSelectorScope{
+			Identifiers:    ids,
+			FieldSelectors: listOpts.FieldSelectors,
+			LabelSelectors: listOpts.LabelSelectors,
+		}
+	}
+
+	// Fall back to ResourceIdentifierScope or EmptyScope
+	if len(ids) > 0 {
+		return ports.NewResourceIdentifierScope(ids...)
+	}
+	return ports.EmptyScope{}
 }

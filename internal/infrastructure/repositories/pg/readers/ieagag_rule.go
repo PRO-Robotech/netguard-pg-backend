@@ -23,7 +23,11 @@ func (r *Reader) ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAg
 			   m.created_at, m.updated_at, m.deletion_timestamp
 		FROM ie_ag_ag_rules ier
 		INNER JOIN k8s_metadata m ON ier.resource_version = m.resource_version`
-	whereClause, args := utils.BuildScopeFilter(scope, "ier")
+	whereClause, args, err := utils.BuildScopeFilterWithTable(scope, "ie_ag_ag_rules", "ier")
+	if err != nil {
+		return errors.Wrap(err, "failed to build scope filter")
+	}
+
 	if whereClause != "" {
 		query += " WHERE " + whereClause
 	} else {

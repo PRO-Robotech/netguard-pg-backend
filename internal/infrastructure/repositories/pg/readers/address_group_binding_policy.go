@@ -19,7 +19,11 @@ func (r *Reader) ListAddressGroupBindingPolicies(ctx context.Context, consume fu
 			   m.created_at, m.updated_at, m.deletion_timestamp
 		FROM address_group_binding_policies agbp
 		INNER JOIN k8s_metadata m ON agbp.resource_version = m.resource_version`
-	whereClause, args := utils.BuildScopeFilter(scope, "agbp")
+	whereClause, args, err := utils.BuildScopeFilterWithTable(scope, "address_group_binding_policies", "agbp")
+	if err != nil {
+		return errors.Wrap(err, "failed to build scope filter")
+	}
+
 	if whereClause != "" {
 		query += " WHERE " + whereClause
 	} else {

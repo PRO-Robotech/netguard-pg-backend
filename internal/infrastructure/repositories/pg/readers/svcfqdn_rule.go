@@ -40,14 +40,17 @@ func (r *Reader) ListSvcFqdnRules(ctx context.Context, consume func(models.SvcFq
         FROM svc_fqdn_rules fr
         INNER JOIN k8s_metadata m ON fr.resource_version = m.resource_version`
 
-	whereClause, args := utils.BuildScopeFilter(scope, "fr")
+	whereClause, args, err := utils.BuildScopeFilterWithTable(scope, "svc_fqdn_rules", "fr")
+	if err != nil {
+		return errors.Wrap(err, "failed to build scope filter")
+	}
+
 	if whereClause != "" {
 		query += " WHERE " + whereClause
 	}
 	query += " ORDER BY fr.namespace, fr.name"
 
 	var rows pgx.Rows
-	var err error
 	const maxRetries = 3
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		rows, err = r.query(ctx, query, args...)
