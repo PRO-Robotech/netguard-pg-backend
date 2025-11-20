@@ -142,16 +142,6 @@ func (s *NetworkBindingStorage) ConvertToTable(ctx context.Context, object runti
 	return table, nil
 }
 
-func formatNamespacedRef(ref netguardv1beta1.NamespacedObjectReference) string {
-	if ref.Name == "" {
-		return "<unknown>"
-	}
-	if ref.Namespace == "" {
-		return ref.Name
-	}
-	return fmt.Sprintf("%s/%s", ref.Namespace, ref.Name)
-}
-
 // helper function for networkbinding storage
 func networkBindingTranslateTimestampSince(ts metav1.Time) string {
 	if ts.IsZero() {
@@ -174,6 +164,16 @@ func networkBindingDurationShortHumanDuration(d time.Duration) string {
 		return fmt.Sprintf("%dh", int(d.Hours()))
 	}
 	return fmt.Sprintf("%dd", int(d.Hours()/24))
+}
+
+func formatNamespacedRef(ref netguardv1beta1.NamespacedObjectReference) string {
+	if ref.Name == "" {
+		return "<unknown>"
+	}
+	if ref.Namespace == "" {
+		return ref.Name
+	}
+	return fmt.Sprintf("%s/%s", ref.Namespace, ref.Name)
 }
 
 // DeleteCollection implements rest.CollectionDeleter

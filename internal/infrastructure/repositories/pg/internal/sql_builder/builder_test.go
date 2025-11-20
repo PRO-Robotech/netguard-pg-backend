@@ -231,6 +231,38 @@ func TestBuildCombinedWHERE(t *testing.T) {
 			startParamNum: 1,
 			wantErr:       true,
 		},
+		{
+			name:       "svc_svc_rules table",
+			table:      "svc_svc_rules",
+			tableAlias: "sr",
+			fieldSelectors: []*netguardpb.FieldSelector{
+				{
+					Field:    "spec.serviceFrom.name",
+					Operator: netguardpb.FieldOperator_FIELD_OPERATOR_EQUALS,
+					Value:    "frontend",
+				},
+			},
+			startParamNum: 1,
+			wantClause:    "(sr.service_from_ref->>'name' = $1)",
+			wantArgs:      []interface{}{"frontend"},
+			wantErr:       false,
+		},
+		{
+			name:       "svc_fqdn_rules table",
+			table:      "svc_fqdn_rules",
+			tableAlias: "fr",
+			fieldSelectors: []*netguardpb.FieldSelector{
+				{
+					Field:    "spec.serviceFrom.namespace",
+					Operator: netguardpb.FieldOperator_FIELD_OPERATOR_EQUALS,
+					Value:    "prod",
+				},
+			},
+			startParamNum: 1,
+			wantClause:    "(fr.service_from_ref->>'namespace' = $1)",
+			wantArgs:      []interface{}{"prod"},
+			wantErr:       false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -296,6 +328,20 @@ func TestGetFieldMapping(t *testing.T) {
 			table:      "nonexistent",
 			field:      "metadata.name",
 			wantExists: false,
+		},
+		{
+			name:       "svc_svc_rules - spec.serviceFrom.name",
+			table:      "svc_svc_rules",
+			field:      "spec.serviceFrom.name",
+			wantExists: true,
+			wantType:   FieldTypeColumn,
+		},
+		{
+			name:       "svc_fqdn_rules - spec.fqdn",
+			table:      "svc_fqdn_rules",
+			field:      "spec.fqdn",
+			wantExists: true,
+			wantType:   FieldTypeColumn,
 		},
 	}
 
@@ -366,6 +412,30 @@ func TestGetSupportedFields(t *testing.T) {
 			name:       "non-existent table",
 			table:      "nonexistent",
 			wantFields: nil,
+		},
+		{
+			name:  "svc_svc_rules table",
+			table: "svc_svc_rules",
+			wantFields: []string{
+				"metadata.name",
+				"metadata.namespace",
+				"spec.serviceFrom.name",
+				"spec.serviceFrom.namespace",
+				"spec.serviceTo.name",
+				"spec.serviceTo.namespace",
+			},
+		},
+		{
+			name:  "svc_fqdn_rules table",
+			table: "svc_fqdn_rules",
+			wantFields: []string{
+				"metadata.name",
+				"metadata.namespace",
+				"spec.serviceFrom.name",
+				"spec.serviceFrom.namespace",
+				"spec.fqdn",
+				"spec.description",
+			},
 		},
 	}
 

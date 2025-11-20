@@ -11,6 +11,13 @@ import (
 	"time"
 	"unsafe"
 
+	"netguard-pg-backend/internal/domain/models"
+	"netguard-pg-backend/internal/domain/ports"
+	"netguard-pg-backend/internal/k8s/middleware"
+	"netguard-pg-backend/internal/k8s/registry/base/fieldmanager"
+	"netguard-pg-backend/internal/k8s/registry/base/patch"
+	"netguard-pg-backend/internal/k8s/registry/utils"
+
 	jsonpatch "github.com/evanphx/json-patch/v5"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -28,13 +35,8 @@ import (
 	"k8s.io/klog/v2"
 	sigyaml "sigs.k8s.io/yaml"
 
-	"netguard-pg-backend/internal/domain/models"
-	"netguard-pg-backend/internal/domain/ports"
 	backendclient "netguard-pg-backend/internal/k8s/client"
-	"netguard-pg-backend/internal/k8s/middleware"
-	"netguard-pg-backend/internal/k8s/registry/base/fieldmanager"
-	"netguard-pg-backend/internal/k8s/registry/base/patch"
-	"netguard-pg-backend/internal/k8s/registry/utils"
+
 	watchpkg "netguard-pg-backend/internal/k8s/registry/watch"
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
 )
@@ -292,7 +294,6 @@ func (s *BaseStorage[K, D]) Create(ctx context.Context, obj runtime.Object, crea
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert created domain object to k8s object: %w", err)
 	}
-
 	s.broadcastWatchEvent(watch.Added, createdK8sObj)
 	return createdK8sObj, nil
 }
@@ -517,7 +518,6 @@ func (s *BaseStorage[K, D]) Update(ctx context.Context, name string, objInfo res
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to convert updated domain object to k8s object: %w", err)
 	}
-
 	s.broadcastWatchEvent(watch.Modified, resultK8sObj)
 	klog.InfoS("✅ BaseStorage.Update SUCCESS",
 		"resource", s.resourceName,
@@ -646,7 +646,6 @@ func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValid
 					"namespace", namespace,
 					"error", accessorErr.Error())
 			}
-
 			s.broadcastWatchEvent(watch.Modified, k8sObj)
 			return k8sObj, true, nil
 		}
@@ -665,7 +664,6 @@ func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValid
 		"resource", s.resourceName,
 		"name", name,
 		"namespace", namespace)
-
 	s.broadcastWatchEvent(watch.Modified, updatedK8sObj)
 	klog.InfoS("🎉 DELETE: Soft delete completed - resource marked for deletion",
 		"resource", s.resourceName,
@@ -867,7 +865,6 @@ func (s *BaseStorage[K, D]) Patch(ctx context.Context, name string, patchType ty
 			}
 		}
 	}
-
 	s.broadcastWatchEvent(watch.Modified, finalK8sObj)
 	return finalK8sObj, nil
 }
@@ -1504,7 +1501,7 @@ func (s *BaseStorage[K, D]) preserveManagedFields(source, dest runtime.Object) e
 	preservedFields := make([]metav1.ManagedFieldsEntry, len(sourceManagedFields))
 	copy(preservedFields, sourceManagedFields)
 	destManagedFields := destAccessor.GetManagedFields()
-	if len(destManagedFields) > 0 {
+	if destManagedFields != nil && len(destManagedFields) > 0 {
 		mergedFields := s.mergeManagedFields(preservedFields, destManagedFields)
 		destAccessor.SetManagedFields(mergedFields)
 		klog.V(3).InfoS("Merged and preserved managedFields",

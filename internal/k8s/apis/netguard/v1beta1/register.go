@@ -176,5 +176,21 @@ func addFieldLabelConversionFuncs(scheme *runtime.Scheme) error {
 		return err
 	}
 
+	// Register field label conversion function for SvcSvcRule resource
+	if err := scheme.AddFieldLabelConversionFunc(
+		SchemeGroupVersion.WithKind("SvcSvcRule"),
+		SvcSvcRuleFieldLabelConversion,
+	); err != nil {
+		return err
+	}
+
+	// Register field label conversion function for SvcFqdnRule resource
+	if err := scheme.AddFieldLabelConversionFunc(
+		SchemeGroupVersion.WithKind("SvcFqdnRule"),
+		SvcFqdnRuleFieldLabelConversion,
+	); err != nil {
+		return err
+	}
+
 	return nil
 }
