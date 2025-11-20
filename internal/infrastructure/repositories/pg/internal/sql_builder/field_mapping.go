@@ -199,6 +199,60 @@ var fieldMappings = map[string]map[string]FieldMapping{
 			ColumnName: "address_group_namespace",
 		},
 	},
+
+	"svc_svc_rules": {
+		"metadata.name": {
+			Type:       FieldTypeColumn,
+			ColumnName: "name",
+		},
+		"metadata.namespace": {
+			Type:       FieldTypeColumn,
+			ColumnName: "namespace",
+		},
+		"spec.serviceFrom.name": {
+			Type:       FieldTypeColumn,
+			ColumnName: "service_from_ref->>'name'",
+		},
+		"spec.serviceFrom.namespace": {
+			Type:       FieldTypeColumn,
+			ColumnName: "service_from_ref->>'namespace'",
+		},
+		"spec.serviceTo.name": {
+			Type:       FieldTypeColumn,
+			ColumnName: "service_to_ref->>'name'",
+		},
+		"spec.serviceTo.namespace": {
+			Type:       FieldTypeColumn,
+			ColumnName: "service_to_ref->>'namespace'",
+		},
+	},
+
+	"svc_fqdn_rules": {
+		"metadata.name": {
+			Type:       FieldTypeColumn,
+			ColumnName: "name",
+		},
+		"metadata.namespace": {
+			Type:       FieldTypeColumn,
+			ColumnName: "namespace",
+		},
+		"spec.serviceFrom.name": {
+			Type:       FieldTypeColumn,
+			ColumnName: "service_from_ref->>'name'",
+		},
+		"spec.serviceFrom.namespace": {
+			Type:       FieldTypeColumn,
+			ColumnName: "service_from_ref->>'namespace'",
+		},
+		"spec.fqdn": {
+			Type:       FieldTypeColumn,
+			ColumnName: "fqdn",
+		},
+		"spec.description": {
+			Type:       FieldTypeColumn,
+			ColumnName: "description",
+		},
+	},
 }
 
 // GetFieldMapping возвращает маппинг для таблицы и поля
