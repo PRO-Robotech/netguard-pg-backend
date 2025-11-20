@@ -68,6 +68,7 @@ type PGNotification struct {
 func NewPGNotifier(
 	ctx context.Context,
 	db *sql.DB,
+	connString string,
 	channel string,
 ) (*PGNotifier, error) {
 	notifierCtx, cancel := context.WithCancel(ctx)
@@ -83,8 +84,12 @@ func NewPGNotifier(
 	minReconnectInterval := 10 * time.Second
 	maxReconnectInterval := 1 * time.Minute
 
+	if connString == "" {
+		return nil, fmt.Errorf("connection string is required for PG notifier")
+	}
+
 	listener := pq.NewListener(
-		db.Driver().(interface{ ConnString() string }).ConnString(),
+		connString,
 		minReconnectInterval,
 		maxReconnectInterval,
 		reportProblem,

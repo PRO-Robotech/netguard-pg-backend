@@ -1,12 +1,5 @@
 -- +goose Up
--- Add PostgreSQL NOTIFY triggers for watch support
--- This enables real-time watch events via LISTEN/NOTIFY mechanism
-
--- Create notification channel name constant
--- All K8s resource changes will be sent to this channel
--- Format: k8s_resource_changes
-
--- Function to send notification on resource changes
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION notify_k8s_resource_change()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -66,6 +59,7 @@ BEGIN
     END IF;
 END;
 $$ LANGUAGE plpgsql;
+-- +goose StatementEnd
 
 -- Add triggers for all K8s resource tables
 -- These will fire AFTER INSERT/UPDATE/DELETE and send NOTIFY
@@ -151,13 +145,6 @@ CREATE TRIGGER notify_svc_fqdn_rules_change
     FOR EACH ROW
     EXECUTE FUNCTION notify_k8s_resource_change();
 
--- IE_SvcSvc_Rules table (if exists)
-DROP TRIGGER IF EXISTS notify_ie_svc_svc_rules_change ON ie_svc_svc_rules;
-CREATE TRIGGER notify_ie_svc_svc_rules_change
-    AFTER INSERT OR UPDATE OR DELETE ON ie_svc_svc_rules
-    FOR EACH ROW
-    EXECUTE FUNCTION notify_k8s_resource_change();
-
 -- Create index on k8s_metadata for watch queries
 -- This helps with efficient resourceVersion-based queries
 CREATE INDEX IF NOT EXISTS idx_k8s_metadata_rv_created 
@@ -184,8 +171,6 @@ DROP TRIGGER IF EXISTS notify_ie_ag_ag_rules_change ON ie_ag_ag_rules;
 DROP TRIGGER IF EXISTS notify_address_group_port_mappings_change ON address_group_port_mappings;
 DROP TRIGGER IF EXISTS notify_svc_svc_rules_change ON svc_svc_rules;
 DROP TRIGGER IF EXISTS notify_svc_fqdn_rules_change ON svc_fqdn_rules;
-DROP TRIGGER IF EXISTS notify_ie_svc_svc_rules_change ON ie_svc_svc_rules;
-
 -- Drop function
 DROP FUNCTION IF EXISTS notify_k8s_resource_change();
 

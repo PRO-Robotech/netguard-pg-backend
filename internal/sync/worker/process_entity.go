@@ -49,11 +49,23 @@ func (w *OutboxWorker) processEntityResource(
 			zap.String("namespace", item.ResourceNamespace),
 			zap.String("name", item.ResourceName),
 			zap.String("operation", operation))
-		resource, err = w.reconstructResourceFromPayload(ctx, item)
+		var payload map[string]interface{}
+		resource, payload, err = w.reconstructResourceFromPayload(ctx, item)
 		if err != nil {
 			duration := time.Since(startTime)
 			RecordProcessingFailure(item.ResourceType, operation, "payload_reconstruction_error", duration)
 			return fmt.Errorf("failed to reconstruct resource from payload: %w", err)
+		}
+
+		if w.shouldSkipExternalSync(item, payload) {
+			w.logger.Info("skipping SGROUP sync for condition-only update",
+				zap.String("resource_type", item.ResourceType),
+				zap.String("namespace", item.ResourceNamespace),
+				zap.String("name", item.ResourceName))
+			if err := w.markEntityResourceReady(ctx, item.ResourceType, item.ResourceNamespace, item.ResourceName, item.ID); err != nil {
+				return err
+			}
+			return nil
 		}
 
 		if service, ok := resource.(*models.Service); ok {
@@ -229,13 +241,19 @@ func (w *OutboxWorker) processEntityResource(
 		zap.Duration("duration", duration))
 	return nil
 }
-func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item *domain.OutboxEntry) (interface{}, error) {
+func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item *domain.OutboxEntry) (interface{}, map[string]interface{}, error) {
 	var payload map[string]interface{}
 	if err := json.Unmarshal(item.Payload, &payload); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal payload: %w", err)
+		return nil, nil, fmt.Errorf("failed to unmarshal payload: %w", err)
 	}
-	namespace, _ := payload["namespace"].(string)
-	name, _ := payload["name"].(string)
+	namespace := getStringFromMap(payload, "namespace")
+	if namespace == "" {
+		namespace = item.ResourceNamespace
+	}
+	name := getStringFromMap(payload, "name")
+	if name == "" {
+		name = item.ResourceName
+	}
 	switch item.ResourceType {
 	case string(registry.TypeHost):
 		uuid := getStringFromMap(payload, "uuid")
@@ -284,7 +302,7 @@ func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item 
 			host.SetIpList(ips)
 		}
 
-		return host, nil
+		return host, payload, nil
 	case string(registry.TypeNetwork):
 		cidr, _ := payload["cidr"].(string)
 		return &models.Network{
@@ -295,7 +313,7 @@ func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item 
 				},
 			},
 			CIDR: cidr,
-		}, nil
+		}, payload, nil
 	case string(registry.TypeAddressGroup):
 		var base *models.AddressGroup
 		if item.Operation != domain.SyncOperationCreate {
@@ -391,7 +409,7 @@ func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item 
 				ag.Networks = networkItems
 			}
 		}
-		return ag, nil
+		return ag, payload, nil
 	case string(registry.TypeService):
 		var base *models.Service
 		if item.Operation != domain.SyncOperationCreate {
@@ -539,7 +557,7 @@ func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item 
 			zap.Int("final_aggregated_address_group_count", len(svc.AggregatedAddressGroups)),
 			zap.Any("final_aggregated_address_groups", svc.AggregatedAddressGroups))
 
-		return svc, nil
+		return svc, payload, nil
 	case string(registry.TypeSvcSvcRule):
 		var base *models.SvcSvcRule
 		if item.Operation != domain.SyncOperationCreate {
@@ -618,7 +636,7 @@ func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item 
 		if rule.ServiceFromRef.Namespace == "" && rule.ServiceFromRef.Name != "" {
 			rule.ServiceFromRef.Namespace = namespace
 		}
-		return rule, nil
+		return rule, payload, nil
 	case string(registry.TypeSvcFqdnRule):
 		var base *models.SvcFqdnRule
 		if item.Operation != domain.SyncOperationCreate {
@@ -725,7 +743,7 @@ func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item 
 		if rule.Transport == "" {
 			rule.Transport = models.TCP
 		}
-		return rule, nil
+		return rule, payload, nil
 	case string(registry.TypeHostBinding):
 		// For DELETE operations on HostBinding (process resource), we only need basic identification
 		// The coordinated deletion handler will load the full resource if needed
@@ -736,10 +754,55 @@ func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item 
 					Name:      name,
 				},
 			},
-		}, nil
+		}, payload, nil
 	default:
-		return nil, fmt.Errorf("unknown resource type: %s", item.ResourceType)
+		return nil, nil, fmt.Errorf("unknown resource type: %s", item.ResourceType)
 	}
+}
+
+func (w *OutboxWorker) shouldSkipExternalSync(item *domain.OutboxEntry, payload map[string]interface{}) bool {
+	if payload == nil {
+		return false
+	}
+
+	if item.Operation != domain.SyncOperationUpdate {
+		return false
+	}
+
+	switch item.ResourceType {
+	case string(registry.TypeAddressGroup):
+		return isConditionOnlyAddressGroupPayload(payload)
+	default:
+		return false
+	}
+}
+
+func isConditionOnlyAddressGroupPayload(payload map[string]interface{}) bool {
+	if payload == nil {
+		return false
+	}
+
+	hasSpecPayload := hasAnyKeys(payload,
+		"defaultAction",
+		"logs",
+		"trace",
+		"networks",
+		"hosts",
+		"description",
+	)
+
+	hasBindingContext := payload["host"] != nil || payload["binding"] != nil
+
+	return !hasSpecPayload && hasBindingContext
+}
+
+func hasAnyKeys(payload map[string]interface{}, keys ...string) bool {
+	for _, key := range keys {
+		if _, ok := payload[key]; ok {
+			return true
+		}
+	}
+	return false
 }
 func (w *OutboxWorker) loadEntityResource(
 	ctx context.Context,

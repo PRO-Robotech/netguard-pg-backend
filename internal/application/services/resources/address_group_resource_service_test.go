@@ -50,7 +50,7 @@ func TestAddressGroupResourceService_GetAddressGroups(t *testing.T) {
 
 			mockConditionManager := testutil.NewMockConditionManager()
 			validationService := NewValidationService(mockRegistry, nil)
-			service := NewAddressGroupResourceService(mockRegistry, mockSyncManager, mockConditionManager, validationService)
+			service := NewAddressGroupResourceService(mockRegistry, mockSyncManager, mockConditionManager, validationService, nil)
 
 			// Execute
 			addressGroups, err := service.GetAddressGroups(context.Background(), tt.scope)
@@ -104,7 +104,7 @@ func TestAddressGroupResourceService_GetAddressGroupByID(t *testing.T) {
 
 			mockConditionManager := testutil.NewMockConditionManager()
 			validationService := NewValidationService(mockRegistry, nil)
-			service := NewAddressGroupResourceService(mockRegistry, mockSyncManager, mockConditionManager, validationService)
+			service := NewAddressGroupResourceService(mockRegistry, mockSyncManager, mockConditionManager, validationService, nil)
 
 			// Execute
 			result, err := service.GetAddressGroupByID(context.Background(), tt.resourceID)
@@ -147,7 +147,7 @@ func TestAddressGroupResourceService_CreateAddressGroup(t *testing.T) {
 
 			mockConditionManager := testutil.NewMockConditionManager()
 			validationService := NewValidationService(mockRegistry, nil)
-			service := NewAddressGroupResourceService(mockRegistry, mockSyncManager, mockConditionManager, validationService)
+			service := NewAddressGroupResourceService(mockRegistry, mockSyncManager, mockConditionManager, validationService, nil)
 
 			// Execute
 			err := service.CreateAddressGroup(context.Background(), tt.addressGroup)
@@ -206,7 +206,7 @@ func TestAddressGroupResourceService_UpdateAddressGroup(t *testing.T) {
 
 			mockConditionManager := testutil.NewMockConditionManager()
 			validationService := NewValidationService(mockRegistry, nil)
-			service := NewAddressGroupResourceService(mockRegistry, mockSyncManager, mockConditionManager, validationService)
+			service := NewAddressGroupResourceService(mockRegistry, mockSyncManager, mockConditionManager, validationService, nil)
 
 			// Execute
 			err := service.UpdateAddressGroup(context.Background(), tt.addressGroup)
@@ -269,7 +269,7 @@ func TestAddressGroupResourceService_DeleteAddressGroupsByIDs(t *testing.T) {
 
 			mockConditionManager := testutil.NewMockConditionManager()
 			validationService := NewValidationService(mockRegistry, nil)
-			service := NewAddressGroupResourceService(mockRegistry, mockSyncManager, mockConditionManager, validationService)
+			service := NewAddressGroupResourceService(mockRegistry, mockSyncManager, mockConditionManager, validationService, nil)
 
 			// Execute
 			err := service.DeleteAddressGroupsByIDs(context.Background(), tt.idsToDelete)
@@ -324,10 +324,10 @@ func TestAddressGroupResourceService_SyncAddressGroups(t *testing.T) {
 
 			mockConditionManager := testutil.NewMockConditionManager()
 			validationService := NewValidationService(mockRegistry, nil)
-			service := NewAddressGroupResourceService(mockRegistry, mockSyncManager, mockConditionManager, validationService)
+			service := NewAddressGroupResourceService(mockRegistry, mockSyncManager, mockConditionManager, validationService, nil)
 
 			// Execute
-			err := service.SyncAddressGroups(context.Background(), tt.addressGroups, tt.scope)
+			err := service.SyncAddressGroups(context.Background(), tt.addressGroups, tt.scope, models.SyncOpUpsert)
 
 			// Assert
 			if tt.expectError {
@@ -355,7 +355,7 @@ func TestAddressGroupResourceService_AddressGroupLifecycle(t *testing.T) {
 
 		mockConditionManager := testutil.NewMockConditionManager()
 		mockValidationService := NewValidationService(mockRegistry, nil)
-		service := NewAddressGroupResourceService(mockRegistry, mockSyncManager, mockConditionManager, mockValidationService)
+		service := NewAddressGroupResourceService(mockRegistry, mockSyncManager, mockConditionManager, mockValidationService, nil)
 		testAddressGroup := testutil.TestFixtures.AddressGroup
 
 		// Create address group
@@ -395,7 +395,7 @@ func TestAddressGroupResourceService_Concurrency(t *testing.T) {
 
 		mockConditionManager := testutil.NewMockConditionManager()
 		mockValidationService := NewValidationService(mockRegistry, nil)
-		service := NewAddressGroupResourceService(mockRegistry, mockSyncManager, mockConditionManager, mockValidationService)
+		service := NewAddressGroupResourceService(mockRegistry, mockSyncManager, mockConditionManager, mockValidationService, nil)
 
 		// Create multiple address groups concurrently (reduced number to avoid race conditions)
 		numAddressGroups := 3
@@ -430,7 +430,7 @@ func TestAddressGroupResourceService_ErrorHandling(t *testing.T) {
 		mockSyncManager := testutil.NewMockSyncManager()
 		mockConditionManager := testutil.NewMockConditionManager()
 		mockValidationService := NewValidationService(mockRegistry, nil)
-		service := NewAddressGroupResourceService(mockRegistry, mockSyncManager, mockConditionManager, mockValidationService)
+		service := NewAddressGroupResourceService(mockRegistry, mockSyncManager, mockConditionManager, mockValidationService, nil)
 
 		// Test that errors are properly handled
 		_, err := service.GetAddressGroups(context.Background(), ports.EmptyScope{})

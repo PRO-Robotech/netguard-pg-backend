@@ -719,7 +719,7 @@ func TestValidationService_ValidateWithReader(t *testing.T) {
 	t.Run("validate service creation with existing reader", func(t *testing.T) {
 		// Setup
 		mockRegistry := testutil.NewMockRegistry()
-		validationService := NewValidationService(mockRegistry)
+		validationService := NewValidationService(mockRegistry, nil)
 
 		reader, err := mockRegistry.Reader(context.Background())
 		require.NoError(t, err)
@@ -737,7 +737,7 @@ func TestValidationService_ValidateWithReader(t *testing.T) {
 	t.Run("validate address group creation with existing reader", func(t *testing.T) {
 		// Setup
 		mockRegistry := testutil.NewMockRegistry()
-		validationService := NewValidationService(mockRegistry)
+		validationService := NewValidationService(mockRegistry, nil)
 
 		reader, err := mockRegistry.Reader(context.Background())
 		require.NoError(t, err)
@@ -774,7 +774,7 @@ func TestValidationService_ValidateWithReader(t *testing.T) {
 			}(),
 		})
 
-		validationService := NewValidationService(mockRegistry)
+		validationService := NewValidationService(mockRegistry, nil)
 
 		reader, err := mockRegistry.Reader(context.Background())
 		require.NoError(t, err)
@@ -910,7 +910,7 @@ func TestValidationService_ErrorHandling(t *testing.T) {
 		mockRegistry := testutil.NewMockRegistry()
 		mockRegistry.Close() // Close registry to force errors
 
-		validationService := NewValidationService(mockRegistry)
+		validationService := NewValidationService(mockRegistry, nil)
 		service := testutil.CreateTestService("test-service", "test-namespace")
 
 		// Test that errors are properly handled
@@ -932,7 +932,7 @@ func TestValidationService_Lifecycle(t *testing.T) {
 	t.Run("complete validation lifecycle for service", func(t *testing.T) {
 		// Setup
 		mockRegistry := testutil.NewMockRegistry()
-		validationService := NewValidationService(mockRegistry)
+		validationService := NewValidationService(mockRegistry, nil)
 		service := testutil.CreateTestService("test-service", "test-namespace")
 
 		// Test creation validation
@@ -958,7 +958,7 @@ func TestValidationService_Lifecycle(t *testing.T) {
 	t.Run("complete validation lifecycle for complex dependency", func(t *testing.T) {
 		// Setup
 		mockRegistry := testutil.NewMockRegistry()
-		validationService := NewValidationService(mockRegistry)
+		validationService := NewValidationService(mockRegistry, nil)
 
 		// First create service and service alias
 		service := testutil.CreateTestService("test-service", "test-namespace")

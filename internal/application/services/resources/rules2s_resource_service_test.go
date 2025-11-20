@@ -381,7 +381,7 @@ func TestRuleS2SResourceService_SyncRuleS2S(t *testing.T) {
 			service := NewRuleS2SResourceService(mockRegistry, mockSyncManager, mockConditionManager)
 
 			// Execute
-			err := service.SyncRuleS2S(context.Background(), tt.rules, tt.scope)
+			err := service.SyncRuleS2S(context.Background(), tt.rules, tt.scope, models.SyncOpUpsert)
 
 			// Assert
 			if tt.expectError {
@@ -589,7 +589,7 @@ func TestRuleS2SResourceService_ErrorHandling(t *testing.T) {
 		_, err := service.GetRuleS2S(context.Background(), ports.EmptyScope{})
 		assert.Error(t, err)
 
-		err = service.SyncRuleS2S(context.Background(), []models.RuleS2S{testutil.CreateTestRuleS2S("test-rule-s2s", "test-namespace")}, ports.EmptyScope{})
+		err = service.SyncRuleS2S(context.Background(), []models.RuleS2S{testutil.CreateTestRuleS2S("test-rule-s2s", "test-namespace")}, ports.EmptyScope{}, models.SyncOpUpsert)
 		assert.Error(t, err)
 
 		_, err = service.GetIEAgAgRules(context.Background(), ports.EmptyScope{})
@@ -628,7 +628,7 @@ func TestRuleS2SResourceService_Lifecycle(t *testing.T) {
 		testRule := testutil.CreateTestRuleS2S("test-rule-s2s", "test-namespace")
 
 		// Sync RuleS2S
-		err := service.SyncRuleS2S(context.Background(), []models.RuleS2S{testRule}, ports.EmptyScope{})
+		err := service.SyncRuleS2S(context.Background(), []models.RuleS2S{testRule}, ports.EmptyScope{}, models.SyncOpUpsert)
 		require.NoError(t, err)
 
 		// Verify RuleS2S exists

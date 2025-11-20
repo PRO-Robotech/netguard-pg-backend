@@ -448,14 +448,32 @@ func (s *HostResourceService) UpdateHostBinding(ctx context.Context, hostID mode
 	}
 	defer writer.Abort()
 
-	// Get reader from writer to ensure same session/transaction visibility
+	if err := s.updateHostBindingInternal(ctx, writer, hostID, bindingID, addressGroupID); err != nil {
+		return err
+	}
+
+	if err := writer.Commit(); err != nil {
+		return fmt.Errorf("failed to commit host binding: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateHostBindingWithWriter applies binding state changes using the provided writer transaction.
+func (s *HostResourceService) UpdateHostBindingWithWriter(ctx context.Context, writer ports.Writer, hostID models.ResourceIdentifier, bindingID models.ResourceIdentifier, addressGroupID models.ResourceIdentifier) error {
+	if writer == nil {
+		return fmt.Errorf("writer cannot be nil")
+	}
+	return s.updateHostBindingInternal(ctx, writer, hostID, bindingID, addressGroupID)
+}
+
+func (s *HostResourceService) updateHostBindingInternal(ctx context.Context, writer ports.Writer, hostID models.ResourceIdentifier, bindingID models.ResourceIdentifier, addressGroupID models.ResourceIdentifier) error {
 	reader, err := s.repo.ReaderFromWriter(ctx, writer)
 	if err != nil {
 		return fmt.Errorf("failed to get reader from writer: %w", err)
 	}
 	defer reader.Close()
 
-	// Get the host using the same session reader
 	host, err := reader.GetHostByID(ctx, hostID)
 	if err != nil {
 		return fmt.Errorf("failed to get host: %w", err)
@@ -475,7 +493,6 @@ func (s *HostResourceService) UpdateHostBinding(ctx context.Context, hostID mode
 		host.IsBound = false
 		host.AddressGroupName = ""
 	} else {
-		// Binding case - set all binding references
 		host.BindingRef = &v1beta1.NamespacedObjectReference{
 			ObjectReference: v1beta1.ObjectReference{
 				APIVersion: "netguard.sgroups.io/v1beta1",
@@ -500,15 +517,11 @@ func (s *HostResourceService) UpdateHostBinding(ctx context.Context, hostID mode
 		}
 	}
 
-	// Update metadata
 	host.GetMeta().TouchOnWrite(fmt.Sprintf("%d", time.Now().UnixNano()))
-	hosts := []models.Host{*host}
-	if err := writer.SyncHosts(ctx, hosts, ports.EmptyScope{}, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
-		return fmt.Errorf("failed to sync host binding: %w", err)
-	}
 
-	if err := writer.Commit(); err != nil {
-		return fmt.Errorf("failed to commit host binding: %w", err)
+	scope := ports.NewResourceIdentifierScope(hostID)
+	if err := writer.SyncHosts(ctx, []models.Host{*host}, scope, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
+		return fmt.Errorf("failed to sync host binding: %w", err)
 	}
 
 	return nil

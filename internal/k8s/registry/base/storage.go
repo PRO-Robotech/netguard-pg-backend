@@ -211,6 +211,11 @@ func (s *BaseStorage[K, D]) List(ctx context.Context, options *internalversion.L
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert domain objects to k8s list: %w", err)
 	}
+	listMetadataBuilder, err := NewListMetadataBuilder(listObj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize list metadata builder: %w", err)
+	}
+	listMetadataBuilder.SetResourceVersionFromItems()
 	return listObj, nil
 }
 func (s *BaseStorage[K, D]) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
@@ -1499,7 +1504,7 @@ func (s *BaseStorage[K, D]) preserveManagedFields(source, dest runtime.Object) e
 	preservedFields := make([]metav1.ManagedFieldsEntry, len(sourceManagedFields))
 	copy(preservedFields, sourceManagedFields)
 	destManagedFields := destAccessor.GetManagedFields()
-	if destManagedFields != nil && len(destManagedFields) > 0 {
+	if len(destManagedFields) > 0 {
 		mergedFields := s.mergeManagedFields(preservedFields, destManagedFields)
 		destAccessor.SetManagedFields(mergedFields)
 		klog.V(3).InfoS("Merged and preserved managedFields",

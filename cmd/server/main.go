@@ -144,7 +144,7 @@ func main() {
 	conditionManager := conditions.NewConditionManager(pgRegistry, outboxRepo)
 	netguardFacade := services.NewNetguardFacade(pgRegistry, conditionManager, syncManager)
 	if sqlDB != nil {
-		watchManager, err = watch.NewManagerWithConfig(ctx, sqlDB, netguardFacade, cfg.Watch.CacheSize, cfg.Watch.PGChannel)
+		watchManager, err = watch.NewManagerWithConfig(ctx, sqlDB, *pgURI, netguardFacade, cfg.Watch.CacheSize, cfg.Watch.PGChannel)
 		if err != nil {
 			log.Fatalf("Failed to initialize watch manager: %v", err)
 		}

@@ -329,7 +329,7 @@ func TestServiceResourceService_SyncServices(t *testing.T) {
 			service := NewServiceResourceService(mockRegistry, mockSyncManager, mockConditionManager)
 
 			// Execute
-			err := service.SyncServices(context.Background(), tt.services, tt.scope)
+			err := service.SyncServices(context.Background(), tt.services, tt.scope, models.SyncOpUpsert)
 
 			// Assert
 			if tt.expectError {

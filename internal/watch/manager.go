@@ -29,14 +29,16 @@ type Manager struct {
 func NewManager(
 	ctx context.Context,
 	db *sql.DB,
+	connString string,
 	facade *services.NetguardFacade,
 ) (*Manager, error) {
-	return NewManagerWithConfig(ctx, db, facade, defaultCacheSize, defaultChannelName)
+	return NewManagerWithConfig(ctx, db, connString, facade, defaultCacheSize, defaultChannelName)
 }
 
 func NewManagerWithConfig(
 	ctx context.Context,
 	db *sql.DB,
+	connString string,
 	facade *services.NetguardFacade,
 	cacheSize int,
 	channel string,
@@ -48,7 +50,7 @@ func NewManagerWithConfig(
 		channel = defaultChannelName
 	}
 
-	notifier, err := NewPGNotifier(ctx, db, channel)
+	notifier, err := NewPGNotifier(ctx, db, connString, channel)
 	if err != nil {
 		return nil, err
 	}

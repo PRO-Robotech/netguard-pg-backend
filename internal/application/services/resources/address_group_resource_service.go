@@ -420,6 +420,36 @@ func (s *AddressGroupResourceService) SyncAddressGroups(ctx context.Context, add
 	return nil
 }
 
+// TouchAddressGroupBindingMembership bumps the AddressGroup metadata inside an existing transaction
+// to ensure resourceVersion increments when bindings are created or removed.
+func (s *AddressGroupResourceService) TouchAddressGroupBindingMembership(ctx context.Context, writer ports.Writer, addressGroupID models.ResourceIdentifier) error {
+	if writer == nil {
+		return fmt.Errorf("writer cannot be nil for TouchAddressGroupBindingMembership")
+	}
+
+	reader, err := s.registry.ReaderFromWriter(ctx, writer)
+	if err != nil {
+		return fmt.Errorf("failed to get reader from writer: %w", err)
+	}
+	defer reader.Close()
+
+	addressGroup, err := reader.GetAddressGroupByID(ctx, addressGroupID)
+	if err != nil {
+		return fmt.Errorf("failed to load address group %s: %w", addressGroupID.Key(), err)
+	}
+	if addressGroup == nil {
+		return fmt.Errorf("address group not found: %s", addressGroupID.Key())
+	}
+
+	addressGroup.GetMeta().TouchOnWrite(fmt.Sprintf("%d", time.Now().UnixNano()))
+	scope := ports.NewResourceIdentifierScope(addressGroupID)
+	if err := writer.SyncAddressGroups(ctx, []models.AddressGroup{*addressGroup}, scope, ports.ConditionOnlyOperation{}); err != nil {
+		return fmt.Errorf("failed to touch address group %s: %w", addressGroupID.Key(), err)
+	}
+
+	return nil
+}
+
 // DeleteAddressGroupsByIDs deletes address groups by IDs with reference architecture compliance
 // Follows k8s-controller pattern: cascade delete bindings first, then AddressGroups, with proper external sync
 func (s *AddressGroupResourceService) DeleteAddressGroupsByIDs(ctx context.Context, ids []models.ResourceIdentifier) error {
