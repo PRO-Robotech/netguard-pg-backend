@@ -19,6 +19,30 @@ func ConvertNetwork(network *netguardpb.Network) models.Network {
 		Meta: ConvertMeta(network.Meta),
 	}
 
+	result.IsBound = network.GetIsBound()
+
+	if bindingRef := network.GetBindingRef(); bindingRef != nil && bindingRef.GetName() != "" {
+		result.BindingRef = &v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: bindingRef.GetApiVersion(),
+				Kind:       bindingRef.GetKind(),
+				Name:       bindingRef.GetName(),
+			},
+			Namespace: bindingRef.GetNamespace(),
+		}
+	}
+
+	if agRef := network.GetAddressGroupRef(); agRef != nil && agRef.GetName() != "" {
+		result.AddressGroupRef = &v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: agRef.GetApiVersion(),
+				Kind:       agRef.GetKind(),
+				Name:       agRef.GetName(),
+			},
+			Namespace: agRef.GetNamespace(),
+		}
+	}
+
 	return result
 }
 

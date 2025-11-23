@@ -2,7 +2,9 @@ package watch
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -204,12 +206,13 @@ func (wc *WatchCache) addEventLocked(eventType watch.EventType, obj runtime.Obje
 
 	recordCacheEvent(wc.resourceType, string(eventType))
 
-	klog.V(6).InfoS("Added watch event to cache",
-		"resourceType", wc.resourceType,
-		"eventType", eventType,
-		"eventID", event.EventID,
-		"resourceVersion", resourceVersion,
-		"key", key)
+	if data, err := json.Marshal(obj); err == nil {
+		log.Printf("[WatchCache] event=%s resource=%s key=%s rv=%d payload=%s",
+			eventType, wc.resourceType, key, resourceVersion, data)
+	} else {
+		log.Printf("[WatchCache] event=%s resource=%s key=%s rv=%d (payload marshal error: %v)",
+			eventType, wc.resourceType, key, resourceVersion, err)
+	}
 
 	return nil
 }

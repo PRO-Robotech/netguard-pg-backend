@@ -9,12 +9,33 @@ import (
 // ConvertAddressGroup converts protobuf AddressGroup to domain model
 func ConvertAddressGroup(ag *netguardpb.AddressGroup) models.AddressGroup {
 	result := models.AddressGroup{
-		SelfRef:       models.NewSelfRef(GetSelfRef(ag.GetSelfRef())),
-		DefaultAction: ConvertActionFromPB(ag.DefaultAction),
-		Logs:          ag.Logs,
-		Trace:         ag.Trace,
-		Description:   ag.Description,
-		Meta:          ConvertMeta(ag.Meta),
+		SelfRef:          models.NewSelfRef(GetSelfRef(ag.GetSelfRef())),
+		DefaultAction:    ConvertActionFromPB(ag.DefaultAction),
+		Logs:             ag.Logs,
+		Trace:            ag.Trace,
+		Description:      ag.Description,
+		Meta:             ConvertMeta(ag.Meta),
+		AddressGroupName: ag.AddressGroupName,
+	}
+
+	if len(ag.Networks) > 0 {
+		result.Networks = make([]models.NetworkItem, len(ag.Networks))
+		for i, network := range ag.Networks {
+			item := models.NetworkItem{
+				Name:       network.Name,
+				CIDR:       network.Cidr,
+				ApiVersion: network.ApiVersion,
+				Kind:       network.Kind,
+				Namespace:  network.Namespace,
+			}
+			if item.Kind == "" {
+				item.Kind = "Network"
+			}
+			if item.ApiVersion == "" {
+				item.ApiVersion = "netguard.sgroups.io/v1beta1"
+			}
+			result.Networks[i] = item
+		}
 	}
 
 	if len(ag.Hosts) > 0 {

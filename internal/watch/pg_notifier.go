@@ -5,10 +5,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
 	"github.com/lib/pq"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
 
 	"netguard-pg-backend/internal/domain/models"
@@ -187,12 +190,8 @@ func (pgn *PGNotifier) handleNotification(notification *pq.Notification) error {
 		return fmt.Errorf("failed to unmarshal notification: %w", err)
 	}
 
-	klog.V(6).InfoS("Received PostgreSQL notification",
-		"operation", pgNotif.Operation,
-		"resourceType", pgNotif.ResourceType,
-		"namespace", pgNotif.Namespace,
-		"name", pgNotif.Name,
-		"resourceVersion", pgNotif.ResourceVersion)
+	log.Printf("[WatchNotifier] payload op=%s type=%s ns=%s name=%s rv=%d",
+		pgNotif.Operation, pgNotif.ResourceType, pgNotif.Namespace, pgNotif.Name, pgNotif.ResourceVersion)
 
 	// Получаем соответствующий cache и converter
 	pgn.mu.RLock()
@@ -234,9 +233,15 @@ func (pgn *PGNotifier) handleInsertOrUpdate(
 		return fmt.Errorf("failed to convert resource %s/%s: %w", notification.Namespace, notification.Name, err)
 	}
 
+	log.Printf("[WatchNotifier] converted %s/%s rv=%d type=%s",
+		notification.Namespace, notification.Name, notification.ResourceVersion, notification.ResourceType)
+
+	setObjectResourceVersion(obj, notification.ResourceVersion)
+
 	if notification.Operation == "INSERT" {
 		return cache.Add(obj, notification.ResourceVersion)
 	}
+	log.Printf("[WatchNotifier] forwarding UPDATE to cache %s/%s rv=%d", notification.Namespace, notification.Name, notification.ResourceVersion)
 	return cache.Update(obj, notification.ResourceVersion)
 }
 
@@ -262,7 +267,17 @@ func (pgn *PGNotifier) handleDelete(
 		}
 	}
 
+	setObjectResourceVersion(obj, notification.ResourceVersion)
+
 	return cache.Delete(obj, notification.ResourceVersion)
+}
+
+func setObjectResourceVersion(obj runtime.Object, rv int64) {
+	accessor, err := meta.Accessor(obj)
+	if err != nil {
+		return
+	}
+	accessor.SetResourceVersion(fmt.Sprintf("%d", rv))
 }
 
 // Stop останавливает notifier

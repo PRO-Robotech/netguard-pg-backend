@@ -3,6 +3,7 @@ package convert
 import (
 	"context"
 	"fmt"
+	"log"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -59,6 +60,12 @@ func (c *AddressGroupConverter) ToDomain(ctx context.Context, k8sObj *netguardv1
 		Meta:             ConvertMetadataToDomain(k8sObj.ObjectMeta, k8sObj.Status.Conditions, k8sObj.Status.ObservedGeneration),
 	}
 
+	log.Printf("[AddressGroupConverter.ToDomain] ag=%s/%s networks=%d aggregatedHosts=%d",
+		domainAddressGroup.Namespace,
+		domainAddressGroup.Name,
+		len(domainAddressGroup.Networks),
+		len(domainAddressGroup.AggregatedHosts))
+
 	return domainAddressGroup, nil
 }
 
@@ -97,6 +104,12 @@ func (c *AddressGroupConverter) FromDomain(ctx context.Context, domainObj *model
 		ObservedGeneration: observedGeneration,
 		Conditions:         conditions,
 	}
+
+	log.Printf("[AddressGroupConverter.FromDomain] ag=%s/%s networks=%d aggregatedHosts=%d",
+		domainObj.Namespace,
+		domainObj.Name,
+		len(domainObj.Networks),
+		len(domainObj.AggregatedHosts))
 
 	return k8sAddressGroup, nil
 }
