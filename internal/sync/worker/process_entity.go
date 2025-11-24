@@ -952,18 +952,10 @@ func (w *OutboxWorker) markEntityResourceReady(
 		return fmt.Errorf("failed to get writer: %w", err)
 	}
 	defer writer.Abort()
-	w.logger.Debug("markEntityResourceReady: got writer",
-		zap.String("resource_type", resourceType),
-		zap.String("namespace", namespace),
-		zap.String("name", name))
 	resource, err := w.loadEntityResource(ctx, resourceType, namespace, name)
 	if err != nil {
 		return fmt.Errorf("failed to load resource for update: %w", err)
 	}
-	w.logger.Debug("markEntityResourceReady: loaded resource",
-		zap.String("resource_type", resourceType),
-		zap.String("namespace", namespace),
-		zap.String("name", name))
 	var resourceScope ports.Scope
 	switch r := resource.(type) {
 	case *models.Host:
@@ -977,45 +969,19 @@ func (w *OutboxWorker) markEntityResourceReady(
 			return fmt.Errorf("failed to update host: %w", err)
 		}
 	case *models.AddressGroup:
-		w.logger.Info("[DIAG] markEntityResourceReady: AddressGroup - BEFORE SetReadyCondition",
-			zap.String("namespace", r.Namespace),
-			zap.String("name", r.Name),
-			zap.Int("conditions_count", len(r.Meta.Conditions)),
-			zap.Any("conditions_before", r.Meta.Conditions))
-		startTime := time.Now()
 		r.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
 		r.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced")
-		setConditionDuration := time.Since(startTime)
-		w.logger.Info("[DIAG] markEntityResourceReady: AddressGroup - AFTER SetReadyCondition",
-			zap.String("namespace", r.Namespace),
-			zap.String("name", r.Name),
-			zap.Int("conditions_count", len(r.Meta.Conditions)),
-			zap.Any("conditions_after", r.Meta.Conditions),
-			zap.Duration("set_duration_ns", setConditionDuration))
 		resourceScope = ports.NewResourceIdentifierScope(models.ResourceIdentifier{
 			Name:      r.Name,
 			Namespace: r.Namespace,
 		})
-		w.logger.Info("[DIAG] markEntityResourceReady: AddressGroup - CALLING SyncAddressGroups",
-			zap.String("namespace", r.Namespace),
-			zap.String("name", r.Name),
-			zap.String("operation_type", "ConditionOnlyOperation"),
-			zap.Bool("has_writer", writer != nil),
-			zap.Bool("has_scope", resourceScope != nil))
-		syncStartTime := time.Now()
 		if err := writer.SyncAddressGroups(ctx, []models.AddressGroup{*r}, resourceScope, ports.ConditionOnlyOperation{}); err != nil {
 			w.logger.Error("markEntityResourceReady: SyncAddressGroups FAILED",
 				zap.String("namespace", r.Namespace),
 				zap.String("name", r.Name),
-				zap.Error(err),
-				zap.Duration("failed_after_ns", time.Since(syncStartTime)))
+				zap.Error(err))
 			return fmt.Errorf("failed to update address group: %w", err)
 		}
-		syncDuration := time.Since(syncStartTime)
-		w.logger.Info("[DIAG] markEntityResourceReady: AddressGroup - SyncAddressGroups SUCCESS",
-			zap.String("namespace", r.Namespace),
-			zap.String("name", r.Name),
-			zap.Duration("sync_duration_ns", syncDuration))
 	case *models.Network:
 		r.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
 		r.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced")
@@ -1033,9 +999,6 @@ func (w *OutboxWorker) markEntityResourceReady(
 			Name:      r.Name,
 			Namespace: r.Namespace,
 		})
-		w.logger.Info("markEntityResourceReady: calling SyncServices with ConditionOnlyOperation",
-			zap.String("namespace", r.Namespace),
-			zap.String("name", r.Name))
 		if err := writer.SyncServices(ctx, []models.Service{*r}, resourceScope, ports.ConditionOnlyOperation{}); err != nil {
 			w.logger.Error("markEntityResourceReady: SyncServices failed",
 				zap.String("namespace", r.Namespace),
@@ -1043,9 +1006,6 @@ func (w *OutboxWorker) markEntityResourceReady(
 				zap.Error(err))
 			return fmt.Errorf("failed to update service: %w", err)
 		}
-		w.logger.Info("markEntityResourceReady: SyncServices succeeded",
-			zap.String("namespace", r.Namespace),
-			zap.String("name", r.Name))
 	case *models.SvcSvcRule:
 		r.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
 		r.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced")
@@ -1069,10 +1029,6 @@ func (w *OutboxWorker) markEntityResourceReady(
 	default:
 		return fmt.Errorf("unknown resource type for update: %T", resource)
 	}
-	w.logger.Info("markEntityResourceReady: committing transaction",
-		zap.String("resource_type", resourceType),
-		zap.String("namespace", namespace),
-		zap.String("name", name))
 	if err := writer.Commit(); err != nil {
 		w.logger.Error("markEntityResourceReady: commit failed",
 			zap.String("resource_type", resourceType),
@@ -1081,23 +1037,12 @@ func (w *OutboxWorker) markEntityResourceReady(
 			zap.Error(err))
 		return fmt.Errorf("failed to commit changes: %w", err)
 	}
-	w.logger.Info("markEntityResourceReady: transaction committed",
-		zap.String("resource_type", resourceType),
-		zap.String("namespace", namespace),
-		zap.String("name", name))
-	w.logger.Debug("markEntityResourceReady: marking outbox entry as SUCCESS",
-		zap.String("outbox_id", outboxID.(uuid.UUID).String()))
 	if err := w.outboxRepo.MarkCompleted(ctx, outboxID.(uuid.UUID)); err != nil {
 		w.logger.Error("markEntityResourceReady: failed to mark outbox entry as completed",
 			zap.String("outbox_id", outboxID.(uuid.UUID).String()),
 			zap.Error(err))
 		return fmt.Errorf("failed to mark outbox entry as completed: %w", err)
 	}
-	w.logger.Info("markEntityResourceReady: outbox entry marked as SUCCESS (preserved for debugging)",
-		zap.String("resource_type", resourceType),
-		zap.String("namespace", namespace),
-		zap.String("name", name),
-		zap.String("outbox_id", outboxID.(uuid.UUID).String()))
 	return nil
 }
 func convertToSyncOperation(op domain.SyncOperation) types.SyncOperation {

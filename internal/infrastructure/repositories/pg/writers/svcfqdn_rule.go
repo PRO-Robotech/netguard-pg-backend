@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"k8s.io/klog/v2"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -96,8 +95,6 @@ func (w *Writer) upsertSvcFqdnRule(ctx context.Context, rule models.SvcFqdnRule)
 	conditions := rule.Meta.Conditions
 	if !existingResourceVersion.Valid {
 		conditions = forcePendingSyncCondition(conditions)
-		klog.V(4).InfoS("Forcing PendingSGROUPSync status for new SvcFqdnRule",
-			"namespace", rule.Namespace, "name", rule.Name)
 	}
 
 	conditionsJSON, err := json.Marshal(conditions)
@@ -126,7 +123,6 @@ func (w *Writer) upsertSvcFqdnRule(ctx context.Context, rule models.SvcFqdnRule)
 			return errors.Wrapf(err, "failed to insert metadata for svc fqdn rule %s/%s", rule.Namespace, rule.Name)
 		}
 	}
-
 	serviceFromJSON, err := json.Marshal(svcFqdnRuleServiceRefJSON{
 		APIVersion: rule.ServiceFromRef.APIVersion,
 		Kind:       rule.ServiceFromRef.Kind,
@@ -201,10 +197,22 @@ func (w *Writer) updateSvcFqdnRuleConditionsOnly(ctx context.Context, rule model
 	updateQuery := `
         UPDATE k8s_metadata
         SET conditions = $1, updated_at = NOW()
-        WHERE resource_version = $2`
+        WHERE resource_version = $2
+        RETURNING resource_version`
 
-	if _, err := w.tx.Exec(ctx, updateQuery, conditionsJSON, resourceVersion); err != nil {
+	var newResourceVersion int64
+	if err := w.tx.QueryRow(ctx, updateQuery, conditionsJSON, resourceVersion).Scan(&newResourceVersion); err != nil {
 		return errors.Wrapf(err, "failed to update conditions for svc fqdn rule %s/%s", rule.Namespace, rule.Name)
+	}
+
+	if newResourceVersion != resourceVersion {
+		if _, err := w.tx.Exec(ctx, `
+            UPDATE svc_fqdn_rules
+            SET resource_version = $1
+            WHERE namespace = $2 AND name = $3`,
+			newResourceVersion, rule.Namespace, rule.Name); err != nil {
+			return errors.Wrapf(err, "failed to sync resource_version for svc fqdn rule %s/%s", rule.Namespace, rule.Name)
+		}
 	}
 
 	return nil
