@@ -64,6 +64,71 @@ SELECT
     1
 FROM missing_metadata;
 
+WITH fqdn_missing_null_rv AS (
+    SELECT id, COALESCE(created_at, NOW()) AS created_at, COALESCE(updated_at, NOW()) AS updated_at
+    FROM svc_fqdn_rules
+    WHERE resource_version IS NULL
+),
+fqdn_updated_rules AS (
+    UPDATE svc_fqdn_rules sr
+    SET resource_version = nextval('k8s_metadata_resource_version_seq')
+    FROM fqdn_missing_null_rv mr
+    WHERE sr.id = mr.id
+    RETURNING sr.resource_version, mr.created_at, mr.updated_at
+)
+INSERT INTO k8s_metadata (
+    resource_version,
+    labels,
+    annotations,
+    finalizers,
+    conditions,
+    created_at,
+    updated_at,
+    uid,
+    generation
+)
+SELECT
+    resource_version,
+    '{}'::jsonb,
+    '{}'::jsonb,
+    '{}'::text[],
+    '[{"type":"Ready","status":"False","reason":"PendingSGROUPSync","message":"Awaiting synchronization with SGROUP before marking as ready"}]'::jsonb,
+    created_at,
+    updated_at,
+    uuid_generate_v4(),
+    1
+FROM fqdn_updated_rules;
+
+WITH fqdn_missing_metadata AS (
+    SELECT sr.resource_version, COALESCE(sr.created_at, NOW()) AS created_at, COALESCE(sr.updated_at, NOW()) AS updated_at
+    FROM svc_fqdn_rules sr
+    LEFT JOIN k8s_metadata km ON km.resource_version = sr.resource_version
+    WHERE sr.resource_version IS NOT NULL
+      AND km.resource_version IS NULL
+)
+INSERT INTO k8s_metadata (
+    resource_version,
+    labels,
+    annotations,
+    finalizers,
+    conditions,
+    created_at,
+    updated_at,
+    uid,
+    generation
+)
+SELECT
+    resource_version,
+    '{}'::jsonb,
+    '{}'::jsonb,
+    '{}'::text[],
+    '[{"type":"Ready","status":"False","reason":"PendingSGROUPSync","message":"Awaiting synchronization with SGROUP before marking as ready"}]'::jsonb,
+    created_at,
+    updated_at,
+    uuid_generate_v4(),
+    1
+FROM fqdn_missing_metadata;
+
 ALTER TABLE svc_svc_rules
     ALTER COLUMN resource_version SET NOT NULL;
 
