@@ -158,3 +158,4 @@ func forcePendingSyncCondition(conditions []metav1.Condition) []metav1.Condition
 
 	return result
 }
+

@@ -947,88 +947,159 @@ func (w *OutboxWorker) markEntityResourceReady(
 	name string,
 	outboxID interface{},
 ) error {
+	resource, err := w.loadEntityResource(ctx, resourceType, namespace, name)
+	if err != nil {
+		return fmt.Errorf("failed to load resource for update: %w", err)
+	}
+
+	var writeFunc func(writer ports.Writer) error
+	needsWrite := false
+
+	markCompleted := func() error {
+		if err := w.outboxRepo.MarkCompleted(ctx, outboxID.(uuid.UUID)); err != nil {
+			w.logger.Error("markEntityResourceReady: failed to mark outbox entry as completed",
+				zap.String("outbox_id", outboxID.(uuid.UUID).String()),
+				zap.Error(err))
+			return fmt.Errorf("failed to mark outbox entry as completed: %w", err)
+		}
+		return nil
+	}
+
+	switch r := resource.(type) {
+	case *models.Host:
+		changed := r.Meta.EnsureReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
+		changed = r.Meta.EnsureSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced") || changed
+		if !changed {
+			break
+		}
+		host := *r
+		scope := ports.NewResourceIdentifierScope(models.ResourceIdentifier{
+			Name:      r.Name,
+			Namespace: r.Namespace,
+		})
+		writeFunc = func(writer ports.Writer) error {
+			if err := writer.SyncHosts(ctx, []models.Host{host}, scope, ports.ConditionOnlyOperation{}); err != nil {
+				return fmt.Errorf("failed to update host: %w", err)
+			}
+			return nil
+		}
+		needsWrite = true
+	case *models.AddressGroup:
+		changed := r.Meta.EnsureReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
+		changed = r.Meta.EnsureSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced") || changed
+		if !changed {
+			break
+		}
+		addressGroup := *r
+		scope := ports.NewResourceIdentifierScope(models.ResourceIdentifier{
+			Name:      r.Name,
+			Namespace: r.Namespace,
+		})
+		writeFunc = func(writer ports.Writer) error {
+			if err := writer.SyncAddressGroups(ctx, []models.AddressGroup{addressGroup}, scope, ports.ConditionOnlyOperation{}); err != nil {
+				w.logger.Error("markEntityResourceReady: SyncAddressGroups FAILED",
+					zap.String("namespace", addressGroup.Namespace),
+					zap.String("name", addressGroup.Name),
+					zap.Error(err))
+				return fmt.Errorf("failed to update address group: %w", err)
+			}
+			return nil
+		}
+		needsWrite = true
+	case *models.Network:
+		changed := r.Meta.EnsureReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
+		changed = r.Meta.EnsureSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced") || changed
+		if !changed {
+			break
+		}
+		network := *r
+		scope := ports.NewResourceIdentifierScope(models.ResourceIdentifier{
+			Name:      r.Name,
+			Namespace: r.Namespace,
+		})
+		writeFunc = func(writer ports.Writer) error {
+			if err := writer.SyncNetworks(ctx, []models.Network{network}, scope, ports.ConditionOnlyOperation{}); err != nil {
+				return fmt.Errorf("failed to update network: %w", err)
+			}
+			return nil
+		}
+		needsWrite = true
+	case *models.Service:
+		changed := r.Meta.EnsureReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
+		changed = r.Meta.EnsureSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced") || changed
+		if !changed {
+			break
+		}
+		service := *r
+		scope := ports.NewResourceIdentifierScope(models.ResourceIdentifier{
+			Name:      r.Name,
+			Namespace: r.Namespace,
+		})
+		writeFunc = func(writer ports.Writer) error {
+			if err := writer.SyncServices(ctx, []models.Service{service}, scope, ports.ConditionOnlyOperation{}); err != nil {
+				w.logger.Error("markEntityResourceReady: SyncServices failed",
+					zap.String("namespace", service.Namespace),
+					zap.String("name", service.Name),
+					zap.Error(err))
+				return fmt.Errorf("failed to update service: %w", err)
+			}
+			return nil
+		}
+		needsWrite = true
+	case *models.SvcSvcRule:
+		changed := r.Meta.EnsureReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
+		changed = r.Meta.EnsureSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced") || changed
+		if !changed {
+			break
+		}
+		rule := *r
+		scope := ports.NewResourceIdentifierScope(models.ResourceIdentifier{
+			Name:      r.Name,
+			Namespace: r.Namespace,
+		})
+		writeFunc = func(writer ports.Writer) error {
+			if err := writer.SyncSvcSvcRules(ctx, []models.SvcSvcRule{rule}, scope, ports.ConditionOnlyOperation{}); err != nil {
+				return fmt.Errorf("failed to update svcsvc rule: %w", err)
+			}
+			return nil
+		}
+		needsWrite = true
+	case *models.SvcFqdnRule:
+		changed := r.Meta.EnsureReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
+		changed = r.Meta.EnsureSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced") || changed
+		if !changed {
+			break
+		}
+		rule := *r
+		scope := ports.NewResourceIdentifierScope(models.ResourceIdentifier{
+			Name:      r.Name,
+			Namespace: r.Namespace,
+		})
+		writeFunc = func(writer ports.Writer) error {
+			if err := writer.SyncSvcFqdnRules(ctx, []models.SvcFqdnRule{rule}, scope, ports.ConditionOnlyOperation{}); err != nil {
+				return fmt.Errorf("failed to update svcfqdn rule: %w", err)
+			}
+			return nil
+		}
+		needsWrite = true
+	default:
+		return fmt.Errorf("unknown resource type for update: %T", resource)
+	}
+
+	if !needsWrite {
+		return markCompleted()
+	}
+
 	writer, err := w.registry.Writer(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get writer: %w", err)
 	}
 	defer writer.Abort()
-	resource, err := w.loadEntityResource(ctx, resourceType, namespace, name)
-	if err != nil {
-		return fmt.Errorf("failed to load resource for update: %w", err)
+
+	if err := writeFunc(writer); err != nil {
+		return err
 	}
-	var resourceScope ports.Scope
-	switch r := resource.(type) {
-	case *models.Host:
-		r.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
-		r.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced")
-		resourceScope = ports.NewResourceIdentifierScope(models.ResourceIdentifier{
-			Name:      r.Name,
-			Namespace: r.Namespace,
-		})
-		if err := writer.SyncHosts(ctx, []models.Host{*r}, resourceScope, ports.ConditionOnlyOperation{}); err != nil {
-			return fmt.Errorf("failed to update host: %w", err)
-		}
-	case *models.AddressGroup:
-		r.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
-		r.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced")
-		resourceScope = ports.NewResourceIdentifierScope(models.ResourceIdentifier{
-			Name:      r.Name,
-			Namespace: r.Namespace,
-		})
-		if err := writer.SyncAddressGroups(ctx, []models.AddressGroup{*r}, resourceScope, ports.ConditionOnlyOperation{}); err != nil {
-			w.logger.Error("markEntityResourceReady: SyncAddressGroups FAILED",
-				zap.String("namespace", r.Namespace),
-				zap.String("name", r.Name),
-				zap.Error(err))
-			return fmt.Errorf("failed to update address group: %w", err)
-		}
-	case *models.Network:
-		r.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
-		r.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced")
-		resourceScope = ports.NewResourceIdentifierScope(models.ResourceIdentifier{
-			Name:      r.Name,
-			Namespace: r.Namespace,
-		})
-		if err := writer.SyncNetworks(ctx, []models.Network{*r}, resourceScope, ports.ConditionOnlyOperation{}); err != nil {
-			return fmt.Errorf("failed to update network: %w", err)
-		}
-	case *models.Service:
-		r.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
-		r.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced")
-		resourceScope = ports.NewResourceIdentifierScope(models.ResourceIdentifier{
-			Name:      r.Name,
-			Namespace: r.Namespace,
-		})
-		if err := writer.SyncServices(ctx, []models.Service{*r}, resourceScope, ports.ConditionOnlyOperation{}); err != nil {
-			w.logger.Error("markEntityResourceReady: SyncServices failed",
-				zap.String("namespace", r.Namespace),
-				zap.String("name", r.Name),
-				zap.Error(err))
-			return fmt.Errorf("failed to update service: %w", err)
-		}
-	case *models.SvcSvcRule:
-		r.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
-		r.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced")
-		resourceScope = ports.NewResourceIdentifierScope(models.ResourceIdentifier{
-			Name:      r.Name,
-			Namespace: r.Namespace,
-		})
-		if err := writer.SyncSvcSvcRules(ctx, []models.SvcSvcRule{*r}, resourceScope, ports.ConditionOnlyOperation{}); err != nil {
-			return fmt.Errorf("failed to update svcsvc rule: %w", err)
-		}
-	case *models.SvcFqdnRule:
-		r.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
-		r.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced")
-		resourceScope = ports.NewResourceIdentifierScope(models.ResourceIdentifier{
-			Name:      r.Name,
-			Namespace: r.Namespace,
-		})
-		if err := writer.SyncSvcFqdnRules(ctx, []models.SvcFqdnRule{*r}, resourceScope, ports.ConditionOnlyOperation{}); err != nil {
-			return fmt.Errorf("failed to update svcfqdn rule: %w", err)
-		}
-	default:
-		return fmt.Errorf("unknown resource type for update: %T", resource)
-	}
+
 	if err := writer.Commit(); err != nil {
 		w.logger.Error("markEntityResourceReady: commit failed",
 			zap.String("resource_type", resourceType),
@@ -1037,13 +1108,8 @@ func (w *OutboxWorker) markEntityResourceReady(
 			zap.Error(err))
 		return fmt.Errorf("failed to commit changes: %w", err)
 	}
-	if err := w.outboxRepo.MarkCompleted(ctx, outboxID.(uuid.UUID)); err != nil {
-		w.logger.Error("markEntityResourceReady: failed to mark outbox entry as completed",
-			zap.String("outbox_id", outboxID.(uuid.UUID).String()),
-			zap.Error(err))
-		return fmt.Errorf("failed to mark outbox entry as completed: %w", err)
-	}
-	return nil
+
+	return markCompleted()
 }
 func convertToSyncOperation(op domain.SyncOperation) types.SyncOperation {
 	switch op {

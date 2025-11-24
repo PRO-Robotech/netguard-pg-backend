@@ -856,10 +856,6 @@ func (w *Writer) createAddressGroupOutboxEntry(ctx context.Context, ag models.Ad
 	return nil
 }
 
-// Removed createAddressGroupDeleteOutboxEntry - no longer needed!
-// DELETE outbox entries are now automatically created by BEFORE DELETE trigger
-// (migration 026: trigger_address_group_before_delete)
-
 func (w *Writer) updateAddressGroupConditionsOnly(ctx context.Context, ag models.AddressGroup) error {
 	// ДИАГНОСТИКА: Начало обновления conditions
 	klog.InfoS("[DIAG] updateAddressGroupConditionsOnly: ENTRY",

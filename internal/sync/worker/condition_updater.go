@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 )
 
@@ -45,10 +46,11 @@ func (w *OutboxWorker) updatePendingSyncCondition(
 	message string,
 ) error {
 	reason := determinePendingSyncReason(pending, message)
+	status := boolToConditionStatus(pending)
 
 	condition := map[string]interface{}{
 		"type":               "PendingSync",
-		"status":             boolToConditionStatus(pending),
+		"status":             status,
 		"reason":             reason,
 		"message":            message,
 		"lastTransitionTime": time.Now().Format(time.RFC3339),
@@ -62,12 +64,57 @@ func (w *OutboxWorker) updatePendingSyncCondition(
 	safeConditionsExpr := "COALESCE(NULLIF(conditions, 'null'::jsonb), '[]'::jsonb)"
 	conditionsNullCheck := "conditions IS NULL OR conditions = 'null'::jsonb"
 
-	// Build entity-specific query with JOIN to entity table
-	// This fixes P0-1: Uses (namespace, name) instead of non-existent resource_id column
-	var query string
+	cfg, err := w.buildPendingSyncSQLConfig(resourceType, conditionsNullCheck, safeConditionsExpr)
+	if err != nil {
+		return err
+	}
+
+	existingCond, fetchErr := w.fetchPendingSyncCondition(ctx, cfg.tableName, namespace, name)
+	if fetchErr != nil {
+		w.logger.Warn("failed to fetch existing PendingSync condition, proceeding with update",
+			zap.String("resource_type", resourceType),
+			zap.String("namespace", namespace),
+			zap.String("name", name),
+			zap.Error(fetchErr))
+	} else if existingCond != nil {
+		if existingCond.Status == status &&
+			existingCond.Reason == reason &&
+			existingCond.Message == message {
+			return nil
+		}
+	}
+
+	result, err := w.pool.Exec(ctx, cfg.updateQuery, conditionJSON, namespace, name)
+	if err != nil {
+		w.logger.Error("failed to update PendingSync condition",
+			zap.String("resource_type", resourceType),
+			zap.String("namespace", namespace),
+			zap.String("name", name),
+			zap.Error(err))
+		return fmt.Errorf("failed to update PendingSync condition: %w", err)
+	}
+
+	rowsAffected := result.RowsAffected()
+	if rowsAffected == 0 {
+		// This is not necessarily an error - the resource might not have k8s_metadata yet
+		// or it might have been deleted
+		return nil
+	}
+
+	return nil
+}
+
+type pendingSyncSQLConfig struct {
+	tableName   string
+	updateQuery string
+}
+
+func (w *OutboxWorker) buildPendingSyncSQLConfig(resourceType, conditionsNullCheck, safeConditionsExpr string) (*pendingSyncSQLConfig, error) {
 	switch resourceType {
 	case "Host":
-		query = fmt.Sprintf(`
+		return &pendingSyncSQLConfig{
+			tableName: "hosts",
+			updateQuery: fmt.Sprintf(`
 			UPDATE k8s_metadata km
 			SET conditions = CASE
 				WHEN %s THEN jsonb_build_array($1::jsonb)
@@ -91,9 +138,12 @@ func (w *OutboxWorker) updatePendingSyncCondition(
 			FROM hosts h
 			WHERE h.namespace = $2 AND h.name = $3
 			  AND h.resource_version = km.resource_version
-		`, conditionsNullCheck, safeConditionsExpr, safeConditionsExpr)
+		`, conditionsNullCheck, safeConditionsExpr, safeConditionsExpr),
+		}, nil
 	case "Network":
-		query = fmt.Sprintf(`
+		return &pendingSyncSQLConfig{
+			tableName: "networks",
+			updateQuery: fmt.Sprintf(`
 			UPDATE k8s_metadata km
 			SET conditions = CASE
 				WHEN %s THEN jsonb_build_array($1::jsonb)
@@ -117,9 +167,12 @@ func (w *OutboxWorker) updatePendingSyncCondition(
 			FROM networks n
 			WHERE n.namespace = $2 AND n.name = $3
 			  AND n.resource_version = km.resource_version
-		`, conditionsNullCheck, safeConditionsExpr, safeConditionsExpr)
+		`, conditionsNullCheck, safeConditionsExpr, safeConditionsExpr),
+		}, nil
 	case "AddressGroup":
-		query = fmt.Sprintf(`
+		return &pendingSyncSQLConfig{
+			tableName: "address_groups",
+			updateQuery: fmt.Sprintf(`
 			UPDATE k8s_metadata km
 			SET conditions = CASE
 				WHEN %s THEN jsonb_build_array($1::jsonb)
@@ -143,9 +196,12 @@ func (w *OutboxWorker) updatePendingSyncCondition(
 			FROM address_groups ag
 			WHERE ag.namespace = $2 AND ag.name = $3
 			  AND ag.resource_version = km.resource_version
-		`, conditionsNullCheck, safeConditionsExpr, safeConditionsExpr)
+		`, conditionsNullCheck, safeConditionsExpr, safeConditionsExpr),
+		}, nil
 	case "Service":
-		query = fmt.Sprintf(`
+		return &pendingSyncSQLConfig{
+			tableName: "services",
+			updateQuery: fmt.Sprintf(`
 			UPDATE k8s_metadata km
 			SET conditions = CASE
 				WHEN %s THEN jsonb_build_array($1::jsonb)
@@ -169,10 +225,12 @@ func (w *OutboxWorker) updatePendingSyncCondition(
 			FROM services s
 			WHERE s.namespace = $2 AND s.name = $3
 			  AND s.resource_version = km.resource_version
-		`, conditionsNullCheck, safeConditionsExpr, safeConditionsExpr)
+		`, conditionsNullCheck, safeConditionsExpr, safeConditionsExpr),
+		}, nil
 	case "SvcSvcRule":
-		// Use Service pattern: check NULL at outer level to avoid scalar extraction
-		query = fmt.Sprintf(`
+		return &pendingSyncSQLConfig{
+			tableName: "svc_svc_rules",
+			updateQuery: fmt.Sprintf(`
 			UPDATE k8s_metadata km
 			SET conditions = CASE
 				WHEN %s THEN jsonb_build_array($1::jsonb)
@@ -196,9 +254,12 @@ func (w *OutboxWorker) updatePendingSyncCondition(
 			FROM svc_svc_rules sr
 			WHERE sr.namespace = $2 AND sr.name = $3
 			  AND sr.resource_version = km.resource_version
-		`, conditionsNullCheck, safeConditionsExpr, safeConditionsExpr)
+		`, conditionsNullCheck, safeConditionsExpr, safeConditionsExpr),
+		}, nil
 	case "SvcFqdnRule":
-		query = fmt.Sprintf(`
+		return &pendingSyncSQLConfig{
+			tableName: "svc_fqdn_rules",
+			updateQuery: fmt.Sprintf(`
 			UPDATE k8s_metadata km
 			SET conditions = CASE
 				WHEN %s THEN jsonb_build_array($1::jsonb)
@@ -222,40 +283,11 @@ func (w *OutboxWorker) updatePendingSyncCondition(
 			FROM svc_fqdn_rules fr
 			WHERE fr.namespace = $2 AND fr.name = $3
 			  AND fr.resource_version = km.resource_version
-		`, conditionsNullCheck, safeConditionsExpr, safeConditionsExpr)
+		`, conditionsNullCheck, safeConditionsExpr, safeConditionsExpr),
+		}, nil
 	default:
-		return fmt.Errorf("unsupported resource type for condition update: %s", resourceType)
+		return nil, fmt.Errorf("unsupported resource type for condition update: %s", resourceType)
 	}
-
-	result, err := w.pool.Exec(ctx, query, conditionJSON, namespace, name)
-	if err != nil {
-		w.logger.Error("failed to update PendingSync condition",
-			zap.String("resource_type", resourceType),
-			zap.String("namespace", namespace),
-			zap.String("name", name),
-			zap.Error(err))
-		return fmt.Errorf("failed to update PendingSync condition: %w", err)
-	}
-
-	rowsAffected := result.RowsAffected()
-	if rowsAffected == 0 {
-		// This is not necessarily an error - the resource might not have k8s_metadata yet
-		// or it might have been deleted
-		w.logger.Debug("no k8s_metadata found for resource (might not exist yet)",
-			zap.String("resource_type", resourceType),
-			zap.String("namespace", namespace),
-			zap.String("name", name))
-	}
-
-	w.logger.Debug("updated PendingSync condition",
-		zap.String("resource_type", resourceType),
-		zap.String("namespace", namespace),
-		zap.String("name", name),
-		zap.Bool("pending", pending),
-		zap.String("reason", reason),
-		zap.Int64("rows_affected", rowsAffected))
-
-	return nil
 }
 
 // determinePendingSyncReason determines the appropriate reason based on message content
@@ -390,4 +422,45 @@ func (w *OutboxWorker) updatePendingSyncWaitingAddressGroup(
 ) error {
 	msg := formatAddressGroupWaitMessage(agNamespace, agName)
 	return w.updatePendingSyncCondition(ctx, resourceType, namespace, name, true, msg)
+}
+
+type pendingSyncCondition struct {
+	Status  string `json:"status"`
+	Reason  string `json:"reason"`
+	Message string `json:"message"`
+}
+
+func (w *OutboxWorker) fetchPendingSyncCondition(ctx context.Context, tableName, namespace, name string) (*pendingSyncCondition, error) {
+	query := fmt.Sprintf(`
+		SELECT pending.elem
+		FROM %s t
+		JOIN k8s_metadata km ON t.resource_version = km.resource_version
+		LEFT JOIN LATERAL (
+			SELECT elem
+			FROM jsonb_array_elements(COALESCE(NULLIF(km.conditions, 'null'::jsonb), '[]'::jsonb)) elem
+			WHERE elem->>'type' = 'PendingSync'
+			LIMIT 1
+		) pending ON true
+		WHERE t.namespace = $1 AND t.name = $2
+		LIMIT 1
+	`, tableName)
+
+	var raw []byte
+	err := w.pool.QueryRow(ctx, query, namespace, name).Scan(&raw)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("fetch pending condition: %w", err)
+	}
+
+	if len(raw) == 0 {
+		return nil, nil
+	}
+
+	var cond pendingSyncCondition
+	if err := json.Unmarshal(raw, &cond); err != nil {
+		return nil, fmt.Errorf("decode pending condition: %w", err)
+	}
+	return &cond, nil
 }

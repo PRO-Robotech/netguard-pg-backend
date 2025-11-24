@@ -112,19 +112,75 @@ func (m *Meta) SetErrorCondition(reason, message string) {
 	m.SetCondition(condition)
 }
 
-// ClearErrorCondition removes Error condition from Meta
-func (m *Meta) ClearErrorCondition() {
+func (m *Meta) conditionMatches(conditionType string, status metav1.ConditionStatus, reason, message string) bool {
+	if m == nil {
+		return false
+	}
+	cond := m.GetCondition(conditionType)
+	if cond == nil {
+		return false
+	}
+	return cond.Status == status && cond.Reason == reason && cond.Message == message
+}
+
+// EnsureReadyCondition updates Ready condition only if changed. Returns true when updated.
+func (m *Meta) EnsureReadyCondition(status metav1.ConditionStatus, reason, message string) bool {
+	if m.conditionMatches(ConditionReady, status, reason, message) {
+		return false
+	}
+	m.SetReadyCondition(status, reason, message)
+	return true
+}
+
+// EnsureSyncedCondition updates Synced condition only if changed. Returns true when updated.
+func (m *Meta) EnsureSyncedCondition(status metav1.ConditionStatus, reason, message string) bool {
+	if m.conditionMatches(ConditionSynced, status, reason, message) {
+		return false
+	}
+	m.SetSyncedCondition(status, reason, message)
+	return true
+}
+
+// EnsureValidatedCondition updates Validated condition only if changed. Returns true when updated.
+func (m *Meta) EnsureValidatedCondition(status metav1.ConditionStatus, reason, message string) bool {
+	if m.conditionMatches(ConditionValidated, status, reason, message) {
+		return false
+	}
+	m.SetValidatedCondition(status, reason, message)
+	return true
+}
+
+// EnsureErrorCondition updates Error condition only if changed. Returns true when updated.
+func (m *Meta) EnsureErrorCondition(reason, message string) bool {
+	if m == nil {
+		return false
+	}
+	cond := m.GetCondition(ConditionError)
+	if cond != nil && cond.Reason == reason && cond.Message == message {
+		return false
+	}
+	m.SetErrorCondition(reason, message)
+	return true
+}
+
+// ClearErrorConditionIfPresent removes Error condition and reports whether anything was changed.
+func (m *Meta) ClearErrorConditionIfPresent() bool {
 	if m == nil || m.Conditions == nil {
-		return
+		return false
 	}
 
 	for i, condition := range m.Conditions {
 		if condition.Type == ConditionError {
-			// Удаляем условие ошибки
 			m.Conditions = append(m.Conditions[:i], m.Conditions[i+1:]...)
-			break
+			return true
 		}
 	}
+	return false
+}
+
+// ClearErrorCondition removes Error condition from Meta
+func (m *Meta) ClearErrorCondition() {
+	_ = m.ClearErrorConditionIfPresent()
 }
 
 // IsReady checks if resource is ready
