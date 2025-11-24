@@ -30,7 +30,7 @@ func (w *OutboxWorker) processEntityResource(
 ) error {
 	startTime := time.Now()
 	operation := string(item.Operation)
-	w.logger.Info("processing entity resource",
+	w.logger.Debug("processing entity resource",
 		zap.String("resource_type", item.ResourceType),
 		zap.String("namespace", item.ResourceNamespace),
 		zap.String("name", item.ResourceName),
@@ -234,7 +234,7 @@ func (w *OutboxWorker) processEntityResource(
 	}
 	duration := time.Since(startTime)
 	RecordProcessingSuccess(item.ResourceType, operation, duration)
-	w.logger.Info("entity resource processed successfully",
+	w.logger.Debug("entity resource processed successfully",
 		zap.String("resource_type", item.ResourceType),
 		zap.String("namespace", item.ResourceNamespace),
 		zap.String("name", item.ResourceName),
@@ -1195,7 +1195,7 @@ func (w *OutboxWorker) syncAndUpdateStatusAtomic(
 		RecordProcessingFailure(item.ResourceType, operation, string(errorCategory), duration)
 		return fmt.Errorf("SGROUP sync failed: %w", err)
 	}
-	w.logger.Info("SGROUP sync successful",
+	w.logger.Debug("SGROUP sync successful",
 		zap.String("resource_type", item.ResourceType),
 		zap.String("namespace", item.ResourceNamespace),
 		zap.String("name", item.ResourceName))

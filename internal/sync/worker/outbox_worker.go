@@ -237,7 +237,7 @@ func (w *OutboxWorker) processBatch(ctx context.Context) error {
 		return nil
 	}
 
-	w.logger.Info("processing batch",
+	w.logger.Debug("processing batch",
 		zap.Int("count", len(entries)),
 	)
 

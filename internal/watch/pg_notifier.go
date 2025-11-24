@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -88,6 +87,7 @@ func NewPGNotifier(
 	maxReconnectInterval := 1 * time.Minute
 
 	if connString == "" {
+		cancel()
 		return nil, fmt.Errorf("connection string is required for PG notifier")
 	}
 
@@ -190,9 +190,6 @@ func (pgn *PGNotifier) handleNotification(notification *pq.Notification) error {
 		return fmt.Errorf("failed to unmarshal notification: %w", err)
 	}
 
-	log.Printf("[WatchNotifier] payload op=%s type=%s ns=%s name=%s rv=%d",
-		pgNotif.Operation, pgNotif.ResourceType, pgNotif.Namespace, pgNotif.Name, pgNotif.ResourceVersion)
-
 	// Получаем соответствующий cache и converter
 	pgn.mu.RLock()
 	cache, cacheExists := pgn.caches[pgNotif.ResourceType]
@@ -211,12 +208,24 @@ func (pgn *PGNotifier) handleNotification(notification *pq.Notification) error {
 
 	switch pgNotif.Operation {
 	case "INSERT", "UPDATE":
-		return pgn.handleInsertOrUpdate(cache, converter, &pgNotif)
+		if err := pgn.handleInsertOrUpdate(cache, converter, &pgNotif); err != nil {
+			return err
+		}
 	case "DELETE":
-		return pgn.handleDelete(cache, converter, &pgNotif)
+		if err := pgn.handleDelete(cache, converter, &pgNotif); err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("unknown operation: %s", pgNotif.Operation)
 	}
+
+	klog.V(6).InfoS("watch event enqueued",
+		"resourceType", pgNotif.ResourceType,
+		"operation", pgNotif.Operation,
+		"namespace", pgNotif.Namespace,
+		"name", pgNotif.Name,
+		"rv", pgNotif.ResourceVersion)
+	return nil
 }
 
 // handleInsertOrUpdate обрабатывает INSERT/UPDATE событие
@@ -233,15 +242,11 @@ func (pgn *PGNotifier) handleInsertOrUpdate(
 		return fmt.Errorf("failed to convert resource %s/%s: %w", notification.Namespace, notification.Name, err)
 	}
 
-	log.Printf("[WatchNotifier] converted %s/%s rv=%d type=%s",
-		notification.Namespace, notification.Name, notification.ResourceVersion, notification.ResourceType)
-
 	setObjectResourceVersion(obj, notification.ResourceVersion)
 
 	if notification.Operation == "INSERT" {
 		return cache.Add(obj, notification.ResourceVersion)
 	}
-	log.Printf("[WatchNotifier] forwarding UPDATE to cache %s/%s rv=%d", notification.Namespace, notification.Name, notification.ResourceVersion)
 	return cache.Update(obj, notification.ResourceVersion)
 }
 
