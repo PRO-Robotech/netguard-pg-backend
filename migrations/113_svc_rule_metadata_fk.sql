@@ -1,3 +1,4 @@
+-- +goose Up
 WITH missing_null_rv AS (
     SELECT id, COALESCE(created_at, NOW()) AS created_at, COALESCE(updated_at, NOW()) AS updated_at
     FROM svc_svc_rules
