@@ -91,7 +91,7 @@ func (w *Writer) upsertSvcFqdnRule(ctx context.Context, rule models.SvcFqdnRule)
 	var existingResourceVersion sql.NullInt64
 	existingQuery := `SELECT resource_version FROM svc_fqdn_rules WHERE namespace = $1 AND name = $2`
 	err = w.tx.QueryRow(ctx, existingQuery, rule.Namespace, rule.Name).Scan(&existingResourceVersion)
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !isNoRowsError(err) {
 		return errors.Wrapf(err, "failed to check existing svc fqdn rule %s/%s", rule.Namespace, rule.Name)
 	}
 

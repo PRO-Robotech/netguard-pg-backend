@@ -77,7 +77,7 @@ func (w *Writer) upsertNetworkBinding(ctx context.Context, binding *models.Netwo
 	var existingResourceVersion sql.NullInt64
 	existingQuery := `SELECT resource_version FROM network_bindings WHERE namespace = $1 AND name = $2`
 	err = w.tx.QueryRow(ctx, existingQuery, binding.Namespace, binding.Name).Scan(&existingResourceVersion)
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !isNoRowsError(err) {
 		return errors.Wrapf(err, "failed to check existing network binding %s/%s", binding.Namespace, binding.Name)
 	}
 

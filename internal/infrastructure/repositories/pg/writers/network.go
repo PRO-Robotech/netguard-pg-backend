@@ -8,11 +8,12 @@ import (
 	"strconv"
 	"strings"
 
+	"netguard-pg-backend/internal/domain/models"
+	"netguard-pg-backend/internal/domain/ports"
+
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
-	"netguard-pg-backend/internal/domain/models"
-	"netguard-pg-backend/internal/domain/ports"
 )
 
 // CIDRAlreadyExistsError represents a CIDR uniqueness violation error
@@ -124,7 +125,7 @@ func (w *Writer) upsertNetwork(ctx context.Context, network *models.Network) err
 	var existingResourceVersion sql.NullInt64
 	checkQuery := `SELECT resource_version FROM networks WHERE namespace = $1 AND name = $2`
 	err := w.tx.QueryRow(ctx, checkQuery, network.Namespace, network.Name).Scan(&existingResourceVersion)
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !isNoRowsError(err) {
 		return errors.Wrapf(err, "failed to check existing network %s/%s", network.Namespace, network.Name)
 	}
 	isNewResource := !existingResourceVersion.Valid

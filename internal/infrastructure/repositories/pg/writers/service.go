@@ -137,13 +137,8 @@ func (w *Writer) upsertService(ctx context.Context, service models.Service) erro
 	var existingResourceVersion sql.NullInt64
 	existingQuery := `SELECT resource_version FROM services WHERE namespace = $1 AND name = $2`
 	err = w.tx.QueryRow(ctx, existingQuery, service.Namespace, service.Name).Scan(&existingResourceVersion)
-
-	if err != nil {
-		if err != sql.ErrNoRows && err.Error() != "no rows in result set" {
-			return errors.Wrapf(err, "failed to check existing service %s/%s", service.Namespace, service.Name)
-		}
-		// Reset err to nil for sql.ErrNoRows or "no rows in result set"
-		err = nil
+	if err != nil && !isNoRowsError(err) {
+		return errors.Wrapf(err, "failed to check existing service %s/%s", service.Namespace, service.Name)
 	}
 
 	if !existingResourceVersion.Valid {

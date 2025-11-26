@@ -111,7 +111,7 @@ func (w *Writer) upsertHost(ctx context.Context, host *models.Host) error {
 	var existingResourceVersion sql.NullInt64
 	checkQuery := `SELECT COALESCE(ip_list, '[]'::jsonb), resource_version FROM hosts WHERE namespace = $1 AND name = $2`
 	queryErr := w.tx.QueryRow(ctx, checkQuery, host.Namespace, host.Name).Scan(&existingIpListJSON, &existingResourceVersion)
-	if queryErr != nil && queryErr != sql.ErrNoRows {
+	if queryErr != nil && !isNoRowsError(queryErr) {
 		return errors.Wrapf(queryErr, "failed to check existing host %s/%s", host.Namespace, host.Name)
 	}
 
@@ -224,7 +224,7 @@ func (w *Writer) updateHostConditionsOnly(ctx context.Context, host *models.Host
 	getVersionQuery := `SELECT resource_version FROM hosts WHERE namespace = $1 AND name = $2`
 	err := w.tx.QueryRow(ctx, getVersionQuery, host.Namespace, host.Name).Scan(&resourceVersion)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if isNoRowsError(err) {
 			return errors.Errorf("host %s/%s not found", host.Namespace, host.Name)
 		}
 		return errors.Wrapf(err, "failed to get resource_version for host %s/%s", host.Namespace, host.Name)

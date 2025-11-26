@@ -80,7 +80,7 @@ func (w *Writer) upsertHostBinding(ctx context.Context, hostBinding *models.Host
 	var existingResourceVersion sql.NullInt64
 	existingQuery := `SELECT resource_version FROM host_bindings WHERE namespace = $1 AND name = $2`
 	err = w.tx.QueryRow(ctx, existingQuery, hostBinding.Namespace, hostBinding.Name).Scan(&existingResourceVersion)
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !isNoRowsError(err) {
 		return errors.Wrapf(err, "failed to check existing host binding %s/%s", hostBinding.Namespace, hostBinding.Name)
 	}
 

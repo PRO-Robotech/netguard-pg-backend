@@ -308,3 +308,7 @@ func priorityValue(priority map[string]int, typ string) int {
 	}
 	return 100 + int(typ[0])
 }
+
+func isNoRowsError(err error) bool {
+	return errors.Is(err, sql.ErrNoRows) || errors.Is(err, pgx.ErrNoRows)
+}

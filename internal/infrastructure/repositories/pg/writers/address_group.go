@@ -64,7 +64,7 @@ func (w *Writer) upsertAddressGroup(ctx context.Context, ag models.AddressGroup)
 	var existingNetworks []byte
 	existingQuery := `SELECT resource_version, networks FROM address_groups WHERE namespace = $1 AND name = $2`
 	err = w.tx.QueryRow(ctx, existingQuery, ag.Namespace, ag.Name).Scan(&existingResourceVersion, &existingNetworks)
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !isNoRowsError(err) {
 		klog.V(4).InfoS("Failed to get existing AddressGroup fields", "namespace", ag.Namespace, "name", ag.Name, "error", err.Error())
 	}
 
@@ -301,7 +301,7 @@ func (w *Writer) upsertAddressGroupBinding(ctx context.Context, binding models.A
 	var existingResourceVersion sql.NullInt64
 	existingQuery := `SELECT resource_version FROM address_group_bindings WHERE namespace = $1 AND name = $2`
 	err = w.tx.QueryRow(ctx, existingQuery, binding.Namespace, binding.Name).Scan(&existingResourceVersion)
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !isNoRowsError(err) {
 		return errors.Wrapf(err, "failed to check existing address group binding %s/%s", binding.Namespace, binding.Name)
 	}
 
@@ -521,7 +521,7 @@ func (w *Writer) upsertAddressGroupPortMapping(ctx context.Context, mapping mode
 	var existingResourceVersion sql.NullInt64
 	existingQuery := `SELECT resource_version FROM address_group_port_mappings WHERE namespace = $1 AND name = $2`
 	err = w.tx.QueryRow(ctx, existingQuery, mapping.Namespace, mapping.Name).Scan(&existingResourceVersion)
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !isNoRowsError(err) {
 		return errors.Wrapf(err, "failed to check existing address group port mapping %s/%s", mapping.Namespace, mapping.Name)
 	}
 
@@ -674,7 +674,7 @@ func (w *Writer) upsertAddressGroupBindingPolicy(ctx context.Context, policy mod
 	var existingResourceVersion sql.NullInt64
 	existingQuery := `SELECT resource_version FROM address_group_binding_policies WHERE namespace = $1 AND name = $2`
 	err = w.tx.QueryRow(ctx, existingQuery, policy.Namespace, policy.Name).Scan(&existingResourceVersion)
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !isNoRowsError(err) {
 		return errors.Wrapf(err, "failed to check existing address group binding policy %s/%s", policy.Namespace, policy.Name)
 	}
 
