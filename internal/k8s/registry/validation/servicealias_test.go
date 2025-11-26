@@ -27,10 +27,16 @@ func TestServiceAliasValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.ServiceAliasSpec{
-					ServiceRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Service",
-						Name:       "my-service",
+					ServiceRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "Service",
+
+							Name: "my-service",
+						},
 					},
 				},
 			},
@@ -49,10 +55,16 @@ func TestServiceAliasValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.ServiceAliasSpec{
-					ServiceRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Service",
-						Name:       "my-service",
+					ServiceRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "Service",
+
+							Name: "my-service",
+						},
 					},
 				},
 			},
@@ -67,10 +79,16 @@ func TestServiceAliasValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.ServiceAliasSpec{
-					ServiceRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Service",
-						Name:       "my-service",
+					ServiceRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "Service",
+
+							Name: "my-service",
+						},
 					},
 				},
 			},
@@ -85,8 +103,13 @@ func TestServiceAliasValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.ServiceAliasSpec{
-					ServiceRef: v1beta1.ObjectReference{
-						// Missing required fields
+					ServiceRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							// Missing required fields
+
+						},
 					},
 				},
 			},
@@ -101,10 +124,16 @@ func TestServiceAliasValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.ServiceAliasSpec{
-					ServiceRef: v1beta1.ObjectReference{
-						APIVersion: "v1", // Wrong API version
-						Kind:       "Service",
-						Name:       "my-service",
+					ServiceRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "v1", // Wrong API version
+
+							Kind: "Service",
+
+							Name: "my-service",
+						},
 					},
 				},
 			},
@@ -119,10 +148,16 @@ func TestServiceAliasValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.ServiceAliasSpec{
-					ServiceRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup", // Should be Service
-						Name:       "my-service",
+					ServiceRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup", // Should be Service
+
+							Name: "my-service",
+						},
 					},
 				},
 			},
@@ -137,10 +172,17 @@ func TestServiceAliasValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.ServiceAliasSpec{
-					ServiceRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Service",
-						// Missing name
+					ServiceRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "Service",
+
+							// Missing name
+
+						},
 					},
 				},
 			},
@@ -155,10 +197,16 @@ func TestServiceAliasValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.ServiceAliasSpec{
-					ServiceRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Service",
-						Name:       "Invalid_Service_Name",
+					ServiceRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "Service",
+
+							Name: "Invalid_Service_Name",
+						},
 					},
 				},
 			},
@@ -173,10 +221,16 @@ func TestServiceAliasValidator_ValidateCreate(t *testing.T) {
 					Namespace:    "default",
 				},
 				Spec: v1beta1.ServiceAliasSpec{
-					ServiceRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Service",
-						Name:       "my-service",
+					ServiceRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "Service",
+
+							Name: "my-service",
+						},
 					},
 				},
 			},
@@ -190,10 +244,16 @@ func TestServiceAliasValidator_ValidateCreate(t *testing.T) {
 					Namespace:    "default",
 				},
 				Spec: v1beta1.ServiceAliasSpec{
-					ServiceRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Service",
-						Name:       "my-service",
+					ServiceRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "Service",
+
+							Name: "my-service",
+						},
 					},
 				},
 			},
@@ -217,10 +277,16 @@ func TestServiceAliasValidator_ValidateCreate(t *testing.T) {
 					},
 				},
 				Spec: v1beta1.ServiceAliasSpec{
-					ServiceRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Service",
-						Name:       "web-service",
+					ServiceRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "Service",
+
+							Name: "web-service",
+						},
 					},
 				},
 			},
@@ -266,10 +332,16 @@ func TestServiceAliasValidator_ValidateUpdate(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: v1beta1.ServiceAliasSpec{
-			ServiceRef: v1beta1.ObjectReference{
-				APIVersion: "netguard.sgroups.io/v1beta1",
-				Kind:       "Service",
-				Name:       "my-service",
+			ServiceRef: v1beta1.NamespacedObjectReference{
+
+				ObjectReference: v1beta1.ObjectReference{
+
+					APIVersion: "netguard.sgroups.io/v1beta1",
+
+					Kind: "Service",
+
+					Name: "my-service",
+				},
 			},
 		},
 	}
@@ -339,10 +411,16 @@ func TestServiceAliasValidator_ValidateUpdate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.ServiceAliasSpec{
-					ServiceRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Service",
-						Name:       "my-service",
+					ServiceRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "Service",
+
+							Name: "my-service",
+						},
 					},
 				},
 			},
@@ -390,10 +468,16 @@ func TestServiceAliasValidator_ValidateDelete(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: v1beta1.ServiceAliasSpec{
-			ServiceRef: v1beta1.ObjectReference{
-				APIVersion: "netguard.sgroups.io/v1beta1",
-				Kind:       "Service",
-				Name:       "my-service",
+			ServiceRef: v1beta1.NamespacedObjectReference{
+
+				ObjectReference: v1beta1.ObjectReference{
+
+					APIVersion: "netguard.sgroups.io/v1beta1",
+
+					Kind: "Service",
+
+					Name: "my-service",
+				},
 			},
 		},
 	}

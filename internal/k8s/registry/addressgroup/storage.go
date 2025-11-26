@@ -3,7 +3,6 @@ package addressgroup
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,6 +14,7 @@ import (
 	"netguard-pg-backend/internal/k8s/client"
 	"netguard-pg-backend/internal/k8s/registry/base"
 	"netguard-pg-backend/internal/k8s/registry/convert"
+	tableutils "netguard-pg-backend/internal/k8s/registry/utils"
 	"netguard-pg-backend/internal/k8s/registry/validation"
 
 	"k8s.io/apiserver/pkg/registry/rest"
@@ -61,22 +61,25 @@ func (s *AddressGroupStorage) GetSingularName() string {
 // can print the objects even when "-o wide" или default output запрашивает
 // server-side преобразование.
 func (s *AddressGroupStorage) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
-	table := &metav1.Table{
-		ColumnDefinitions: []metav1.TableColumnDefinition{
-			{Name: "Name", Type: "string", Format: "name"},
-			{Name: "Default Action", Type: "string"},
-			{Name: "Logs", Type: "boolean"},
-			{Name: "Trace", Type: "boolean"},
-			{Name: "Age", Type: "string"},
-		},
+	table := tableutils.NewTable(
+		metav1.TableColumnDefinition{Name: "Name", Type: "string", Format: "name"},
+		metav1.TableColumnDefinition{Name: "Default Action", Type: "string"},
+		metav1.TableColumnDefinition{Name: "Logs", Type: "boolean"},
+		metav1.TableColumnDefinition{Name: "Trace", Type: "boolean"},
+		metav1.TableColumnDefinition{Name: "Age", Type: "string"},
+	)
+	if tableutils.AppendBookmarkRowIfNeeded(table, object) {
+		return table, nil
 	}
 
 	addRow := func(ag *netguardv1beta1.AddressGroup) {
-		row := metav1.TableRow{
-			Object: runtime.RawExtension{Object: ag},
-			Cells:  []interface{}{ag.Name, ag.Spec.DefaultAction, ag.Spec.Logs, ag.Spec.Trace, translateTimestampSince(ag.CreationTimestamp)},
-		}
-		table.Rows = append(table.Rows, row)
+		tableutils.AppendRow(table, ag,
+			ag.Name,
+			ag.Spec.DefaultAction,
+			ag.Spec.Logs,
+			ag.Spec.Trace,
+			tableutils.TranslateTimestampSince(ag.CreationTimestamp),
+		)
 	}
 
 	switch v := object.(type) {
@@ -90,30 +93,6 @@ func (s *AddressGroupStorage) ConvertToTable(ctx context.Context, object runtime
 		return nil, fmt.Errorf("unexpected object type %T", object)
 	}
 	return table, nil
-}
-
-// translateTimestampSince returns the elapsed time since timestamp in human-readable form.
-func translateTimestampSince(ts metav1.Time) string {
-	if ts.IsZero() {
-		return "<unknown>"
-	}
-	return durationShortHumanDuration(time.Since(ts.Time))
-}
-
-// durationShortHumanDuration is a copy of kube ctl printing helper (short).
-func durationShortHumanDuration(d time.Duration) string {
-	if seconds := int(d.Seconds()); seconds < 90 {
-		return fmt.Sprintf("%ds", seconds)
-	}
-	if minutes := int(d.Minutes()); minutes < 90 {
-		return fmt.Sprintf("%dm", minutes)
-	}
-	hours := int(d.Round(time.Hour).Hours())
-	if hours < 48 {
-		return fmt.Sprintf("%dh", hours)
-	}
-	days := hours / 24
-	return fmt.Sprintf("%dd", days)
 }
 
 // DeleteCollection implements rest.CollectionDeleter

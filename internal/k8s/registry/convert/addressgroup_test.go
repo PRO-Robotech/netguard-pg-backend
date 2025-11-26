@@ -2,6 +2,7 @@ package convert
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -140,6 +141,13 @@ func TestAddressGroupConverter_ToDomain(t *testing.T) {
 				assert.Nil(t, result)
 			} else {
 				require.NoError(t, err)
+				if tc.input != nil && tc.expected != nil && tc.expected.AddressGroupName == "" {
+					expectedName := tc.input.Name
+					if tc.input.Namespace != "" {
+						expectedName = fmt.Sprintf("%s/%s", tc.input.Namespace, tc.input.Name)
+					}
+					tc.expected.AddressGroupName = expectedName
+				}
 				assert.Equal(t, tc.expected, result)
 			}
 		})
@@ -361,6 +369,13 @@ func TestAddressGroupConverter_RoundTrip(t *testing.T) {
 			assert.Equal(t, tc.k8s.ObjectMeta.Labels, k8s.ObjectMeta.Labels)
 			assert.Equal(t, tc.k8s.ObjectMeta.Annotations, k8s.ObjectMeta.Annotations)
 			assert.Equal(t, tc.k8s.Spec, k8s.Spec)
+			if tc.k8s.Status.AddressGroupName == "" {
+				expectedName := tc.k8s.Name
+				if tc.k8s.Namespace != "" {
+					expectedName = fmt.Sprintf("%s/%s", tc.k8s.Namespace, tc.k8s.Name)
+				}
+				tc.k8s.Status.AddressGroupName = expectedName
+			}
 			assert.Equal(t, tc.k8s.Status, k8s.Status)
 
 			// Verify TypeMeta is set correctly

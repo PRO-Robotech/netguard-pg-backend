@@ -45,7 +45,7 @@ func (c *RuleS2SConverter) ToDomain(ctx context.Context, k8sObj *netguardv1beta1
 	if len(k8sObj.Status.IEAgAgRuleRefs) > 0 {
 		domainRule.IEAgAgRuleRefs = make([]netguardv1beta1.NamespacedObjectReference, len(k8sObj.Status.IEAgAgRuleRefs))
 		for i, ref := range k8sObj.Status.IEAgAgRuleRefs {
-			domainRule.IEAgAgRuleRefs[i] = ref
+			domainRule.IEAgAgRuleRefs[i] = EnsureNamespacedObjectReferenceFields(ref, "IEAgAgRule")
 		}
 	}
 

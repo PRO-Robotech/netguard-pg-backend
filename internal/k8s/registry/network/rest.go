@@ -3,7 +3,6 @@ package network
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -241,17 +240,14 @@ func (r *REST) Delete(ctx context.Context, name string, deleteValidation rest.Va
 
 // ConvertToTable implements minimal table output so kubectl can display resources.
 func (r *REST) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
-	table := &metav1.Table{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "meta.k8s.io/v1",
-			Kind:       "Table",
-		},
-		ColumnDefinitions: []metav1.TableColumnDefinition{
-			{Name: "Name", Type: "string", Format: "name"},
-			{Name: "CIDR", Type: "string"},
-			{Name: "Bound", Type: "string"},
-			{Name: "Age", Type: "string"},
-		},
+	table := utils.NewTable(
+		metav1.TableColumnDefinition{Name: "Name", Type: "string", Format: "name"},
+		metav1.TableColumnDefinition{Name: "CIDR", Type: "string"},
+		metav1.TableColumnDefinition{Name: "Bound", Type: "string"},
+		metav1.TableColumnDefinition{Name: "Age", Type: "string"},
+	)
+	if utils.AppendBookmarkRowIfNeeded(table, object) {
+		return table, nil
 	}
 
 	addRow := func(network *v1beta1.Network) {
@@ -260,11 +256,12 @@ func (r *REST) ConvertToTable(ctx context.Context, object runtime.Object, tableO
 			bound = "Yes"
 		}
 
-		row := metav1.TableRow{
-			Object: runtime.RawExtension{Object: network},
-			Cells:  []interface{}{network.Name, network.Spec.CIDR, bound, translateTimestampSince(network.CreationTimestamp)},
-		}
-		table.Rows = append(table.Rows, row)
+		utils.AppendRow(table, network,
+			network.Name,
+			network.Spec.CIDR,
+			bound,
+			utils.TranslateTimestampSince(network.CreationTimestamp),
+		)
 	}
 
 	switch v := object.(type) {
@@ -278,29 +275,6 @@ func (r *REST) ConvertToTable(ctx context.Context, object runtime.Object, tableO
 		return nil, fmt.Errorf("unexpected object type %T", object)
 	}
 	return table, nil
-}
-
-// helper function to format duration
-func translateTimestampSince(ts metav1.Time) string {
-	if ts.IsZero() {
-		return "<unknown>"
-	}
-	return durationShortHumanDuration(time.Since(ts.Time))
-}
-
-func durationShortHumanDuration(d time.Duration) string {
-	if seconds := int(d.Seconds()); seconds < 90 {
-		return fmt.Sprintf("%ds", seconds)
-	}
-	if minutes := int(d.Minutes()); minutes < 90 {
-		return fmt.Sprintf("%dm", minutes)
-	}
-	hours := int(d.Round(time.Hour).Hours())
-	if hours < 48 {
-		return fmt.Sprintf("%dh", hours)
-	}
-	days := hours / 24
-	return fmt.Sprintf("%dd", days)
 }
 
 // Destroy cleans up resources

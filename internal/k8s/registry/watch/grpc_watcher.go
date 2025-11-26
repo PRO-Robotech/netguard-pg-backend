@@ -77,7 +77,10 @@ func (w *grpcStreamWatcher) run(stream Stream, decoder runtimeDecoder) {
 				Code:    int32(http.StatusInternalServerError),
 			}
 		case watch.Bookmark:
-			obj = buildBookmark(evt.GetResourceVersion())
+			// Bookmark events lead to "<unknown>" rows in kubectl watch output,
+			// and we already keep track of resource versions elsewhere.
+			// Skip emitting them to clients entirely.
+			continue
 		default:
 			if evt.Object == nil {
 				continue

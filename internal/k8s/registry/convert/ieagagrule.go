@@ -47,15 +47,23 @@ func (c *IEAgAgRuleConverter) ToDomain(ctx context.Context, k8sObj *netguardv1be
 				Namespace: k8sObj.Namespace,
 			},
 		},
-		Transport:         transport,
-		Traffic:           traffic,
-		AddressGroupLocal: k8sObj.Spec.AddressGroupLocal,
-		AddressGroup:      k8sObj.Spec.AddressGroup,
-		Action:            action,
-		Logs:              false,             // Not exposed in k8s API for now
-		Trace:             k8sObj.Spec.Trace, // Copy trace field from spec
-		Priority:          k8sObj.Spec.Priority,
-		Meta:              ConvertMetadataToDomain(k8sObj.ObjectMeta, k8sObj.Status.Conditions, k8sObj.Status.ObservedGeneration),
+		Transport: transport,
+		Traffic:   traffic,
+		AddressGroupLocal: EnsureNamespacedObjectReferenceFields(
+			k8sObj.Spec.AddressGroupLocal, "AddressGroup"),
+		AddressGroup: EnsureNamespacedObjectReferenceFields(
+			k8sObj.Spec.AddressGroup, "AddressGroup"),
+		Action:   action,
+		Logs:     false,             // Not exposed in k8s API for now
+		Trace:    k8sObj.Spec.Trace, // Copy trace field from spec
+		Priority: k8sObj.Spec.Priority,
+		Meta:     ConvertMetadataToDomain(k8sObj.ObjectMeta, k8sObj.Status.Conditions, k8sObj.Status.ObservedGeneration),
+	}
+	if domainRule.AddressGroupLocal.Namespace == "" {
+		domainRule.AddressGroupLocal.Namespace = k8sObj.Namespace
+	}
+	if domainRule.AddressGroup.Namespace == "" {
+		domainRule.AddressGroup.Namespace = k8sObj.Namespace
 	}
 
 	// Convert ports

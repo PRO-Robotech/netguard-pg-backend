@@ -3,7 +3,6 @@ package svcfqdn_rule
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,6 +15,7 @@ import (
 	"netguard-pg-backend/internal/k8s/client"
 	"netguard-pg-backend/internal/k8s/registry/base"
 	"netguard-pg-backend/internal/k8s/registry/convert"
+	tableutils "netguard-pg-backend/internal/k8s/registry/utils"
 	"netguard-pg-backend/internal/k8s/registry/validation"
 )
 
@@ -54,33 +54,30 @@ func (s *SvcFqdnRuleStorage) GetSingularName() string {
 
 // ConvertToTable renders human friendly table view for kubectl get.
 func (s *SvcFqdnRuleStorage) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
-	table := &metav1.Table{
-		ColumnDefinitions: []metav1.TableColumnDefinition{
-			{Name: "Name", Type: "string", Format: "name"},
-			{Name: "ServiceFrom", Type: "string"},
-			{Name: "FQDN", Type: "string"},
-			{Name: "Transport", Type: "string"},
-			{Name: "Action", Type: "string"},
-			{Name: "Priority", Type: "integer"},
-			{Name: "Age", Type: "string"},
-		},
+	table := tableutils.NewTable(
+		metav1.TableColumnDefinition{Name: "Name", Type: "string", Format: "name"},
+		metav1.TableColumnDefinition{Name: "ServiceFrom", Type: "string"},
+		metav1.TableColumnDefinition{Name: "FQDN", Type: "string"},
+		metav1.TableColumnDefinition{Name: "Transport", Type: "string"},
+		metav1.TableColumnDefinition{Name: "Action", Type: "string"},
+		metav1.TableColumnDefinition{Name: "Priority", Type: "integer"},
+		metav1.TableColumnDefinition{Name: "Age", Type: "string"},
+	)
+	if tableutils.AppendBookmarkRowIfNeeded(table, object) {
+		return table, nil
 	}
 
 	addRow := func(rule *netguardv1beta1.SvcFqdnRule) {
 		serviceFrom := fmt.Sprintf("%s/%s", rule.Spec.ServiceFrom.Namespace, rule.Spec.ServiceFrom.Name)
-		row := metav1.TableRow{
-			Object: runtime.RawExtension{Object: rule},
-			Cells: []interface{}{
-				rule.Name,
-				serviceFrom,
-				rule.Spec.FQDN,
-				string(rule.Spec.Transport),
-				string(rule.Spec.Action),
-				rule.Spec.Priority,
-				translateTimestampSince(rule.CreationTimestamp),
-			},
-		}
-		table.Rows = append(table.Rows, row)
+		tableutils.AppendRow(table, rule,
+			rule.Name,
+			serviceFrom,
+			rule.Spec.FQDN,
+			string(rule.Spec.Transport),
+			string(rule.Spec.Action),
+			rule.Spec.Priority,
+			tableutils.TranslateTimestampSince(rule.CreationTimestamp),
+		)
 	}
 
 	switch v := object.(type) {
@@ -131,29 +128,6 @@ func (s *SvcFqdnRuleStorage) DeleteCollection(ctx context.Context, deleteValidat
 	}
 
 	return deleted, nil
-}
-
-// translateTimestampSince renders time difference similar to kubectl output.
-func translateTimestampSince(ts metav1.Time) string {
-	if ts.IsZero() {
-		return "<unknown>"
-	}
-	return durationShortHumanDuration(time.Since(ts.Time))
-}
-
-func durationShortHumanDuration(d time.Duration) string {
-	if seconds := int(d.Seconds()); seconds < 90 {
-		return fmt.Sprintf("%ds", seconds)
-	}
-	if minutes := int(d.Minutes()); minutes < 90 {
-		return fmt.Sprintf("%dm", minutes)
-	}
-	hours := int(d.Round(time.Hour).Hours())
-	if hours < 48 {
-		return fmt.Sprintf("%dh", hours)
-	}
-	days := hours / 24
-	return fmt.Sprintf("%dd", days)
 }
 
 // Kind returns resource kind for rest.KindProvider implementation.

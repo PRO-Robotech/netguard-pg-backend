@@ -165,6 +165,7 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 	genericCfg.BuildHandlerChainFunc = func(apiHandler http.Handler, c *server.Config) http.Handler {
 		handler := server.DefaultBuildHandlerChain(apiHandler, c)
 		handler = WithPatchBodyExtractor(handler)
+		handler = WithoutWatchBookmarks(handler)
 		return handler
 	}
 

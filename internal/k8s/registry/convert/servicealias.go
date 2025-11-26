@@ -21,6 +21,10 @@ func (c *ServiceAliasConverter) ToDomain(ctx context.Context, k8sObj *netguardv1
 	}
 
 	// Create domain service alias
+	serviceRef := EnsureNamespacedObjectReferenceFields(k8sObj.Spec.ServiceRef, "Service")
+	if serviceRef.Namespace == "" {
+		serviceRef.Namespace = k8sObj.Namespace
+	}
 	domainAlias := &models.ServiceAlias{
 		SelfRef: models.SelfRef{
 			ResourceIdentifier: models.ResourceIdentifier{
@@ -28,7 +32,7 @@ func (c *ServiceAliasConverter) ToDomain(ctx context.Context, k8sObj *netguardv1
 				Namespace: k8sObj.Namespace,
 			},
 		},
-		ServiceRef: k8sObj.Spec.ServiceRef,
+		ServiceRef: serviceRef,
 		Meta:       ConvertMetadataToDomain(k8sObj.ObjectMeta, k8sObj.Status.Conditions, k8sObj.Status.ObservedGeneration),
 	}
 

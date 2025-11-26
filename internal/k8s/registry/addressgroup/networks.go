@@ -13,6 +13,7 @@ import (
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 	"netguard-pg-backend/internal/k8s/client"
 	"netguard-pg-backend/internal/k8s/registry/utils"
+	tableutils "netguard-pg-backend/internal/k8s/registry/utils"
 )
 
 // NetworksREST implements the Networks subresource for AddressGroup
@@ -97,30 +98,31 @@ func (r *NetworksREST) List(ctx context.Context, options *metainternalversion.Li
 
 // ConvertToTable converts the Networks object to a table for kubectl output
 func (r *NetworksREST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
-	table := &metav1.Table{
-		ColumnDefinitions: []metav1.TableColumnDefinition{
-			{
-				Name:        "Name",
-				Type:        "string",
-				Format:      "name",
-				Description: "Network name",
-			},
-			{
-				Name:        "CIDR",
-				Type:        "string",
-				Description: "Network CIDR",
-			},
-			{
-				Name:        "Kind",
-				Type:        "string",
-				Description: "Network resource kind",
-			},
-			{
-				Name:        "Namespace",
-				Type:        "string",
-				Description: "Network resource namespace",
-			},
+	table := tableutils.NewTable(
+		metav1.TableColumnDefinition{
+			Name:        "Name",
+			Type:        "string",
+			Format:      "name",
+			Description: "Network name",
 		},
+		metav1.TableColumnDefinition{
+			Name:        "CIDR",
+			Type:        "string",
+			Description: "Network CIDR",
+		},
+		metav1.TableColumnDefinition{
+			Name:        "Kind",
+			Type:        "string",
+			Description: "Network resource kind",
+		},
+		metav1.TableColumnDefinition{
+			Name:        "Namespace",
+			Type:        "string",
+			Description: "Network resource namespace",
+		},
+	)
+	if tableutils.AppendBookmarkRowIfNeeded(table, obj) {
+		return table, nil
 	}
 
 	switch t := obj.(type) {

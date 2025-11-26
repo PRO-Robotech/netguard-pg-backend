@@ -15,6 +15,7 @@ import (
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 	"netguard-pg-backend/internal/k8s/client"
 	"netguard-pg-backend/internal/k8s/registry/utils"
+	tableutils "netguard-pg-backend/internal/k8s/registry/utils"
 )
 
 // AccessPortsREST implements the accessPorts subresource for AddressGroupPortMapping
@@ -124,36 +125,30 @@ func (r *AccessPortsREST) List(ctx context.Context, options *metainternalversion
 
 // ConvertToTable converts objects to tabular format for kubectl
 func (r *AccessPortsREST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
-	table := &metav1.Table{
-		ColumnDefinitions: []metav1.TableColumnDefinition{
-			{Name: "Mapping", Type: "string", Format: "name", Description: "AddressGroupPortMapping name"},
-			{Name: "Namespace", Type: "string", Description: "Mapping namespace"},
-			{Name: "Services", Type: "integer", Description: "Number of services with access"},
-		},
+	table := tableutils.NewTable(
+		metav1.TableColumnDefinition{Name: "Mapping", Type: "string", Format: "name", Description: "AddressGroupPortMapping name"},
+		metav1.TableColumnDefinition{Name: "Namespace", Type: "string", Description: "Mapping namespace"},
+		metav1.TableColumnDefinition{Name: "Services", Type: "integer", Description: "Number of services with access"},
+	)
+	if tableutils.AppendBookmarkRowIfNeeded(table, obj) {
+		return table, nil
 	}
 
 	switch t := obj.(type) {
 	case *netguardv1beta1.AccessPortsSpec:
-		table.Rows = []metav1.TableRow{
-			{
-				Cells: []interface{}{
-					t.MappingName,
-					t.MappingNamespace,
-					len(t.Items),
-				},
-				Object: runtime.RawExtension{Object: t},
-			},
-		}
+		tableutils.AppendRow(table, t,
+			t.MappingName,
+			t.MappingNamespace,
+			len(t.Items),
+		)
 	case *netguardv1beta1.AccessPortsSpecList:
 		for _, item := range t.Items {
-			table.Rows = append(table.Rows, metav1.TableRow{
-				Cells: []interface{}{
-					item.MappingName,
-					item.MappingNamespace,
-					len(item.Items),
-				},
-				Object: runtime.RawExtension{Object: &item},
-			})
+			itemCopy := item
+			tableutils.AppendRow(table, &itemCopy,
+				item.MappingName,
+				item.MappingNamespace,
+				len(item.Items),
+			)
 		}
 	default:
 		return nil, fmt.Errorf("unsupported object type: %T", obj)

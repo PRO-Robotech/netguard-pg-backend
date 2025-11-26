@@ -221,16 +221,14 @@ func (s *BaseStorage[K, D]) List(ctx context.Context, options *internalversion.L
 	return listObj, nil
 }
 func (s *BaseStorage[K, D]) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
-	table := &metav1.Table{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "meta.k8s.io/v1",
-			Kind:       "Table",
-		},
-		ColumnDefinitions: []metav1.TableColumnDefinition{
-			{Name: "Name", Type: "string", Description: "Name of the resource"},
-			{Name: "Age", Type: "string", Description: "Age of the resource"},
-		},
+	table := utils.NewTable(
+		metav1.TableColumnDefinition{Name: "Name", Type: "string", Description: "Name of the resource"},
+		metav1.TableColumnDefinition{Name: "Age", Type: "string", Description: "Age of the resource"},
+	)
+	if utils.AppendBookmarkRowIfNeeded(table, object) {
+		return table, nil
 	}
+
 	if _, isList := object.(metav1.ListInterface); isList {
 		items, err := meta.ExtractList(object)
 		if err != nil {
@@ -238,27 +236,26 @@ func (s *BaseStorage[K, D]) ConvertToTable(ctx context.Context, object runtime.O
 		}
 		for _, item := range items {
 			if accessor, err := meta.Accessor(item); err == nil {
-				row := metav1.TableRow{
+				table.Rows = append(table.Rows, metav1.TableRow{
+					Object: runtime.RawExtension{Object: item},
 					Cells: []interface{}{
 						accessor.GetName(),
-						"<unknown>",
+						utils.TranslateTimestampSince(accessor.GetCreationTimestamp()),
 					},
-					Object: runtime.RawExtension{Object: item},
-				}
-				table.Rows = append(table.Rows, row)
+				})
 			}
 		}
-	} else {
-		if accessor, err := meta.Accessor(object); err == nil {
-			row := metav1.TableRow{
-				Cells: []interface{}{
-					accessor.GetName(),
-					"<unknown>",
-				},
-				Object: runtime.RawExtension{Object: object},
-			}
-			table.Rows = append(table.Rows, row)
-		}
+		return table, nil
+	}
+
+	if accessor, err := meta.Accessor(object); err == nil {
+		table.Rows = append(table.Rows, metav1.TableRow{
+			Object: runtime.RawExtension{Object: object},
+			Cells: []interface{}{
+				accessor.GetName(),
+				utils.TranslateTimestampSince(accessor.GetCreationTimestamp()),
+			},
+		})
 	}
 	return table, nil
 }
@@ -871,6 +868,10 @@ func (s *BaseStorage[K, D]) Patch(ctx context.Context, name string, patchType ty
 func (s *BaseStorage[K, D]) Watch(ctx context.Context, options *internalversion.ListOptions) (watch.Interface, error) {
 	if s.backendClient == nil {
 		return nil, apierrors.NewInternalError(fmt.Errorf("watch not configured for resource %s", s.resourceName))
+	}
+
+	if options != nil {
+		options.AllowWatchBookmarks = false
 	}
 
 	req := s.buildWatchRequest(ctx, options)

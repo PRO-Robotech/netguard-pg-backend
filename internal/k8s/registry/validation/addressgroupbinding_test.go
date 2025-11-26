@@ -27,10 +27,13 @@ func TestAddressGroupBindingValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.AddressGroupBindingSpec{
-					ServiceRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Service",
-						Name:       "my-service",
+					ServiceRef: v1beta1.NamespacedObjectReference{
+						ObjectReference: v1beta1.ObjectReference{
+							APIVersion: "netguard.sgroups.io/v1beta1",
+							Kind:       "Service",
+							Name:       "my-service",
+						},
+						Namespace: "default",
 					},
 					AddressGroupRef: v1beta1.NamespacedObjectReference{
 						ObjectReference: v1beta1.ObjectReference{
@@ -57,10 +60,13 @@ func TestAddressGroupBindingValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.AddressGroupBindingSpec{
-					ServiceRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Service",
-						Name:       "my-service",
+					ServiceRef: v1beta1.NamespacedObjectReference{
+						ObjectReference: v1beta1.ObjectReference{
+							APIVersion: "netguard.sgroups.io/v1beta1",
+							Kind:       "Service",
+							Name:       "my-service",
+						},
+						Namespace: "default",
 					},
 					AddressGroupRef: v1beta1.NamespacedObjectReference{
 						ObjectReference: v1beta1.ObjectReference{
@@ -83,10 +89,13 @@ func TestAddressGroupBindingValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.AddressGroupBindingSpec{
-					ServiceRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Service",
-						Name:       "my-service",
+					ServiceRef: v1beta1.NamespacedObjectReference{
+						ObjectReference: v1beta1.ObjectReference{
+							APIVersion: "netguard.sgroups.io/v1beta1",
+							Kind:       "Service",
+							Name:       "my-service",
+						},
+						Namespace: "default",
 					},
 					AddressGroupRef: v1beta1.NamespacedObjectReference{
 						ObjectReference: v1beta1.ObjectReference{
@@ -109,8 +118,10 @@ func TestAddressGroupBindingValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.AddressGroupBindingSpec{
-					ServiceRef: v1beta1.ObjectReference{
-						// Missing required fields
+					ServiceRef: v1beta1.NamespacedObjectReference{
+						ObjectReference: v1beta1.ObjectReference{
+							// Missing required fields
+						},
 					},
 					AddressGroupRef: v1beta1.NamespacedObjectReference{
 						ObjectReference: v1beta1.ObjectReference{
@@ -133,10 +144,13 @@ func TestAddressGroupBindingValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.AddressGroupBindingSpec{
-					ServiceRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup", // Should be Service
-						Name:       "my-service",
+					ServiceRef: v1beta1.NamespacedObjectReference{
+						ObjectReference: v1beta1.ObjectReference{
+							APIVersion: "netguard.sgroups.io/v1beta1",
+							Kind:       "AddressGroup", // Should be Service
+							Name:       "my-service",
+						},
+						Namespace: "default",
 					},
 					AddressGroupRef: v1beta1.NamespacedObjectReference{
 						ObjectReference: v1beta1.ObjectReference{
@@ -159,10 +173,13 @@ func TestAddressGroupBindingValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.AddressGroupBindingSpec{
-					ServiceRef: v1beta1.ObjectReference{
-						APIVersion: "v1", // Wrong API version
-						Kind:       "Service",
-						Name:       "my-service",
+					ServiceRef: v1beta1.NamespacedObjectReference{
+						ObjectReference: v1beta1.ObjectReference{
+							APIVersion: "v1", // Wrong API version
+							Kind:       "Service",
+							Name:       "my-service",
+						},
+						Namespace: "default",
 					},
 					AddressGroupRef: v1beta1.NamespacedObjectReference{
 						ObjectReference: v1beta1.ObjectReference{
@@ -185,10 +202,13 @@ func TestAddressGroupBindingValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.AddressGroupBindingSpec{
-					ServiceRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Service",
-						Name:       "my-service",
+					ServiceRef: v1beta1.NamespacedObjectReference{
+						ObjectReference: v1beta1.ObjectReference{
+							APIVersion: "netguard.sgroups.io/v1beta1",
+							Kind:       "Service",
+							Name:       "my-service",
+						},
+						Namespace: "default",
 					},
 					AddressGroupRef: v1beta1.NamespacedObjectReference{
 						// Missing required fields
@@ -206,10 +226,13 @@ func TestAddressGroupBindingValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.AddressGroupBindingSpec{
-					ServiceRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Service",
-						Name:       "my-service",
+					ServiceRef: v1beta1.NamespacedObjectReference{
+						ObjectReference: v1beta1.ObjectReference{
+							APIVersion: "netguard.sgroups.io/v1beta1",
+							Kind:       "Service",
+							Name:       "my-service",
+						},
+						Namespace: "default",
 					},
 					AddressGroupRef: v1beta1.NamespacedObjectReference{
 						ObjectReference: v1beta1.ObjectReference{
@@ -232,10 +255,13 @@ func TestAddressGroupBindingValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.AddressGroupBindingSpec{
-					ServiceRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Service",
-						Name:       "my-service",
+					ServiceRef: v1beta1.NamespacedObjectReference{
+						ObjectReference: v1beta1.ObjectReference{
+							APIVersion: "netguard.sgroups.io/v1beta1",
+							Kind:       "Service",
+							Name:       "my-service",
+						},
+						Namespace: "default",
 					},
 					AddressGroupRef: v1beta1.NamespacedObjectReference{
 						ObjectReference: v1beta1.ObjectReference{
@@ -258,10 +284,13 @@ func TestAddressGroupBindingValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.AddressGroupBindingSpec{
-					ServiceRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Service",
-						Name:       "my-service",
+					ServiceRef: v1beta1.NamespacedObjectReference{
+						ObjectReference: v1beta1.ObjectReference{
+							APIVersion: "netguard.sgroups.io/v1beta1",
+							Kind:       "Service",
+							Name:       "my-service",
+						},
+						Namespace: "default",
 					},
 					AddressGroupRef: v1beta1.NamespacedObjectReference{
 						ObjectReference: v1beta1.ObjectReference{
@@ -284,10 +313,13 @@ func TestAddressGroupBindingValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.AddressGroupBindingSpec{
-					ServiceRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Service",
-						Name:       "Invalid_Service_Name",
+					ServiceRef: v1beta1.NamespacedObjectReference{
+						ObjectReference: v1beta1.ObjectReference{
+							APIVersion: "netguard.sgroups.io/v1beta1",
+							Kind:       "Service",
+							Name:       "Invalid_Service_Name",
+						},
+						Namespace: "default",
 					},
 					AddressGroupRef: v1beta1.NamespacedObjectReference{
 						ObjectReference: v1beta1.ObjectReference{
@@ -310,10 +342,13 @@ func TestAddressGroupBindingValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.AddressGroupBindingSpec{
-					ServiceRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Service",
-						Name:       "my-service",
+					ServiceRef: v1beta1.NamespacedObjectReference{
+						ObjectReference: v1beta1.ObjectReference{
+							APIVersion: "netguard.sgroups.io/v1beta1",
+							Kind:       "Service",
+							Name:       "my-service",
+						},
+						Namespace: "default",
 					},
 					AddressGroupRef: v1beta1.NamespacedObjectReference{
 						ObjectReference: v1beta1.ObjectReference{
@@ -336,10 +371,13 @@ func TestAddressGroupBindingValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.AddressGroupBindingSpec{
-					ServiceRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Service",
-						Name:       "service-in-default",
+					ServiceRef: v1beta1.NamespacedObjectReference{
+						ObjectReference: v1beta1.ObjectReference{
+							APIVersion: "netguard.sgroups.io/v1beta1",
+							Kind:       "Service",
+							Name:       "service-in-default",
+						},
+						Namespace: "default",
 					},
 					AddressGroupRef: v1beta1.NamespacedObjectReference{
 						ObjectReference: v1beta1.ObjectReference{
@@ -395,10 +433,13 @@ func TestAddressGroupBindingValidator_ValidateUpdate(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: v1beta1.AddressGroupBindingSpec{
-			ServiceRef: v1beta1.ObjectReference{
-				APIVersion: "netguard.sgroups.io/v1beta1",
-				Kind:       "Service",
-				Name:       "my-service",
+			ServiceRef: v1beta1.NamespacedObjectReference{
+				ObjectReference: v1beta1.ObjectReference{
+					APIVersion: "netguard.sgroups.io/v1beta1",
+					Kind:       "Service",
+					Name:       "my-service",
+				},
+				Namespace: "default",
 			},
 			AddressGroupRef: v1beta1.NamespacedObjectReference{
 				ObjectReference: v1beta1.ObjectReference{
@@ -476,10 +517,13 @@ func TestAddressGroupBindingValidator_ValidateUpdate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.AddressGroupBindingSpec{
-					ServiceRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Service",
-						Name:       "my-service",
+					ServiceRef: v1beta1.NamespacedObjectReference{
+						ObjectReference: v1beta1.ObjectReference{
+							APIVersion: "netguard.sgroups.io/v1beta1",
+							Kind:       "Service",
+							Name:       "my-service",
+						},
+						Namespace: "default",
 					},
 					AddressGroupRef: v1beta1.NamespacedObjectReference{
 						ObjectReference: v1beta1.ObjectReference{
@@ -548,10 +592,13 @@ func TestAddressGroupBindingValidator_ValidateDelete(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: v1beta1.AddressGroupBindingSpec{
-			ServiceRef: v1beta1.ObjectReference{
-				APIVersion: "netguard.sgroups.io/v1beta1",
-				Kind:       "Service",
-				Name:       "my-service",
+			ServiceRef: v1beta1.NamespacedObjectReference{
+				ObjectReference: v1beta1.ObjectReference{
+					APIVersion: "netguard.sgroups.io/v1beta1",
+					Kind:       "Service",
+					Name:       "my-service",
+				},
+				Namespace: "default",
 			},
 			AddressGroupRef: v1beta1.NamespacedObjectReference{
 				ObjectReference: v1beta1.ObjectReference{
