@@ -2,6 +2,7 @@ package writers
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -73,9 +74,16 @@ func (w *Writer) upsertNetworkBinding(ctx context.Context, binding *models.Netwo
 		return errors.Wrap(err, "failed to marshal K8s metadata")
 	}
 
-	conditionsJSON, err := json.Marshal(binding.Meta.Conditions)
+	var existingResourceVersion sql.NullInt64
+	existingQuery := `SELECT resource_version FROM network_bindings WHERE namespace = $1 AND name = $2`
+	err = w.tx.QueryRow(ctx, existingQuery, binding.Namespace, binding.Name).Scan(&existingResourceVersion)
+	if err != nil && !isNoRowsError(err) {
+		return errors.Wrapf(err, "failed to check existing network binding %s/%s", binding.Namespace, binding.Name)
+	}
+
+	conditionsJSON, err := w.prepareConditionsJSON(ctx, existingResourceVersion, binding.Meta.Conditions, conditionMergeOptions{})
 	if err != nil {
-		return errors.Wrap(err, "failed to marshal conditions")
+		return errors.Wrap(err, "failed to prepare merged conditions")
 	}
 
 	var resourceVersion int64
@@ -241,18 +249,19 @@ func (w *Writer) updateNetworkBindingConditionsOnly(ctx context.Context, binding
 	for i := range bindings {
 		binding := &bindings[i]
 
-		// Marshal conditions
-		conditionsJSON, err := json.Marshal(binding.Meta.Conditions)
-		if err != nil {
-			return errors.Wrap(err, "failed to marshal conditions")
-		}
-
 		// Find existing resource_version
 		var existingResourceVersion int64
 		query := `SELECT resource_version FROM network_bindings WHERE namespace = $1 AND name = $2`
-		err = w.tx.QueryRow(ctx, query, binding.Namespace, binding.Name).Scan(&existingResourceVersion)
+		err := w.tx.QueryRow(ctx, query, binding.Namespace, binding.Name).Scan(&existingResourceVersion)
 		if err != nil {
 			return errors.Wrapf(err, "failed to find existing NetworkBinding %s/%s", binding.Namespace, binding.Name)
+		}
+
+		mergedVersion := sql.NullInt64{Int64: existingResourceVersion, Valid: true}
+
+		conditionsJSON, err := w.prepareConditionsJSON(ctx, mergedVersion, binding.Meta.Conditions, conditionMergeOptions{})
+		if err != nil {
+			return errors.Wrap(err, "failed to prepare merged conditions")
 		}
 
 		// Update only conditions in k8s_metadata (no new resource_version)

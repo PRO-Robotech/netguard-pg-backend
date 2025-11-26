@@ -99,17 +99,16 @@ func (w *Writer) upsertSvcSvcRule(ctx context.Context, rule models.SvcSvcRule) e
 	// Check if rule exists to determine if conditions need initialization
 	var existingResourceVersion sql.NullInt64
 	existingQuery := `SELECT resource_version FROM svc_svc_rules WHERE namespace = $1 AND name = $2`
-	_ = w.tx.QueryRow(ctx, existingQuery, rule.Namespace, rule.Name).Scan(&existingResourceVersion)
-
-	// Initialize conditions for new resources
-	conditions := rule.Meta.Conditions
-	if !existingResourceVersion.Valid {
-		conditions = forcePendingSyncCondition(conditions)
+	err = w.tx.QueryRow(ctx, existingQuery, rule.Namespace, rule.Name).Scan(&existingResourceVersion)
+	if err != nil && !isNoRowsError(err) {
+		return errors.Wrapf(err, "failed to check existing svc svc rule %s/%s", rule.Namespace, rule.Name)
 	}
 
-	conditionsJSON, err := json.Marshal(conditions)
+	conditionsJSON, err := w.prepareConditionsJSON(ctx, existingResourceVersion, rule.Meta.Conditions, conditionMergeOptions{
+		ForcePendingReady: true,
+	})
 	if err != nil {
-		return errors.Wrap(err, "failed to marshal conditions")
+		return errors.Wrap(err, "failed to prepare merged conditions")
 	}
 
 	var resourceVersion int64
@@ -196,18 +195,19 @@ func (w *Writer) upsertSvcSvcRule(ctx context.Context, rule models.SvcSvcRule) e
 // This is used by OutboxWorker after successful SGROUP sync to mark resource as Ready
 // Updates k8s_metadata directly, bypassing the svc_svc_rules table, so triggers do not fire and no outbox entry is created.
 func (w *Writer) updateSvcSvcRuleConditionsOnly(ctx context.Context, rule models.SvcSvcRule) error {
-	// Marshal only the conditions we need to update
-	conditionsJSON, err := json.Marshal(rule.Meta.Conditions)
-	if err != nil {
-		return errors.Wrap(err, "failed to marshal conditions")
-	}
-
 	// Find the existing rule's resource_version by namespace/name
 	var resourceVersion int64
 	findQuery := `SELECT resource_version FROM svc_svc_rules WHERE namespace = $1 AND name = $2`
-	err = w.tx.QueryRow(ctx, findQuery, rule.Namespace, rule.Name).Scan(&resourceVersion)
+	err := w.tx.QueryRow(ctx, findQuery, rule.Namespace, rule.Name).Scan(&resourceVersion)
 	if err != nil {
 		return errors.Wrapf(err, "failed to find svcsvc rule %s/%s for condition update", rule.Namespace, rule.Name)
+	}
+
+	mergedVersion := sql.NullInt64{Int64: resourceVersion, Valid: true}
+
+	conditionsJSON, err := w.prepareConditionsJSON(ctx, mergedVersion, rule.Meta.Conditions, conditionMergeOptions{})
+	if err != nil {
+		return errors.Wrap(err, "failed to prepare merged conditions")
 	}
 
 	// Update only the conditions in k8s_metadata using the resource_version

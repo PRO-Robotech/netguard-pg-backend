@@ -36,3 +36,4 @@ DROP TRIGGER IF EXISTS trg_service_rules_on_delete ON services;
 DROP FUNCTION IF EXISTS cascade_service_rules_on_delete();
 -- +goose StatementEnd
 
+

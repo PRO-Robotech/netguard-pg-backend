@@ -110,29 +110,29 @@ func (w *Writer) upsertHost(ctx context.Context, host *models.Host) error {
 	var existingIpListJSON []byte
 	var existingResourceVersion sql.NullInt64
 	checkQuery := `SELECT COALESCE(ip_list, '[]'::jsonb), resource_version FROM hosts WHERE namespace = $1 AND name = $2`
-	err = w.tx.QueryRow(ctx, checkQuery, host.Namespace, host.Name).Scan(&existingIpListJSON, &existingResourceVersion)
+	queryErr := w.tx.QueryRow(ctx, checkQuery, host.Namespace, host.Name).Scan(&existingIpListJSON, &existingResourceVersion)
+	if queryErr != nil && !isNoRowsError(queryErr) {
+		return errors.Wrapf(queryErr, "failed to check existing host %s/%s", host.Namespace, host.Name)
+	}
 
-	// Ready will be set to True by Worker after successful SGROUP sync
-	// Business Rule: Resources should NOT have Ready=True until synced to SGROUP
-	conditions := host.Meta.Conditions
 	if !existingResourceVersion.Valid {
-		// This is a new resource - force Pending status
-		conditions = forcePendingSyncCondition(conditions)
 		klog.V(4).InfoS("Forcing PendingSGROUPSync status for new Host",
 			"namespace", host.Namespace, "name", host.Name)
 	}
 
-	conditionsJSON, err := json.Marshal(conditions)
+	conditionsJSON, err := w.prepareConditionsJSON(ctx, existingResourceVersion, host.Meta.Conditions, conditionMergeOptions{
+		ForcePendingReady: true,
+	})
 	if err != nil {
-		return errors.Wrap(err, "failed to marshal conditions")
+		return errors.Wrap(err, "failed to prepare merged conditions")
 	}
 
 	var existingIpList []models.IPItem
-	if err == nil && existingIpListJSON != nil && len(existingIpListJSON) > 0 {
+	if queryErr == nil && len(existingIpListJSON) > 0 {
 		_ = json.Unmarshal(existingIpListJSON, &existingIpList)
 	}
 
-	if host.IpList != nil && len(host.IpList) > 0 {
+	if len(host.IpList) > 0 {
 		ipListJSON, err = json.Marshal(host.IpList)
 		if err != nil {
 			return errors.Wrap(err, "failed to marshal IP list")
@@ -224,16 +224,17 @@ func (w *Writer) updateHostConditionsOnly(ctx context.Context, host *models.Host
 	getVersionQuery := `SELECT resource_version FROM hosts WHERE namespace = $1 AND name = $2`
 	err := w.tx.QueryRow(ctx, getVersionQuery, host.Namespace, host.Name).Scan(&resourceVersion)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if isNoRowsError(err) {
 			return errors.Errorf("host %s/%s not found", host.Namespace, host.Name)
 		}
 		return errors.Wrapf(err, "failed to get resource_version for host %s/%s", host.Namespace, host.Name)
 	}
 
-	// Marshal only the conditions
-	conditionsJSON, err := json.Marshal(host.Meta.Conditions)
+	mergedVersion := sql.NullInt64{Int64: resourceVersion, Valid: true}
+
+	conditionsJSON, err := w.prepareConditionsJSON(ctx, mergedVersion, host.Meta.Conditions, conditionMergeOptions{})
 	if err != nil {
-		return errors.Wrap(err, "failed to marshal conditions")
+		return errors.Wrap(err, "failed to prepare merged conditions")
 	}
 
 	// Update ONLY the conditions in k8s_metadata

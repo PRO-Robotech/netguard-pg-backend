@@ -64,23 +64,20 @@ func (w *Writer) upsertAddressGroup(ctx context.Context, ag models.AddressGroup)
 	var existingNetworks []byte
 	existingQuery := `SELECT resource_version, networks FROM address_groups WHERE namespace = $1 AND name = $2`
 	err = w.tx.QueryRow(ctx, existingQuery, ag.Namespace, ag.Name).Scan(&existingResourceVersion, &existingNetworks)
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !isNoRowsError(err) {
 		klog.V(4).InfoS("Failed to get existing AddressGroup fields", "namespace", ag.Namespace, "name", ag.Name, "error", err.Error())
 	}
 
-	// Ready will be set to True by Worker after successful SGROUP sync
-	// Business Rule: Resources should NOT have Ready=True until synced to SGROUP
-	conditions := ag.Meta.Conditions
 	if !existingResourceVersion.Valid {
-		// This is a new resource - force Pending status
-		conditions = forcePendingSyncCondition(conditions)
 		klog.V(4).InfoS("Forcing PendingSGROUPSync status for new AddressGroup",
 			"namespace", ag.Namespace, "name", ag.Name)
 	}
 
-	conditionsJSON, err := json.Marshal(conditions)
+	conditionsJSON, err := w.prepareConditionsJSON(ctx, existingResourceVersion, ag.Meta.Conditions, conditionMergeOptions{
+		ForcePendingReady: true,
+	})
 	if err != nil {
-		return errors.Wrap(err, "failed to marshal conditions")
+		return errors.Wrap(err, "failed to prepare merged conditions")
 	}
 
 	var networksJSON []byte
@@ -301,9 +298,16 @@ func (w *Writer) upsertAddressGroupBinding(ctx context.Context, binding models.A
 		return errors.Wrap(err, "failed to marshal K8s metadata")
 	}
 
-	conditionsJSON, err := json.Marshal(binding.Meta.Conditions)
+	var existingResourceVersion sql.NullInt64
+	existingQuery := `SELECT resource_version FROM address_group_bindings WHERE namespace = $1 AND name = $2`
+	err = w.tx.QueryRow(ctx, existingQuery, binding.Namespace, binding.Name).Scan(&existingResourceVersion)
+	if err != nil && !isNoRowsError(err) {
+		return errors.Wrapf(err, "failed to check existing address group binding %s/%s", binding.Namespace, binding.Name)
+	}
+
+	conditionsJSON, err := w.prepareConditionsJSON(ctx, existingResourceVersion, binding.Meta.Conditions, conditionMergeOptions{})
 	if err != nil {
-		return errors.Wrap(err, "failed to marshal conditions")
+		return errors.Wrap(err, "failed to prepare merged conditions")
 	}
 
 	var resourceVersion int64
@@ -446,18 +450,19 @@ func (w *Writer) updateAddressGroupBindingConditionsOnly(ctx context.Context, bi
 	for i := range bindings {
 		binding := &bindings[i]
 
-		// Marshal conditions
-		conditionsJSON, err := json.Marshal(binding.Meta.Conditions)
-		if err != nil {
-			return errors.Wrap(err, "failed to marshal conditions")
-		}
-
 		// Find existing resource_version
 		var existingResourceVersion int64
 		query := `SELECT resource_version FROM address_group_bindings WHERE namespace = $1 AND name = $2`
-		err = w.tx.QueryRow(ctx, query, binding.Namespace, binding.Name).Scan(&existingResourceVersion)
+		err := w.tx.QueryRow(ctx, query, binding.Namespace, binding.Name).Scan(&existingResourceVersion)
 		if err != nil {
 			return errors.Wrapf(err, "failed to find existing AddressGroupBinding %s/%s", binding.Namespace, binding.Name)
+		}
+
+		mergedVersion := sql.NullInt64{Int64: existingResourceVersion, Valid: true}
+
+		conditionsJSON, err := w.prepareConditionsJSON(ctx, mergedVersion, binding.Meta.Conditions, conditionMergeOptions{})
+		if err != nil {
+			return errors.Wrap(err, "failed to prepare merged conditions")
 		}
 
 		// Update only conditions in k8s_metadata (no new resource_version)
@@ -512,15 +517,18 @@ func (w *Writer) upsertAddressGroupPortMapping(ctx context.Context, mapping mode
 		return errors.Wrap(err, "failed to marshal K8s metadata")
 	}
 
-	conditionsJSON, err := json.Marshal(mapping.Meta.Conditions)
-	if err != nil {
-		return errors.Wrap(err, "failed to marshal conditions")
-	}
-
 	// First, check if address group port mapping exists and get existing resource version
 	var existingResourceVersion sql.NullInt64
 	existingQuery := `SELECT resource_version FROM address_group_port_mappings WHERE namespace = $1 AND name = $2`
-	_ = w.tx.QueryRow(ctx, existingQuery, mapping.Namespace, mapping.Name).Scan(&existingResourceVersion)
+	err = w.tx.QueryRow(ctx, existingQuery, mapping.Namespace, mapping.Name).Scan(&existingResourceVersion)
+	if err != nil && !isNoRowsError(err) {
+		return errors.Wrapf(err, "failed to check existing address group port mapping %s/%s", mapping.Namespace, mapping.Name)
+	}
+
+	conditionsJSON, err := w.prepareConditionsJSON(ctx, existingResourceVersion, mapping.Meta.Conditions, conditionMergeOptions{})
+	if err != nil {
+		return errors.Wrap(err, "failed to prepare merged conditions")
+	}
 
 	var resourceVersion int64
 	if existingResourceVersion.Valid {
@@ -662,15 +670,18 @@ func (w *Writer) upsertAddressGroupBindingPolicy(ctx context.Context, policy mod
 		return errors.Wrap(err, "failed to marshal K8s metadata")
 	}
 
-	conditionsJSON, err := json.Marshal(policy.Meta.Conditions)
-	if err != nil {
-		return errors.Wrap(err, "failed to marshal conditions")
-	}
-
 	// First, check if address group binding policy exists and get existing resource version
 	var existingResourceVersion sql.NullInt64
 	existingQuery := `SELECT resource_version FROM address_group_binding_policies WHERE namespace = $1 AND name = $2`
-	_ = w.tx.QueryRow(ctx, existingQuery, policy.Namespace, policy.Name).Scan(&existingResourceVersion)
+	err = w.tx.QueryRow(ctx, existingQuery, policy.Namespace, policy.Name).Scan(&existingResourceVersion)
+	if err != nil && !isNoRowsError(err) {
+		return errors.Wrapf(err, "failed to check existing address group binding policy %s/%s", policy.Namespace, policy.Name)
+	}
+
+	conditionsJSON, err := w.prepareConditionsJSON(ctx, existingResourceVersion, policy.Meta.Conditions, conditionMergeOptions{})
+	if err != nil {
+		return errors.Wrap(err, "failed to prepare merged conditions")
+	}
 
 	var resourceVersion int64
 	if existingResourceVersion.Valid {
@@ -890,12 +901,14 @@ func (w *Writer) updateAddressGroupConditionsOnly(ctx context.Context, ag models
 		"name", ag.Name,
 		"resource_version", resourceVersion)
 
-	conditionsJSON, err := json.Marshal(ag.Meta.Conditions)
+	mergedVersion := sql.NullInt64{Int64: resourceVersion, Valid: true}
+
+	conditionsJSON, err := w.prepareConditionsJSON(ctx, mergedVersion, ag.Meta.Conditions, conditionMergeOptions{})
 	if err != nil {
-		klog.ErrorS(err, "[DIAG] updateAddressGroupConditionsOnly: marshal FAILED",
+		klog.ErrorS(err, "[DIAG] updateAddressGroupConditionsOnly: merge FAILED",
 			"namespace", ag.Namespace,
 			"name", ag.Name)
-		return errors.Wrap(err, "failed to marshal conditions")
+		return errors.Wrap(err, "failed to prepare merged conditions")
 	}
 
 	klog.InfoS("[DIAG] updateAddressGroupConditionsOnly: conditions marshaled",
