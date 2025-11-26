@@ -146,19 +146,16 @@ func (w *Writer) upsertService(ctx context.Context, service models.Service) erro
 		err = nil
 	}
 
-	// Ready will be set to True by Worker after successful SGROUP sync
-	// Business Rule: Resources should NOT have Ready=True until synced to SGROUP
-	conditions := service.Meta.Conditions
 	if !existingResourceVersion.Valid {
-		// This is a new resource - force Pending status
-		conditions = forcePendingSyncCondition(conditions)
 		klog.V(4).InfoS("Forcing PendingSGROUPSync status for new Service",
 			"namespace", service.Namespace, "name", service.Name)
 	}
 
-	conditionsJSON, err := json.Marshal(conditions)
+	conditionsJSON, err := w.prepareConditionsJSON(ctx, existingResourceVersion, service.Meta.Conditions, conditionMergeOptions{
+		ForcePendingReady: true,
+	})
 	if err != nil {
-		return errors.Wrap(err, "failed to marshal conditions")
+		return errors.Wrap(err, "failed to prepare merged conditions")
 	}
 
 	var resourceVersion int64
@@ -231,18 +228,19 @@ func (w *Writer) getExistingServiceUID(ctx context.Context, namespace, name stri
 // updateServiceConditionsOnly updates only the conditions in k8s_metadata for condition-only operations
 // This avoids the UID conflict issues when ConditionManager runs after main transaction commit
 func (w *Writer) updateServiceConditionsOnly(ctx context.Context, service models.Service) error {
-	// Marshal only the conditions we need to update
-	conditionsJSON, err := json.Marshal(service.Meta.Conditions)
-	if err != nil {
-		return errors.Wrap(err, "failed to marshal conditions")
-	}
-
 	// Find the existing service's resource_version by namespace/name
 	var resourceVersion int64
 	findQuery := `SELECT resource_version FROM services WHERE namespace = $1 AND name = $2`
-	err = w.tx.QueryRow(ctx, findQuery, service.Namespace, service.Name).Scan(&resourceVersion)
+	err := w.tx.QueryRow(ctx, findQuery, service.Namespace, service.Name).Scan(&resourceVersion)
 	if err != nil {
 		return errors.Wrapf(err, "failed to find service %s/%s for condition update", service.Namespace, service.Name)
+	}
+
+	mergedVersion := sql.NullInt64{Int64: resourceVersion, Valid: true}
+
+	conditionsJSON, err := w.prepareConditionsJSON(ctx, mergedVersion, service.Meta.Conditions, conditionMergeOptions{})
+	if err != nil {
+		return errors.Wrap(err, "failed to prepare merged conditions")
 	}
 
 	// Update only the conditions in k8s_metadata using the resource_version

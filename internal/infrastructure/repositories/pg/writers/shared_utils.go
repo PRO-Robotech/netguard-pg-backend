@@ -1,10 +1,14 @@
 package writers
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -157,4 +161,150 @@ func forcePendingSyncCondition(conditions []metav1.Condition) []metav1.Condition
 	result := append(filtered, pending)
 
 	return result
+}
+
+type conditionMergeOptions struct {
+	ForcePendingReady bool
+}
+
+func (w *Writer) prepareConditionsJSON(
+	ctx context.Context,
+	existingResourceVersion sql.NullInt64,
+	incoming []metav1.Condition,
+	opts conditionMergeOptions,
+) ([]byte, error) {
+	var (
+		err      error
+		existing []metav1.Condition
+	)
+
+	if existingResourceVersion.Valid {
+		existing, err = w.fetchConditions(ctx, existingResourceVersion.Int64)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if opts.ForcePendingReady && !existingResourceVersion.Valid {
+		incoming = forcePendingSyncCondition(incoming)
+	}
+
+	merged := mergeConditionsByType(existing, incoming)
+
+	conditionsJSON, err := json.Marshal(merged)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshal merged conditions")
+	}
+	return conditionsJSON, nil
+}
+
+func (w *Writer) fetchConditions(ctx context.Context, resourceVersion int64) ([]metav1.Condition, error) {
+	query := `SELECT conditions FROM k8s_metadata WHERE resource_version = $1`
+	var raw []byte
+	err := w.tx.QueryRow(ctx, query, resourceVersion).Scan(&raw)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, errors.Wrap(err, "failed to fetch existing conditions")
+	}
+
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+
+	var conditions []metav1.Condition
+	if err := json.Unmarshal(raw, &conditions); err != nil {
+		return nil, errors.Wrap(err, "failed to unmarshal existing conditions")
+	}
+	return conditions, nil
+}
+
+func mergeConditionsByType(existing, incoming []metav1.Condition) []metav1.Condition {
+	if len(existing) == 0 && len(incoming) == 0 {
+		return []metav1.Condition{}
+	}
+
+	merged := make(map[string]metav1.Condition, len(existing)+len(incoming))
+
+	for _, cond := range existing {
+		if cond.Type == "" {
+			continue
+		}
+		merged[cond.Type] = cond
+	}
+
+	for _, cond := range incoming {
+		if cond.Type == "" {
+			continue
+		}
+		merged[cond.Type] = normalizeIncomingCondition(cond, merged[cond.Type])
+	}
+
+	if len(merged) == 0 {
+		return []metav1.Condition{}
+	}
+
+	types := make([]string, 0, len(merged))
+	for condType := range merged {
+		types = append(types, condType)
+	}
+	priority := map[string]int{
+		"Validated":   0,
+		"Synced":      1,
+		"PendingSync": 2,
+		"Ready":       3,
+	}
+	sort.Slice(types, func(i, j int) bool {
+		li, lj := priorityValue(priority, types[i]), priorityValue(priority, types[j])
+		if li == lj {
+			return types[i] < types[j]
+		}
+		return li < lj
+	})
+
+	result := make([]metav1.Condition, 0, len(types))
+	for _, condType := range types {
+		result = append(result, merged[condType])
+	}
+
+	return result
+}
+
+func normalizeIncomingCondition(incoming metav1.Condition, existing metav1.Condition) metav1.Condition {
+	normalized := incoming.DeepCopy()
+	if normalized == nil {
+		return existing
+	}
+
+	if normalized.LastTransitionTime.IsZero() {
+		if conditionsEquivalent(*normalized, existing) {
+			normalized.LastTransitionTime = existing.LastTransitionTime
+		} else {
+			now := metav1.Now()
+			normalized.LastTransitionTime = now
+		}
+	}
+
+	return *normalized
+}
+
+func conditionsEquivalent(a, b metav1.Condition) bool {
+	if a.Type != b.Type {
+		return false
+	}
+	if a.Status != b.Status || a.Reason != b.Reason || a.Message != b.Message {
+		return false
+	}
+	return a.ObservedGeneration == b.ObservedGeneration
+}
+
+func priorityValue(priority map[string]int, typ string) int {
+	if v, ok := priority[typ]; ok {
+		return v
+	}
+	if typ == "" {
+		return 1 << 30
+	}
+	return 100 + int(typ[0])
 }

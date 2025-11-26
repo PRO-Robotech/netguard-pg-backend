@@ -3,6 +3,7 @@ package convert
 import (
 	"fmt"
 	"reflect"
+	"sort"
 
 	"netguard-pg-backend/internal/domain/models"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
@@ -74,7 +75,30 @@ func ConvertMetadataFromDomain(meta models.Meta, name, namespace string) metav1.
 	return objMeta
 }
 func ConvertStatusFromDomain(meta models.Meta) ([]metav1.Condition, int64) {
-	return meta.Conditions, meta.ObservedGeneration
+	if len(meta.Conditions) == 0 {
+		return nil, meta.ObservedGeneration
+	}
+
+	ordered := make([]metav1.Condition, len(meta.Conditions))
+	copy(ordered, meta.Conditions)
+
+	priority := map[string]int{
+		"Validated":   0,
+		"Synced":      1,
+		"PendingSync": 2,
+		"Ready":       3,
+	}
+
+	sort.SliceStable(ordered, func(i, j int) bool {
+		li := conditionPriorityValue(priority, ordered[i].Type)
+		lj := conditionPriorityValue(priority, ordered[j].Type)
+		if li == lj {
+			return ordered[i].Type < ordered[j].Type
+		}
+		return li < lj
+	})
+
+	return ordered, meta.ObservedGeneration
 }
 func CreateStandardTypeMetaForResource(kind string) metav1.TypeMeta {
 	return metav1.TypeMeta{
@@ -151,4 +175,14 @@ func EnsureNamespacedObjectReferenceFields(objRef netguardv1beta1.NamespacedObje
 		result.Kind = kind
 	}
 	return result
+}
+
+func conditionPriorityValue(priority map[string]int, typ string) int {
+	if v, ok := priority[typ]; ok {
+		return v
+	}
+	if typ == "" {
+		return 1 << 30
+	}
+	return 100 + int(typ[0])
 }

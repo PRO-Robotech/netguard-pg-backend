@@ -2,6 +2,7 @@ package writers
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -120,10 +121,13 @@ func (w *Writer) SyncNetworks(ctx context.Context, networks []models.Network, sc
 // upsertNetwork inserts or updates a network with full K8s metadata support and creates Outbox entry
 func (w *Writer) upsertNetwork(ctx context.Context, network *models.Network) error {
 	// Check if network exists to determine if this is INSERT or UPDATE
-	var existingResourceVersion int64
+	var existingResourceVersion sql.NullInt64
 	checkQuery := `SELECT resource_version FROM networks WHERE namespace = $1 AND name = $2`
 	err := w.tx.QueryRow(ctx, checkQuery, network.Namespace, network.Name).Scan(&existingResourceVersion)
-	isNewResource := (err != nil) // If query fails, resource doesn't exist
+	if err != nil && err != sql.ErrNoRows {
+		return errors.Wrapf(err, "failed to check existing network %s/%s", network.Namespace, network.Name)
+	}
+	isNewResource := !existingResourceVersion.Valid
 
 	// Marshal K8s metadata
 	labelsJSON, annotationsJSON, err := w.marshalLabelsAnnotations(network.Meta.Labels, network.Meta.Annotations)
@@ -131,19 +135,16 @@ func (w *Writer) upsertNetwork(ctx context.Context, network *models.Network) err
 		return errors.Wrap(err, "failed to marshal K8s metadata")
 	}
 
-	// Ready will be set to True by Worker after successful SGROUP sync
-	// Business Rule: Resources should NOT have Ready=True until synced to SGROUP
-	conditions := network.Meta.Conditions
 	if isNewResource {
-		// This is a new resource - force Pending status
-		conditions = forcePendingSyncCondition(conditions)
 		klog.V(4).InfoS("Forcing PendingSGROUPSync status for new Network",
 			"namespace", network.Namespace, "name", network.Name)
 	}
 
-	conditionsJSON, err := json.Marshal(conditions)
+	conditionsJSON, err := w.prepareConditionsJSON(ctx, existingResourceVersion, network.Meta.Conditions, conditionMergeOptions{
+		ForcePendingReady: true,
+	})
 	if err != nil {
-		return errors.Wrap(err, "failed to marshal conditions")
+		return errors.Wrap(err, "failed to prepare merged conditions")
 	}
 
 	var resourceVersion int64
@@ -350,10 +351,11 @@ func (w *Writer) updateNetworkConditionsOnly(ctx context.Context, network *model
 		return errors.Wrapf(err, "failed to get resource_version for network %s/%s", network.Namespace, network.Name)
 	}
 
-	// Marshal only the conditions
-	conditionsJSON, err := json.Marshal(network.Meta.Conditions)
+	mergedVersion := sql.NullInt64{Int64: resourceVersion, Valid: true}
+
+	conditionsJSON, err := w.prepareConditionsJSON(ctx, mergedVersion, network.Meta.Conditions, conditionMergeOptions{})
 	if err != nil {
-		return errors.Wrap(err, "failed to marshal conditions")
+		return errors.Wrap(err, "failed to prepare merged conditions")
 	}
 
 	// Update ONLY the conditions in k8s_metadata
