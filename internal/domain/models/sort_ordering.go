@@ -148,8 +148,24 @@ func SortHostReferences(refs []HostReference) {
 		} else if namespaceNameLess(refs[j].Ref.Namespace, refs[j].Ref.Name, refs[i].Ref.Namespace, refs[i].Ref.Name) {
 			return false
 		}
+		rankI := hostReferenceSourceRank(refs[i].Source)
+		rankJ := hostReferenceSourceRank(refs[j].Source)
+		if rankI != rankJ {
+			return rankI < rankJ
+		}
 		return string(refs[i].Source) < string(refs[j].Source)
 	})
+}
+
+func hostReferenceSourceRank(source HostRegistrationSource) int {
+	switch source {
+	case HostSourceSpec:
+		return 0
+	case HostSourceBinding:
+		return 1
+	default:
+		return 2
+	}
 }
 
 // SortIPItems orders host IP values lexicographically.

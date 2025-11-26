@@ -30,7 +30,7 @@ func (w *OutboxWorker) processEntityResource(
 ) error {
 	startTime := time.Now()
 	operation := string(item.Operation)
-	w.logger.Info("processing entity resource",
+	w.logger.Debug("processing entity resource",
 		zap.String("resource_type", item.ResourceType),
 		zap.String("namespace", item.ResourceNamespace),
 		zap.String("name", item.ResourceName),
@@ -49,11 +49,23 @@ func (w *OutboxWorker) processEntityResource(
 			zap.String("namespace", item.ResourceNamespace),
 			zap.String("name", item.ResourceName),
 			zap.String("operation", operation))
-		resource, err = w.reconstructResourceFromPayload(ctx, item)
+		var payload map[string]interface{}
+		resource, payload, err = w.reconstructResourceFromPayload(ctx, item)
 		if err != nil {
 			duration := time.Since(startTime)
 			RecordProcessingFailure(item.ResourceType, operation, "payload_reconstruction_error", duration)
 			return fmt.Errorf("failed to reconstruct resource from payload: %w", err)
+		}
+
+		if w.shouldSkipExternalSync(item, payload) {
+			w.logger.Info("skipping SGROUP sync for condition-only update",
+				zap.String("resource_type", item.ResourceType),
+				zap.String("namespace", item.ResourceNamespace),
+				zap.String("name", item.ResourceName))
+			if err := w.markEntityResourceReady(ctx, item.ResourceType, item.ResourceNamespace, item.ResourceName, item.ID); err != nil {
+				return err
+			}
+			return nil
 		}
 
 		if service, ok := resource.(*models.Service); ok {
@@ -222,20 +234,26 @@ func (w *OutboxWorker) processEntityResource(
 	}
 	duration := time.Since(startTime)
 	RecordProcessingSuccess(item.ResourceType, operation, duration)
-	w.logger.Info("entity resource processed successfully",
+	w.logger.Debug("entity resource processed successfully",
 		zap.String("resource_type", item.ResourceType),
 		zap.String("namespace", item.ResourceNamespace),
 		zap.String("name", item.ResourceName),
 		zap.Duration("duration", duration))
 	return nil
 }
-func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item *domain.OutboxEntry) (interface{}, error) {
+func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item *domain.OutboxEntry) (interface{}, map[string]interface{}, error) {
 	var payload map[string]interface{}
 	if err := json.Unmarshal(item.Payload, &payload); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal payload: %w", err)
+		return nil, nil, fmt.Errorf("failed to unmarshal payload: %w", err)
 	}
-	namespace, _ := payload["namespace"].(string)
-	name, _ := payload["name"].(string)
+	namespace := getStringFromMap(payload, "namespace")
+	if namespace == "" {
+		namespace = item.ResourceNamespace
+	}
+	name := getStringFromMap(payload, "name")
+	if name == "" {
+		name = item.ResourceName
+	}
 	switch item.ResourceType {
 	case string(registry.TypeHost):
 		uuid := getStringFromMap(payload, "uuid")
@@ -284,7 +302,7 @@ func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item 
 			host.SetIpList(ips)
 		}
 
-		return host, nil
+		return host, payload, nil
 	case string(registry.TypeNetwork):
 		cidr, _ := payload["cidr"].(string)
 		return &models.Network{
@@ -295,7 +313,7 @@ func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item 
 				},
 			},
 			CIDR: cidr,
-		}, nil
+		}, payload, nil
 	case string(registry.TypeAddressGroup):
 		var base *models.AddressGroup
 		if item.Operation != domain.SyncOperationCreate {
@@ -391,7 +409,7 @@ func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item 
 				ag.Networks = networkItems
 			}
 		}
-		return ag, nil
+		return ag, payload, nil
 	case string(registry.TypeService):
 		var base *models.Service
 		if item.Operation != domain.SyncOperationCreate {
@@ -539,7 +557,7 @@ func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item 
 			zap.Int("final_aggregated_address_group_count", len(svc.AggregatedAddressGroups)),
 			zap.Any("final_aggregated_address_groups", svc.AggregatedAddressGroups))
 
-		return svc, nil
+		return svc, payload, nil
 	case string(registry.TypeSvcSvcRule):
 		var base *models.SvcSvcRule
 		if item.Operation != domain.SyncOperationCreate {
@@ -618,7 +636,7 @@ func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item 
 		if rule.ServiceFromRef.Namespace == "" && rule.ServiceFromRef.Name != "" {
 			rule.ServiceFromRef.Namespace = namespace
 		}
-		return rule, nil
+		return rule, payload, nil
 	case string(registry.TypeSvcFqdnRule):
 		var base *models.SvcFqdnRule
 		if item.Operation != domain.SyncOperationCreate {
@@ -725,7 +743,7 @@ func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item 
 		if rule.Transport == "" {
 			rule.Transport = models.TCP
 		}
-		return rule, nil
+		return rule, payload, nil
 	case string(registry.TypeHostBinding):
 		// For DELETE operations on HostBinding (process resource), we only need basic identification
 		// The coordinated deletion handler will load the full resource if needed
@@ -736,10 +754,55 @@ func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item 
 					Name:      name,
 				},
 			},
-		}, nil
+		}, payload, nil
 	default:
-		return nil, fmt.Errorf("unknown resource type: %s", item.ResourceType)
+		return nil, nil, fmt.Errorf("unknown resource type: %s", item.ResourceType)
 	}
+}
+
+func (w *OutboxWorker) shouldSkipExternalSync(item *domain.OutboxEntry, payload map[string]interface{}) bool {
+	if payload == nil {
+		return false
+	}
+
+	if item.Operation != domain.SyncOperationUpdate {
+		return false
+	}
+
+	switch item.ResourceType {
+	case string(registry.TypeAddressGroup):
+		return isConditionOnlyAddressGroupPayload(payload)
+	default:
+		return false
+	}
+}
+
+func isConditionOnlyAddressGroupPayload(payload map[string]interface{}) bool {
+	if payload == nil {
+		return false
+	}
+
+	hasSpecPayload := hasAnyKeys(payload,
+		"defaultAction",
+		"logs",
+		"trace",
+		"networks",
+		"hosts",
+		"description",
+	)
+
+	hasBindingContext := payload["host"] != nil || payload["binding"] != nil
+
+	return !hasSpecPayload && hasBindingContext
+}
+
+func hasAnyKeys(payload map[string]interface{}, keys ...string) bool {
+	for _, key := range keys {
+		if _, ok := payload[key]; ok {
+			return true
+		}
+	}
+	return false
 }
 func (w *OutboxWorker) loadEntityResource(
 	ctx context.Context,
@@ -884,132 +947,159 @@ func (w *OutboxWorker) markEntityResourceReady(
 	name string,
 	outboxID interface{},
 ) error {
+	resource, err := w.loadEntityResource(ctx, resourceType, namespace, name)
+	if err != nil {
+		return fmt.Errorf("failed to load resource for update: %w", err)
+	}
+
+	var writeFunc func(writer ports.Writer) error
+	needsWrite := false
+
+	markCompleted := func() error {
+		if err := w.outboxRepo.MarkCompleted(ctx, outboxID.(uuid.UUID)); err != nil {
+			w.logger.Error("markEntityResourceReady: failed to mark outbox entry as completed",
+				zap.String("outbox_id", outboxID.(uuid.UUID).String()),
+				zap.Error(err))
+			return fmt.Errorf("failed to mark outbox entry as completed: %w", err)
+		}
+		return nil
+	}
+
+	switch r := resource.(type) {
+	case *models.Host:
+		changed := r.Meta.EnsureReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
+		changed = r.Meta.EnsureSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced") || changed
+		if !changed {
+			break
+		}
+		host := *r
+		scope := ports.NewResourceIdentifierScope(models.ResourceIdentifier{
+			Name:      r.Name,
+			Namespace: r.Namespace,
+		})
+		writeFunc = func(writer ports.Writer) error {
+			if err := writer.SyncHosts(ctx, []models.Host{host}, scope, ports.ConditionOnlyOperation{}); err != nil {
+				return fmt.Errorf("failed to update host: %w", err)
+			}
+			return nil
+		}
+		needsWrite = true
+	case *models.AddressGroup:
+		changed := r.Meta.EnsureReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
+		changed = r.Meta.EnsureSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced") || changed
+		if !changed {
+			break
+		}
+		addressGroup := *r
+		scope := ports.NewResourceIdentifierScope(models.ResourceIdentifier{
+			Name:      r.Name,
+			Namespace: r.Namespace,
+		})
+		writeFunc = func(writer ports.Writer) error {
+			if err := writer.SyncAddressGroups(ctx, []models.AddressGroup{addressGroup}, scope, ports.ConditionOnlyOperation{}); err != nil {
+				w.logger.Error("markEntityResourceReady: SyncAddressGroups FAILED",
+					zap.String("namespace", addressGroup.Namespace),
+					zap.String("name", addressGroup.Name),
+					zap.Error(err))
+				return fmt.Errorf("failed to update address group: %w", err)
+			}
+			return nil
+		}
+		needsWrite = true
+	case *models.Network:
+		changed := r.Meta.EnsureReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
+		changed = r.Meta.EnsureSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced") || changed
+		if !changed {
+			break
+		}
+		network := *r
+		scope := ports.NewResourceIdentifierScope(models.ResourceIdentifier{
+			Name:      r.Name,
+			Namespace: r.Namespace,
+		})
+		writeFunc = func(writer ports.Writer) error {
+			if err := writer.SyncNetworks(ctx, []models.Network{network}, scope, ports.ConditionOnlyOperation{}); err != nil {
+				return fmt.Errorf("failed to update network: %w", err)
+			}
+			return nil
+		}
+		needsWrite = true
+	case *models.Service:
+		changed := r.Meta.EnsureReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
+		changed = r.Meta.EnsureSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced") || changed
+		if !changed {
+			break
+		}
+		service := *r
+		scope := ports.NewResourceIdentifierScope(models.ResourceIdentifier{
+			Name:      r.Name,
+			Namespace: r.Namespace,
+		})
+		writeFunc = func(writer ports.Writer) error {
+			if err := writer.SyncServices(ctx, []models.Service{service}, scope, ports.ConditionOnlyOperation{}); err != nil {
+				w.logger.Error("markEntityResourceReady: SyncServices failed",
+					zap.String("namespace", service.Namespace),
+					zap.String("name", service.Name),
+					zap.Error(err))
+				return fmt.Errorf("failed to update service: %w", err)
+			}
+			return nil
+		}
+		needsWrite = true
+	case *models.SvcSvcRule:
+		changed := r.Meta.EnsureReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
+		changed = r.Meta.EnsureSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced") || changed
+		if !changed {
+			break
+		}
+		rule := *r
+		scope := ports.NewResourceIdentifierScope(models.ResourceIdentifier{
+			Name:      r.Name,
+			Namespace: r.Namespace,
+		})
+		writeFunc = func(writer ports.Writer) error {
+			if err := writer.SyncSvcSvcRules(ctx, []models.SvcSvcRule{rule}, scope, ports.ConditionOnlyOperation{}); err != nil {
+				return fmt.Errorf("failed to update svcsvc rule: %w", err)
+			}
+			return nil
+		}
+		needsWrite = true
+	case *models.SvcFqdnRule:
+		changed := r.Meta.EnsureReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
+		changed = r.Meta.EnsureSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced") || changed
+		if !changed {
+			break
+		}
+		rule := *r
+		scope := ports.NewResourceIdentifierScope(models.ResourceIdentifier{
+			Name:      r.Name,
+			Namespace: r.Namespace,
+		})
+		writeFunc = func(writer ports.Writer) error {
+			if err := writer.SyncSvcFqdnRules(ctx, []models.SvcFqdnRule{rule}, scope, ports.ConditionOnlyOperation{}); err != nil {
+				return fmt.Errorf("failed to update svcfqdn rule: %w", err)
+			}
+			return nil
+		}
+		needsWrite = true
+	default:
+		return fmt.Errorf("unknown resource type for update: %T", resource)
+	}
+
+	if !needsWrite {
+		return markCompleted()
+	}
+
 	writer, err := w.registry.Writer(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get writer: %w", err)
 	}
 	defer writer.Abort()
-	w.logger.Debug("markEntityResourceReady: got writer",
-		zap.String("resource_type", resourceType),
-		zap.String("namespace", namespace),
-		zap.String("name", name))
-	resource, err := w.loadEntityResource(ctx, resourceType, namespace, name)
-	if err != nil {
-		return fmt.Errorf("failed to load resource for update: %w", err)
+
+	if err := writeFunc(writer); err != nil {
+		return err
 	}
-	w.logger.Debug("markEntityResourceReady: loaded resource",
-		zap.String("resource_type", resourceType),
-		zap.String("namespace", namespace),
-		zap.String("name", name))
-	var resourceScope ports.Scope
-	switch r := resource.(type) {
-	case *models.Host:
-		r.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
-		r.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced")
-		resourceScope = ports.NewResourceIdentifierScope(models.ResourceIdentifier{
-			Name:      r.Name,
-			Namespace: r.Namespace,
-		})
-		if err := writer.SyncHosts(ctx, []models.Host{*r}, resourceScope, ports.ConditionOnlyOperation{}); err != nil {
-			return fmt.Errorf("failed to update host: %w", err)
-		}
-	case *models.AddressGroup:
-		w.logger.Info("[DIAG] markEntityResourceReady: AddressGroup - BEFORE SetReadyCondition",
-			zap.String("namespace", r.Namespace),
-			zap.String("name", r.Name),
-			zap.Int("conditions_count", len(r.Meta.Conditions)),
-			zap.Any("conditions_before", r.Meta.Conditions))
-		startTime := time.Now()
-		r.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
-		r.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced")
-		setConditionDuration := time.Since(startTime)
-		w.logger.Info("[DIAG] markEntityResourceReady: AddressGroup - AFTER SetReadyCondition",
-			zap.String("namespace", r.Namespace),
-			zap.String("name", r.Name),
-			zap.Int("conditions_count", len(r.Meta.Conditions)),
-			zap.Any("conditions_after", r.Meta.Conditions),
-			zap.Duration("set_duration_ns", setConditionDuration))
-		resourceScope = ports.NewResourceIdentifierScope(models.ResourceIdentifier{
-			Name:      r.Name,
-			Namespace: r.Namespace,
-		})
-		w.logger.Info("[DIAG] markEntityResourceReady: AddressGroup - CALLING SyncAddressGroups",
-			zap.String("namespace", r.Namespace),
-			zap.String("name", r.Name),
-			zap.String("operation_type", "ConditionOnlyOperation"),
-			zap.Bool("has_writer", writer != nil),
-			zap.Bool("has_scope", resourceScope != nil))
-		syncStartTime := time.Now()
-		if err := writer.SyncAddressGroups(ctx, []models.AddressGroup{*r}, resourceScope, ports.ConditionOnlyOperation{}); err != nil {
-			w.logger.Error("markEntityResourceReady: SyncAddressGroups FAILED",
-				zap.String("namespace", r.Namespace),
-				zap.String("name", r.Name),
-				zap.Error(err),
-				zap.Duration("failed_after_ns", time.Since(syncStartTime)))
-			return fmt.Errorf("failed to update address group: %w", err)
-		}
-		syncDuration := time.Since(syncStartTime)
-		w.logger.Info("[DIAG] markEntityResourceReady: AddressGroup - SyncAddressGroups SUCCESS",
-			zap.String("namespace", r.Namespace),
-			zap.String("name", r.Name),
-			zap.Duration("sync_duration_ns", syncDuration))
-	case *models.Network:
-		r.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
-		r.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced")
-		resourceScope = ports.NewResourceIdentifierScope(models.ResourceIdentifier{
-			Name:      r.Name,
-			Namespace: r.Namespace,
-		})
-		if err := writer.SyncNetworks(ctx, []models.Network{*r}, resourceScope, ports.ConditionOnlyOperation{}); err != nil {
-			return fmt.Errorf("failed to update network: %w", err)
-		}
-	case *models.Service:
-		r.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
-		r.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced")
-		resourceScope = ports.NewResourceIdentifierScope(models.ResourceIdentifier{
-			Name:      r.Name,
-			Namespace: r.Namespace,
-		})
-		w.logger.Info("markEntityResourceReady: calling SyncServices with ConditionOnlyOperation",
-			zap.String("namespace", r.Namespace),
-			zap.String("name", r.Name))
-		if err := writer.SyncServices(ctx, []models.Service{*r}, resourceScope, ports.ConditionOnlyOperation{}); err != nil {
-			w.logger.Error("markEntityResourceReady: SyncServices failed",
-				zap.String("namespace", r.Namespace),
-				zap.String("name", r.Name),
-				zap.Error(err))
-			return fmt.Errorf("failed to update service: %w", err)
-		}
-		w.logger.Info("markEntityResourceReady: SyncServices succeeded",
-			zap.String("namespace", r.Namespace),
-			zap.String("name", r.Name))
-	case *models.SvcSvcRule:
-		r.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
-		r.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced")
-		resourceScope = ports.NewResourceIdentifierScope(models.ResourceIdentifier{
-			Name:      r.Name,
-			Namespace: r.Namespace,
-		})
-		if err := writer.SyncSvcSvcRules(ctx, []models.SvcSvcRule{*r}, resourceScope, ports.ConditionOnlyOperation{}); err != nil {
-			return fmt.Errorf("failed to update svcsvc rule: %w", err)
-		}
-	case *models.SvcFqdnRule:
-		r.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
-		r.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced")
-		resourceScope = ports.NewResourceIdentifierScope(models.ResourceIdentifier{
-			Name:      r.Name,
-			Namespace: r.Namespace,
-		})
-		if err := writer.SyncSvcFqdnRules(ctx, []models.SvcFqdnRule{*r}, resourceScope, ports.ConditionOnlyOperation{}); err != nil {
-			return fmt.Errorf("failed to update svcfqdn rule: %w", err)
-		}
-	default:
-		return fmt.Errorf("unknown resource type for update: %T", resource)
-	}
-	w.logger.Info("markEntityResourceReady: committing transaction",
-		zap.String("resource_type", resourceType),
-		zap.String("namespace", namespace),
-		zap.String("name", name))
+
 	if err := writer.Commit(); err != nil {
 		w.logger.Error("markEntityResourceReady: commit failed",
 			zap.String("resource_type", resourceType),
@@ -1018,24 +1108,8 @@ func (w *OutboxWorker) markEntityResourceReady(
 			zap.Error(err))
 		return fmt.Errorf("failed to commit changes: %w", err)
 	}
-	w.logger.Info("markEntityResourceReady: transaction committed",
-		zap.String("resource_type", resourceType),
-		zap.String("namespace", namespace),
-		zap.String("name", name))
-	w.logger.Debug("markEntityResourceReady: marking outbox entry as SUCCESS",
-		zap.String("outbox_id", outboxID.(uuid.UUID).String()))
-	if err := w.outboxRepo.MarkCompleted(ctx, outboxID.(uuid.UUID)); err != nil {
-		w.logger.Error("markEntityResourceReady: failed to mark outbox entry as completed",
-			zap.String("outbox_id", outboxID.(uuid.UUID).String()),
-			zap.Error(err))
-		return fmt.Errorf("failed to mark outbox entry as completed: %w", err)
-	}
-	w.logger.Info("markEntityResourceReady: outbox entry marked as SUCCESS (preserved for debugging)",
-		zap.String("resource_type", resourceType),
-		zap.String("namespace", namespace),
-		zap.String("name", name),
-		zap.String("outbox_id", outboxID.(uuid.UUID).String()))
-	return nil
+
+	return markCompleted()
 }
 func convertToSyncOperation(op domain.SyncOperation) types.SyncOperation {
 	switch op {
@@ -1187,7 +1261,7 @@ func (w *OutboxWorker) syncAndUpdateStatusAtomic(
 		RecordProcessingFailure(item.ResourceType, operation, string(errorCategory), duration)
 		return fmt.Errorf("SGROUP sync failed: %w", err)
 	}
-	w.logger.Info("SGROUP sync successful",
+	w.logger.Debug("SGROUP sync successful",
 		zap.String("resource_type", item.ResourceType),
 		zap.String("namespace", item.ResourceNamespace),
 		zap.String("name", item.ResourceName))

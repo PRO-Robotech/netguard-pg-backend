@@ -27,15 +27,27 @@ func TestNetworkBindingValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.NetworkBindingSpec{
-					NetworkRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Network",
-						Name:       "my-network",
+					NetworkRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "Network",
+
+							Name: "my-network",
+						},
 					},
-					AddressGroupRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "my-addressgroup",
+					AddressGroupRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "my-addressgroup",
+						},
 					},
 				},
 			},
@@ -54,15 +66,27 @@ func TestNetworkBindingValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.NetworkBindingSpec{
-					NetworkRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Network",
-						Name:       "my-network",
+					NetworkRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "Network",
+
+							Name: "my-network",
+						},
 					},
-					AddressGroupRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "my-addressgroup",
+					AddressGroupRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "my-addressgroup",
+						},
 					},
 				},
 			},
@@ -77,15 +101,27 @@ func TestNetworkBindingValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.NetworkBindingSpec{
-					NetworkRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Network",
-						Name:       "my-network",
+					NetworkRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "Network",
+
+							Name: "my-network",
+						},
 					},
-					AddressGroupRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "my-addressgroup",
+					AddressGroupRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "my-addressgroup",
+						},
 					},
 				},
 			},
@@ -100,13 +136,24 @@ func TestNetworkBindingValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.NetworkBindingSpec{
-					NetworkRef: v1beta1.ObjectReference{
-						// Missing required fields
+					NetworkRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							// Missing required fields
+
+						},
 					},
-					AddressGroupRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "my-addressgroup",
+					AddressGroupRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "my-addressgroup",
+						},
 					},
 				},
 			},
@@ -121,15 +168,27 @@ func TestNetworkBindingValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.NetworkBindingSpec{
-					NetworkRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Service", // Should be Network
-						Name:       "my-network",
+					NetworkRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "Service", // Should be Network
+
+							Name: "my-network",
+						},
 					},
-					AddressGroupRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "my-addressgroup",
+					AddressGroupRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "my-addressgroup",
+						},
 					},
 				},
 			},
@@ -144,15 +203,27 @@ func TestNetworkBindingValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.NetworkBindingSpec{
-					NetworkRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Network",
-						Name:       "my-network",
+					NetworkRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "Network",
+
+							Name: "my-network",
+						},
 					},
-					AddressGroupRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Service", // Should be AddressGroup
-						Name:       "my-addressgroup",
+					AddressGroupRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "Service", // Should be AddressGroup
+
+							Name: "my-addressgroup",
+						},
 					},
 				},
 			},
@@ -167,15 +238,27 @@ func TestNetworkBindingValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.NetworkBindingSpec{
-					NetworkRef: v1beta1.ObjectReference{
-						APIVersion: "v1", // Wrong API version
-						Kind:       "Network",
-						Name:       "my-network",
+					NetworkRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "v1", // Wrong API version
+
+							Kind: "Network",
+
+							Name: "my-network",
+						},
 					},
-					AddressGroupRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "my-addressgroup",
+					AddressGroupRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "my-addressgroup",
+						},
 					},
 				},
 			},
@@ -190,15 +273,27 @@ func TestNetworkBindingValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.NetworkBindingSpec{
-					NetworkRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Network",
-						Name:       "Invalid_Network_Name",
+					NetworkRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "Network",
+
+							Name: "Invalid_Network_Name",
+						},
 					},
-					AddressGroupRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "my-addressgroup",
+					AddressGroupRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "my-addressgroup",
+						},
 					},
 				},
 			},
@@ -247,15 +342,27 @@ func TestNetworkBindingValidator_ValidateUpdate(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: v1beta1.NetworkBindingSpec{
-			NetworkRef: v1beta1.ObjectReference{
-				APIVersion: "netguard.sgroups.io/v1beta1",
-				Kind:       "Network",
-				Name:       "my-network",
+			NetworkRef: v1beta1.NamespacedObjectReference{
+
+				ObjectReference: v1beta1.ObjectReference{
+
+					APIVersion: "netguard.sgroups.io/v1beta1",
+
+					Kind: "Network",
+
+					Name: "my-network",
+				},
 			},
-			AddressGroupRef: v1beta1.ObjectReference{
-				APIVersion: "netguard.sgroups.io/v1beta1",
-				Kind:       "AddressGroup",
-				Name:       "my-addressgroup",
+			AddressGroupRef: v1beta1.NamespacedObjectReference{
+
+				ObjectReference: v1beta1.ObjectReference{
+
+					APIVersion: "netguard.sgroups.io/v1beta1",
+
+					Kind: "AddressGroup",
+
+					Name: "my-addressgroup",
+				},
 			},
 		},
 	}
@@ -266,15 +373,27 @@ func TestNetworkBindingValidator_ValidateUpdate(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: v1beta1.NetworkBindingSpec{
-			NetworkRef: v1beta1.ObjectReference{
-				APIVersion: "netguard.sgroups.io/v1beta1",
-				Kind:       "Network",
-				Name:       "my-network",
+			NetworkRef: v1beta1.NamespacedObjectReference{
+
+				ObjectReference: v1beta1.ObjectReference{
+
+					APIVersion: "netguard.sgroups.io/v1beta1",
+
+					Kind: "Network",
+
+					Name: "my-network",
+				},
 			},
-			AddressGroupRef: v1beta1.ObjectReference{
-				APIVersion: "netguard.sgroups.io/v1beta1",
-				Kind:       "AddressGroup",
-				Name:       "my-addressgroup",
+			AddressGroupRef: v1beta1.NamespacedObjectReference{
+
+				ObjectReference: v1beta1.ObjectReference{
+
+					APIVersion: "netguard.sgroups.io/v1beta1",
+
+					Kind: "AddressGroup",
+
+					Name: "my-addressgroup",
+				},
 			},
 		},
 		Status: v1beta1.NetworkBindingStatus{
@@ -336,15 +455,27 @@ func TestNetworkBindingValidator_ValidateUpdate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.NetworkBindingSpec{
-					NetworkRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Network",
-						Name:       "my-network",
+					NetworkRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "Network",
+
+							Name: "my-network",
+						},
 					},
-					AddressGroupRef: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "my-addressgroup",
+					AddressGroupRef: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "my-addressgroup",
+						},
 					},
 				},
 			},
@@ -394,15 +525,27 @@ func TestNetworkBindingValidator_ValidateDelete(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: v1beta1.NetworkBindingSpec{
-			NetworkRef: v1beta1.ObjectReference{
-				APIVersion: "netguard.sgroups.io/v1beta1",
-				Kind:       "Network",
-				Name:       "my-network",
+			NetworkRef: v1beta1.NamespacedObjectReference{
+
+				ObjectReference: v1beta1.ObjectReference{
+
+					APIVersion: "netguard.sgroups.io/v1beta1",
+
+					Kind: "Network",
+
+					Name: "my-network",
+				},
 			},
-			AddressGroupRef: v1beta1.ObjectReference{
-				APIVersion: "netguard.sgroups.io/v1beta1",
-				Kind:       "AddressGroup",
-				Name:       "my-addressgroup",
+			AddressGroupRef: v1beta1.NamespacedObjectReference{
+
+				ObjectReference: v1beta1.ObjectReference{
+
+					APIVersion: "netguard.sgroups.io/v1beta1",
+
+					Kind: "AddressGroup",
+
+					Name: "my-addressgroup",
+				},
 			},
 		},
 	}

@@ -3,6 +3,8 @@ package netguard
 import (
 	"context"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"k8s.io/klog/v2"
@@ -10,8 +12,14 @@ import (
 	"netguard-pg-backend/internal/api/netguard/handlers"
 	"netguard-pg-backend/internal/api/netguard/sync"
 	"netguard-pg-backend/internal/application/services"
+	"netguard-pg-backend/internal/config"
+	watchpkg "netguard-pg-backend/internal/watch"
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
 )
+
+type watchCacheProvider interface {
+	Cache(resourceType string) (*watchpkg.WatchCache, bool)
+}
 
 type ServiceServer struct {
 	netguardpb.UnimplementedNetguardServiceServer
@@ -24,9 +32,12 @@ type ServiceServer struct {
 	hostHandler         *handlers.HostHandler
 	syncDispatcher      *sync.Dispatcher
 	service             *services.NetguardFacade
+	watchHandler        *WatchHandler
+	watchConfig         config.WatchConfig
+	watchProvider       watchCacheProvider
 }
 
-func NewServiceServer(service *services.NetguardFacade) *ServiceServer {
+func NewServiceServer(service *services.NetguardFacade, watchCfg config.WatchConfig) *ServiceServer {
 	return &ServiceServer{
 		serviceHandler:      handlers.NewServiceHandler(service),
 		addressGroupHandler: handlers.NewAddressGroupHandler(service),
@@ -37,7 +48,22 @@ func NewServiceServer(service *services.NetguardFacade) *ServiceServer {
 		hostHandler:         handlers.NewHostHandler(service),
 		syncDispatcher:      sync.NewDispatcher(service),
 		service:             service,
+		watchConfig:         watchCfg,
 	}
+}
+
+func (s *ServiceServer) SetWatchManager(provider watchCacheProvider) {
+	s.watchProvider = provider
+	if provider != nil {
+		s.watchHandler = NewWatchHandler(provider, s.watchConfig)
+	}
+}
+
+func (s *ServiceServer) streamWatch(resourceType string, req *netguardpb.WatchRequest, ctx context.Context, send func(*netguardpb.WatchEvent) error) error {
+	if s.watchHandler == nil {
+		return status.Error(codes.Unimplemented, "watch manager not configured")
+	}
+	return s.watchHandler.Stream(ctx, resourceType, req, send)
 }
 func (s *ServiceServer) Sync(ctx context.Context, req *netguardpb.SyncReq) (*emptypb.Empty, error) {
 	return s.syncDispatcher.Sync(ctx, req)
@@ -101,6 +127,64 @@ func (s *ServiceServer) ListSvcFqdnRules(ctx context.Context, req *netguardpb.Li
 }
 func (s *ServiceServer) GetSvcFqdnRule(ctx context.Context, req *netguardpb.GetSvcFqdnRuleReq) (*netguardpb.GetSvcFqdnRuleResp, error) {
 	return s.svcFqdnRuleHandler.GetSvcFqdnRule(ctx, req)
+}
+
+// Watch RPC implementations
+
+func (s *ServiceServer) WatchServices(req *netguardpb.WatchRequest, stream netguardpb.NetguardService_WatchServicesServer) error {
+	return s.streamWatch("services", req, stream.Context(), stream.Send)
+}
+
+func (s *ServiceServer) WatchAddressGroups(req *netguardpb.WatchRequest, stream netguardpb.NetguardService_WatchAddressGroupsServer) error {
+	return s.streamWatch("address_groups", req, stream.Context(), stream.Send)
+}
+
+func (s *ServiceServer) WatchAddressGroupBindings(req *netguardpb.WatchRequest, stream netguardpb.NetguardService_WatchAddressGroupBindingsServer) error {
+	return s.streamWatch("address_group_bindings", req, stream.Context(), stream.Send)
+}
+
+func (s *ServiceServer) WatchAddressGroupPortMappings(req *netguardpb.WatchRequest, stream netguardpb.NetguardService_WatchAddressGroupPortMappingsServer) error {
+	return s.streamWatch("address_group_port_mappings", req, stream.Context(), stream.Send)
+}
+
+func (s *ServiceServer) WatchRuleS2S(req *netguardpb.WatchRequest, stream netguardpb.NetguardService_WatchRuleS2SServer) error {
+	return s.streamWatch("rule_s2s", req, stream.Context(), stream.Send)
+}
+
+func (s *ServiceServer) WatchServiceAliases(req *netguardpb.WatchRequest, stream netguardpb.NetguardService_WatchServiceAliasesServer) error {
+	return s.streamWatch("service_aliases", req, stream.Context(), stream.Send)
+}
+
+func (s *ServiceServer) WatchAddressGroupBindingPolicies(req *netguardpb.WatchRequest, stream netguardpb.NetguardService_WatchAddressGroupBindingPoliciesServer) error {
+	return s.streamWatch("address_group_binding_policies", req, stream.Context(), stream.Send)
+}
+
+func (s *ServiceServer) WatchHosts(req *netguardpb.WatchRequest, stream netguardpb.NetguardService_WatchHostsServer) error {
+	return s.streamWatch("hosts", req, stream.Context(), stream.Send)
+}
+
+func (s *ServiceServer) WatchHostBindings(req *netguardpb.WatchRequest, stream netguardpb.NetguardService_WatchHostBindingsServer) error {
+	return s.streamWatch("host_bindings", req, stream.Context(), stream.Send)
+}
+
+func (s *ServiceServer) WatchNetworks(req *netguardpb.WatchRequest, stream netguardpb.NetguardService_WatchNetworksServer) error {
+	return s.streamWatch("networks", req, stream.Context(), stream.Send)
+}
+
+func (s *ServiceServer) WatchNetworkBindings(req *netguardpb.WatchRequest, stream netguardpb.NetguardService_WatchNetworkBindingsServer) error {
+	return s.streamWatch("network_bindings", req, stream.Context(), stream.Send)
+}
+
+func (s *ServiceServer) WatchIEAgAgRules(req *netguardpb.WatchRequest, stream netguardpb.NetguardService_WatchIEAgAgRulesServer) error {
+	return s.streamWatch("ie_ag_ag_rules", req, stream.Context(), stream.Send)
+}
+
+func (s *ServiceServer) WatchSvcSvcRules(req *netguardpb.WatchRequest, stream netguardpb.NetguardService_WatchSvcSvcRulesServer) error {
+	return s.streamWatch("svc_svc_rules", req, stream.Context(), stream.Send)
+}
+
+func (s *ServiceServer) WatchSvcFqdnRules(req *netguardpb.WatchRequest, stream netguardpb.NetguardService_WatchSvcFqdnRulesServer) error {
+	return s.streamWatch("svc_fqdn_rules", req, stream.Context(), stream.Send)
 }
 func (s *ServiceServer) ListNetworks(ctx context.Context, req *netguardpb.ListNetworksReq) (*netguardpb.ListNetworksResp, error) {
 	return s.networkHandler.ListNetworks(ctx, req)

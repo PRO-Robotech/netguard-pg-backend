@@ -9,14 +9,10 @@ import (
 
 	"netguard-pg-backend/internal/domain/models"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
-	"netguard-pg-backend/internal/k8s/registry/base"
 )
 
 // ServiceConverter implements conversion between k8s Service and domain Service
 type ServiceConverter struct{}
-
-// Compile-time interface assertion
-var _ base.Converter[*netguardv1beta1.Service, *models.Service] = &ServiceConverter{}
 
 // ToDomain converts a Kubernetes Service object to a domain Service model
 func (c *ServiceConverter) ToDomain(ctx context.Context, k8sObj *netguardv1beta1.Service) (*models.Service, error) {
@@ -126,7 +122,6 @@ func (c *ServiceConverter) FromDomain(ctx context.Context, domainObj *models.Ser
 	}
 
 	aggregatedAGsK8s := convertAddressGroupReferencesToK8s(domainObj.AggregatedAddressGroups)
-
 
 	if len(aggregatedAGsK8s) == 0 && len(k8sService.Spec.AddressGroups) > 0 {
 		aggregatedAGsK8s = make([]netguardv1beta1.AddressGroupReference, len(k8sService.Spec.AddressGroups))

@@ -136,6 +136,22 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 		return nil, fmt.Errorf("self-signed certs: %w", err)
 	}
 
+	// Register meta/v1 types (PartialObjectMetadata) so bookmark events can be encoded.
+	if err := metav1.AddMetaToScheme(scheme.Scheme); err != nil {
+		return nil, fmt.Errorf("register meta types: %w", err)
+	}
+	metav1.AddToGroupVersion(scheme.Scheme, metav1.SchemeGroupVersion)
+	// Also register PartialObjectMetadata under our group version so the apiserver
+	// can convert bookmark objects without failing conversions.
+	scheme.Scheme.AddKnownTypeWithName(
+		netguardv1beta1.SchemeGroupVersion.WithKind("PartialObjectMetadata"),
+		&metav1.PartialObjectMetadata{},
+	)
+	scheme.Scheme.AddKnownTypeWithName(
+		netguardv1beta1.SchemeGroupVersion.WithKind("PartialObjectMetadataList"),
+		&metav1.PartialObjectMetadataList{},
+	)
+
 	// Create standard CodecFactory
 	standardCodecs := serializer.NewCodecFactory(scheme.Scheme)
 
@@ -149,6 +165,7 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 	genericCfg.BuildHandlerChainFunc = func(apiHandler http.Handler, c *server.Config) http.Handler {
 		handler := server.DefaultBuildHandlerChain(apiHandler, c)
 		handler = WithPatchBodyExtractor(handler)
+		handler = WithoutWatchBookmarks(handler)
 		return handler
 	}
 

@@ -13,6 +13,7 @@ import (
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 	"netguard-pg-backend/internal/k8s/client"
 	"netguard-pg-backend/internal/k8s/registry/utils"
+	tableutils "netguard-pg-backend/internal/k8s/registry/utils"
 )
 
 // RuleS2SDstOwnRefREST implements the ruleS2SDstOwnRef subresource for Service
@@ -141,36 +142,30 @@ func (r *RuleS2SDstOwnRefREST) List(ctx context.Context, options *metainternalve
 
 // ConvertToTable converts objects to tabular format for kubectl
 func (r *RuleS2SDstOwnRefREST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
-	table := &metav1.Table{
-		ColumnDefinitions: []metav1.TableColumnDefinition{
-			{Name: "Service", Type: "string", Format: "name", Description: "Service name"},
-			{Name: "Namespace", Type: "string", Description: "Service namespace"},
-			{Name: "CrossNamespaceRules", Type: "integer", Description: "Number of cross-namespace rules"},
-		},
+	table := tableutils.NewTable(
+		metav1.TableColumnDefinition{Name: "Service", Type: "string", Format: "name", Description: "Service name"},
+		metav1.TableColumnDefinition{Name: "Namespace", Type: "string", Description: "Service namespace"},
+		metav1.TableColumnDefinition{Name: "CrossNamespaceRules", Type: "integer", Description: "Number of cross-namespace rules"},
+	)
+	if tableutils.AppendBookmarkRowIfNeeded(table, obj) {
+		return table, nil
 	}
 
 	switch t := obj.(type) {
 	case *netguardv1beta1.RuleS2SDstOwnRefSpec:
-		table.Rows = []metav1.TableRow{
-			{
-				Cells: []interface{}{
-					t.ObjectMeta.Name,
-					t.ObjectMeta.Namespace,
-					len(t.Items),
-				},
-				Object: runtime.RawExtension{Object: t},
-			},
-		}
+		tableutils.AppendRow(table, t,
+			t.ObjectMeta.Name,
+			t.ObjectMeta.Namespace,
+			len(t.Items),
+		)
 	case *netguardv1beta1.RuleS2SDstOwnRefSpecList:
-		for _, item := range t.Items {
-			table.Rows = append(table.Rows, metav1.TableRow{
-				Cells: []interface{}{
-					item.ObjectMeta.Name,
-					item.ObjectMeta.Namespace,
-					len(item.Items),
-				},
-				Object: runtime.RawExtension{Object: &item},
-			})
+		for i := range t.Items {
+			item := &t.Items[i]
+			tableutils.AppendRow(table, item,
+				item.ObjectMeta.Name,
+				item.ObjectMeta.Namespace,
+				len(item.Items),
+			)
 		}
 	default:
 		return nil, fmt.Errorf("unsupported object type: %T", obj)

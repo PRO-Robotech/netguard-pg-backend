@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"flag"
 	"log"
 	"net"
@@ -25,6 +26,7 @@ import (
 	"netguard-pg-backend/internal/sync/synchronizer"
 	"netguard-pg-backend/internal/sync/types"
 	"netguard-pg-backend/internal/sync/worker"
+	"netguard-pg-backend/internal/watch"
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
 	"os"
 	"os/signal"
@@ -32,6 +34,7 @@ import (
 	"time"
 
 	"github.com/go-logr/stdr"
+	_ "github.com/lib/pq"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -72,7 +75,11 @@ func main() {
 	defer cancel()
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	var pgRegistry *pg.Registry
+	var (
+		pgRegistry   *pg.Registry
+		sqlDB        *sql.DB
+		watchManager *watch.Manager
+	)
 	if *memoryDB {
 		log.Fatal("OutboxWorker requires PostgreSQL, cannot use memory database")
 	} else if *pgURI != "" {
@@ -87,6 +94,13 @@ func main() {
 		log.Fatal("Either --memory or --pg-uri must be specified")
 	}
 	defer pgRegistry.Close()
+	if *pgURI != "" {
+		sqlDB, err = sql.Open("postgres", *pgURI)
+		if err != nil {
+			log.Fatalf("Failed to open SQL connection: %v", err)
+		}
+		defer sqlDB.Close()
+	}
 	if err := registry.ValidateRegistry(); err != nil {
 		zapLogger.Fatal("invalid resource registry", zap.Error(err))
 	}
@@ -129,12 +143,22 @@ func main() {
 	outboxRepo := repositories.NewOutboxRepository(pgRegistry.Pool())
 	conditionManager := conditions.NewConditionManager(pgRegistry, outboxRepo)
 	netguardFacade := services.NewNetguardFacade(pgRegistry, conditionManager, syncManager)
+	if sqlDB != nil {
+		watchManager, err = watch.NewManagerWithConfig(ctx, sqlDB, *pgURI, netguardFacade, cfg.Watch.CacheSize, cfg.Watch.PGChannel)
+		if err != nil {
+			log.Fatalf("Failed to initialize watch manager: %v", err)
+		}
+		defer watchManager.Stop()
+	}
 	var outboxWorker *worker.OutboxWorker
 	if syncManager != nil {
 		outboxWorker = setupOutboxWorker(ctx, cfg, pgRegistry, syncManager, conditionManager, connMonitor, netguardFacade.AddressGroupResourceService(), zapLogger)
 	}
 	grpcServer := grpc.NewServer()
-	netguardServer := netguard.NewServiceServer(netguardFacade)
+	netguardServer := netguard.NewServiceServer(netguardFacade, cfg.Watch)
+	if watchManager != nil {
+		netguardServer.SetWatchManager(watchManager)
+	}
 	netguardpb.RegisterNetguardServiceServer(grpcServer, netguardServer)
 	healthServer := health.NewServer()
 	grpc_health_v1.RegisterHealthServer(grpcServer, healthServer)
@@ -149,9 +173,12 @@ func main() {
 			log.Fatalf("Failed to serve gRPC: %v", err)
 		}
 	}()
-	httpServer, httpMux, err := server.SetupServer(ctx, cfg.Settings.GRPCAddr, cfg.Settings.HTTPAddr, netguardFacade)
+	httpServer, httpMux, err := server.SetupServer(ctx, cfg.Settings.GRPCAddr, cfg.Settings.HTTPAddr, netguardFacade, cfg.Watch)
 	if err != nil {
 		log.Fatalf("Failed to setup server: %v", err)
+	}
+	if watchManager != nil {
+		httpMux.Handle("/healthz/watch", watch.NewHealthHandler(watchManager))
 	}
 	if connMonitor != nil {
 		healthListener := server.NewHealthEndpointListener()

@@ -3,7 +3,6 @@ package host_binding
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,6 +15,7 @@ import (
 	"netguard-pg-backend/internal/k8s/client"
 	"netguard-pg-backend/internal/k8s/registry/base"
 	"netguard-pg-backend/internal/k8s/registry/convert"
+	tableutils "netguard-pg-backend/internal/k8s/registry/utils"
 	"netguard-pg-backend/internal/k8s/registry/validation"
 
 	"k8s.io/apiserver/pkg/registry/rest"
@@ -74,6 +74,7 @@ func NewHostBindingStorage(backendClient client.BackendClient) *HostBindingStora
 		func() *netguardv1beta1.HostBinding { return &netguardv1beta1.HostBinding{} },
 		func() runtime.Object { return &netguardv1beta1.HostBindingList{} },
 		backendOps,
+		backendClient,
 		converter,
 		validator,
 		watcher,
@@ -200,26 +201,23 @@ func (s *HostBindingStorage) GetSingularName() string {
 
 // ConvertToTable implements minimal table output so kubectl can display resources.
 func (s *HostBindingStorage) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
-	table := &metav1.Table{
-		ColumnDefinitions: []metav1.TableColumnDefinition{
-			{Name: "Name", Type: "string", Format: "name"},
-			{Name: "Host", Type: "string"},
-			{Name: "AddressGroup", Type: "string"},
-			{Name: "Age", Type: "string"},
-		},
+	table := tableutils.NewTable(
+		metav1.TableColumnDefinition{Name: "Name", Type: "string", Format: "name"},
+		metav1.TableColumnDefinition{Name: "Host", Type: "string"},
+		metav1.TableColumnDefinition{Name: "AddressGroup", Type: "string"},
+		metav1.TableColumnDefinition{Name: "Age", Type: "string"},
+	)
+	if tableutils.AppendBookmarkRowIfNeeded(table, object) {
+		return table, nil
 	}
 
 	addRow := func(binding *netguardv1beta1.HostBinding) {
-		row := metav1.TableRow{
-			Object: runtime.RawExtension{Object: binding},
-			Cells: []interface{}{
-				binding.Name,
-				binding.Spec.HostRef.Name,
-				binding.Spec.AddressGroupRef.Name,
-				translateTimestampSince(binding.CreationTimestamp),
-			},
-		}
-		table.Rows = append(table.Rows, row)
+		tableutils.AppendRow(table, binding,
+			binding.Name,
+			binding.Spec.HostRef.Name,
+			binding.Spec.AddressGroupRef.Name,
+			tableutils.TranslateTimestampSince(binding.CreationTimestamp),
+		)
 	}
 
 	switch v := object.(type) {
@@ -335,30 +333,6 @@ func (s *HostBindingStorage) updateHostBindingStatus(ctx context.Context, hostBi
 // Kind implements rest.KindProvider
 func (s *HostBindingStorage) Kind() string {
 	return "HostBinding"
-}
-
-// translateTimestampSince returns the elapsed time since timestamp in human-readable form.
-func translateTimestampSince(ts metav1.Time) string {
-	if ts.IsZero() {
-		return "<unknown>"
-	}
-	return durationShortHumanDuration(time.Since(ts.Time))
-}
-
-// durationShortHumanDuration is a copy of kubectl printing helper (short).
-func durationShortHumanDuration(d time.Duration) string {
-	if seconds := int(d.Seconds()); seconds < 90 {
-		return fmt.Sprintf("%ds", seconds)
-	}
-	if minutes := int(d.Minutes()); minutes < 90 {
-		return fmt.Sprintf("%dm", minutes)
-	}
-	hours := int(d.Round(time.Hour).Hours())
-	if hours < 48 {
-		return fmt.Sprintf("%dh", hours)
-	}
-	days := hours / 24
-	return fmt.Sprintf("%dd", days)
 }
 
 // Ensure HostBindingStorage implements the required interfaces

@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package netguard.v1;
+
+option go_package = "netguard-pg-backend/protos/pkg/api/netguard;netguard";
+
+import "google/protobuf/timestamp.proto";
+import "netguard/api.proto";
+
+enum WatchEventType {
+  WATCH_EVENT_TYPE_UNSPECIFIED = 0;
+  WATCH_EVENT_TYPE_ADDED = 1;
+  WATCH_EVENT_TYPE_MODIFIED = 2;
+  WATCH_EVENT_TYPE_DELETED = 3;
+  WATCH_EVENT_TYPE_BOOKMARK = 4;
+  WATCH_EVENT_TYPE_ERROR = 5;
+}
+
+message WatchRequest {
+  string namespace = 1;
+  string resource_version = 2;
+  string resource_version_match = 3;
+  int64 timeout_seconds = 4;
+  string label_selector = 5;
+  string field_selector = 6;
+}
+
+message WatchEvent {
+  WatchEventType type = 1;
+  string resource_version = 2;
+  google.protobuf.Timestamp timestamp = 3;
+
+  oneof object {
+    Service service = 10;
+    AddressGroup address_group = 11;
+    AddressGroupBinding address_group_binding = 12;
+    AddressGroupPortMapping address_group_port_mapping = 13;
+    AddressGroupBindingPolicy address_group_binding_policy = 14;
+    RuleS2S rule_s2s = 15;
+    ServiceAlias service_alias = 16;
+    Host host = 17;
+    HostBinding host_binding = 18;
+    Network network = 19;
+    NetworkBinding network_binding = 20;
+    IEAgAgRule ie_ag_ag_rule = 21;
+    SvcSvcRule svc_svc_rule = 22;
+    SvcFqdnRule svc_fqdn_rule = 23;
+  }
+
+  string error_message = 40;
+}
+

@@ -9,14 +9,10 @@ import (
 
 	"netguard-pg-backend/internal/domain/models"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
-	"netguard-pg-backend/internal/k8s/registry/base"
 )
 
 // SvcSvcRuleConverter implements conversion between k8s SvcSvcRule and domain SvcSvcRule
 type SvcSvcRuleConverter struct{}
-
-// Compile-time interface assertion
-var _ base.Converter[*netguardv1beta1.SvcSvcRule, *models.SvcSvcRule] = &SvcSvcRuleConverter{}
 
 // ToDomain converts a Kubernetes SvcSvcRule object to a domain SvcSvcRule model
 func (c *SvcSvcRuleConverter) ToDomain(ctx context.Context, k8sObj *netguardv1beta1.SvcSvcRule) (*models.SvcSvcRule, error) {

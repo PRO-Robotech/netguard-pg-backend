@@ -31,15 +31,27 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 					Description: "Test rule for TCP traffic",
 					Transport:   v1beta1.ProtocolTCP,
 					Traffic:     v1beta1.INGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "remote-ag",
+						},
 					},
 					Ports: []v1beta1.PortSpec{
 						{
@@ -63,15 +75,27 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 					Description: "Test rule for UDP traffic",
 					Transport:   v1beta1.ProtocolUDP,
 					Traffic:     v1beta1.EGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "remote-ag",
+						},
 					},
 					Ports: []v1beta1.PortSpec{
 						{
@@ -98,15 +122,27 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 					Description: "Allow all traffic",
 					Transport:   v1beta1.ProtocolTCP,
 					Traffic:     v1beta1.INGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "remote-ag",
+						},
 					},
 					Action:   "ACCEPT",
 					Priority: 0,
@@ -129,15 +165,27 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 				Spec: v1beta1.IEAgAgRuleSpec{
 					Transport: v1beta1.ProtocolTCP,
 					Traffic:   v1beta1.INGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "remote-ag",
+						},
 					},
 				},
 			},
@@ -154,15 +202,27 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 				Spec: v1beta1.IEAgAgRuleSpec{
 					Transport: v1beta1.ProtocolTCP,
 					Traffic:   v1beta1.INGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "remote-ag",
+						},
 					},
 				},
 			},
@@ -180,15 +240,27 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 					Description: strings.Repeat("a", 513), // Too long (>512 chars)
 					Transport:   v1beta1.ProtocolTCP,
 					Traffic:     v1beta1.INGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "remote-ag",
+						},
 					},
 				},
 			},
@@ -205,15 +277,27 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 				Spec: v1beta1.IEAgAgRuleSpec{
 					// Missing Transport
 					Traffic: v1beta1.INGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "remote-ag",
+						},
 					},
 				},
 			},
@@ -230,15 +314,27 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 				Spec: v1beta1.IEAgAgRuleSpec{
 					Transport: "INVALID", // Invalid transport
 					Traffic:   v1beta1.INGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "remote-ag",
+						},
 					},
 				},
 			},
@@ -255,15 +351,27 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 				Spec: v1beta1.IEAgAgRuleSpec{
 					Transport: v1beta1.ProtocolTCP,
 					// Missing Traffic
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "remote-ag",
+						},
 					},
 				},
 			},
@@ -280,15 +388,27 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 				Spec: v1beta1.IEAgAgRuleSpec{
 					Transport: v1beta1.ProtocolTCP,
 					Traffic:   "INVALID", // Invalid traffic
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "remote-ag",
+						},
 					},
 				},
 			},
@@ -303,15 +423,26 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: v1beta1.IEAgAgRuleSpec{
-					Transport:         v1beta1.ProtocolTCP,
-					Traffic:           v1beta1.INGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						// Missing required fields
+					Transport: v1beta1.ProtocolTCP,
+					Traffic:   v1beta1.INGRESS,
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							// Missing required fields
+
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "remote-ag",
+						},
 					},
 				},
 			},
@@ -328,15 +459,27 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 				Spec: v1beta1.IEAgAgRuleSpec{
 					Transport: v1beta1.ProtocolTCP,
 					Traffic:   v1beta1.INGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "v1", // Wrong API version
-						Kind:       "AddressGroup",
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "v1", // Wrong API version
+
+							Kind: "AddressGroup",
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "remote-ag",
+						},
 					},
 				},
 			},
@@ -353,15 +496,27 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 				Spec: v1beta1.IEAgAgRuleSpec{
 					Transport: v1beta1.ProtocolTCP,
 					Traffic:   v1beta1.INGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Service", // Should be AddressGroup
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "Service", // Should be AddressGroup
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "remote-ag",
+						},
 					},
 				},
 			},
@@ -378,13 +533,24 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 				Spec: v1beta1.IEAgAgRuleSpec{
 					Transport: v1beta1.ProtocolTCP,
 					Traffic:   v1beta1.INGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						// Missing required fields
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							// Missing required fields
+
+						},
 					},
 				},
 			},
@@ -401,15 +567,27 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 				Spec: v1beta1.IEAgAgRuleSpec{
 					Transport: v1beta1.ProtocolTCP,
 					Traffic:   v1beta1.INGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "networking.k8s.io/v1", // Wrong API version
-						Kind:       "AddressGroup",
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "networking.k8s.io/v1", // Wrong API version
+
+							Kind: "AddressGroup",
+
+							Name: "remote-ag",
+						},
 					},
 				},
 			},
@@ -426,15 +604,27 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 				Spec: v1beta1.IEAgAgRuleSpec{
 					Transport: v1beta1.ProtocolTCP,
 					Traffic:   v1beta1.INGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "Service", // Should be AddressGroup
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "Service", // Should be AddressGroup
+
+							Name: "remote-ag",
+						},
 					},
 				},
 			},
@@ -451,15 +641,27 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 				Spec: v1beta1.IEAgAgRuleSpec{
 					Transport: v1beta1.ProtocolTCP,
 					Traffic:   v1beta1.INGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "Invalid_Local_AG",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "Invalid_Local_AG",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "remote-ag",
+						},
 					},
 				},
 			},
@@ -476,15 +678,27 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 				Spec: v1beta1.IEAgAgRuleSpec{
 					Transport: v1beta1.ProtocolTCP,
 					Traffic:   v1beta1.INGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "Invalid_Remote_AG",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "Invalid_Remote_AG",
+						},
 					},
 				},
 			},
@@ -501,15 +715,27 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 				Spec: v1beta1.IEAgAgRuleSpec{
 					Transport: v1beta1.ProtocolTCP,
 					Traffic:   v1beta1.INGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "remote-ag",
+						},
 					},
 					Action: "INVALID", // Invalid action
 				},
@@ -527,15 +753,27 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 				Spec: v1beta1.IEAgAgRuleSpec{
 					Transport: v1beta1.ProtocolTCP,
 					Traffic:   v1beta1.INGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "remote-ag",
+						},
 					},
 					Priority: -1, // Negative priority
 				},
@@ -553,15 +791,27 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 				Spec: v1beta1.IEAgAgRuleSpec{
 					Transport: v1beta1.ProtocolTCP,
 					Traffic:   v1beta1.INGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "remote-ag",
+						},
 					},
 					Ports: []v1beta1.PortSpec{
 						{
@@ -583,15 +833,27 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 				Spec: v1beta1.IEAgAgRuleSpec{
 					Transport: v1beta1.ProtocolTCP,
 					Traffic:   v1beta1.INGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "remote-ag",
+						},
 					},
 					Ports: []v1beta1.PortSpec{
 						{
@@ -617,15 +879,27 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 				Spec: v1beta1.IEAgAgRuleSpec{
 					Transport: v1beta1.ProtocolTCP,
 					Traffic:   v1beta1.INGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "remote-ag",
+						},
 					},
 					Ports: []v1beta1.PortSpec{
 						{
@@ -647,15 +921,27 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 				Spec: v1beta1.IEAgAgRuleSpec{
 					Transport: v1beta1.ProtocolTCP,
 					Traffic:   v1beta1.INGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "remote-ag",
+						},
 					},
 					Ports: []v1beta1.PortSpec{
 						{
@@ -677,15 +963,27 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 				Spec: v1beta1.IEAgAgRuleSpec{
 					Transport: v1beta1.ProtocolTCP,
 					Traffic:   v1beta1.INGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "remote-ag",
+						},
 					},
 					Ports: []v1beta1.PortSpec{
 						{
@@ -710,15 +1008,27 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 				Spec: v1beta1.IEAgAgRuleSpec{
 					Transport: v1beta1.ProtocolTCP,
 					Traffic:   v1beta1.INGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "remote-ag",
+						},
 					},
 					Ports: []v1beta1.PortSpec{
 						{
@@ -743,15 +1053,27 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 				Spec: v1beta1.IEAgAgRuleSpec{
 					Transport: v1beta1.ProtocolTCP,
 					Traffic:   v1beta1.INGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "remote-ag",
+						},
 					},
 					Ports: []v1beta1.PortSpec{
 						{
@@ -776,15 +1098,27 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 				Spec: v1beta1.IEAgAgRuleSpec{
 					Transport: v1beta1.ProtocolTCP,
 					Traffic:   v1beta1.INGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "remote-ag",
+						},
 					},
 				},
 			},
@@ -800,15 +1134,27 @@ func TestIEAgAgRuleValidator_ValidateCreate(t *testing.T) {
 				Spec: v1beta1.IEAgAgRuleSpec{
 					Transport: v1beta1.ProtocolTCP,
 					Traffic:   v1beta1.INGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "remote-ag",
+						},
 					},
 				},
 			},
@@ -858,15 +1204,27 @@ func TestIEAgAgRuleValidator_ValidateUpdate(t *testing.T) {
 			Description: "Test rule",
 			Transport:   v1beta1.ProtocolTCP,
 			Traffic:     v1beta1.INGRESS,
-			AddressGroupLocal: v1beta1.ObjectReference{
-				APIVersion: "netguard.sgroups.io/v1beta1",
-				Kind:       "AddressGroup",
-				Name:       "local-ag",
+			AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+				ObjectReference: v1beta1.ObjectReference{
+
+					APIVersion: "netguard.sgroups.io/v1beta1",
+
+					Kind: "AddressGroup",
+
+					Name: "local-ag",
+				},
 			},
-			AddressGroup: v1beta1.ObjectReference{
-				APIVersion: "netguard.sgroups.io/v1beta1",
-				Kind:       "AddressGroup",
-				Name:       "remote-ag",
+			AddressGroup: v1beta1.NamespacedObjectReference{
+
+				ObjectReference: v1beta1.ObjectReference{
+
+					APIVersion: "netguard.sgroups.io/v1beta1",
+
+					Kind: "AddressGroup",
+
+					Name: "remote-ag",
+				},
 			},
 			Ports: []v1beta1.PortSpec{
 				{
@@ -1000,15 +1358,27 @@ func TestIEAgAgRuleValidator_ValidateUpdate(t *testing.T) {
 				Spec: v1beta1.IEAgAgRuleSpec{
 					Transport: v1beta1.ProtocolTCP,
 					Traffic:   v1beta1.INGRESS,
-					AddressGroupLocal: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "local-ag",
+					AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "local-ag",
+						},
 					},
-					AddressGroup: v1beta1.ObjectReference{
-						APIVersion: "netguard.sgroups.io/v1beta1",
-						Kind:       "AddressGroup",
-						Name:       "remote-ag",
+					AddressGroup: v1beta1.NamespacedObjectReference{
+
+						ObjectReference: v1beta1.ObjectReference{
+
+							APIVersion: "netguard.sgroups.io/v1beta1",
+
+							Kind: "AddressGroup",
+
+							Name: "remote-ag",
+						},
 					},
 				},
 			},
@@ -1059,15 +1429,27 @@ func TestIEAgAgRuleValidator_ValidateDelete(t *testing.T) {
 			Description: "Test rule",
 			Transport:   v1beta1.ProtocolTCP,
 			Traffic:     v1beta1.INGRESS,
-			AddressGroupLocal: v1beta1.ObjectReference{
-				APIVersion: "netguard.sgroups.io/v1beta1",
-				Kind:       "AddressGroup",
-				Name:       "local-ag",
+			AddressGroupLocal: v1beta1.NamespacedObjectReference{
+
+				ObjectReference: v1beta1.ObjectReference{
+
+					APIVersion: "netguard.sgroups.io/v1beta1",
+
+					Kind: "AddressGroup",
+
+					Name: "local-ag",
+				},
 			},
-			AddressGroup: v1beta1.ObjectReference{
-				APIVersion: "netguard.sgroups.io/v1beta1",
-				Kind:       "AddressGroup",
-				Name:       "remote-ag",
+			AddressGroup: v1beta1.NamespacedObjectReference{
+
+				ObjectReference: v1beta1.ObjectReference{
+
+					APIVersion: "netguard.sgroups.io/v1beta1",
+
+					Kind: "AddressGroup",
+
+					Name: "remote-ag",
+				},
 			},
 			Ports: []v1beta1.PortSpec{
 				{

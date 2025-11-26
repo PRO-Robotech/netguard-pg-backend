@@ -2,10 +2,12 @@ package client
 
 import (
 	"context"
-	"k8s.io/klog/v2"
 	"netguard-pg-backend/internal/application/validation"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
+	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
+
+	"k8s.io/klog/v2"
 )
 
 type BackendClient interface {
@@ -103,6 +105,20 @@ type BackendClient interface {
 	ListRuleS2SDstOwnRef(ctx context.Context, serviceID models.ResourceIdentifier) ([]models.RuleS2S, error)
 	ListAccessPorts(ctx context.Context, mappingID models.ResourceIdentifier) ([]models.ServicePortsRef, error)
 	MarkForDeletion(ctx context.Context, namespace, name, kind string) error
+	WatchServices(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchServicesClient, error)
+	WatchAddressGroups(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchAddressGroupsClient, error)
+	WatchAddressGroupBindings(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchAddressGroupBindingsClient, error)
+	WatchAddressGroupPortMappings(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchAddressGroupPortMappingsClient, error)
+	WatchRuleS2S(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchRuleS2SClient, error)
+	WatchServiceAliases(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchServiceAliasesClient, error)
+	WatchAddressGroupBindingPolicies(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchAddressGroupBindingPoliciesClient, error)
+	WatchHosts(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchHostsClient, error)
+	WatchHostBindings(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchHostBindingsClient, error)
+	WatchNetworks(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchNetworksClient, error)
+	WatchNetworkBindings(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchNetworkBindingsClient, error)
+	WatchIEAgAgRules(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchIEAgAgRulesClient, error)
+	WatchSvcSvcRules(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchSvcSvcRulesClient, error)
+	WatchSvcFqdnRules(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchSvcFqdnRulesClient, error)
 	Close() error
 }
 

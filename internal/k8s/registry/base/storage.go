@@ -3,22 +3,25 @@ package base
 import (
 	"context"
 	"encoding/json"
+	stdErrors "errors"
 	"fmt"
 	"math/rand"
+	"reflect"
+	"strings"
+	"time"
+	"unsafe"
+
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/k8s/middleware"
 	"netguard-pg-backend/internal/k8s/registry/base/fieldmanager"
 	"netguard-pg-backend/internal/k8s/registry/base/patch"
 	"netguard-pg-backend/internal/k8s/registry/utils"
-	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
-	"reflect"
-	"strings"
-	"time"
-	"unsafe"
 
 	jsonpatch "github.com/evanphx/json-patch/v5"
-	"k8s.io/apimachinery/pkg/api/errors"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,24 +34,31 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/klog/v2"
 	sigyaml "sigs.k8s.io/yaml"
+
+	backendclient "netguard-pg-backend/internal/k8s/client"
+
+	watchpkg "netguard-pg-backend/internal/k8s/registry/watch"
+	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
 )
 
 type BaseStorage[K runtime.Object, D any] struct {
-	NewFunc      func() K
-	NewListFunc  func() runtime.Object
-	backendOps   BackendOperations[D]
-	converter    Converter[K, D]
-	validator    Validator[K]
-	watcher      *watch.Broadcaster
-	resourceName string
-	kindName     string
-	isNamespaced bool
+	NewFunc       func() K
+	NewListFunc   func() runtime.Object
+	backendOps    BackendOperations[D]
+	backendClient backendclient.BackendClient
+	converter     Converter[K, D]
+	validator     Validator[K]
+	watcher       *watch.Broadcaster
+	resourceName  string
+	kindName      string
+	isNamespaced  bool
 }
 
 func NewBaseStorage[K runtime.Object, D any](
 	newFunc func() K,
 	newListFunc func() runtime.Object,
 	backendOps BackendOperations[D],
+	backendClient backendclient.BackendClient,
 	converter Converter[K, D],
 	validator Validator[K],
 	watcher *watch.Broadcaster,
@@ -57,15 +67,16 @@ func NewBaseStorage[K runtime.Object, D any](
 	isNamespaced bool,
 ) *BaseStorage[K, D] {
 	return &BaseStorage[K, D]{
-		NewFunc:      newFunc,
-		NewListFunc:  newListFunc,
-		backendOps:   backendOps,
-		converter:    converter,
-		validator:    validator,
-		watcher:      watcher,
-		resourceName: resourceName,
-		kindName:     kindName,
-		isNamespaced: isNamespaced,
+		NewFunc:       newFunc,
+		NewListFunc:   newListFunc,
+		backendOps:    backendOps,
+		backendClient: backendClient,
+		converter:     converter,
+		validator:     validator,
+		watcher:       watcher,
+		resourceName:  resourceName,
+		kindName:      kindName,
+		isNamespaced:  isNamespaced,
 	}
 }
 
@@ -77,6 +88,7 @@ var _ rest.Creater = &BaseStorage[runtime.Object, any]{}
 var _ rest.Updater = &BaseStorage[runtime.Object, any]{}
 var _ rest.Patcher = &BaseStorage[runtime.Object, any]{}
 var _ rest.GracefulDeleter = &BaseStorage[runtime.Object, any]{}
+var _ rest.Watcher = &BaseStorage[runtime.Object, any]{}
 
 func (s *BaseStorage[K, D]) New() runtime.Object {
 	return s.NewFunc()
@@ -98,7 +110,7 @@ func (s *BaseStorage[K, D]) Get(ctx context.Context, name string, options *metav
 			"error", err.Error())
 		if isNotFoundError(err) {
 			klog.V(1).InfoS("get: returning Kubernetes NotFound error", "name", name)
-			return nil, errors.NewNotFound(
+			return nil, apierrors.NewNotFound(
 				schema.GroupResource{Group: "netguard.sgroups.io", Resource: s.resourceName},
 				name,
 			)
@@ -201,19 +213,22 @@ func (s *BaseStorage[K, D]) List(ctx context.Context, options *internalversion.L
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert domain objects to k8s list: %w", err)
 	}
+	listMetadataBuilder, err := NewListMetadataBuilder(listObj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize list metadata builder: %w", err)
+	}
+	listMetadataBuilder.SetResourceVersionFromItems()
 	return listObj, nil
 }
 func (s *BaseStorage[K, D]) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
-	table := &metav1.Table{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "meta.k8s.io/v1",
-			Kind:       "Table",
-		},
-		ColumnDefinitions: []metav1.TableColumnDefinition{
-			{Name: "Name", Type: "string", Description: "Name of the resource"},
-			{Name: "Age", Type: "string", Description: "Age of the resource"},
-		},
+	table := utils.NewTable(
+		metav1.TableColumnDefinition{Name: "Name", Type: "string", Description: "Name of the resource"},
+		metav1.TableColumnDefinition{Name: "Age", Type: "string", Description: "Age of the resource"},
+	)
+	if utils.AppendBookmarkRowIfNeeded(table, object) {
+		return table, nil
 	}
+
 	if _, isList := object.(metav1.ListInterface); isList {
 		items, err := meta.ExtractList(object)
 		if err != nil {
@@ -221,27 +236,26 @@ func (s *BaseStorage[K, D]) ConvertToTable(ctx context.Context, object runtime.O
 		}
 		for _, item := range items {
 			if accessor, err := meta.Accessor(item); err == nil {
-				row := metav1.TableRow{
+				table.Rows = append(table.Rows, metav1.TableRow{
+					Object: runtime.RawExtension{Object: item},
 					Cells: []interface{}{
 						accessor.GetName(),
-						"<unknown>",
+						utils.TranslateTimestampSince(accessor.GetCreationTimestamp()),
 					},
-					Object: runtime.RawExtension{Object: item},
-				}
-				table.Rows = append(table.Rows, row)
+				})
 			}
 		}
-	} else {
-		if accessor, err := meta.Accessor(object); err == nil {
-			row := metav1.TableRow{
-				Cells: []interface{}{
-					accessor.GetName(),
-					"<unknown>",
-				},
-				Object: runtime.RawExtension{Object: object},
-			}
-			table.Rows = append(table.Rows, row)
-		}
+		return table, nil
+	}
+
+	if accessor, err := meta.Accessor(object); err == nil {
+		table.Rows = append(table.Rows, metav1.TableRow{
+			Object: runtime.RawExtension{Object: object},
+			Cells: []interface{}{
+				accessor.GetName(),
+				utils.TranslateTimestampSince(accessor.GetCreationTimestamp()),
+			},
+		})
 	}
 	return table, nil
 }
@@ -251,7 +265,7 @@ func (s *BaseStorage[K, D]) Create(ctx context.Context, obj runtime.Object, crea
 		return nil, fmt.Errorf("expected %T, got %T", s.NewFunc(), obj)
 	}
 	if errs := s.validator.ValidateCreate(ctx, k8sObj); len(errs) > 0 {
-		return nil, errors.NewInvalid(
+		return nil, apierrors.NewInvalid(
 			schema.GroupKind{Group: "netguard.sgroups.io", Kind: s.kindName},
 			getObjectName(k8sObj),
 			errs,
@@ -289,7 +303,7 @@ func (s *BaseStorage[K, D]) Update(ctx context.Context, name string, objInfo res
 		"forceAllowCreate", forceAllowCreate)
 	currentDomainObj, err := s.getFromBackend(ctx, namespace, name)
 	if err != nil {
-		if errors.IsNotFound(err) && forceAllowCreate {
+		if apierrors.IsNotFound(err) && forceAllowCreate {
 			obj, err := objInfo.UpdatedObject(ctx, nil)
 			if err != nil {
 				return nil, false, err
@@ -471,14 +485,14 @@ func (s *BaseStorage[K, D]) Update(ctx context.Context, name string, objInfo res
 			"name", name,
 			"namespace", namespace,
 			"deletionTimestamp", deletionTimestamp.String())
-		return nil, false, errors.NewConflict(
+		return nil, false, apierrors.NewConflict(
 			schema.GroupResource{Group: "netguard.sgroups.io", Resource: s.resourceName},
 			name,
 			fmt.Errorf("object is being deleted, update rejected to prevent deletion conflicts"),
 		)
 	}
 	if errs := s.validator.ValidateUpdate(ctx, finalK8sObj, currentK8sObj); len(errs) > 0 {
-		return nil, false, errors.NewInvalid(
+		return nil, false, apierrors.NewInvalid(
 			schema.GroupKind{Group: "netguard.sgroups.io", Kind: s.kindName},
 			getObjectName(finalK8sObj),
 			errs,
@@ -502,12 +516,22 @@ func (s *BaseStorage[K, D]) Update(ctx context.Context, name string, objInfo res
 		return nil, false, fmt.Errorf("failed to convert updated domain object to k8s object: %w", err)
 	}
 	s.broadcastWatchEvent(watch.Modified, resultK8sObj)
-
+	klog.InfoS("✅ BaseStorage.Update SUCCESS",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace)
 	return resultK8sObj, false, nil
 }
 func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions) (runtime.Object, bool, error) {
 	namespace := utils.NamespaceFrom(ctx)
-
+	klog.InfoS("🔥 DELETE METHOD CALLED - STARTING DELETE OPERATION",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace)
+	klog.InfoS("🔍 DELETE: Getting object from backend",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace)
 	domainObj, err := s.getFromBackend(ctx, namespace, name)
 	if err != nil {
 		klog.InfoS("❌ DELETE: Failed to get object from backend",
@@ -517,7 +541,14 @@ func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValid
 			"error", err.Error())
 		return nil, false, err
 	}
-
+	klog.InfoS("✅ DELETE: Successfully got object from backend",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace)
+	klog.InfoS("🔄 DELETE: Converting domain object to k8s object",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace)
 	k8sObj, err := s.converter.FromDomain(ctx, *domainObj)
 	if err != nil {
 		klog.InfoS("❌ DELETE: Failed to convert domain object to k8s object",
@@ -527,16 +558,35 @@ func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValid
 			"error", err.Error())
 		return nil, false, fmt.Errorf("failed to convert domain object to k8s object: %w", err)
 	}
-
+	klog.InfoS("✅ DELETE: Successfully converted domain object to k8s object",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace)
+	klog.InfoS("🔍 DELETE: Validating deletion",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace)
 	if errs := s.validator.ValidateDelete(ctx, k8sObj); len(errs) > 0 {
-		return nil, false, errors.NewInvalid(
+		klog.InfoS("❌ DELETE: Validation failed",
+			"resource", s.resourceName,
+			"name", name,
+			"namespace", namespace,
+			"validationErrors", len(errs))
+		return nil, false, apierrors.NewInvalid(
 			schema.GroupKind{Group: "netguard.sgroups.io", Kind: s.kindName},
 			getObjectName(k8sObj),
 			errs,
 		)
 	}
-
+	klog.InfoS("✅ DELETE: Validation passed",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace)
 	if deleteValidation != nil {
+		klog.InfoS("🔍 DELETE: Running additional validation",
+			"resource", s.resourceName,
+			"name", name,
+			"namespace", namespace)
 		if err := deleteValidation(ctx, k8sObj); err != nil {
 			klog.InfoS("❌ DELETE: Additional validation failed",
 				"resource", s.resourceName,
@@ -545,8 +595,15 @@ func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValid
 				"error", err.Error())
 			return nil, false, err
 		}
+		klog.InfoS("✅ DELETE: Additional validation passed",
+			"resource", s.resourceName,
+			"name", name,
+			"namespace", namespace)
 	}
-
+	klog.InfoS("🗑️ DELETE: Marking for deletion (soft delete)",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace)
 	err = s.markForDeletionInBackend(ctx, namespace, name)
 	if err != nil {
 		klog.InfoS("❌ DELETE: markForDeletionInBackend failed",
@@ -556,6 +613,14 @@ func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValid
 			"error", err.Error())
 		return nil, false, err
 	}
+	klog.InfoS("✅ DELETE: Marked for deletion successfully",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace)
+	klog.InfoS("🔄 DELETE: Fetching updated object after marking for deletion",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace)
 	updatedDomainObj, err := s.getFromBackend(ctx, namespace, name)
 	if err != nil {
 		klog.InfoS("❌ DELETE: Failed to fetch updated object",
@@ -592,11 +657,23 @@ func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValid
 			"error", err.Error())
 		return nil, false, err
 	}
+	klog.InfoS("📡 DELETE: Broadcasting watch.Modified event (soft delete)",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace)
 	s.broadcastWatchEvent(watch.Modified, updatedK8sObj)
+	klog.InfoS("🎉 DELETE: Soft delete completed - resource marked for deletion",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace,
+		"message", "Resource will be physically deleted after SGROUP sync by OutboxWorker")
 	return updatedK8sObj, true, nil
 }
 func (s *BaseStorage[K, D]) DeleteCollection(ctx context.Context, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions, listOptions *internalversion.ListOptions) (runtime.Object, error) {
 	namespace := utils.NamespaceFrom(ctx)
+	klog.InfoS("🗑️🗑️🗑️ DELETE COLLECTION STARTED",
+		"resource", s.resourceName,
+		"namespace", namespace)
 	listObj, err := s.List(ctx, listOptions)
 	if err != nil {
 		klog.InfoS("❌ DELETE COLLECTION: Failed to list resources",
@@ -656,6 +733,12 @@ func (s *BaseStorage[K, D]) DeleteCollection(ctx context.Context, deleteValidati
 }
 func (s *BaseStorage[K, D]) Patch(ctx context.Context, name string, patchType types.PatchType, data []byte, options *metav1.PatchOptions, subresources ...string) (runtime.Object, error) {
 	namespace := utils.NamespaceFrom(ctx)
+	klog.InfoS("🚀🚀🚀 PATCH OPERATION STARTED - DEFINITELY BEING CALLED",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace,
+		"patchType", string(patchType),
+		"dataSize", len(data))
 	patchData := &PatchData{
 		PatchType: patchType,
 		Data:      data,
@@ -664,6 +747,10 @@ func (s *BaseStorage[K, D]) Patch(ctx context.Context, name string, patchType ty
 		Namespace: namespace,
 	}
 	ctx = WithPatchData(ctx, patchData)
+	klog.InfoS("✅ Patch data stored in context for fallback use",
+		"resource", s.resourceName,
+		"patchType", string(patchType),
+		"dataSize", len(data))
 	var currentK8sObj K
 	var isCreateOperation bool
 	if patchType == types.ApplyPatchType {
@@ -695,7 +782,7 @@ func (s *BaseStorage[K, D]) Patch(ctx context.Context, name string, patchType ty
 		currentDomainObj, err := s.getFromBackend(ctx, namespace, name)
 		if err != nil {
 			if isNotFoundError(err) {
-				return nil, errors.NewNotFound(
+				return nil, apierrors.NewNotFound(
 					schema.GroupResource{Group: "netguard.sgroups.io", Resource: s.resourceName},
 					name,
 				)
@@ -743,7 +830,7 @@ func (s *BaseStorage[K, D]) Patch(ctx context.Context, name string, patchType ty
 		return nil, fmt.Errorf("expected %T, got %T", s.NewFunc(), patchedObj)
 	}
 	if errs := s.validator.ValidateUpdate(ctx, patchedK8sObj, currentK8sObj); len(errs) > 0 {
-		return nil, errors.NewInvalid(
+		return nil, apierrors.NewInvalid(
 			schema.GroupKind{Group: "netguard.sgroups.io", Kind: s.kindName},
 			getObjectName(patchedK8sObj),
 			errs,
@@ -778,8 +865,47 @@ func (s *BaseStorage[K, D]) Patch(ctx context.Context, name string, patchType ty
 	s.broadcastWatchEvent(watch.Modified, finalK8sObj)
 	return finalK8sObj, nil
 }
+func (s *BaseStorage[K, D]) Watch(ctx context.Context, options *internalversion.ListOptions) (watch.Interface, error) {
+	if s.backendClient == nil {
+		return nil, apierrors.NewInternalError(fmt.Errorf("watch not configured for resource %s", s.resourceName))
+	}
+
+	if options != nil {
+		options.AllowWatchBookmarks = false
+	}
+
+	req := s.buildWatchRequest(ctx, options)
+
+	stream, err := s.startWatchStream(ctx, req)
+	if err != nil {
+		return nil, s.translateWatchError(err)
+	}
+
+	watcher, err := watchpkg.NewGRPCWatcher(s.resourceName, stream)
+	if err != nil {
+		return nil, apierrors.NewInternalError(fmt.Errorf("failed to initialize gRPC watch: %w", err))
+	}
+
+	klog.V(4).InfoS("Created gRPC watch",
+		"resource", s.resourceName,
+		"namespace", req.Namespace,
+		"resourceVersion", req.ResourceVersion,
+		"resourceVersionMatch", req.ResourceVersionMatch,
+		"timeoutSeconds", req.TimeoutSeconds,
+		"labelSelector", req.LabelSelector,
+		"fieldSelector", req.FieldSelector)
+
+	return watcher, nil
+}
 func (s *BaseStorage[K, D]) getFromBackend(ctx context.Context, namespace, name string) (*D, error) {
 	id := models.NewResourceIdentifier(name, models.WithNamespace(namespace))
+	getBackendStartTime := time.Now()
+	klog.InfoS("🚀 getFromBackend CALLED - ENHANCED TRACKING",
+		"resource", s.resourceName,
+		"name", name,
+		"namespace", namespace,
+		"timestamp", getBackendStartTime.Format("15:04:05.000000"),
+		"identifier", fmt.Sprintf("%+v", id))
 	result, err := s.backendOps.Get(ctx, id)
 	if err != nil {
 		klog.V(1).InfoS("getFromBackend error",
@@ -828,6 +954,9 @@ func (s *BaseStorage[K, D]) createInBackend(ctx context.Context, obj *D) (*D, er
 	return obj, nil
 }
 func (s *BaseStorage[K, D]) updateInBackend(ctx context.Context, obj *D) (*D, error) {
+	klog.InfoS("🔧 updateInBackend CALLED",
+		"resource", s.resourceName,
+		"objType", fmt.Sprintf("%T", obj))
 	err := s.backendOps.Update(ctx, obj)
 	if err != nil {
 		klog.InfoS("❌ updateInBackend FAILED",
@@ -836,6 +965,8 @@ func (s *BaseStorage[K, D]) updateInBackend(ctx context.Context, obj *D) (*D, er
 			"errorType", fmt.Sprintf("%T", err))
 		return nil, err
 	}
+	klog.InfoS("✅ updateInBackend SUCCESS",
+		"resource", s.resourceName)
 	return obj, nil
 }
 func (s *BaseStorage[K, D]) deleteFromBackend(ctx context.Context, namespace, name string) error {
@@ -889,6 +1020,99 @@ func (s *BaseStorage[K, D]) broadcastWatchEvent(eventType watch.EventType, obj r
 	if s.watcher != nil {
 		s.watcher.Action(eventType, obj)
 	}
+}
+
+func (s *BaseStorage[K, D]) buildWatchRequest(ctx context.Context, options *internalversion.ListOptions) *netguardpb.WatchRequest {
+	req := &netguardpb.WatchRequest{
+		Namespace: utils.NamespaceFrom(ctx),
+	}
+
+	if options == nil {
+		req.ResourceVersion = "0"
+		return req
+	}
+
+	if options.ResourceVersion == "" {
+		req.ResourceVersion = "0"
+	} else {
+		req.ResourceVersion = options.ResourceVersion
+	}
+
+	req.ResourceVersionMatch = string(options.ResourceVersionMatch)
+
+	if options.TimeoutSeconds != nil {
+		req.TimeoutSeconds = int64(*options.TimeoutSeconds)
+	}
+
+	if options.LabelSelector != nil {
+		req.LabelSelector = options.LabelSelector.String()
+	}
+
+	if options.FieldSelector != nil {
+		req.FieldSelector = options.FieldSelector.String()
+	}
+
+	return req
+}
+
+func (s *BaseStorage[K, D]) startWatchStream(ctx context.Context, req *netguardpb.WatchRequest) (watchpkg.Stream, error) {
+	switch s.resourceName {
+	case "services":
+		return s.backendClient.WatchServices(ctx, req)
+	case "addressgroups":
+		return s.backendClient.WatchAddressGroups(ctx, req)
+	case "addressgroupbindings":
+		return s.backendClient.WatchAddressGroupBindings(ctx, req)
+	case "addressgroupportmappings":
+		return s.backendClient.WatchAddressGroupPortMappings(ctx, req)
+	case "addressgroupbindingpolicies":
+		return s.backendClient.WatchAddressGroupBindingPolicies(ctx, req)
+	case "rules2s":
+		return s.backendClient.WatchRuleS2S(ctx, req)
+	case "servicealiases":
+		return s.backendClient.WatchServiceAliases(ctx, req)
+	case "hosts":
+		return s.backendClient.WatchHosts(ctx, req)
+	case "hostbindings":
+		return s.backendClient.WatchHostBindings(ctx, req)
+	case "networks":
+		return s.backendClient.WatchNetworks(ctx, req)
+	case "networkbindings":
+		return s.backendClient.WatchNetworkBindings(ctx, req)
+	case "ieagagrules":
+		return s.backendClient.WatchIEAgAgRules(ctx, req)
+	case "svcsvcrules":
+		return s.backendClient.WatchSvcSvcRules(ctx, req)
+	case "svcfqdnrules":
+		return s.backendClient.WatchSvcFqdnRules(ctx, req)
+	default:
+		return nil, fmt.Errorf("watch not supported for resource %s", s.resourceName)
+	}
+}
+
+func (s *BaseStorage[K, D]) translateWatchError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	if stdErrors.Is(err, context.Canceled) || stdErrors.Is(err, context.DeadlineExceeded) {
+		return err
+	}
+
+	if st, ok := status.FromError(err); ok {
+		switch st.Code() {
+		case codes.InvalidArgument:
+			return apierrors.NewBadRequest(st.Message())
+		case codes.NotFound:
+			return apierrors.NewNotFound(schema.GroupResource{Group: "netguard.sgroups.io", Resource: s.resourceName}, "")
+		case codes.PermissionDenied, codes.Unauthenticated:
+			return apierrors.NewForbidden(schema.GroupResource{Group: "netguard.sgroups.io", Resource: s.resourceName}, "", err)
+		case codes.FailedPrecondition, codes.AlreadyExists:
+			return apierrors.NewConflict(schema.GroupResource{Group: "netguard.sgroups.io", Resource: s.resourceName}, "", err)
+		}
+	}
+
+	return apierrors.NewInternalError(fmt.Errorf("watch stream failed: %w", err))
 }
 func (s *BaseStorage[K, D]) hasDeletionTimestampSet(domainObj *D) bool {
 	k8sObj, err := s.converter.FromDomain(context.Background(), *domainObj)
@@ -1322,7 +1546,7 @@ func isNotFoundError(err error) bool {
 	errMsg := err.Error()
 	isEntityNotFound := strings.Contains(errMsg, "entity not found")
 	isGeneralNotFound := strings.Contains(errMsg, "not found")
-	isK8sNotFound := errors.IsNotFound(err)
+	isK8sNotFound := apierrors.IsNotFound(err)
 	klog.V(1).InfoS("🔍 DEBUG: isNotFoundError check",
 		"errorMsg", errMsg,
 		"entityNotFound", isEntityNotFound,
@@ -1556,10 +1780,12 @@ func extractPatchDataFromObjInfo(objInfo rest.UpdatedObjectInfo) (*PatchData, bo
 var (
 	_ rest.Storage           = &BaseStorage[runtime.Object, any]{}
 	_ rest.Scoper            = &BaseStorage[runtime.Object, any]{}
+	_ rest.StandardStorage   = &BaseStorage[runtime.Object, any]{}
 	_ rest.CollectionDeleter = &BaseStorage[runtime.Object, any]{}
 	_ rest.Patcher           = &BaseStorage[runtime.Object, any]{}
 	_ rest.Getter            = &BaseStorage[runtime.Object, any]{}
 	_ rest.Lister            = &BaseStorage[runtime.Object, any]{}
 	_ rest.CreaterUpdater    = &BaseStorage[runtime.Object, any]{}
 	_ rest.GracefulDeleter   = &BaseStorage[runtime.Object, any]{}
+	_ rest.Watcher           = &BaseStorage[runtime.Object, any]{}
 )

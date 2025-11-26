@@ -53,6 +53,7 @@ func NewNetguardFacade(
 		addressGroupConditionAdapter, validationService, hostResourceService)
 	networkResourceService := resources.NewNetworkResourceService(registry, syncManager, networkConditionAdapter)
 	networkBindingResourceService := resources.NewNetworkBindingResourceService(registry, networkResourceService,
+		addressGroupResourceService,
 		syncManager, networkBindingConditionAdapter)
 	hostBindingResourceService := resources.NewHostBindingResourceService(registry, hostResourceService,
 		addressGroupResourceService, syncManager, hostBindingConditionAdapter)

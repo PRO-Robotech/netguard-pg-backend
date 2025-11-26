@@ -35,6 +35,7 @@ type (
 		Authn       `yaml:"authn"`
 		Sync        SyncConfig                         `yaml:"sync"`
 		ReverseSync syncConfig.ReverseSyncSystemConfig `yaml:"reverse_sync"`
+		Watch       WatchConfig                        `yaml:"watch"`
 	}
 
 	// App - конфигурация приложения
@@ -90,6 +91,7 @@ func NewConfig(path string) (*Config, error) {
 	cfg.Authn.TLS.Client.Verify = VerifyModeSkip
 	cfg.Sync = DefaultSyncConfig()
 	cfg.ReverseSync = syncConfig.DevelopmentConfig() // Use development config by default
+	cfg.Watch = DefaultWatchConfig()
 
 	// Загрузка из файла конфигурации
 	if path != "" {
@@ -202,6 +204,10 @@ func (c *Config) Validate() error {
 	// Validate reverse sync configuration
 	if err := c.ReverseSync.Validate(); err != nil {
 		return fmt.Errorf("reverse sync config validation failed: %w", err)
+	}
+
+	if err := c.Watch.Validate(); err != nil {
+		return fmt.Errorf("watch config validation failed: %w", err)
 	}
 
 	return nil

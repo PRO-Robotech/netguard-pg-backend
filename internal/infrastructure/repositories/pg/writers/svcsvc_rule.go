@@ -7,7 +7,6 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	"k8s.io/klog/v2"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -106,8 +105,6 @@ func (w *Writer) upsertSvcSvcRule(ctx context.Context, rule models.SvcSvcRule) e
 	conditions := rule.Meta.Conditions
 	if !existingResourceVersion.Valid {
 		conditions = forcePendingSyncCondition(conditions)
-		klog.V(4).InfoS("Forcing PendingSGROUPSync status for new SvcSvcRule",
-			"namespace", rule.Namespace, "name", rule.Name)
 	}
 
 	conditionsJSON, err := json.Marshal(conditions)
@@ -138,7 +135,6 @@ func (w *Writer) upsertSvcSvcRule(ctx context.Context, rule models.SvcSvcRule) e
 			return errors.Wrapf(err, "failed to create K8s metadata for svc svc rule %s/%s", rule.Namespace, rule.Name)
 		}
 	}
-
 	// Marshal service references to JSON
 	serviceFromRefJSON := svcSvcRuleServiceRefJSON{
 		APIVersion: rule.ServiceFromRef.APIVersion,
@@ -220,16 +216,23 @@ func (w *Writer) updateSvcSvcRuleConditionsOnly(ctx context.Context, rule models
 	conditionUpdateQuery := `
 		UPDATE k8s_metadata
 		SET conditions = $1, updated_at = NOW()
-		WHERE resource_version = $2`
+		WHERE resource_version = $2
+		RETURNING resource_version`
 
-	cmdTag, err := w.tx.Exec(ctx, conditionUpdateQuery, conditionsJSON, resourceVersion)
-	if err != nil {
+	var newResourceVersion int64
+	if err := w.tx.QueryRow(ctx, conditionUpdateQuery, conditionsJSON, resourceVersion).Scan(&newResourceVersion); err != nil {
 		return errors.Wrapf(err, "failed to update conditions for svcsvc rule %s/%s", rule.Namespace, rule.Name)
 	}
 
-	// Log success (helps debugging infinite loops)
-	if cmdTag.RowsAffected() > 0 {
-		// Success - conditions updated without creating outbox entry
+	// If metadata bump trigger produced a new resourceVersion, keep svc_svc_rules row in sync
+	if newResourceVersion != resourceVersion {
+		updateRuleRVQuery := `
+			UPDATE svc_svc_rules
+			SET resource_version = $1
+			WHERE namespace = $2 AND name = $3`
+		if _, err := w.tx.Exec(ctx, updateRuleRVQuery, newResourceVersion, rule.Namespace, rule.Name); err != nil {
+			return errors.Wrapf(err, "failed to sync resource_version for svcsvc rule %s/%s", rule.Namespace, rule.Name)
+		}
 	}
 
 	return nil

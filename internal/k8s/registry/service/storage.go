@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,6 +18,7 @@ import (
 	"netguard-pg-backend/internal/k8s/client"
 	"netguard-pg-backend/internal/k8s/registry/base"
 	"netguard-pg-backend/internal/k8s/registry/convert"
+	tableutils "netguard-pg-backend/internal/k8s/registry/utils"
 	"netguard-pg-backend/internal/k8s/registry/validation"
 )
 
@@ -72,6 +72,7 @@ func NewServiceStorage(backendClient client.BackendClient) *ServiceStorage {
 		func() *netguardv1beta1.Service { return &netguardv1beta1.Service{} },
 		func() runtime.Object { return &netguardv1beta1.ServiceList{} },
 		backendOps,
+		backendClient,
 		converter,
 		validator,
 		watcher,
@@ -100,6 +101,7 @@ func NewServiceStorageWithClient(backendClient client.BackendClient) *ServiceSto
 		func() *netguardv1beta1.Service { return &netguardv1beta1.Service{} },
 		func() runtime.Object { return &netguardv1beta1.ServiceList{} },
 		backendOps,
+		backendClient,
 		converter,
 		validator,
 		watcher,
@@ -122,12 +124,13 @@ func (s *ServiceStorage) GetSingularName() string {
 
 // ConvertToTable implements minimal table output so kubectl can display resources.
 func (s *ServiceStorage) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
-	table := &metav1.Table{
-		ColumnDefinitions: []metav1.TableColumnDefinition{
-			{Name: "Name", Type: "string", Format: "name"},
-			{Name: "Ports", Type: "string"},
-			{Name: "Age", Type: "string"},
-		},
+	table := tableutils.NewTable(
+		metav1.TableColumnDefinition{Name: "Name", Type: "string", Format: "name"},
+		metav1.TableColumnDefinition{Name: "Ports", Type: "string"},
+		metav1.TableColumnDefinition{Name: "Age", Type: "string"},
+	)
+	if tableutils.AppendBookmarkRowIfNeeded(table, object) {
+		return table, nil
 	}
 
 	addRow := func(svc *netguardv1beta1.Service) {
@@ -135,11 +138,11 @@ func (s *ServiceStorage) ConvertToTable(ctx context.Context, object runtime.Obje
 		for _, p := range svc.Spec.IngressPorts {
 			ports = append(ports, fmt.Sprintf("%s/%s", p.Protocol, p.Port))
 		}
-		row := metav1.TableRow{
-			Object: runtime.RawExtension{Object: svc},
-			Cells:  []interface{}{svc.Name, strings.Join(ports, ","), translateTimestampSince(svc.CreationTimestamp)},
-		}
-		table.Rows = append(table.Rows, row)
+		tableutils.AppendRow(table, svc,
+			svc.Name,
+			strings.Join(ports, ","),
+			tableutils.TranslateTimestampSince(svc.CreationTimestamp),
+		)
 	}
 
 	switch v := object.(type) {
@@ -153,29 +156,6 @@ func (s *ServiceStorage) ConvertToTable(ctx context.Context, object runtime.Obje
 		return nil, fmt.Errorf("unexpected object type %T", object)
 	}
 	return table, nil
-}
-
-// helper similar to addressgroup
-func translateTimestampSince(ts metav1.Time) string {
-	if ts.IsZero() {
-		return "<unknown>"
-	}
-	return durationShortHumanDuration(time.Since(ts.Time))
-}
-
-func durationShortHumanDuration(d time.Duration) string {
-	if seconds := int(d.Seconds()); seconds < 90 {
-		return fmt.Sprintf("%ds", seconds)
-	}
-	if minutes := int(d.Minutes()); minutes < 90 {
-		return fmt.Sprintf("%dm", minutes)
-	}
-	hours := int(d.Round(time.Hour).Hours())
-	if hours < 48 {
-		return fmt.Sprintf("%dh", hours)
-	}
-	days := hours / 24
-	return fmt.Sprintf("%dd", days)
 }
 
 // DeleteCollection implements rest.CollectionDeleter

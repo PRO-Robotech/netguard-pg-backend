@@ -3,7 +3,6 @@ package addressgroupbindingpolicy
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,6 +16,7 @@ import (
 	"netguard-pg-backend/internal/k8s/client"
 	"netguard-pg-backend/internal/k8s/registry/base"
 	"netguard-pg-backend/internal/k8s/registry/convert"
+	tableutils "netguard-pg-backend/internal/k8s/registry/utils"
 	"netguard-pg-backend/internal/k8s/registry/validation"
 )
 
@@ -38,6 +38,7 @@ func NewAddressGroupBindingPolicyStorage(backendClient client.BackendClient) *Ad
 		func() *netguardv1beta1.AddressGroupBindingPolicy { return &netguardv1beta1.AddressGroupBindingPolicy{} },
 		func() runtime.Object { return &netguardv1beta1.AddressGroupBindingPolicyList{} },
 		backendOps,
+		backendClient,
 		converter,
 		validator,
 		watcher,
@@ -58,19 +59,19 @@ func (s *AddressGroupBindingPolicyStorage) GetSingularName() string {
 
 // ConvertToTable provides a minimal table representation
 func (s *AddressGroupBindingPolicyStorage) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
-	table := &metav1.Table{
-		ColumnDefinitions: []metav1.TableColumnDefinition{
-			{Name: "Name", Type: "string", Format: "name"},
-			{Name: "Age", Type: "string"},
-		},
+	table := tableutils.NewTable(
+		metav1.TableColumnDefinition{Name: "Name", Type: "string", Format: "name"},
+		metav1.TableColumnDefinition{Name: "Age", Type: "string"},
+	)
+	if tableutils.AppendBookmarkRowIfNeeded(table, object) {
+		return table, nil
 	}
 
 	addRow := func(policy *netguardv1beta1.AddressGroupBindingPolicy) {
-		row := metav1.TableRow{
-			Object: runtime.RawExtension{Object: policy},
-			Cells:  []interface{}{policy.Name, translateTimestampSince(policy.CreationTimestamp)},
-		}
-		table.Rows = append(table.Rows, row)
+		tableutils.AppendRow(table, policy,
+			policy.Name,
+			tableutils.TranslateTimestampSince(policy.CreationTimestamp),
+		)
 	}
 
 	switch v := object.(type) {
@@ -84,30 +85,6 @@ func (s *AddressGroupBindingPolicyStorage) ConvertToTable(ctx context.Context, o
 		return nil, fmt.Errorf("unexpected object type %T", object)
 	}
 	return table, nil
-}
-
-// translateTimestampSince returns the elapsed time since timestamp in human-readable form.
-func translateTimestampSince(ts metav1.Time) string {
-	if ts.IsZero() {
-		return "<unknown>"
-	}
-	return durationShortHumanDuration(time.Since(ts.Time))
-}
-
-// durationShortHumanDuration is a copy of kube ctl printing helper (short).
-func durationShortHumanDuration(d time.Duration) string {
-	if seconds := int(d.Seconds()); seconds < 90 {
-		return fmt.Sprintf("%ds", seconds)
-	}
-	if minutes := int(d.Minutes()); minutes < 90 {
-		return fmt.Sprintf("%dm", minutes)
-	}
-	hours := int(d.Round(time.Hour).Hours())
-	if hours < 48 {
-		return fmt.Sprintf("%dh", hours)
-	}
-	days := hours / 24
-	return fmt.Sprintf("%dd", days)
 }
 
 // DeleteCollection implements rest.CollectionDeleter

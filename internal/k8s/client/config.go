@@ -10,7 +10,7 @@ import (
 // BackendClientConfig конфигурация клиента с cleanenv тегами
 type BackendClientConfig struct {
 	// gRPC настройки
-	Endpoint       string        `yaml:"endpoint" env:"BACKEND_ENDPOINT" env-default:"localhost:8080" env-description:"Backend gRPC endpoint"`
+	Endpoint       string        `yaml:"endpoint" env:"BACKEND_ENDPOINT" env-default:"localhost:9090" env-description:"Backend gRPC endpoint"`
 	MaxRetries     int           `yaml:"max_retries" env:"BACKEND_MAX_RETRIES" env-default:"3" env-description:"Maximum number of retries"`
 	ConnectTimeout time.Duration `yaml:"connect_timeout" env:"BACKEND_CONNECT_TIMEOUT" env-default:"10s" env-description:"Connection timeout"`
 	RequestTimeout time.Duration `yaml:"request_timeout" env:"BACKEND_REQUEST_TIMEOUT" env-default:"30s" env-description:"Request timeout"`

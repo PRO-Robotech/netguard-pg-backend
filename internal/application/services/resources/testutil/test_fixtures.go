@@ -9,6 +9,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+func readyCondition() metav1.Condition {
+	return metav1.Condition{
+		Type:               models.ConditionReady,
+		Status:             metav1.ConditionTrue,
+		LastTransitionTime: metav1.NewTime(time.Now()),
+		Reason:             "TestReady",
+		Message:            "Resource is ready for testing",
+	}
+}
+
 // TestFixtures provides consistent test data for all test suites
 var TestFixtures = struct {
 	Service             models.Service
@@ -50,6 +60,7 @@ var TestFixtures = struct {
 		Meta: models.Meta{
 			CreationTS: metav1.NewTime(time.Now()),
 			Generation: 1,
+			Conditions: []metav1.Condition{readyCondition()},
 		},
 	},
 
@@ -78,6 +89,7 @@ var TestFixtures = struct {
 		Meta: models.Meta{
 			CreationTS: metav1.NewTime(time.Now()),
 			Generation: 1,
+			Conditions: []metav1.Condition{readyCondition()},
 		},
 	},
 
@@ -93,6 +105,7 @@ var TestFixtures = struct {
 		Meta: models.Meta{
 			CreationTS: metav1.NewTime(time.Now()),
 			Generation: 1,
+			Conditions: []metav1.Condition{readyCondition()},
 		},
 	},
 
@@ -117,6 +130,7 @@ var TestFixtures = struct {
 		Meta: models.Meta{
 			CreationTS: metav1.NewTime(time.Now()),
 			Generation: 1,
+			Conditions: []metav1.Condition{readyCondition()},
 		},
 	},
 
@@ -132,6 +146,7 @@ var TestFixtures = struct {
 		Meta: models.Meta{
 			CreationTS: metav1.NewTime(time.Now()),
 			Generation: 1,
+			Conditions: []metav1.Condition{readyCondition()},
 		},
 	},
 
@@ -162,6 +177,7 @@ var TestFixtures = struct {
 		Meta: models.Meta{
 			CreationTS: metav1.NewTime(time.Now()),
 			Generation: 1,
+			Conditions: []metav1.Condition{readyCondition()},
 		},
 	},
 
@@ -264,6 +280,7 @@ func CreateTestAddressGroup(name, namespace string) models.AddressGroup {
 		Meta: models.Meta{
 			CreationTS: metav1.NewTime(time.Now()),
 			Generation: 1,
+			Conditions: []metav1.Condition{readyCondition()},
 		},
 	}
 }
@@ -282,6 +299,7 @@ func CreateTestNetwork(name, namespace, cidr string) models.Network {
 		Meta: models.Meta{
 			CreationTS: metav1.NewTime(time.Now()),
 			Generation: 1,
+			Conditions: []metav1.Condition{readyCondition()},
 		},
 	}
 }

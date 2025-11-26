@@ -9,14 +9,10 @@ import (
 
 	"netguard-pg-backend/internal/domain/models"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
-	"netguard-pg-backend/internal/k8s/registry/base"
 )
 
 // AddressGroupBindingPolicyConverter implements conversion between k8s AddressGroupBindingPolicy and domain AddressGroupBindingPolicy
 type AddressGroupBindingPolicyConverter struct{}
-
-// Compile-time interface assertion
-var _ base.Converter[*netguardv1beta1.AddressGroupBindingPolicy, *models.AddressGroupBindingPolicy] = &AddressGroupBindingPolicyConverter{}
 
 // ToDomain converts a Kubernetes AddressGroupBindingPolicy object to a domain AddressGroupBindingPolicy model
 func (c *AddressGroupBindingPolicyConverter) ToDomain(ctx context.Context, k8sObj *netguardv1beta1.AddressGroupBindingPolicy) (*models.AddressGroupBindingPolicy, error) {

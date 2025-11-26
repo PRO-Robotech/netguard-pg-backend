@@ -237,10 +237,6 @@ func (w *OutboxWorker) processBatch(ctx context.Context) error {
 		return nil
 	}
 
-	w.logger.Info("processing batch",
-		zap.Int("count", len(entries)),
-	)
-
 	// Process each entry
 	for _, entry := range entries {
 		if err := w.processEntry(ctx, entry); err != nil {

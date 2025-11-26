@@ -58,6 +58,7 @@ func NewNetworkBindingStorage(netguardService *services.NetguardFacade) *Network
 		func() *netguardv1beta1.NetworkBinding { return &netguardv1beta1.NetworkBinding{} },
 		func() runtime.Object { return &netguardv1beta1.NetworkBindingList{} },
 		backendOps,
+		nil,
 		converter,
 		validator,
 		watcher,
@@ -84,6 +85,7 @@ func NewNetworkBindingStorageWithClient(backendClient client.BackendClient) *Net
 		func() *netguardv1beta1.NetworkBinding { return &netguardv1beta1.NetworkBinding{} },
 		func() runtime.Object { return &netguardv1beta1.NetworkBindingList{} },
 		backendOps,
+		backendClient,
 		converter,
 		validator,
 		watcher,
@@ -109,7 +111,6 @@ func (s *NetworkBindingStorage) ConvertToTable(ctx context.Context, object runti
 			{Name: "Name", Type: "string", Format: "name"},
 			{Name: "Network", Type: "string"},
 			{Name: "AddressGroup", Type: "string"},
-			{Name: "Network Item", Type: "string"},
 			{Name: "Age", Type: "string"},
 		},
 	}
@@ -119,10 +120,9 @@ func (s *NetworkBindingStorage) ConvertToTable(ctx context.Context, object runti
 			Object: runtime.RawExtension{Object: binding},
 			Cells: []interface{}{
 				binding.Name,
-				binding.Spec.NetworkRef,
-				binding.Spec.AddressGroupRef,
+				formatNamespacedRef(binding.Spec.NetworkRef),
+				formatNamespacedRef(binding.Spec.AddressGroupRef),
 				//binding.NetworkItem.Name,
-				"",
 				networkBindingTranslateTimestampSince(binding.CreationTimestamp),
 			},
 		}
@@ -164,6 +164,16 @@ func networkBindingDurationShortHumanDuration(d time.Duration) string {
 		return fmt.Sprintf("%dh", int(d.Hours()))
 	}
 	return fmt.Sprintf("%dd", int(d.Hours()/24))
+}
+
+func formatNamespacedRef(ref netguardv1beta1.NamespacedObjectReference) string {
+	if ref.Name == "" {
+		return "<unknown>"
+	}
+	if ref.Namespace == "" {
+		return ref.Name
+	}
+	return fmt.Sprintf("%s/%s", ref.Namespace, ref.Name)
 }
 
 // DeleteCollection implements rest.CollectionDeleter

@@ -13,6 +13,7 @@ import (
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 	"netguard-pg-backend/internal/k8s/client"
 	"netguard-pg-backend/internal/k8s/registry/utils"
+	tableutils "netguard-pg-backend/internal/k8s/registry/utils"
 )
 
 // AddressGroupsREST implements the addressGroups subresource for Service
@@ -141,36 +142,30 @@ func (r *AddressGroupsREST) List(ctx context.Context, options *metainternalversi
 
 // ConvertToTable converts objects to tabular format for kubectl
 func (r *AddressGroupsREST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
-	table := &metav1.Table{
-		ColumnDefinitions: []metav1.TableColumnDefinition{
-			{Name: "Service", Type: "string", Format: "name", Description: "Service name"},
-			{Name: "Namespace", Type: "string", Description: "Service namespace"},
-			{Name: "AddressGroups", Type: "integer", Description: "Number of address groups"},
-		},
+	table := tableutils.NewTable(
+		metav1.TableColumnDefinition{Name: "Service", Type: "string", Format: "name", Description: "Service name"},
+		metav1.TableColumnDefinition{Name: "Namespace", Type: "string", Description: "Service namespace"},
+		metav1.TableColumnDefinition{Name: "AddressGroups", Type: "integer", Description: "Number of address groups"},
+	)
+	if tableutils.AppendBookmarkRowIfNeeded(table, obj) {
+		return table, nil
 	}
 
 	switch t := obj.(type) {
 	case *netguardv1beta1.AddressGroupsSpec:
-		table.Rows = []metav1.TableRow{
-			{
-				Cells: []interface{}{
-					t.ObjectMeta.Name,
-					t.ObjectMeta.Namespace,
-					len(t.Items),
-				},
-				Object: runtime.RawExtension{Object: t},
-			},
-		}
+		tableutils.AppendRow(table, t,
+			t.ObjectMeta.Name,
+			t.ObjectMeta.Namespace,
+			len(t.Items),
+		)
 	case *netguardv1beta1.AddressGroupsSpecList:
-		for _, item := range t.Items {
-			table.Rows = append(table.Rows, metav1.TableRow{
-				Cells: []interface{}{
-					item.ObjectMeta.Name,
-					item.ObjectMeta.Namespace,
-					len(item.Items),
-				},
-				Object: runtime.RawExtension{Object: &item},
-			})
+		for i := range t.Items {
+			item := &t.Items[i]
+			tableutils.AppendRow(table, item,
+				item.ObjectMeta.Name,
+				item.ObjectMeta.Namespace,
+				len(item.Items),
+			)
 		}
 	default:
 		return nil, fmt.Errorf("unsupported object type: %T", obj)

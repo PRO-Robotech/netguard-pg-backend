@@ -12,6 +12,62 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type noopConditionManager struct{}
+
+func (n *noopConditionManager) ProcessNetworkConditions(ctx context.Context, network *models.Network, syncResult error) error {
+	return nil
+}
+
+func (n *noopConditionManager) ProcessNetworkBindingConditions(ctx context.Context, binding *models.NetworkBinding) error {
+	return nil
+}
+
+func (n *noopConditionManager) ProcessHostConditions(ctx context.Context, host *models.Host, syncResult error) error {
+	return nil
+}
+
+func (n *noopConditionManager) ProcessAddressGroupConditions(ctx context.Context, ag *models.AddressGroup) error {
+	return nil
+}
+
+func (n *noopConditionManager) ProcessAddressGroupBindingConditions(ctx context.Context, binding *models.AddressGroupBinding) error {
+	return nil
+}
+
+func (n *noopConditionManager) ProcessAddressGroupPortMappingConditions(ctx context.Context, mapping *models.AddressGroupPortMapping) error {
+	return nil
+}
+
+func (n *noopConditionManager) ProcessAddressGroupBindingPolicyConditions(ctx context.Context, policy *models.AddressGroupBindingPolicy) error {
+	return nil
+}
+
+func (n *noopConditionManager) SaveAddressGroupConditions(ctx context.Context, ag *models.AddressGroup) error {
+	return nil
+}
+
+func (n *noopConditionManager) SaveAddressGroupBindingConditions(ctx context.Context, binding *models.AddressGroupBinding) error {
+	return nil
+}
+
+func (n *noopConditionManager) SaveAddressGroupPortMappingConditions(ctx context.Context, mapping *models.AddressGroupPortMapping) error {
+	return nil
+}
+
+func (n *noopConditionManager) SaveAddressGroupBindingPolicyConditions(ctx context.Context, policy *models.AddressGroupBindingPolicy) error {
+	return nil
+}
+
+func newTestNetworkBindingService(registry *testutil.MockRegistry) *NetworkBindingResourceService {
+	mockSyncManager := testutil.NewMockSyncManager()
+	conditionManager := &noopConditionManager{}
+	networkService := NewNetworkResourceService(registry, mockSyncManager, conditionManager)
+	validationService := NewValidationService(registry, mockSyncManager)
+	hostResourceService := NewHostResourceService(registry, mockSyncManager, conditionManager)
+	addressGroupService := NewAddressGroupResourceService(registry, mockSyncManager, conditionManager, validationService, hostResourceService)
+	return NewNetworkBindingResourceService(registry, networkService, addressGroupService, mockSyncManager, conditionManager)
+}
+
 func TestNetworkBindingResourceService_ListNetworkBindings(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -46,11 +102,7 @@ func TestNetworkBindingResourceService_ListNetworkBindings(t *testing.T) {
 			mockRegistry := testutil.NewMockRegistry()
 			mockRegistry.SetupTestData(tt.setupData)
 
-			mockSyncManager := testutil.NewMockSyncManager()
-			mockConditionManager := testutil.NewMockConditionManager()
-			networkService := NewNetworkResourceService(mockRegistry, mockSyncManager, mockConditionManager)
-
-			service := NewNetworkBindingResourceService(mockRegistry, networkService, mockSyncManager, mockConditionManager)
+			service := newTestNetworkBindingService(mockRegistry)
 
 			// Execute
 			bindings, err := service.ListNetworkBindings(context.Background(), tt.scope)
@@ -100,11 +152,7 @@ func TestNetworkBindingResourceService_GetNetworkBinding(t *testing.T) {
 			mockRegistry := testutil.NewMockRegistry()
 			mockRegistry.SetupTestData(tt.setupData)
 
-			mockSyncManager := testutil.NewMockSyncManager()
-			mockConditionManager := testutil.NewMockConditionManager()
-			networkService := NewNetworkResourceService(mockRegistry, mockSyncManager, mockConditionManager)
-
-			service := NewNetworkBindingResourceService(mockRegistry, networkService, mockSyncManager, mockConditionManager)
+			service := newTestNetworkBindingService(mockRegistry)
 
 			// Execute
 			result, err := service.GetNetworkBinding(context.Background(), tt.resourceID)
@@ -147,11 +195,7 @@ func TestNetworkBindingResourceService_CreateNetworkBinding(t *testing.T) {
 			// Setup
 			mockRegistry := testutil.NewMockRegistry()
 			mockRegistry.SetupTestData(tt.setupData)
-			mockSyncManager := testutil.NewMockSyncManager()
-			mockConditionManager := testutil.NewMockConditionManager()
-			networkService := NewNetworkResourceService(mockRegistry, mockSyncManager, mockConditionManager)
-
-			service := NewNetworkBindingResourceService(mockRegistry, networkService, mockSyncManager, mockConditionManager)
+			service := newTestNetworkBindingService(mockRegistry)
 
 			// Execute
 			err := service.CreateNetworkBinding(context.Background(), &tt.networkBinding)
@@ -170,6 +214,34 @@ func TestNetworkBindingResourceService_CreateNetworkBinding(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNetworkBindingResourceService_CreateUpdatesAddressGroupNetworks(t *testing.T) {
+	ctx := context.Background()
+	mockRegistry := testutil.NewMockRegistry()
+	service := newTestNetworkBindingService(mockRegistry)
+
+	addressGroup := testutil.CreateTestAddressGroup("ag-watch", "test-namespace")
+	addressGroup.Meta.ResourceVersion = "rv-initial"
+	network := testutil.CreateTestNetwork("net-watch", "test-namespace", "10.10.0.0/32")
+
+	mockRegistry.SetupTestData(map[string]interface{}{
+		"addressgroup_test-namespace/ag-watch": &addressGroup,
+		"network_test-namespace/net-watch":     &network,
+	})
+
+	binding := testutil.CreateTestNetworkBinding("binding-watch", "test-namespace", "net-watch", "ag-watch")
+
+	require.NoError(t, service.CreateNetworkBinding(ctx, &binding))
+
+	reader, err := mockRegistry.Reader(ctx)
+	require.NoError(t, err)
+	defer reader.Close()
+
+	updatedAG, err := reader.GetAddressGroupByID(ctx, models.ResourceIdentifier{Name: "ag-watch", Namespace: "test-namespace"})
+	require.NoError(t, err)
+	assert.NotEqual(t, "rv-initial", updatedAG.Meta.ResourceVersion)
+	assert.NotEmpty(t, updatedAG.Meta.ResourceVersion)
 }
 
 func TestNetworkBindingResourceService_UpdateNetworkBinding(t *testing.T) {
@@ -205,11 +277,7 @@ func TestNetworkBindingResourceService_UpdateNetworkBinding(t *testing.T) {
 			// Setup
 			mockRegistry := testutil.NewMockRegistry()
 			mockRegistry.SetupTestData(tt.setupData)
-			mockSyncManager := testutil.NewMockSyncManager()
-			mockConditionManager := testutil.NewMockConditionManager()
-			networkService := NewNetworkResourceService(mockRegistry, mockSyncManager, mockConditionManager)
-
-			service := NewNetworkBindingResourceService(mockRegistry, networkService, mockSyncManager, mockConditionManager)
+			service := newTestNetworkBindingService(mockRegistry)
 
 			// Execute
 			err := service.UpdateNetworkBinding(context.Background(), &tt.networkBinding)
@@ -260,11 +328,7 @@ func TestNetworkBindingResourceService_DeleteNetworkBinding(t *testing.T) {
 			// Setup
 			mockRegistry := testutil.NewMockRegistry()
 			mockRegistry.SetupTestData(tt.setupData)
-			mockSyncManager := testutil.NewMockSyncManager()
-			mockConditionManager := testutil.NewMockConditionManager()
-			networkService := NewNetworkResourceService(mockRegistry, mockSyncManager, mockConditionManager)
-
-			service := NewNetworkBindingResourceService(mockRegistry, networkService, mockSyncManager, mockConditionManager)
+			service := newTestNetworkBindingService(mockRegistry)
 
 			// Execute
 			err := service.DeleteNetworkBinding(context.Background(), tt.idToDelete)
@@ -283,6 +347,42 @@ func TestNetworkBindingResourceService_DeleteNetworkBinding(t *testing.T) {
 	}
 }
 
+func TestNetworkBindingResourceService_DeleteRemovesAddressGroupNetwork(t *testing.T) {
+	ctx := context.Background()
+	mockRegistry := testutil.NewMockRegistry()
+	service := newTestNetworkBindingService(mockRegistry)
+
+	addressGroup := testutil.CreateTestAddressGroup("ag-cleanup", "test-namespace")
+	addressGroup.Meta.ResourceVersion = "rv-delete-before"
+	addressGroup.Networks = []models.NetworkItem{
+		{
+			Name:      "test-namespace/net-cleanup",
+			Namespace: "test-namespace",
+			CIDR:      "10.20.0.0/32",
+		},
+	}
+
+	network := testutil.CreateTestNetwork("net-cleanup", "test-namespace", "10.20.0.0/32")
+	binding := testutil.CreateTestNetworkBinding("binding-cleanup", "test-namespace", "net-cleanup", "ag-cleanup")
+
+	mockRegistry.SetupTestData(map[string]interface{}{
+		"addressgroup_test-namespace/ag-cleanup":        &addressGroup,
+		"network_test-namespace/net-cleanup":            &network,
+		"networkbinding_test-namespace/binding-cleanup": &binding,
+	})
+
+	require.NoError(t, service.DeleteNetworkBinding(ctx, binding.SelfRef.ResourceIdentifier))
+
+	reader, err := mockRegistry.Reader(ctx)
+	require.NoError(t, err)
+	defer reader.Close()
+
+	updatedAG, err := reader.GetAddressGroupByID(ctx, models.ResourceIdentifier{Name: "ag-cleanup", Namespace: "test-namespace"})
+	require.NoError(t, err)
+	assert.NotEqual(t, "rv-delete-before", updatedAG.Meta.ResourceVersion)
+	assert.NotEmpty(t, updatedAG.Meta.ResourceVersion)
+}
+
 func TestNetworkBindingResourceService_NetworkBindingLifecycle(t *testing.T) {
 	t.Run("complete network binding lifecycle", func(t *testing.T) {
 		// Setup
@@ -292,11 +392,7 @@ func TestNetworkBindingResourceService_NetworkBindingLifecycle(t *testing.T) {
 			"network_test-namespace/test-network":            &testutil.TestFixtures.Network,
 			"addressgroup_test-namespace/test-address-group": &testutil.TestFixtures.AddressGroup,
 		})
-		mockSyncManager := testutil.NewMockSyncManager()
-		mockConditionManager := testutil.NewMockConditionManager()
-		networkService := NewNetworkResourceService(mockRegistry, mockSyncManager, mockConditionManager)
-
-		service := NewNetworkBindingResourceService(mockRegistry, networkService, mockSyncManager, mockConditionManager)
+		service := newTestNetworkBindingService(mockRegistry)
 		testNetworkBinding := testutil.TestFixtures.NetworkBinding
 
 		// Create network binding
@@ -331,10 +427,7 @@ func TestNetworkBindingResourceService_Concurrency(t *testing.T) {
 	t.Run("concurrent operations", func(t *testing.T) {
 		// Use a fresh mock registry to avoid interference from other tests
 		mockRegistry := testutil.NewMockRegistry()
-		mockSyncManager := testutil.NewMockSyncManager()
-		mockConditionManager := testutil.NewMockConditionManager()
-		networkService := NewNetworkResourceService(mockRegistry, mockSyncManager, mockConditionManager)
-		service := NewNetworkBindingResourceService(mockRegistry, networkService, mockSyncManager, mockConditionManager)
+		service := newTestNetworkBindingService(mockRegistry)
 
 		// Create multiple address groups for concurrent testing (one per binding to avoid conflicts)
 		// Use smaller number to avoid registry lock contention in complex operations
@@ -390,10 +483,7 @@ func TestNetworkBindingResourceService_ErrorHandling(t *testing.T) {
 		mockRegistry := testutil.NewMockRegistry()
 		mockRegistry.Close() // Close registry to force errors
 
-		mockSyncManager := testutil.NewMockSyncManager()
-		mockConditionManager := testutil.NewMockConditionManager()
-		networkService := NewNetworkResourceService(mockRegistry, mockSyncManager, mockConditionManager)
-		service := NewNetworkBindingResourceService(mockRegistry, networkService, mockSyncManager, mockConditionManager)
+		service := newTestNetworkBindingService(mockRegistry)
 
 		// Test that errors are properly handled
 		_, err := service.ListNetworkBindings(context.Background(), ports.EmptyScope{})

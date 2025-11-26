@@ -88,18 +88,24 @@ func (s *HostBindingResourceService) CreateHostBinding(ctx context.Context, host
 		return fmt.Errorf("host binding already exists: %s", hostBinding.Key())
 	}
 
-	// Convert to slice for sync
 	bindings := []models.HostBinding{*hostBinding}
 	if err := writer.SyncHostBindings(ctx, bindings, ports.EmptyScope{}, ports.WithSyncOp(models.SyncOpUpsert)); err != nil {
 		return fmt.Errorf("failed to sync host bindings: %w", err)
 	}
 
-	if err := writer.Commit(); err != nil {
-		return fmt.Errorf("failed to commit host binding creation: %w", err)
+	if s.hostResourceService != nil {
+		if err := s.hostResourceService.UpdateHostBindingWithWriter(ctx, writer, hostRef, bindingID, addressGroupRef); err != nil {
+			return fmt.Errorf("failed to update host binding status: %w", err)
+		}
+	}
+	if s.addressGroupResourceService != nil {
+		if err := s.addressGroupResourceService.TouchAddressGroupBindingMembership(ctx, writer, addressGroupRef); err != nil {
+			return fmt.Errorf("failed to touch address group membership: %w", err)
+		}
 	}
 
-	if err := s.hostResourceService.UpdateHostBinding(ctx, hostRef, bindingID, addressGroupRef); err != nil {
-		return fmt.Errorf("failed to update host binding status: %w", err)
+	if err := writer.Commit(); err != nil {
+		return fmt.Errorf("failed to commit host binding creation: %w", err)
 	}
 
 	// Process conditions after binding operations
@@ -174,6 +180,32 @@ func (s *HostBindingResourceService) UpdateHostBinding(ctx context.Context, host
 		return fmt.Errorf("failed to update host binding: %w", err)
 	}
 
+	var previousAG models.ResourceIdentifier
+	if existing.AddressGroupRef.Name != "" || existing.AddressGroupRef.Namespace != "" {
+		previousAG = models.ResourceIdentifier{
+			Name:      existing.AddressGroupRef.Name,
+			Namespace: existing.AddressGroupRef.Namespace,
+		}
+	}
+
+	if s.hostResourceService != nil {
+		if err := s.hostResourceService.UpdateHostBindingWithWriter(ctx, writer, hostRef, bindingID, addressGroupRef); err != nil {
+			return fmt.Errorf("failed to refresh host binding status: %w", err)
+		}
+	}
+	if s.addressGroupResourceService != nil {
+		if err := s.addressGroupResourceService.TouchAddressGroupBindingMembership(ctx, writer, addressGroupRef); err != nil {
+			return fmt.Errorf("failed to touch target address group: %w", err)
+		}
+		if previousAG.Name != "" || previousAG.Namespace != "" {
+			if previousAG.Name != addressGroupRef.Name || previousAG.Namespace != addressGroupRef.Namespace {
+				if err := s.addressGroupResourceService.TouchAddressGroupBindingMembership(ctx, writer, previousAG); err != nil {
+					return fmt.Errorf("failed to touch previous address group: %w", err)
+				}
+			}
+		}
+	}
+
 	if err := writer.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
@@ -214,23 +246,33 @@ func (s *HostBindingResourceService) DeleteHostBinding(ctx context.Context, id m
 		return fmt.Errorf("host binding not found: %s", id.Key())
 	}
 
+	hostID := models.ResourceIdentifier{
+		Namespace: existingBinding.HostRef.Namespace,
+		Name:      existingBinding.HostRef.Name,
+	}
+	addressGroupID := models.ResourceIdentifier{
+		Namespace: existingBinding.AddressGroupRef.Namespace,
+		Name:      existingBinding.AddressGroupRef.Name,
+	}
+
 	// Delete the HostBinding using the SyncHostBindings with DELETE operation
 	if err := writer.SyncHostBindings(ctx, []models.HostBinding{*existingBinding}, ports.EmptyScope{}, ports.WithSyncOp(models.SyncOpDelete)); err != nil {
 		return fmt.Errorf("failed to delete host binding: %w", err)
 	}
 
-	if err := writer.Commit(); err != nil {
-		return fmt.Errorf("failed to commit deletion transaction: %w", err)
+	if s.hostResourceService != nil {
+		if err := s.hostResourceService.UpdateHostBindingWithWriter(ctx, writer, hostID, models.ResourceIdentifier{}, models.ResourceIdentifier{}); err != nil {
+			return fmt.Errorf("failed to clear host binding status: %w", err)
+		}
+	}
+	if s.addressGroupResourceService != nil && (addressGroupID.Name != "" || addressGroupID.Namespace != "") {
+		if err := s.addressGroupResourceService.TouchAddressGroupBindingMembership(ctx, writer, addressGroupID); err != nil {
+			return fmt.Errorf("failed to touch address group membership: %w", err)
+		}
 	}
 
-	hostID := models.ResourceIdentifier{
-		Namespace: existingBinding.HostRef.Namespace,
-		Name:      existingBinding.HostRef.Name,
-	}
-	if err := s.hostResourceService.UpdateHostBinding(ctx, hostID, models.ResourceIdentifier{}, models.ResourceIdentifier{}); err != nil {
-		// Log warning but don't fail - the HostBinding is already deleted
-		// The Host will still have stale binding references but that's better than failing the entire operation
-		// User can manually update the Host if needed
+	if err := writer.Commit(); err != nil {
+		return fmt.Errorf("failed to commit deletion transaction: %w", err)
 	}
 
 	return nil

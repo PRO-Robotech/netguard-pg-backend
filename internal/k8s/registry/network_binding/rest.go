@@ -3,7 +3,6 @@ package network_binding
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -13,11 +12,11 @@ import (
 	"netguard-pg-backend/internal/k8s/registry/utils"
 	"netguard-pg-backend/internal/k8s/registry/validation"
 
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/registry/rest"
 )
@@ -241,25 +240,23 @@ func (r *REST) Delete(ctx context.Context, name string, deleteValidation rest.Va
 
 // ConvertToTable implements minimal table output so kubectl can display resources.
 func (r *REST) ConvertToTable(ctx context.Context, object runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
-	table := &metav1.Table{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "meta.k8s.io/v1",
-			Kind:       "Table",
-		},
-		ColumnDefinitions: []metav1.TableColumnDefinition{
-			{Name: "Name", Type: "string", Format: "name"},
-			{Name: "Network", Type: "string"},
-			{Name: "Address Group", Type: "string"},
-			{Name: "Age", Type: "string"},
-		},
+	table := utils.NewTable(
+		metav1.TableColumnDefinition{Name: "Name", Type: "string", Format: "name"},
+		metav1.TableColumnDefinition{Name: "Network", Type: "string"},
+		metav1.TableColumnDefinition{Name: "Address Group", Type: "string"},
+		metav1.TableColumnDefinition{Name: "Age", Type: "string"},
+	)
+	if utils.AppendBookmarkRowIfNeeded(table, object) {
+		return table, nil
 	}
 
 	addRow := func(binding *v1beta1.NetworkBinding) {
-		row := metav1.TableRow{
-			Object: runtime.RawExtension{Object: binding},
-			Cells:  []interface{}{binding.Name, binding.Spec.NetworkRef.Name, binding.Spec.AddressGroupRef.Name, translateTimestampSince(binding.CreationTimestamp)},
-		}
-		table.Rows = append(table.Rows, row)
+		utils.AppendRow(table, binding,
+			binding.Name,
+			binding.Spec.NetworkRef.Name,
+			binding.Spec.AddressGroupRef.Name,
+			utils.TranslateTimestampSince(binding.CreationTimestamp),
+		)
 	}
 
 	switch v := object.(type) {
@@ -273,29 +270,6 @@ func (r *REST) ConvertToTable(ctx context.Context, object runtime.Object, tableO
 		return nil, fmt.Errorf("unexpected object type %T", object)
 	}
 	return table, nil
-}
-
-// helper function to format duration
-func translateTimestampSince(ts metav1.Time) string {
-	if ts.IsZero() {
-		return "<unknown>"
-	}
-	return durationShortHumanDuration(time.Since(ts.Time))
-}
-
-func durationShortHumanDuration(d time.Duration) string {
-	if seconds := int(d.Seconds()); seconds < 90 {
-		return fmt.Sprintf("%ds", seconds)
-	}
-	if minutes := int(d.Minutes()); minutes < 90 {
-		return fmt.Sprintf("%dm", minutes)
-	}
-	hours := int(d.Round(time.Hour).Hours())
-	if hours < 48 {
-		return fmt.Sprintf("%dh", hours)
-	}
-	days := hours / 24
-	return fmt.Sprintf("%dd", days)
 }
 
 // Destroy cleans up resources

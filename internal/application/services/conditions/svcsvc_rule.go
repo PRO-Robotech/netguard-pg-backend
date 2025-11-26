@@ -13,19 +13,33 @@ import (
 )
 
 func (cm *ConditionManager) ProcessSvcSvcRuleConditions(ctx context.Context, rule *models.SvcSvcRule) error {
-	rule.Meta.ClearErrorCondition()
-	rule.Meta.TouchOnWrite("v1")
+	changed := rule.Meta.ClearErrorConditionIfPresent()
+	flushUpdate := func() {
+		if !changed {
+			return
+		}
+		rule.Meta.TouchOnWrite("v1")
+		cm.batchConditionUpdate("SvcSvcRule", rule)
+		changed = false
+	}
 
 	reader, err := cm.registry.Reader(ctx)
 	if err != nil {
 		klog.Errorf("Failed to get reader for SvcSvcRule %s/%s: %v", rule.Namespace, rule.Name, err)
-		rule.Meta.SetErrorCondition(models.ReasonBackendError, fmt.Sprintf("Failed to get reader for validation: %v", err))
-		rule.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Backend validation unavailable")
+		if rule.Meta.EnsureErrorCondition(models.ReasonBackendError, fmt.Sprintf("Failed to get reader for validation: %v", err)) {
+			changed = true
+		}
+		if rule.Meta.EnsureReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Backend validation unavailable") {
+			changed = true
+		}
+		flushUpdate()
 		return nil
 	}
 	defer reader.Close()
 
-	rule.Meta.SetSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "SvcSvcRule committed to backend successfully")
+	if rule.Meta.EnsureSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "SvcSvcRule committed to backend successfully") {
+		changed = true
+	}
 
 	// Validate dependencies: ServiceFrom and ServiceTo must exist
 	serviceFromID := models.NewResourceIdentifier(rule.ServiceFromRef.Name, models.WithNamespace(rule.ServiceFromRef.Namespace))
@@ -36,8 +50,13 @@ func (cm *ConditionManager) ProcessSvcSvcRuleConditions(ctx context.Context, rul
 		serviceFromExists = false
 	} else if err != nil {
 		klog.Errorf("Failed to check ServiceFrom %s for SvcSvcRule %s/%s: %v", rule.ServiceFromRefKey(), rule.Namespace, rule.Name, err)
-		rule.Meta.SetErrorCondition(models.ReasonDependencyError, fmt.Sprintf("Failed to check ServiceFrom %s: %v", rule.ServiceFromRefKey(), err))
-		rule.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "ServiceFrom validation failed")
+		if rule.Meta.EnsureErrorCondition(models.ReasonDependencyError, fmt.Sprintf("Failed to check ServiceFrom %s: %v", rule.ServiceFromRefKey(), err)) {
+			changed = true
+		}
+		if rule.Meta.EnsureReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "ServiceFrom validation failed") {
+			changed = true
+		}
+		flushUpdate()
 		return nil
 	}
 
@@ -49,41 +68,67 @@ func (cm *ConditionManager) ProcessSvcSvcRuleConditions(ctx context.Context, rul
 		serviceToExists = false
 	} else if err != nil {
 		klog.Errorf("Failed to check ServiceTo %s for SvcSvcRule %s/%s: %v", rule.ServiceToRefKey(), rule.Namespace, rule.Name, err)
-		rule.Meta.SetErrorCondition(models.ReasonDependencyError, fmt.Sprintf("Failed to check ServiceTo %s: %v", rule.ServiceToRefKey(), err))
-		rule.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "ServiceTo validation failed")
+		if rule.Meta.EnsureErrorCondition(models.ReasonDependencyError, fmt.Sprintf("Failed to check ServiceTo %s: %v", rule.ServiceToRefKey(), err)) {
+			changed = true
+		}
+		if rule.Meta.EnsureReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "ServiceTo validation failed") {
+			changed = true
+		}
+		flushUpdate()
 		return nil
 	}
 
 	// Set condition based on dependency checks
 	if !serviceFromExists && !serviceToExists {
 		klog.Warningf("SvcSvcRule %s/%s not ready: both ServiceFrom and ServiceTo not found", rule.Namespace, rule.Name)
-		rule.Meta.SetErrorCondition(models.ReasonDependencyError, fmt.Sprintf("Both ServiceFrom (%s) and ServiceTo (%s) not found", rule.ServiceFromRefKey(), rule.ServiceToRefKey()))
-		rule.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Both referenced Services not found")
-		rule.Meta.SetValidatedCondition(metav1.ConditionFalse, models.ReasonValidationFailed, "Dependency validation failed")
-		cm.batchConditionUpdate("SvcSvcRule", rule)
+		if rule.Meta.EnsureErrorCondition(models.ReasonDependencyError, fmt.Sprintf("Both ServiceFrom (%s) and ServiceTo (%s) not found", rule.ServiceFromRefKey(), rule.ServiceToRefKey())) {
+			changed = true
+		}
+		if rule.Meta.EnsureReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Both referenced Services not found") {
+			changed = true
+		}
+		if rule.Meta.EnsureValidatedCondition(metav1.ConditionFalse, models.ReasonValidationFailed, "Dependency validation failed") {
+			changed = true
+		}
+		flushUpdate()
 		return nil
 	} else if !serviceFromExists {
 		klog.Warningf("SvcSvcRule %s/%s not ready: ServiceFrom %s not found", rule.Namespace, rule.Name, rule.ServiceFromRefKey())
-		rule.Meta.SetErrorCondition(models.ReasonDependencyError, fmt.Sprintf("ServiceFrom %s not found", rule.ServiceFromRefKey()))
-		rule.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "ServiceFrom not found")
-		rule.Meta.SetValidatedCondition(metav1.ConditionFalse, models.ReasonValidationFailed, "ServiceFrom dependency missing")
-		cm.batchConditionUpdate("SvcSvcRule", rule)
+		if rule.Meta.EnsureErrorCondition(models.ReasonDependencyError, fmt.Sprintf("ServiceFrom %s not found", rule.ServiceFromRefKey())) {
+			changed = true
+		}
+		if rule.Meta.EnsureReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "ServiceFrom not found") {
+			changed = true
+		}
+		if rule.Meta.EnsureValidatedCondition(metav1.ConditionFalse, models.ReasonValidationFailed, "ServiceFrom dependency missing") {
+			changed = true
+		}
+		flushUpdate()
 		return nil
 	} else if !serviceToExists {
 		klog.Warningf("SvcSvcRule %s/%s not ready: ServiceTo %s not found", rule.Namespace, rule.Name, rule.ServiceToRefKey())
-		rule.Meta.SetErrorCondition(models.ReasonDependencyError, fmt.Sprintf("ServiceTo %s not found", rule.ServiceToRefKey()))
-		rule.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "ServiceTo not found")
-		rule.Meta.SetValidatedCondition(metav1.ConditionFalse, models.ReasonValidationFailed, "ServiceTo dependency missing")
-		cm.batchConditionUpdate("SvcSvcRule", rule)
+		if rule.Meta.EnsureErrorCondition(models.ReasonDependencyError, fmt.Sprintf("ServiceTo %s not found", rule.ServiceToRefKey())) {
+			changed = true
+		}
+		if rule.Meta.EnsureReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "ServiceTo not found") {
+			changed = true
+		}
+		if rule.Meta.EnsureValidatedCondition(metav1.ConditionFalse, models.ReasonValidationFailed, "ServiceTo dependency missing") {
+			changed = true
+		}
+		flushUpdate()
 		return nil
 	}
 
 	// Both services exist - set Ready=True
 	klog.Infof("SvcSvcRule %s/%s is ready: both ServiceFrom and ServiceTo exist", rule.Namespace, rule.Name)
-	rule.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "SvcSvcRule passed validation")
-	rule.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "SvcSvcRule is ready, all services exist")
-
-	cm.batchConditionUpdate("SvcSvcRule", rule)
+	if rule.Meta.EnsureValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "SvcSvcRule passed validation") {
+		changed = true
+	}
+	if rule.Meta.EnsureReadyCondition(metav1.ConditionTrue, models.ReasonReady, "SvcSvcRule is ready, all services exist") {
+		changed = true
+	}
+	flushUpdate()
 	return nil
 }
 
