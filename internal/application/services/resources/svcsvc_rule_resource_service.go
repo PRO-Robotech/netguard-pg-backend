@@ -181,18 +181,7 @@ func (s *SvcSvcRuleResourceService) DeleteSvcSvcRulesByIDs(ctx context.Context, 
 		return nil
 	}
 
-	writer, err := s.registry.Writer(ctx)
-	if err != nil {
-		return errors.Wrap(err, "failed to get writer")
-	}
-
-	if err := writer.DeleteSvcSvcRulesByIDs(ctx, ids); err != nil {
-		return errors.Wrap(err, "failed to delete SvcSvcRules")
-	}
-
-	if err := writer.Commit(); err != nil {
-		return errors.Wrap(err, "failed to commit transaction")
-	}
-
-	return nil
+	return s.registry.ExecuteDeleteWithRetry(ctx, func(writer ports.Writer) error {
+		return writer.DeleteSvcSvcRulesByIDs(ctx, ids)
+	})
 }

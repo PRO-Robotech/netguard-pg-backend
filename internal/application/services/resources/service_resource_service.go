@@ -595,23 +595,11 @@ func (s *ServiceResourceService) DeleteServicesByIDs(ctx context.Context, ids []
 		}
 	}
 
-	// 4. Proceed with deletion
-	writer, err := s.registry.Writer(ctx)
-	if err != nil {
-		return errors.Wrap(err, "failed to get writer")
-	}
-	defer func() {
-		if err != nil {
-			writer.Abort()
-		}
-	}()
-
-	if err = writer.DeleteServicesByIDs(ctx, ids); err != nil {
+	// 4. Proceed with deletion using retry for serialization conflicts
+	if err := s.registry.ExecuteDeleteWithRetry(ctx, func(writer ports.Writer) error {
+		return writer.DeleteServicesByIDs(ctx, ids)
+	}); err != nil {
 		return errors.Wrap(err, "failed to delete services")
-	}
-
-	if err = writer.Commit(); err != nil {
-		return errors.Wrap(err, "failed to commit transaction")
 	}
 
 	if s.portMappingRegenerator != nil {
@@ -836,25 +824,9 @@ func (s *ServiceResourceService) DeleteServiceAliasesByIDs(ctx context.Context, 
 		}
 	}
 
-	writer, err := s.registry.Writer(ctx)
-	if err != nil {
-		return errors.Wrap(err, "failed to get writer")
-	}
-	defer func() {
-		if err != nil {
-			writer.Abort()
-		}
-	}()
-
-	if err = writer.DeleteServiceAliasesByIDs(ctx, ids); err != nil {
-		return errors.Wrap(err, "failed to delete service aliases")
-	}
-
-	if err = writer.Commit(); err != nil {
-		return errors.Wrap(err, "failed to commit transaction")
-	}
-
-	return nil
+	return s.registry.ExecuteDeleteWithRetry(ctx, func(writer ports.Writer) error {
+		return writer.DeleteServiceAliasesByIDs(ctx, ids)
+	})
 }
 
 // Private helper methods (extracted from original NetguardService)

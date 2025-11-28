@@ -216,6 +216,53 @@ func (r *Registry) Close() error {
 	return nil
 }
 
+// ExecuteDeleteWithRetry executes a delete operation with automatic retry on serialization failures (SQLSTATE 40001).
+// It uses ReadCommitted isolation level and retries up to 3 times with exponential backoff.
+// The function handles transaction lifecycle: begin, execute fn, commit/rollback.
+func (r *Registry) ExecuteDeleteWithRetry(ctx context.Context, fn func(writer ports.Writer) error) error {
+	const maxRetries = 3
+	delays := []time.Duration{50 * time.Millisecond, 100 * time.Millisecond, 200 * time.Millisecond}
+
+	var lastErr error
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			delay := delays[attempt-1]
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+			}
+		}
+
+		err := r.executeDeleteTransaction(ctx, fn)
+		if err == nil {
+			return nil
+		}
+
+		lastErr = err
+		if !IsSerializationError(err) {
+			return err // Non-retryable error, return immediately
+		}
+	}
+
+	return &SerializationError{Err: lastErr, Attempts: maxRetries + 1}
+}
+
+// executeDeleteTransaction creates a transaction with ReadCommitted isolation and executes the function.
+func (r *Registry) executeDeleteTransaction(ctx context.Context, fn func(writer ports.Writer) error) error {
+	writer, err := r.WriterForDeletes(ctx)
+	if err != nil {
+		return err
+	}
+
+	if err := fn(writer); err != nil {
+		writer.Abort()
+		return err
+	}
+
+	return writer.Commit()
+}
+
 type simpleWriter struct {
 	tx            pgx.Tx
 	ctx           context.Context

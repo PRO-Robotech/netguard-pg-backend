@@ -89,6 +89,7 @@ type (
 		Reader(ctx context.Context) (Reader, error)
 		ReaderFromWriter(ctx context.Context, writer Writer) (Reader, error)
 		ReaderWithReadCommitted(ctx context.Context) (Reader, error)
+		ExecuteDeleteWithRetry(ctx context.Context, fn func(Writer) error) error
 		Close() error
 	}
 )

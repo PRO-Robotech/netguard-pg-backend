@@ -63,26 +63,9 @@ func (s *SvcFqdnRuleResourceService) DeleteSvcFqdnRulesByIDs(ctx context.Context
 		return nil
 	}
 
-	writer, err := s.registry.Writer(ctx)
-	if err != nil {
-		return errors.Wrap(err, "failed to get writer")
-	}
-
-	defer func() {
-		if err != nil {
-			writer.Abort()
-		}
-	}()
-
-	if err = writer.DeleteSvcFqdnRulesByIDs(ctx, ids); err != nil {
-		return errors.Wrap(err, "failed to delete SvcFqdnRules")
-	}
-
-	if err = writer.Commit(); err != nil {
-		return errors.Wrap(err, "failed to commit transaction")
-	}
-
-	return nil
+	return s.registry.ExecuteDeleteWithRetry(ctx, func(writer ports.Writer) error {
+		return writer.DeleteSvcFqdnRulesByIDs(ctx, ids)
+	})
 }
 
 func (s *SvcFqdnRuleResourceService) SyncSvcFqdnRules(ctx context.Context, rules []models.SvcFqdnRule, scope ports.Scope, syncOp models.SyncOp) (err error) {
