@@ -29,3 +29,7 @@ func (m *MockRegistry) ReaderWithReadCommitted(ctx context.Context) (ports.Reade
 func (m *MockRegistry) Close() error {
 	return nil
 }
+
+func (m *MockRegistry) ExecuteDeleteWithRetry(ctx context.Context, fn func(ports.Writer) error) error {
+	return nil
+}

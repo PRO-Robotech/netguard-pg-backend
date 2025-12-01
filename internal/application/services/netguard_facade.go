@@ -745,41 +745,20 @@ func (f *NetguardFacade) MarkForDeletion(ctx context.Context, namespace, name, k
 		"namespace", namespace,
 		"name", name,
 		"kind", kind)
-	writer, err := f.registry.Writer(ctx)
+
+	// Use ExecuteDeleteWithRetry to handle serialization failures (SQLSTATE 40001)
+	err := f.registry.ExecuteDeleteWithRetry(ctx, func(writer ports.Writer) error {
+		klog.V(2).InfoS("NetguardFacade.MarkForDeletion: Executing MarkForDeletionWithStatus",
+			"namespace", namespace, "name", name, "kind", kind)
+		return writer.MarkForDeletionWithStatus(namespace, name, kind)
+	})
+
 	if err != nil {
-		klog.ErrorS(err, "NetguardFacade.MarkForDeletion: Failed to get writer")
-		return fmt.Errorf("failed to get writer: %w", err)
-	}
-	klog.V(3).InfoS("NetguardFacade.MarkForDeletion: Writer acquired", "writerType", fmt.Sprintf("%T", writer))
-	type writerWithMethods interface {
-		MarkForDeletionWithStatus(namespace, name, kind string) error
-		Commit() error
-		Abort()
-		Close() error
-	}
-	pgWriter, ok := writer.(writerWithMethods)
-	if !ok {
-		klog.ErrorS(nil, "NetguardFacade.MarkForDeletion: Type assertion FAILED",
-			"writerType", fmt.Sprintf("%T", writer),
-			"hasMarkForDeletionWithStatus", fmt.Sprintf("%v", writer))
-		return fmt.Errorf("writer does not support required methods (type: %T)", writer)
-	}
-	defer pgWriter.Close()
-	klog.V(2).InfoS("NetguardFacade.MarkForDeletion: Executing MarkForDeletionWithStatus",
-		"namespace", namespace, "name", name, "kind", kind)
-	if err := pgWriter.MarkForDeletionWithStatus(namespace, name, kind); err != nil {
 		klog.ErrorS(err, "NetguardFacade.MarkForDeletion: MarkForDeletionWithStatus failed",
 			"namespace", namespace, "name", name, "kind", kind)
-		pgWriter.Abort()
 		return err
 	}
-	klog.V(2).InfoS("NetguardFacade.MarkForDeletion: Committing transaction",
-		"namespace", namespace, "name", name, "kind", kind)
-	if err := pgWriter.Commit(); err != nil {
-		klog.ErrorS(err, "NetguardFacade.MarkForDeletion: Commit failed",
-			"namespace", namespace, "name", name, "kind", kind)
-		return err
-	}
+
 	klog.InfoS("NetguardFacade.MarkForDeletion completed",
 		"namespace", namespace, "name", name, "kind", kind)
 	return nil

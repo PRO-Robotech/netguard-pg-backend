@@ -305,6 +305,51 @@ func (w *OutboxWorker) checkAllNetworkBindingsDeleted(
 	return true, nil
 }
 
+// findAddressGroupBindingsForAddressGroup finds all AddressGroupBindings that reference a specific AddressGroup
+// Used in Case 4: DELETE AddressGroup → CASCADE AddressGroupBinding
+func (w *OutboxWorker) findAddressGroupBindingsForAddressGroup(
+	ctx context.Context,
+	agNamespace string,
+	agName string,
+) ([]BindingInfo, error) {
+	query := `
+		SELECT
+			agb.namespace,
+			agb.name,
+			agb.resource_version,
+			m.deletion_timestamp
+		FROM address_group_bindings agb
+		JOIN k8s_metadata m ON m.resource_version = agb.resource_version
+		WHERE agb.address_group_namespace = $1 AND agb.address_group_name = $2
+	`
+
+	rows, err := w.pool.Query(ctx, query, agNamespace, agName)
+	if err != nil {
+		return nil, fmt.Errorf("query failed: %w", err)
+	}
+	defer rows.Close()
+
+	var bindings []BindingInfo
+	for rows.Next() {
+		var binding BindingInfo
+		if err := rows.Scan(
+			&binding.Namespace,
+			&binding.Name,
+			&binding.ResourceVersion,
+			&binding.DeletionTimestamp,
+		); err != nil {
+			return nil, fmt.Errorf("scan failed: %w", err)
+		}
+		bindings = append(bindings, binding)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+
+	return bindings, nil
+}
+
 // findAddressGroupBindingsForService finds all AddressGroupBindings that reference a specific Service
 // Used in Case 2: DELETE Service → CASCADE AddressGroupBinding
 func (w *OutboxWorker) findAddressGroupBindingsForService(

@@ -418,23 +418,11 @@ func (s *RuleS2SResourceService) DeleteRuleS2SByIDs(ctx context.Context, ids []m
 
 	klog.Infof("RULES2S_DELETE: Found %d IEAgAgRules referenced by RuleS2S being deleted", len(referencedIEAgAgRules))
 
-	writer, err := s.registry.Writer(ctx)
-	if err != nil {
-		return errors.Wrap(err, "failed to get writer")
-	}
-	defer func() {
-		if err != nil {
-			writer.Abort()
-		}
-	}()
-
-	// Step 1: Delete the RuleS2S resources
-	if err = writer.DeleteRuleS2SByIDs(ctx, ids); err != nil {
+	// Step 1: Delete the RuleS2S resources with retry for serialization conflicts
+	if err := s.registry.ExecuteDeleteWithRetry(ctx, func(writer ports.Writer) error {
+		return writer.DeleteRuleS2SByIDs(ctx, ids)
+	}); err != nil {
 		return errors.Wrap(err, "failed to delete RuleS2S")
-	}
-
-	if err = writer.Commit(); err != nil {
-		return errors.Wrap(err, "failed to commit transaction")
 	}
 
 	klog.Infof("✅ RULES2S_DELETE: Successfully deleted %d RuleS2S", len(ids))
@@ -587,37 +575,12 @@ func (s *RuleS2SResourceService) DeleteIEAgAgRulesByIDs(ctx context.Context, ids
 		klog.Infof("  IEAGAG_DELETE: Prepared rule for deletion: %s", rule.SelfRef.Key())
 	}
 
-	// Prefer WriterForDeletes to reduce serialization conflicts during concurrent delete operations.
-	var writer ports.Writer
-	if registryWithDeletes, ok := s.registry.(interface {
-		WriterForDeletes(context.Context) (ports.Writer, error)
-	}); ok {
-		klog.V(2).Infof("Using WriterForDeletes with ReadCommitted isolation for %d rules", len(ids))
-		writer, err = registryWithDeletes.WriterForDeletes(ctx)
-		if err != nil {
-			return errors.Wrap(err, "failed to get delete writer with ReadCommitted isolation")
-		}
-	} else {
-		klog.V(2).Infof("WriterForDeletes not available, using standard writer for %d rules", len(ids))
-		writer, err = s.registry.Writer(ctx)
-		if err != nil {
-			return errors.Wrap(err, "failed to get writer")
-		}
-	}
-	defer func() {
-		if err != nil {
-			writer.Abort()
-		}
-	}()
-
-	// Delete from backend
+	// Delete from backend using ExecuteDeleteWithRetry for serialization conflict handling
 	klog.Infof("IEAGAG_DELETE: Deleting %d rules from backend", len(ids))
-	if err = writer.DeleteIEAgAgRulesByIDs(ctx, ids); err != nil {
+	if err := s.registry.ExecuteDeleteWithRetry(ctx, func(writer ports.Writer) error {
+		return writer.DeleteIEAgAgRulesByIDs(ctx, ids)
+	}); err != nil {
 		return errors.Wrap(err, "failed to delete IEAgAgRules from backend")
-	}
-
-	if err = writer.Commit(); err != nil {
-		return errors.Wrap(err, "failed to commit backend deletion transaction")
 	}
 
 	// Sync deletions to external systems (SGROUP).

@@ -1191,6 +1191,11 @@ func (w *OutboxWorker) deleteResourceFromDB(ctx context.Context, item *domain.Ou
 	case string(registry.TypeNetwork):
 		deleteQuery = `DELETE FROM networks WHERE namespace = $1 AND name = $2`
 	case string(registry.TypeAddressGroup):
+		// AddressGroupBindings are deleted via coordinated deletion flow (markBindingForDeletion)
+		// in coordinateAddressGroupDelete(). Do NOT delete them directly here - that would
+		// bypass K8s watch notifications and leave CRDs stuck with deletionTimestamp.
+
+		// Delete address_group_port_mappings (no CRD, no watch needed)
 		if err := w.deleteAddressGroupPortMapping(ctx, tx, item.ResourceNamespace, item.ResourceName); err != nil {
 			return fmt.Errorf("failed to delete address group port mapping: %w", err)
 		}
@@ -1561,7 +1566,7 @@ func (w *OutboxWorker) coordinateNetworkDelete(
 }
 
 // coordinateAddressGroupDelete handles Case 4 for AddressGroup deletion
-// AddressGroup can have BOTH HostBindings AND NetworkBindings
+// AddressGroup can have HostBindings, NetworkBindings, AND AddressGroupBindings
 // See: docs/architecture/COORDINATED_BINDING_DELETION.md - Case 4
 func (w *OutboxWorker) coordinateAddressGroupDelete(
 	ctx context.Context,
@@ -1585,7 +1590,14 @@ func (w *OutboxWorker) coordinateAddressGroupDelete(
 		return fmt.Errorf("finding network bindings: %w", err)
 	}
 
-	totalBindings := len(hostBindings) + len(netBindings)
+	// Step 3: Find AddressGroupBindings (bindings that reference this AddressGroup)
+	agBindings, err := w.findAddressGroupBindingsForAddressGroup(ctx,
+		item.ResourceNamespace, item.ResourceName)
+	if err != nil {
+		return fmt.Errorf("finding address group bindings: %w", err)
+	}
+
+	totalBindings := len(hostBindings) + len(netBindings) + len(agBindings)
 	if totalBindings == 0 {
 		w.logger.Debug("no bindings found, proceeding with AddressGroup DELETE",
 			zap.String("namespace", item.ResourceNamespace),
@@ -1597,9 +1609,10 @@ func (w *OutboxWorker) coordinateAddressGroupDelete(
 		zap.String("namespace", item.ResourceNamespace),
 		zap.String("name", item.ResourceName),
 		zap.Int("host_bindings", len(hostBindings)),
-		zap.Int("network_bindings", len(netBindings)))
+		zap.Int("network_bindings", len(netBindings)),
+		zap.Int("address_group_bindings", len(agBindings)))
 
-	// Step 3: Mark all for deletion
+	// Step 4: Mark all for deletion
 	for _, binding := range hostBindings {
 		if err := w.markBindingForDeletion(ctx, binding); err != nil {
 			return fmt.Errorf("marking host binding for deletion: %w", err)
@@ -1610,8 +1623,13 @@ func (w *OutboxWorker) coordinateAddressGroupDelete(
 			return fmt.Errorf("marking network binding for deletion: %w", err)
 		}
 	}
+	for _, binding := range agBindings {
+		if err := w.markBindingForDeletion(ctx, binding); err != nil {
+			return fmt.Errorf("marking address group binding for deletion: %w", err)
+		}
+	}
 
-	// Step 4: Check all deleted
+	// Step 5: Check all deleted
 	hostDeleted, err := w.checkAllHostBindingsDeleted(ctx, hostBindings)
 	if err != nil {
 		return fmt.Errorf("checking host binding deletion: %w", err)
@@ -1620,13 +1638,18 @@ func (w *OutboxWorker) coordinateAddressGroupDelete(
 	if err != nil {
 		return fmt.Errorf("checking network binding deletion: %w", err)
 	}
+	agDeleted, err := w.checkAllAddressGroupBindingsDeleted(ctx, agBindings)
+	if err != nil {
+		return fmt.Errorf("checking address group binding deletion: %w", err)
+	}
 
-	if !hostDeleted || !netDeleted {
+	if !hostDeleted || !netDeleted || !agDeleted {
 		w.logger.Debug("bindings not yet physically deleted, waiting",
 			zap.String("namespace", item.ResourceNamespace),
 			zap.String("name", item.ResourceName),
 			zap.Bool("host_deleted", hostDeleted),
-			zap.Bool("net_deleted", netDeleted))
+			zap.Bool("net_deleted", netDeleted),
+			zap.Bool("ag_deleted", agDeleted))
 		return ErrWaitingForSync
 	}
 

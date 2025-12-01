@@ -111,6 +111,10 @@ func (m *mockRegistry) Close() error {
 	return nil
 }
 
+func (m *mockRegistry) ExecuteDeleteWithRetry(ctx context.Context, fn func(ports.Writer) error) error {
+	return nil
+}
+
 // TestSyncHosts_ConditionOnlyOperation_DoesNotDeleteHost is the CRITICAL P0 bug reproduction test
 //
 // BUG DESCRIPTION:

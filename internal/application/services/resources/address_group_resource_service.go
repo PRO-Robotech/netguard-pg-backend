@@ -318,6 +318,37 @@ func (s *AddressGroupResourceService) UpdateAddressGroup(ctx context.Context, ad
 
 // SyncAddressGroups synchronizes multiple address groups
 func (s *AddressGroupResourceService) SyncAddressGroups(ctx context.Context, addressGroups []models.AddressGroup, scope ports.Scope, syncOp models.SyncOp) error {
+	// For DELETE operations, use ExecuteDeleteWithRetry to handle serialization failures (SQLSTATE 40001)
+	if syncOp == models.SyncOpDelete {
+		return s.syncAddressGroupsWithRetry(ctx, addressGroups, syncOp)
+	}
+
+	// For non-DELETE operations, use the standard transaction flow
+	return s.syncAddressGroupsTransaction(ctx, addressGroups, syncOp)
+}
+
+// syncAddressGroupsWithRetry handles DELETE operations with automatic retry on serialization failures
+func (s *AddressGroupResourceService) syncAddressGroupsWithRetry(ctx context.Context, addressGroups []models.AddressGroup, syncOp models.SyncOp) error {
+	// Execute delete with retry logic
+	err := s.registry.ExecuteDeleteWithRetry(ctx, func(writer ports.Writer) error {
+		if err := s.syncAddressGroups(ctx, writer, addressGroups, syncOp); err != nil {
+			return errors.Wrap(err, "failed to sync address groups")
+		}
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// Post-commit: update host binding status (outside transaction)
+	s.updateHostBindingStatusForSyncedAddressGroups(ctx, addressGroups, syncOp)
+
+	return nil
+}
+
+// syncAddressGroupsTransaction handles non-DELETE operations with standard transaction flow
+func (s *AddressGroupResourceService) syncAddressGroupsTransaction(ctx context.Context, addressGroups []models.AddressGroup, syncOp models.SyncOp) error {
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get writer")
@@ -360,20 +391,18 @@ func (s *AddressGroupResourceService) SyncAddressGroups(ctx context.Context, add
 		return errors.Wrap(err, "failed to commit transaction")
 	}
 
-	if syncOp != models.SyncOpDelete {
-		readerForNetworks, err := s.registry.Reader(ctx)
-		if err != nil {
-			klog.Errorf("Failed to get reader for re-reading AddressGroups: %v", err)
-		} else {
-			defer readerForNetworks.Close()
-			for i := range addressGroups {
-				updatedAG, err := readerForNetworks.GetAddressGroupByID(ctx, addressGroups[i].ResourceIdentifier)
-				if err != nil {
-					klog.Errorf("Failed to re-read AddressGroup %s/%s after sync: %v",
-						addressGroups[i].Namespace, addressGroups[i].Name, err)
-				} else {
-					addressGroups[i] = *updatedAG
-				}
+	readerForNetworks, err := s.registry.Reader(ctx)
+	if err != nil {
+		klog.Errorf("Failed to get reader for re-reading AddressGroups: %v", err)
+	} else {
+		defer readerForNetworks.Close()
+		for i := range addressGroups {
+			updatedAG, err := readerForNetworks.GetAddressGroupByID(ctx, addressGroups[i].ResourceIdentifier)
+			if err != nil {
+				klog.Errorf("Failed to re-read AddressGroup %s/%s after sync: %v",
+					addressGroups[i].Namespace, addressGroups[i].Name, err)
+			} else {
+				addressGroups[i] = *updatedAG
 			}
 		}
 	}
@@ -390,8 +419,8 @@ func (s *AddressGroupResourceService) SyncAddressGroups(ctx context.Context, add
 		}
 	}
 
-	// Process conditions after successful commit for each address group (skip for DELETE operations)
-	if s.conditionManager != nil && syncOp != models.SyncOpDelete {
+	// Process conditions after successful commit for each address group
+	if s.conditionManager != nil {
 		for i := range addressGroups {
 			if err := s.conditionManager.ProcessAddressGroupConditions(ctx, &addressGroups[i]); err != nil {
 				klog.Errorf("Failed to process address group conditions for %s/%s: %v",
@@ -400,22 +429,18 @@ func (s *AddressGroupResourceService) SyncAddressGroups(ctx context.Context, add
 		}
 	}
 
-	// Sync with external systems after successful batch sync (skip for DELETE - handled by DeleteAddressGroupsByIDs)
-	if syncOp != models.SyncOpDelete {
-		var externalSyncOp types.SyncOperation
-		switch syncOp {
-		case models.SyncOpUpsert:
-			externalSyncOp = types.SyncOperationUpsert
-		case models.SyncOpFullSync:
-			externalSyncOp = types.SyncOperationUpsert // FullSync uses upsert for external systems
-		default:
-			externalSyncOp = types.SyncOperationUpsert
-		}
-		s.syncAddressGroupsWithSGroups(ctx, addressGroups, externalSyncOp)
-		s.updateHostBindingStatusForSyncedAddressGroups(ctx, addressGroups, syncOp)
-	} else {
-		s.updateHostBindingStatusForSyncedAddressGroups(ctx, addressGroups, syncOp)
+	// Sync with external systems after successful batch sync
+	var externalSyncOp types.SyncOperation
+	switch syncOp {
+	case models.SyncOpUpsert:
+		externalSyncOp = types.SyncOperationUpsert
+	case models.SyncOpFullSync:
+		externalSyncOp = types.SyncOperationUpsert // FullSync uses upsert for external systems
+	default:
+		externalSyncOp = types.SyncOperationUpsert
 	}
+	s.syncAddressGroupsWithSGroups(ctx, addressGroups, externalSyncOp)
+	s.updateHostBindingStatusForSyncedAddressGroups(ctx, addressGroups, syncOp)
 
 	return nil
 }
@@ -531,22 +556,10 @@ func (s *AddressGroupResourceService) DeleteAddressGroupsByIDs(ctx context.Conte
 	}
 
 	if len(networkBindingsToDelete) > 0 {
-		networkBindingWriter, err := s.registry.Writer(ctx)
-		if err != nil {
-			return errors.Wrap(err, "failed to get writer for NetworkBinding deletion")
-		}
-		defer func() {
-			if err != nil {
-				networkBindingWriter.Abort()
-			}
-		}()
-
-		if err := networkBindingWriter.DeleteNetworkBindingsByIDs(ctx, networkBindingsToDelete); err != nil {
+		if err := s.registry.ExecuteDeleteWithRetry(ctx, func(writer ports.Writer) error {
+			return writer.DeleteNetworkBindingsByIDs(ctx, networkBindingsToDelete)
+		}); err != nil {
 			return errors.Wrap(err, "failed to cascade delete NetworkBindings")
-		}
-
-		if err := networkBindingWriter.Commit(); err != nil {
-			return errors.Wrap(err, "failed to commit NetworkBinding deletion")
 		}
 
 		if len(networksToUpdate) > 0 {
@@ -590,22 +603,10 @@ func (s *AddressGroupResourceService) DeleteAddressGroupsByIDs(ctx context.Conte
 		}
 	}
 
-	writer, err := s.registry.Writer(ctx)
-	if err != nil {
-		return errors.Wrap(err, "failed to get writer")
-	}
-	defer func() {
-		if err != nil {
-			writer.Abort()
-		}
-	}()
-
-	if err = writer.DeleteAddressGroupsByIDs(ctx, ids); err != nil {
+	if err := s.registry.ExecuteDeleteWithRetry(ctx, func(writer ports.Writer) error {
+		return writer.DeleteAddressGroupsByIDs(ctx, ids)
+	}); err != nil {
 		return errors.Wrap(err, "failed to delete address groups from storage")
-	}
-
-	if err = writer.Commit(); err != nil {
-		return errors.Wrap(err, "failed to commit transaction")
 	}
 
 	mappingIDs := make([]models.ResourceIdentifier, 0, len(addressGroupsToDelete))
@@ -846,6 +847,58 @@ func (s *AddressGroupResourceService) UpdateAddressGroupBinding(ctx context.Cont
 
 // SyncAddressGroupBindings synchronizes multiple address group bindings
 func (s *AddressGroupResourceService) SyncAddressGroupBindings(ctx context.Context, bindings []models.AddressGroupBinding, scope ports.Scope, syncOp models.SyncOp) error {
+	// For DELETE operations, use ExecuteDeleteWithRetry to handle serialization failures (SQLSTATE 40001)
+	if syncOp == models.SyncOpDelete {
+		return s.syncAddressGroupBindingsWithRetry(ctx, bindings, syncOp)
+	}
+
+	// For non-DELETE operations, use the standard transaction flow
+	return s.syncAddressGroupBindingsTransaction(ctx, bindings, syncOp)
+}
+
+// syncAddressGroupBindingsWithRetry handles DELETE operations with automatic retry on serialization failures
+func (s *AddressGroupResourceService) syncAddressGroupBindingsWithRetry(ctx context.Context, bindings []models.AddressGroupBinding, syncOp models.SyncOp) error {
+	// Collect service IDs before the operation for post-commit notifications
+	serviceIDs := make(map[string]models.ResourceIdentifier)
+	for _, binding := range bindings {
+		key := binding.ServiceRef.Namespace + "/" + binding.ServiceRef.Name
+		serviceIDs[key] = models.ResourceIdentifier{Name: binding.ServiceRef.Name, Namespace: binding.ServiceRef.Namespace}
+	}
+
+	// Execute delete with retry logic
+	err := s.registry.ExecuteDeleteWithRetry(ctx, func(writer ports.Writer) error {
+		if err := s.syncAddressGroupBindings(ctx, writer, bindings, syncOp); err != nil {
+			return errors.Wrap(err, "failed to sync address group bindings")
+		}
+
+		for _, binding := range bindings {
+			if err := s.SyncAddressGroupPortMappingsWithWriter(ctx, writer, binding, syncOp); err != nil {
+				return errors.Wrapf(err, "failed to sync address group port mapping for binding %s", binding.Key())
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// Post-commit: notify RuleS2S regenerator (outside transaction)
+	if s.ruleS2SRegenerator != nil {
+		for key, serviceID := range serviceIDs {
+			if err := s.ruleS2SRegenerator.NotifyServiceAddressGroupsChanged(ctx, serviceID); err != nil {
+				klog.Errorf("Failed to notify RuleS2S regenerator for service %s: %v", key, err)
+				// Don't fail the operation, but log the issue
+			}
+		}
+	}
+
+	return nil
+}
+
+// syncAddressGroupBindingsTransaction handles non-DELETE operations with standard transaction flow
+func (s *AddressGroupResourceService) syncAddressGroupBindingsTransaction(ctx context.Context, bindings []models.AddressGroupBinding, syncOp models.SyncOp) error {
 	writer, err := s.registry.Writer(ctx)
 	if err != nil {
 		return errors.Wrap(err, "failed to get writer")
@@ -870,14 +923,12 @@ func (s *AddressGroupResourceService) SyncAddressGroupBindings(ctx context.Conte
 		return errors.Wrap(err, "failed to commit transaction")
 	}
 
-	if syncOp != models.SyncOpDelete {
-		// Process conditions after successful commit for each address group binding
-		if s.conditionManager != nil {
-			for i := range bindings {
-				if err := s.conditionManager.ProcessAddressGroupBindingConditions(ctx, &bindings[i]); err != nil {
-					klog.Errorf("Failed to process address group binding conditions for %s/%s: %v",
-						bindings[i].Namespace, bindings[i].Name, err)
-				}
+	// Process conditions after successful commit for each address group binding
+	if s.conditionManager != nil {
+		for i := range bindings {
+			if err := s.conditionManager.ProcessAddressGroupBindingConditions(ctx, &bindings[i]); err != nil {
+				klog.Errorf("Failed to process address group binding conditions for %s/%s: %v",
+					bindings[i].Namespace, bindings[i].Name, err)
 			}
 		}
 	}
@@ -949,32 +1000,10 @@ func (s *AddressGroupResourceService) DeleteAddressGroupBindingsByIDs(ctx contex
 	klog.InfoS("DeleteAddressGroupBindings: collected address groups for port mapping regeneration",
 		"count", len(affectedAddressGroups))
 
-	var writer ports.Writer
-	if registryWithDeletes, ok := s.registry.(interface {
-		WriterForDeletes(context.Context) (ports.Writer, error)
-	}); ok {
-		writer, err = registryWithDeletes.WriterForDeletes(ctx)
-		if err != nil {
-			return errors.Wrap(err, "failed to get delete writer with ReadCommitted isolation")
-		}
-	} else {
-		writer, err = s.registry.Writer(ctx)
-		if err != nil {
-			return errors.Wrap(err, "failed to get writer")
-		}
-	}
-	defer func() {
-		if err != nil {
-			writer.Abort()
-		}
-	}()
-
-	if err = writer.DeleteAddressGroupBindingsByIDs(ctx, ids); err != nil {
+	if err := s.registry.ExecuteDeleteWithRetry(ctx, func(writer ports.Writer) error {
+		return writer.DeleteAddressGroupBindingsByIDs(ctx, ids)
+	}); err != nil {
 		return errors.Wrap(err, "failed to delete address group bindings")
-	}
-
-	if err = writer.Commit(); err != nil {
-		return errors.Wrap(err, "failed to commit transaction")
 	}
 
 	if s.ruleS2SRegenerator != nil {
@@ -1203,25 +1232,9 @@ func (s *AddressGroupResourceService) SyncMultipleAddressGroupPortMappings(ctx c
 
 // DeleteAddressGroupPortMappingsByIDs deletes address group port mappings by IDs
 func (s *AddressGroupResourceService) DeleteAddressGroupPortMappingsByIDs(ctx context.Context, ids []models.ResourceIdentifier) error {
-	writer, err := s.registry.Writer(ctx)
-	if err != nil {
-		return errors.Wrap(err, "failed to get writer")
-	}
-	defer func() {
-		if err != nil {
-			writer.Abort()
-		}
-	}()
-
-	if err = writer.DeleteAddressGroupPortMappingsByIDs(ctx, ids); err != nil {
-		return errors.Wrap(err, "failed to delete address group port mappings")
-	}
-
-	if err = writer.Commit(); err != nil {
-		return errors.Wrap(err, "failed to commit transaction")
-	}
-
-	return nil
+	return s.registry.ExecuteDeleteWithRetry(ctx, func(writer ports.Writer) error {
+		return writer.DeleteAddressGroupPortMappingsByIDs(ctx, ids)
+	})
 }
 
 // =============================================================================
@@ -1419,25 +1432,9 @@ func (s *AddressGroupResourceService) SyncAddressGroupBindingPolicies(ctx contex
 
 // DeleteAddressGroupBindingPoliciesByIDs deletes address group binding policies by IDs
 func (s *AddressGroupResourceService) DeleteAddressGroupBindingPoliciesByIDs(ctx context.Context, ids []models.ResourceIdentifier) error {
-	writer, err := s.registry.Writer(ctx)
-	if err != nil {
-		return errors.Wrap(err, "failed to get writer")
-	}
-	defer func() {
-		if err != nil {
-			writer.Abort()
-		}
-	}()
-
-	if err = writer.DeleteAddressGroupBindingPoliciesByIDs(ctx, ids); err != nil {
-		return errors.Wrap(err, "failed to delete address group binding policies")
-	}
-
-	if err = writer.Commit(); err != nil {
-		return errors.Wrap(err, "failed to commit transaction")
-	}
-
-	return nil
+	return s.registry.ExecuteDeleteWithRetry(ctx, func(writer ports.Writer) error {
+		return writer.DeleteAddressGroupBindingPoliciesByIDs(ctx, ids)
+	})
 }
 
 // =============================================================================

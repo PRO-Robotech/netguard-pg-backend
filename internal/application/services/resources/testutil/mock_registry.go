@@ -118,6 +118,22 @@ func (m *MockRegistry) Close() error {
 	return nil
 }
 
+// ExecuteDeleteWithRetry executes a delete operation with automatic retry on serialization failures.
+// In mock implementation, it simply executes the function once without retry logic.
+func (m *MockRegistry) ExecuteDeleteWithRetry(ctx context.Context, fn func(ports.Writer) error) error {
+	writer, err := m.Writer(ctx)
+	if err != nil {
+		return err
+	}
+
+	if err := fn(writer); err != nil {
+		writer.Abort()
+		return err
+	}
+
+	return writer.Commit()
+}
+
 // Helper function to deep copy data
 func copyData(original map[string]interface{}) map[string]interface{} {
 	copy := make(map[string]interface{})
