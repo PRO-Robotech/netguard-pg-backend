@@ -1,7 +1,0 @@
-apiVersion: netguard.sgroups.io/v1beta1
-kind: Host
-metadata:
-  name: test-resilient-host-001
-  namespace: incloud-sgroups
-spec:
-  uuid: "550e8400-e29b-41d4-a716-446655440010"

@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"netguard-pg-backend/internal/application/validation"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
@@ -43,9 +44,16 @@ func TestServiceValidator_ValidateExists(t *testing.T) {
 func TestServiceValidator_CheckDependencies(t *testing.T) {
 	// Create a mock reader with no dependencies
 	mockReader := &MockReaderForServiceValidator{
-		serviceID:   "test-service",
-		hasBindings: false,
+		serviceID:     "test-service",
+		serviceExists: true,
+		hasBindings:   false,
 	}
+	mockReader.InitMockData()
+	// Add service to the mock
+	service := models.Service{
+		SelfRef: models.NewSelfRef(models.NewResourceIdentifier("test-service")),
+	}
+	mockReader.AddService(service)
 
 	validator := validation.NewServiceValidator(mockReader)
 	serviceID := models.NewResourceIdentifier("test-service")
@@ -387,9 +395,14 @@ func TestServiceValidator_ValidateForCreation(t *testing.T) {
 	mockReader := &MockReaderForServiceValidator{}
 	mockReader.InitMockData()
 
-	// Создаем AddressGroup
+	// Создаем AddressGroup с Ready=True условием
 	ag := models.AddressGroup{
 		SelfRef: models.NewSelfRef(models.NewResourceIdentifier("test-ag")),
+		Meta: models.Meta{
+			Conditions: []metav1.Condition{
+				{Type: "Ready", Status: metav1.ConditionTrue, Reason: "Ready", Message: "AddressGroup is ready"},
+			},
+		},
 	}
 	mockReader.AddAddressGroup(ag)
 
@@ -471,9 +484,14 @@ func TestServiceValidator_CheckBindingsPortOverlaps(t *testing.T) {
 	mockReader := &MockReaderForServiceValidator{}
 	mockReader.InitMockData()
 
-	// Создаем AddressGroup
+	// Создаем AddressGroup с Ready=True условием
 	ag := models.AddressGroup{
 		SelfRef: models.NewSelfRef(models.NewResourceIdentifier("test-ag")),
+		Meta: models.Meta{
+			Conditions: []metav1.Condition{
+				{Type: "Ready", Status: metav1.ConditionTrue, Reason: "Ready", Message: "AddressGroup is ready"},
+			},
+		},
 	}
 	mockReader.AddAddressGroup(ag)
 
@@ -506,26 +524,20 @@ func TestServiceValidator_CheckBindingsPortOverlaps(t *testing.T) {
 	mockReader.addressGroupBindings = append(mockReader.addressGroupBindings, binding)
 
 	// Создаем AddressGroupPortMapping для test-ag
+	// Примечание: не добавляем порты test-service в AGPM,
+	// т.к. проверка перекрытия не должна сравнивать сервис с самим собой
 	agpm := models.AddressGroupPortMapping{
 		SelfRef:     models.NewSelfRef(models.NewResourceIdentifier("test-ag")),
 		AccessPorts: make(map[models.ServiceRef]models.ServicePorts),
 	}
 
-	// Добавляем порты other-service в AddressGroupPortMapping
+	// Добавляем порты other-service в AddressGroupPortMapping (порт 80)
 	otherServicePorts := models.ServicePorts{
 		Ports: models.ProtocolPorts{
 			models.TCP: []models.PortRange{{Start: 80, End: 80}},
 		},
 	}
 	agpm.AccessPorts[models.NewServiceRef("other-service")] = otherServicePorts
-
-	// Добавляем порты test-service в AddressGroupPortMapping
-	servicePorts := models.ServicePorts{
-		Ports: models.ProtocolPorts{
-			models.TCP: []models.PortRange{{Start: 8080, End: 8080}},
-		},
-	}
-	agpm.AccessPorts[models.NewServiceRef("test-service")] = servicePorts
 
 	mockReader.AddAddressGroupPortMapping(agpm)
 
@@ -588,9 +600,14 @@ func TestServiceValidator_ValidateForUpdate(t *testing.T) {
 	mockReader := &MockReaderForServiceValidator{}
 	mockReader.InitMockData()
 
-	// Создаем AddressGroup
+	// Создаем AddressGroup с Ready=True условием
 	ag := models.AddressGroup{
 		SelfRef: models.NewSelfRef(models.NewResourceIdentifier("test-ag")),
+		Meta: models.Meta{
+			Conditions: []metav1.Condition{
+				{Type: "Ready", Status: metav1.ConditionTrue, Reason: "Ready", Message: "AddressGroup is ready"},
+			},
+		},
 	}
 	mockReader.AddAddressGroup(ag)
 

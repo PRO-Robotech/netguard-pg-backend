@@ -160,7 +160,9 @@ func TestAddressGroupSyncer_Sync(t *testing.T) {
 	}
 }
 
-func TestAddressGroupSyncer_Sync_DeleteBeforeUpsertWhenNetworksEmpty(t *testing.T) {
+func TestAddressGroupSyncer_Sync_UpsertWhenNetworksEmpty(t *testing.T) {
+	// Updated test: AddressGroupSyncer now only performs a single upsert operation
+	// regardless of networks state (hosts are no longer sent to SGROUP)
 	mockGateway := &MockSGroupGateway{}
 	logger := logr.Discard()
 	syncer := NewAddressGroupSyncer(mockGateway, logger)
@@ -176,17 +178,6 @@ func TestAddressGroupSyncer_Sync_DeleteBeforeUpsertWhenNetworksEmpty(t *testing.
 		Networks:      []models.NetworkItem{},
 	}
 
-	deleteMatcher := mock.MatchedBy(func(req *types.SyncRequest) bool {
-		batch, ok := req.Data.(*pb.SyncSecurityGroups)
-		if !ok || len(batch.Groups) != 1 {
-			return false
-		}
-		grp := batch.Groups[0]
-		return req.Operation == types.SyncOperationDelete &&
-			req.SubjectType == types.SyncSubjectTypeGroups &&
-			grp.GetName() == "incloud-sgroups/ag-clear"
-	})
-
 	upsertMatcher := mock.MatchedBy(func(req *types.SyncRequest) bool {
 		batch, ok := req.Data.(*pb.SyncSecurityGroups)
 		if !ok || len(batch.Groups) != 1 {
@@ -199,7 +190,6 @@ func TestAddressGroupSyncer_Sync_DeleteBeforeUpsertWhenNetworksEmpty(t *testing.
 			len(grp.GetNetworks()) == 0
 	})
 
-	mockGateway.On("Sync", mock.Anything, deleteMatcher).Return(nil).Once()
 	mockGateway.On("Sync", mock.Anything, upsertMatcher).Return(nil).Once()
 
 	err := syncer.Sync(context.Background(), ag, types.SyncOperationUpsert)

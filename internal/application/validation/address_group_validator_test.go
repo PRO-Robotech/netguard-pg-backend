@@ -14,12 +14,13 @@ import (
 func TestAddressGroupValidator_ValidateExists(t *testing.T) {
 	// Create a custom mock reader that returns an address group for the test ID
 	mockReader := &MockReaderForAddressGroupValidator{
-		addressGroupExists: true,
-		addressGroupID:     "test-address-group",
+		addressGroupExists:    true,
+		addressGroupName:      "test-address-group",
+		addressGroupNamespace: "default",
 	}
 
 	validator := validation.NewAddressGroupValidator(mockReader)
-	addressGroupID := models.NewResourceIdentifier("test-address-group")
+	addressGroupID := models.NewResourceIdentifier("test-address-group", models.WithNamespace("default"))
 
 	// Test when address group exists
 	err := validator.ValidateExists(context.Background(), addressGroupID)
@@ -44,13 +45,14 @@ func TestAddressGroupValidator_ValidateExists(t *testing.T) {
 func TestAddressGroupValidator_CheckDependencies(t *testing.T) {
 	// Create a mock reader with no dependencies
 	mockReader := &MockReaderForAddressGroupValidator{
-		addressGroupID: "test-address-group",
-		hasServiceRefs: false,
-		hasBindingRefs: false,
+		addressGroupName:      "test-address-group",
+		addressGroupNamespace: "default",
+		hasServiceRefs:        false,
+		hasBindingRefs:        false,
 	}
 
 	validator := validation.NewAddressGroupValidator(mockReader)
-	addressGroupID := models.NewResourceIdentifier("test-address-group")
+	addressGroupID := models.NewResourceIdentifier("test-address-group", models.WithNamespace("default"))
 
 	// Test when no dependencies exist
 	err := validator.CheckDependencies(context.Background(), addressGroupID)
@@ -86,10 +88,11 @@ func TestAddressGroupValidator_CheckDependencies(t *testing.T) {
 
 // MockReaderForAddressGroupValidator is a specialized mock for testing AddressGroupValidator
 type MockReaderForAddressGroupValidator struct {
-	addressGroupExists bool
-	addressGroupID     string
-	hasServiceRefs     bool
-	hasBindingRefs     bool
+	addressGroupExists    bool
+	addressGroupName      string
+	addressGroupNamespace string
+	hasServiceRefs        bool
+	hasBindingRefs        bool
 }
 
 func (m *MockReaderForAddressGroupValidator) Close() error {
@@ -100,10 +103,10 @@ func (m *MockReaderForAddressGroupValidator) ListServices(ctx context.Context, c
 	if m.hasServiceRefs {
 		service := models.Service{
 			SelfRef: models.SelfRef{
-				ResourceIdentifier: models.NewResourceIdentifier("test-service"),
+				ResourceIdentifier: models.NewResourceIdentifier("test-service", models.WithNamespace(m.addressGroupNamespace)),
 			},
 			AddressGroups: []models.AddressGroupRef{
-				models.NewAddressGroupRef(m.addressGroupID),
+				models.NewAddressGroupRef(m.addressGroupName, models.WithNamespace(m.addressGroupNamespace)),
 			},
 		}
 		return consume(service)
@@ -115,7 +118,7 @@ func (m *MockReaderForAddressGroupValidator) ListAddressGroups(ctx context.Conte
 	if m.addressGroupExists {
 		addressGroup := models.AddressGroup{
 			SelfRef: models.SelfRef{
-				ResourceIdentifier: models.NewResourceIdentifier(m.addressGroupID),
+				ResourceIdentifier: models.NewResourceIdentifier(m.addressGroupName, models.WithNamespace(m.addressGroupNamespace)),
 			},
 		}
 		return consume(addressGroup)
@@ -127,9 +130,9 @@ func (m *MockReaderForAddressGroupValidator) ListAddressGroupBindings(ctx contex
 	if m.hasBindingRefs {
 		binding := models.AddressGroupBinding{
 			SelfRef: models.SelfRef{
-				ResourceIdentifier: models.NewResourceIdentifier("test-binding"),
+				ResourceIdentifier: models.NewResourceIdentifier("test-binding", models.WithNamespace(m.addressGroupNamespace)),
 			},
-			AddressGroupRef: models.NewAddressGroupRef(m.addressGroupID),
+			AddressGroupRef: models.NewAddressGroupRef(m.addressGroupName, models.WithNamespace(m.addressGroupNamespace)),
 		}
 		return consume(binding)
 	}
@@ -149,10 +152,11 @@ func (m *MockReaderForAddressGroupValidator) GetServiceByID(ctx context.Context,
 }
 
 func (m *MockReaderForAddressGroupValidator) GetAddressGroupByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroup, error) {
-	if m.addressGroupExists && id.Key() == m.addressGroupID {
+	expectedID := models.NewResourceIdentifier(m.addressGroupName, models.WithNamespace(m.addressGroupNamespace))
+	if m.addressGroupExists && id.Key() == expectedID.Key() {
 		return &models.AddressGroup{
 			SelfRef: models.SelfRef{
-				ResourceIdentifier: models.NewResourceIdentifier(m.addressGroupID),
+				ResourceIdentifier: expectedID,
 			},
 		}, nil
 	}

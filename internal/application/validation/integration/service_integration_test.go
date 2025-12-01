@@ -7,6 +7,8 @@ import (
 	"netguard-pg-backend/internal/application/validation"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/infrastructure/repositories/mem"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // TestIntegration_ServiceValidation tests the integration of ServiceValidator with the repository
@@ -77,6 +79,11 @@ func TestIntegration_ServiceReferences(t *testing.T) {
 	addressGroupID := models.NewResourceIdentifier("test-address-group")
 	addressGroup := models.AddressGroup{
 		SelfRef: models.SelfRef{ResourceIdentifier: addressGroupID},
+		Meta: models.Meta{
+			Conditions: []metav1.Condition{
+				{Type: "Ready", Status: metav1.ConditionTrue, Reason: "Ready", Message: "AddressGroup is ready"},
+			},
+		},
 	}
 
 	serviceID := models.NewResourceIdentifier("test-service")

@@ -562,6 +562,22 @@ func TestSvcSvcRuleValidator_ValidateForCreation(t *testing.T) {
 				reader.serviceToReady = true
 				reader.hasDuplicateRule = true
 				reader.duplicateRuleKey = "duplicate-rule"
+				reader.duplicateServiceFromRef = netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
+						Name:       "service-from",
+						APIVersion: "netguard.sgroups.io/v1beta1",
+						Kind:       "Service",
+					},
+					Namespace: "default",
+				}
+				reader.duplicateServiceToRef = netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
+						Name:       "service-to",
+						APIVersion: "netguard.sgroups.io/v1beta1",
+						Kind:       "Service",
+					},
+					Namespace: "default",
+				}
 			},
 			wantErr: true,
 			errMsg:  "duplicate SvcSvcRule detected",
@@ -654,7 +670,7 @@ func TestSvcSvcRuleValidator_ValidateForUpdate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "Invalid update - changed ServiceFrom reference",
+			name: "Invalid update - changed ServiceFrom reference (service not found)",
 			oldRule: models.SvcSvcRule{
 				SelfRef: models.SelfRef{
 					ResourceIdentifier: models.NewResourceIdentifier("test-rule", models.WithNamespace("default")),
@@ -706,10 +722,10 @@ func TestSvcSvcRuleValidator_ValidateForUpdate(t *testing.T) {
 				reader.serviceToReady = true
 			},
 			wantErr: true,
-			errMsg:  "cannot change serviceFrom reference",
+			errMsg:  "not found", // Validation checks references first, service doesn't exist
 		},
 		{
-			name: "Invalid update - changed ServiceTo reference",
+			name: "Invalid update - changed ServiceTo reference (service not found)",
 			oldRule: models.SvcSvcRule{
 				SelfRef: models.SelfRef{
 					ResourceIdentifier: models.NewResourceIdentifier("test-rule", models.WithNamespace("default")),
@@ -761,7 +777,7 @@ func TestSvcSvcRuleValidator_ValidateForUpdate(t *testing.T) {
 				reader.serviceToReady = true
 			},
 			wantErr: true,
-			errMsg:  "cannot change serviceTo reference",
+			errMsg:  "not found", // Validation checks references first, service doesn't exist
 		},
 		{
 			name: "Invalid priority in update",
@@ -914,8 +930,8 @@ func (m *MockReaderForSvcSvcRuleValidator) GetSvcSvcRuleByID(ctx context.Context
 }
 
 func (m *MockReaderForSvcSvcRuleValidator) GetServiceByID(ctx context.Context, id models.ResourceIdentifier) (*models.Service, error) {
-	// Check ServiceFrom
-	if m.serviceFromExists && id.Name == "service-from" {
+	// Check ServiceFrom (handle both with and without namespace in name)
+	if m.serviceFromExists && (id.Name == "service-from" || id.Key() == "default/service-from") {
 		svc := &models.Service{
 			SelfRef: models.SelfRef{
 				ResourceIdentifier: id,
@@ -927,14 +943,14 @@ func (m *MockReaderForSvcSvcRuleValidator) GetServiceByID(ctx context.Context, i
 		if m.serviceFromReady {
 			svc.Meta.Conditions = append(svc.Meta.Conditions, metav1.Condition{
 				Type:   "Ready",
-				Status: "True",
+				Status: metav1.ConditionTrue,
 			})
 		}
 		return svc, nil
 	}
 
 	// Check ServiceTo
-	if m.serviceToExists && id.Name == "service-to" {
+	if m.serviceToExists && (id.Name == "service-to" || id.Key() == "default/service-to") {
 		svc := &models.Service{
 			SelfRef: models.SelfRef{
 				ResourceIdentifier: id,
@@ -946,13 +962,13 @@ func (m *MockReaderForSvcSvcRuleValidator) GetServiceByID(ctx context.Context, i
 		if m.serviceToReady {
 			svc.Meta.Conditions = append(svc.Meta.Conditions, metav1.Condition{
 				Type:   "Ready",
-				Status: "True",
+				Status: metav1.ConditionTrue,
 			})
 		}
 		return svc, nil
 	}
 
-	return nil, fmt.Errorf("service not found")
+	return nil, validation.NewEntityNotFoundError("service", id.Key())
 }
 
 // Stub implementations for other ports.Reader methods
@@ -961,6 +977,48 @@ func (m *MockReaderForSvcSvcRuleValidator) Close() error {
 }
 
 func (m *MockReaderForSvcSvcRuleValidator) ListServices(ctx context.Context, consume func(models.Service) error, scope ports.Scope) error {
+	// Return ServiceFrom if it exists
+	if m.serviceFromExists {
+		svc := models.Service{
+			SelfRef: models.SelfRef{
+				ResourceIdentifier: models.NewResourceIdentifier("service-from", models.WithNamespace("default")),
+			},
+			Meta: models.Meta{
+				Conditions: []metav1.Condition{},
+			},
+		}
+		if m.serviceFromReady {
+			svc.Meta.Conditions = append(svc.Meta.Conditions, metav1.Condition{
+				Type:   "Ready",
+				Status: metav1.ConditionTrue,
+			})
+		}
+		if err := consume(svc); err != nil {
+			return err
+		}
+	}
+
+	// Return ServiceTo if it exists
+	if m.serviceToExists {
+		svc := models.Service{
+			SelfRef: models.SelfRef{
+				ResourceIdentifier: models.NewResourceIdentifier("service-to", models.WithNamespace("default")),
+			},
+			Meta: models.Meta{
+				Conditions: []metav1.Condition{},
+			},
+		}
+		if m.serviceToReady {
+			svc.Meta.Conditions = append(svc.Meta.Conditions, metav1.Condition{
+				Type:   "Ready",
+				Status: metav1.ConditionTrue,
+			})
+		}
+		if err := consume(svc); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -1040,16 +1098,8 @@ func (m *MockReaderForSvcSvcRuleValidator) GetHostBindingByID(ctx context.Contex
 	return nil, fmt.Errorf("host binding not found")
 }
 
-func (m *MockReaderForSvcSvcRuleValidator) ListSvcSvcRules(ctx context.Context, consume func(models.SvcSvcRule) error, scope ports.Scope) error {
-	return nil
-}
-
 func (m *MockReaderForSvcSvcRuleValidator) ListSvcFqdnRules(ctx context.Context, consume func(models.SvcFqdnRule) error, scope ports.Scope) error {
 	return nil
-}
-
-func (m *MockReaderForSvcSvcRuleValidator) GetSvcSvcRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcSvcRule, error) {
-	return nil, fmt.Errorf("svc svc rule not found")
 }
 
 func (m *MockReaderForSvcSvcRuleValidator) GetSvcFqdnRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcFqdnRule, error) {
