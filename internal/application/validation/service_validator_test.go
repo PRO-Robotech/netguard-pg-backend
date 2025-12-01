@@ -44,7 +44,6 @@ func TestServiceValidator_CheckDependencies(t *testing.T) {
 	// Create a mock reader with no dependencies
 	mockReader := &MockReaderForServiceValidator{
 		serviceID:   "test-service",
-		hasAliases:  false,
 		hasBindings: false,
 	}
 
@@ -57,20 +56,7 @@ func TestServiceValidator_CheckDependencies(t *testing.T) {
 		t.Errorf("Expected no error, got %v", err)
 	}
 
-	// Test when service alias dependency exists
-	mockReader.hasAliases = true
-	err = validator.CheckDependencies(context.Background(), serviceID)
-	if err == nil {
-		t.Error("Expected error for service alias dependency, got nil")
-	}
-
-	// Check if it's the right type of error
-	if _, ok := err.(*validation.DependencyExistsError); !ok {
-		t.Errorf("Expected DependencyExistsError, got %T", err)
-	}
-
 	// Test when address group binding dependency exists
-	mockReader.hasAliases = false
 	mockReader.hasBindings = true
 	err = validator.CheckDependencies(context.Background(), serviceID)
 	if err == nil {
@@ -87,7 +73,6 @@ func TestServiceValidator_CheckDependencies(t *testing.T) {
 type MockReaderForServiceValidator struct {
 	serviceExists bool
 	serviceID     string
-	hasAliases    bool
 	hasBindings   bool
 
 	// Дополнительные поля для тестирования новых методов
@@ -154,23 +139,6 @@ func (m *MockReaderForServiceValidator) ListAddressGroupPortMappings(ctx context
 	return nil
 }
 
-func (m *MockReaderForServiceValidator) ListRuleS2S(ctx context.Context, consume func(models.RuleS2S) error, scope ports.Scope) error {
-	return nil
-}
-
-func (m *MockReaderForServiceValidator) ListServiceAliases(ctx context.Context, consume func(models.ServiceAlias) error, scope ports.Scope) error {
-	if m.hasAliases {
-		alias := models.ServiceAlias{
-			SelfRef: models.SelfRef{
-				ResourceIdentifier: models.NewResourceIdentifier("test-alias"),
-			},
-			ServiceRef: models.NewServiceRef(m.serviceID),
-		}
-		return consume(alias)
-	}
-	return nil
-}
-
 func (m *MockReaderForServiceValidator) GetSyncStatus(ctx context.Context) (*models.SyncStatus, error) {
 	return nil, nil
 }
@@ -216,14 +184,6 @@ func (m *MockReaderForServiceValidator) GetAddressGroupPortMappingByID(ctx conte
 	}
 
 	return &agpm, nil
-}
-
-func (m *MockReaderForServiceValidator) GetRuleS2SByID(ctx context.Context, id models.ResourceIdentifier) (*models.RuleS2S, error) {
-	return nil, nil
-}
-
-func (m *MockReaderForServiceValidator) GetServiceAliasByID(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error) {
-	return nil, nil
 }
 
 // Вспомогательные методы для настройки мока
@@ -734,16 +694,6 @@ func (m *MockReaderForServiceValidator) GetAddressGroupBindingPolicyByID(ctx con
 	return nil, nil
 }
 
-func (m *MockReaderForServiceValidator) ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAgRule) error, scope ports.Scope) error {
-	return nil
-}
-
-func (m *MockReaderForServiceValidator) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
-	// Since this mock is for ServiceValidator tests, we don't expect this method to be called
-	// But we still return a proper error instead of nil, nil
-	return nil, validation.NewEntityNotFoundError("IEAgAgRule", id.Key())
-}
-
 // Additional missing methods for ports.Reader interface
 func (m *MockReaderForServiceValidator) ListNetworks(ctx context.Context, consume func(models.Network) error, scope ports.Scope) error {
 	return nil
@@ -784,4 +734,24 @@ func (m *MockReaderForServiceValidator) ListHosts(ctx context.Context, consume f
 // GetNetworkByCIDR returns a network by CIDR
 func (m *MockReaderForServiceValidator) GetNetworkByCIDR(ctx context.Context, cidr string) (*models.Network, error) {
 	return nil, validation.NewEntityNotFoundError("Network", cidr)
+}
+
+func (m *MockReaderForServiceValidator) GetNetworksOverlappingCIDR(ctx context.Context, cidr string) ([]*models.Network, error) {
+	return nil, nil
+}
+
+func (m *MockReaderForServiceValidator) ListSvcSvcRules(ctx context.Context, consume func(models.SvcSvcRule) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReaderForServiceValidator) ListSvcFqdnRules(ctx context.Context, consume func(models.SvcFqdnRule) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReaderForServiceValidator) GetSvcSvcRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcSvcRule, error) {
+	return nil, validation.NewEntityNotFoundError("SvcSvcRule", id.Key())
+}
+
+func (m *MockReaderForServiceValidator) GetSvcFqdnRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcFqdnRule, error) {
+	return nil, validation.NewEntityNotFoundError("SvcFqdnRule", id.Key())
 }

@@ -1067,10 +1067,6 @@ func (s *BaseStorage[K, D]) startWatchStream(ctx context.Context, req *netguardp
 		return s.backendClient.WatchAddressGroupPortMappings(ctx, req)
 	case "addressgroupbindingpolicies":
 		return s.backendClient.WatchAddressGroupBindingPolicies(ctx, req)
-	case "rules2s":
-		return s.backendClient.WatchRuleS2S(ctx, req)
-	case "servicealiases":
-		return s.backendClient.WatchServiceAliases(ctx, req)
 	case "hosts":
 		return s.backendClient.WatchHosts(ctx, req)
 	case "hostbindings":
@@ -1079,8 +1075,6 @@ func (s *BaseStorage[K, D]) startWatchStream(ctx context.Context, req *netguardp
 		return s.backendClient.WatchNetworks(ctx, req)
 	case "networkbindings":
 		return s.backendClient.WatchNetworkBindings(ctx, req)
-	case "ieagagrules":
-		return s.backendClient.WatchIEAgAgRules(ctx, req)
 	case "svcsvcrules":
 		return s.backendClient.WatchSvcSvcRules(ctx, req)
 	case "svcfqdnrules":

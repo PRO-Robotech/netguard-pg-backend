@@ -116,14 +116,6 @@ func (v *BaseValidator) IsReadyConditionTrue(obj interface{}) bool {
 		return o.Meta.IsReady()
 	case models.AddressGroupBinding:
 		return o.Meta.IsReady()
-	case *models.ServiceAlias:
-		return o.Meta.IsReady()
-	case models.ServiceAlias:
-		return o.Meta.IsReady()
-	case *models.RuleS2S:
-		return o.Meta.IsReady()
-	case models.RuleS2S:
-		return o.Meta.IsReady()
 	case *models.AddressGroupPortMapping:
 		return o.Meta.IsReady()
 	case models.AddressGroupPortMapping:
@@ -131,10 +123,6 @@ func (v *BaseValidator) IsReadyConditionTrue(obj interface{}) bool {
 	case *models.AddressGroupBindingPolicy:
 		return o.Meta.IsReady()
 	case models.AddressGroupBindingPolicy:
-		return o.Meta.IsReady()
-	case *models.IEAgAgRule:
-		return o.Meta.IsReady()
-	case models.IEAgAgRule:
 		return o.Meta.IsReady()
 	case *models.Network:
 		return o.Meta.IsReady()

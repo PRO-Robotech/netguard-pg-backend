@@ -360,22 +360,6 @@ func (v *ServiceValidator) ValidateForUpdate(ctx context.Context, oldService, ne
 }
 
 func (v *ServiceValidator) CheckDependencies(ctx context.Context, id models.ResourceIdentifier) error {
-	hasAliases := false
-	err := v.reader.ListServiceAliases(ctx, func(alias models.ServiceAlias) error {
-		if alias.ServiceRefKey() == id.Key() {
-			hasAliases = true
-		}
-		return nil
-	}, nil)
-
-	if err != nil {
-		return errors.Wrap(err, "failed to check service aliases")
-	}
-
-	if hasAliases {
-		return NewDependencyExistsError("service", id.Key(), "service_alias")
-	}
-
 	service, err := v.reader.GetServiceByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, ports.ErrNotFound) {

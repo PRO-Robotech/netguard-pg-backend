@@ -976,19 +976,7 @@ func (m *MockReaderForSvcSvcRuleValidator) ListAddressGroupPortMappings(ctx cont
 	return nil
 }
 
-func (m *MockReaderForSvcSvcRuleValidator) ListRuleS2S(ctx context.Context, consume func(models.RuleS2S) error, scope ports.Scope) error {
-	return nil
-}
-
-func (m *MockReaderForSvcSvcRuleValidator) ListServiceAliases(ctx context.Context, consume func(models.ServiceAlias) error, scope ports.Scope) error {
-	return nil
-}
-
 func (m *MockReaderForSvcSvcRuleValidator) ListAddressGroupBindingPolicies(ctx context.Context, consume func(models.AddressGroupBindingPolicy) error, scope ports.Scope) error {
-	return nil
-}
-
-func (m *MockReaderForSvcSvcRuleValidator) ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAgRule) error, scope ports.Scope) error {
 	return nil
 }
 
@@ -1024,20 +1012,8 @@ func (m *MockReaderForSvcSvcRuleValidator) GetAddressGroupPortMappingByID(ctx co
 	return nil, fmt.Errorf("address group port mapping not found")
 }
 
-func (m *MockReaderForSvcSvcRuleValidator) GetRuleS2SByID(ctx context.Context, id models.ResourceIdentifier) (*models.RuleS2S, error) {
-	return nil, fmt.Errorf("rule s2s not found")
-}
-
-func (m *MockReaderForSvcSvcRuleValidator) GetServiceAliasByID(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error) {
-	return nil, fmt.Errorf("service alias not found")
-}
-
 func (m *MockReaderForSvcSvcRuleValidator) GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
 	return nil, fmt.Errorf("address group binding policy not found")
-}
-
-func (m *MockReaderForSvcSvcRuleValidator) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
-	return nil, fmt.Errorf("ieagag rule not found")
 }
 
 func (m *MockReaderForSvcSvcRuleValidator) GetNetworkByID(ctx context.Context, id models.ResourceIdentifier) (*models.Network, error) {
@@ -1062,4 +1038,20 @@ func (m *MockReaderForSvcSvcRuleValidator) GetHostByID(ctx context.Context, id m
 
 func (m *MockReaderForSvcSvcRuleValidator) GetHostBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.HostBinding, error) {
 	return nil, fmt.Errorf("host binding not found")
+}
+
+func (m *MockReaderForSvcSvcRuleValidator) ListSvcSvcRules(ctx context.Context, consume func(models.SvcSvcRule) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReaderForSvcSvcRuleValidator) ListSvcFqdnRules(ctx context.Context, consume func(models.SvcFqdnRule) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReaderForSvcSvcRuleValidator) GetSvcSvcRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcSvcRule, error) {
+	return nil, fmt.Errorf("svc svc rule not found")
+}
+
+func (m *MockReaderForSvcSvcRuleValidator) GetSvcFqdnRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcFqdnRule, error) {
+	return nil, fmt.Errorf("svc fqdn rule not found")
 }

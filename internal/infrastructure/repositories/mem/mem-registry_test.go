@@ -7,7 +7,6 @@ import (
 
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
-	"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 )
 
 func TestMemRegistry(t *testing.T) {
@@ -275,92 +274,6 @@ func TestMemRegistryAddressGroupPortMappings(t *testing.T) {
 	}
 }
 
-func TestMemRegistryRuleS2S(t *testing.T) {
-	registry := NewRegistry()
-	defer registry.Close()
-
-	ctx := context.Background()
-
-	// Test Writer
-	writer, err := registry.Writer(ctx)
-	if err != nil {
-		t.Fatalf("Failed to get writer: %v", err)
-	}
-
-	// Create test data
-	rules := []models.RuleS2S{
-		{
-			SelfRef: models.NewSelfRef(models.NewResourceIdentifier("web-to-db", models.WithNamespace("default"))),
-			Traffic: models.EGRESS,
-			ServiceLocalRef: v1beta1.NamespacedObjectReference{
-				ObjectReference: v1beta1.ObjectReference{
-					APIVersion: "netguard.sgroups.io/v1beta1",
-					Kind:       "ServiceAlias",
-					Name:       "web",
-				},
-				Namespace: "default",
-			},
-			ServiceRef: v1beta1.NamespacedObjectReference{
-				ObjectReference: v1beta1.ObjectReference{
-					APIVersion: "netguard.sgroups.io/v1beta1",
-					Kind:       "ServiceAlias",
-					Name:       "db",
-				},
-				Namespace: "default",
-			},
-		},
-	}
-
-	// Sync data
-	err = writer.SyncRuleS2S(ctx, rules, ports.EmptyScope{})
-	if err != nil {
-		t.Fatalf("Failed to sync rule s2s: %v", err)
-	}
-
-	// Commit changes
-	err = writer.Commit()
-	if err != nil {
-		t.Fatalf("Failed to commit: %v", err)
-	}
-
-	// Test Reader
-	reader, err := registry.Reader(ctx)
-	if err != nil {
-		t.Fatalf("Failed to get reader: %v", err)
-	}
-	defer reader.Close()
-
-	// Check that data was saved
-	var foundRules []models.RuleS2S
-	err = reader.ListRuleS2S(ctx, func(rule models.RuleS2S) error {
-		foundRules = append(foundRules, rule)
-		return nil
-	}, ports.EmptyScope{})
-	if err != nil {
-		t.Fatalf("Failed to list rule s2s: %v", err)
-	}
-
-	if len(foundRules) != 1 {
-		t.Fatalf("Expected 1 rule, got %d", len(foundRules))
-	}
-
-	if foundRules[0].Name != "web-to-db" {
-		t.Errorf("Expected name 'web-to-db', got '%s'", foundRules[0].Name)
-	}
-
-	if foundRules[0].Traffic != models.EGRESS {
-		t.Errorf("Expected traffic EGRESS, got %s", foundRules[0].Traffic)
-	}
-
-	if foundRules[0].ServiceLocalRef.Name != "web" {
-		t.Errorf("Expected local service name 'web', got '%s'", foundRules[0].ServiceLocalRef.Name)
-	}
-
-	if foundRules[0].ServiceRef.Name != "db" {
-		t.Errorf("Expected service name 'db', got '%s'", foundRules[0].ServiceRef.Name)
-	}
-}
-
 func TestMemRegistrySyncStatus(t *testing.T) {
 	registry := NewRegistry()
 	defer registry.Close()
@@ -413,72 +326,6 @@ func TestMemRegistrySyncStatus(t *testing.T) {
 	// Check that the updated at time is recent
 	if time.Since(status.UpdatedAt) > time.Minute {
 		t.Errorf("Expected recent updated at time, got %v", status.UpdatedAt)
-	}
-}
-
-func TestMemRegistryServiceAliases(t *testing.T) {
-	registry := NewRegistry()
-	defer registry.Close()
-
-	ctx := context.Background()
-
-	// Test Writer
-	writer, err := registry.Writer(ctx)
-	if err != nil {
-		t.Fatalf("Failed to get writer: %v", err)
-	}
-
-	// Create test data
-	aliases := []models.ServiceAlias{
-		{
-			SelfRef:    models.NewSelfRef(models.NewResourceIdentifier("web-alias", models.WithNamespace("default"))),
-			ServiceRef: models.NewServiceRef("web", models.WithNamespace("default")),
-		},
-	}
-
-	// Sync data
-	err = writer.SyncServiceAliases(ctx, aliases, ports.EmptyScope{})
-	if err != nil {
-		t.Fatalf("Failed to sync service aliases: %v", err)
-	}
-
-	// Commit changes
-	err = writer.Commit()
-	if err != nil {
-		t.Fatalf("Failed to commit: %v", err)
-	}
-
-	// Test Reader
-	reader, err := registry.Reader(ctx)
-	if err != nil {
-		t.Fatalf("Failed to get reader: %v", err)
-	}
-	defer reader.Close()
-
-	// Check that data was saved
-	var foundAliases []models.ServiceAlias
-	err = reader.ListServiceAliases(ctx, func(alias models.ServiceAlias) error {
-		foundAliases = append(foundAliases, alias)
-		return nil
-	}, ports.EmptyScope{})
-	if err != nil {
-		t.Fatalf("Failed to list service aliases: %v", err)
-	}
-
-	if len(foundAliases) != 1 {
-		t.Fatalf("Expected 1 service alias, got %d", len(foundAliases))
-	}
-
-	if foundAliases[0].Name != "web-alias" {
-		t.Errorf("Expected name 'web-alias', got '%s'", foundAliases[0].Name)
-	}
-
-	if foundAliases[0].ServiceRef.Name != "web" {
-		t.Errorf("Expected service name 'web', got '%s'", foundAliases[0].ServiceRef.Name)
-	}
-
-	if foundAliases[0].ServiceRef.Namespace != "default" {
-		t.Errorf("Expected service namespace 'default', got '%s'", foundAliases[0].ServiceRef.Namespace)
 	}
 }
 

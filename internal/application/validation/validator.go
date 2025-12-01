@@ -40,16 +40,6 @@ func (v *DependencyValidator) GetAddressGroupBindingValidator() *AddressGroupBin
 	return NewAddressGroupBindingValidator(v.reader)
 }
 
-// GetServiceAliasValidator returns a validator for service aliases
-func (v *DependencyValidator) GetServiceAliasValidator() *ServiceAliasValidator {
-	return NewServiceAliasValidator(v.reader)
-}
-
-// GetRuleS2SValidator returns a validator for rule s2s
-func (v *DependencyValidator) GetRuleS2SValidator() *RuleS2SValidator {
-	return NewRuleS2SValidator(v.reader)
-}
-
 // GetAddressGroupPortMappingValidator returns a validator for address group port mappings
 func (v *DependencyValidator) GetAddressGroupPortMappingValidator() *AddressGroupPortMappingValidator {
 	return NewAddressGroupPortMappingValidator(v.reader)
@@ -58,11 +48,6 @@ func (v *DependencyValidator) GetAddressGroupPortMappingValidator() *AddressGrou
 // GetAddressGroupBindingPolicyValidator returns a validator for address group binding policies
 func (v *DependencyValidator) GetAddressGroupBindingPolicyValidator() *AddressGroupBindingPolicyValidator {
 	return NewAddressGroupBindingPolicyValidator(v.reader)
-}
-
-// GetIEAgAgRuleValidator returns a validator for IEAgAgRule
-func (v *DependencyValidator) GetIEAgAgRuleValidator() *IEAgAgRuleValidator {
-	return NewIEAgAgRuleValidator(v.reader)
 }
 
 // GetNetworkValidator returns a validator for networks
@@ -137,46 +122,6 @@ func NewAddressGroupBindingValidator(reader ports.Reader) *AddressGroupBindingVa
 	return &AddressGroupBindingValidator{
 		reader:        reader,
 		BaseValidator: NewBaseValidator(reader, "address_group_binding", listFunction),
-	}
-}
-
-// ServiceAliasValidator provides methods for validating service aliases
-type ServiceAliasValidator struct {
-	reader        ports.Reader
-	BaseValidator *BaseValidator
-}
-
-// NewServiceAliasValidator creates a new service alias validator
-func NewServiceAliasValidator(reader ports.Reader) *ServiceAliasValidator {
-	listFunction := func(ctx context.Context, consume func(entity interface{}) error, scope ports.Scope) error {
-		return reader.ListServiceAliases(ctx, func(alias models.ServiceAlias) error {
-			return consume(&alias) // Передаем указатель вместо значения
-		}, scope)
-	}
-
-	return &ServiceAliasValidator{
-		reader:        reader,
-		BaseValidator: NewBaseValidator(reader, "service_alias", listFunction),
-	}
-}
-
-// RuleS2SValidator provides methods for validating rule s2s
-type RuleS2SValidator struct {
-	reader        ports.Reader
-	BaseValidator *BaseValidator
-}
-
-// NewRuleS2SValidator creates a new rule s2s validator
-func NewRuleS2SValidator(reader ports.Reader) *RuleS2SValidator {
-	listFunction := func(ctx context.Context, consume func(entity interface{}) error, scope ports.Scope) error {
-		return reader.ListRuleS2S(ctx, func(rule models.RuleS2S) error {
-			return consume(&rule) // Передаем указатель вместо значения
-		}, scope)
-	}
-
-	return &RuleS2SValidator{
-		reader:        reader,
-		BaseValidator: NewBaseValidator(reader, "rule_s2s", listFunction),
 	}
 }
 

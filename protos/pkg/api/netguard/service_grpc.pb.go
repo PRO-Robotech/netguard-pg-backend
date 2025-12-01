@@ -31,10 +31,6 @@ const (
 	NetguardService_GetAddressGroupBinding_FullMethodName           = "/netguard.v1.NetguardService/GetAddressGroupBinding"
 	NetguardService_ListAddressGroupPortMappings_FullMethodName     = "/netguard.v1.NetguardService/ListAddressGroupPortMappings"
 	NetguardService_GetAddressGroupPortMapping_FullMethodName       = "/netguard.v1.NetguardService/GetAddressGroupPortMapping"
-	NetguardService_ListRuleS2S_FullMethodName                      = "/netguard.v1.NetguardService/ListRuleS2S"
-	NetguardService_GetRuleS2S_FullMethodName                       = "/netguard.v1.NetguardService/GetRuleS2S"
-	NetguardService_ListServiceAliases_FullMethodName               = "/netguard.v1.NetguardService/ListServiceAliases"
-	NetguardService_GetServiceAlias_FullMethodName                  = "/netguard.v1.NetguardService/GetServiceAlias"
 	NetguardService_ListAddressGroupBindingPolicies_FullMethodName  = "/netguard.v1.NetguardService/ListAddressGroupBindingPolicies"
 	NetguardService_GetAddressGroupBindingPolicy_FullMethodName     = "/netguard.v1.NetguardService/GetAddressGroupBindingPolicy"
 	NetguardService_ListHosts_FullMethodName                        = "/netguard.v1.NetguardService/ListHosts"
@@ -45,8 +41,6 @@ const (
 	NetguardService_GetNetwork_FullMethodName                       = "/netguard.v1.NetguardService/GetNetwork"
 	NetguardService_ListNetworkBindings_FullMethodName              = "/netguard.v1.NetguardService/ListNetworkBindings"
 	NetguardService_GetNetworkBinding_FullMethodName                = "/netguard.v1.NetguardService/GetNetworkBinding"
-	NetguardService_ListIEAgAgRules_FullMethodName                  = "/netguard.v1.NetguardService/ListIEAgAgRules"
-	NetguardService_GetIEAgAgRule_FullMethodName                    = "/netguard.v1.NetguardService/GetIEAgAgRule"
 	NetguardService_ListSvcSvcRules_FullMethodName                  = "/netguard.v1.NetguardService/ListSvcSvcRules"
 	NetguardService_GetSvcSvcRule_FullMethodName                    = "/netguard.v1.NetguardService/GetSvcSvcRule"
 	NetguardService_ListSvcFqdnRules_FullMethodName                 = "/netguard.v1.NetguardService/ListSvcFqdnRules"
@@ -55,14 +49,11 @@ const (
 	NetguardService_WatchAddressGroups_FullMethodName               = "/netguard.v1.NetguardService/WatchAddressGroups"
 	NetguardService_WatchAddressGroupBindings_FullMethodName        = "/netguard.v1.NetguardService/WatchAddressGroupBindings"
 	NetguardService_WatchAddressGroupPortMappings_FullMethodName    = "/netguard.v1.NetguardService/WatchAddressGroupPortMappings"
-	NetguardService_WatchRuleS2S_FullMethodName                     = "/netguard.v1.NetguardService/WatchRuleS2S"
-	NetguardService_WatchServiceAliases_FullMethodName              = "/netguard.v1.NetguardService/WatchServiceAliases"
 	NetguardService_WatchAddressGroupBindingPolicies_FullMethodName = "/netguard.v1.NetguardService/WatchAddressGroupBindingPolicies"
 	NetguardService_WatchHosts_FullMethodName                       = "/netguard.v1.NetguardService/WatchHosts"
 	NetguardService_WatchHostBindings_FullMethodName                = "/netguard.v1.NetguardService/WatchHostBindings"
 	NetguardService_WatchNetworks_FullMethodName                    = "/netguard.v1.NetguardService/WatchNetworks"
 	NetguardService_WatchNetworkBindings_FullMethodName             = "/netguard.v1.NetguardService/WatchNetworkBindings"
-	NetguardService_WatchIEAgAgRules_FullMethodName                 = "/netguard.v1.NetguardService/WatchIEAgAgRules"
 	NetguardService_WatchSvcSvcRules_FullMethodName                 = "/netguard.v1.NetguardService/WatchSvcSvcRules"
 	NetguardService_WatchSvcFqdnRules_FullMethodName                = "/netguard.v1.NetguardService/WatchSvcFqdnRules"
 )
@@ -82,10 +73,6 @@ type NetguardServiceClient interface {
 	GetAddressGroupBinding(ctx context.Context, in *GetAddressGroupBindingReq, opts ...grpc.CallOption) (*GetAddressGroupBindingResp, error)
 	ListAddressGroupPortMappings(ctx context.Context, in *ListAddressGroupPortMappingsReq, opts ...grpc.CallOption) (*ListAddressGroupPortMappingsResp, error)
 	GetAddressGroupPortMapping(ctx context.Context, in *GetAddressGroupPortMappingReq, opts ...grpc.CallOption) (*GetAddressGroupPortMappingResp, error)
-	ListRuleS2S(ctx context.Context, in *ListRuleS2SReq, opts ...grpc.CallOption) (*ListRuleS2SResp, error)
-	GetRuleS2S(ctx context.Context, in *GetRuleS2SReq, opts ...grpc.CallOption) (*GetRuleS2SResp, error)
-	ListServiceAliases(ctx context.Context, in *ListServiceAliasesReq, opts ...grpc.CallOption) (*ListServiceAliasesResp, error)
-	GetServiceAlias(ctx context.Context, in *GetServiceAliasReq, opts ...grpc.CallOption) (*GetServiceAliasResp, error)
 	ListAddressGroupBindingPolicies(ctx context.Context, in *ListAddressGroupBindingPoliciesReq, opts ...grpc.CallOption) (*ListAddressGroupBindingPoliciesResp, error)
 	GetAddressGroupBindingPolicy(ctx context.Context, in *GetAddressGroupBindingPolicyReq, opts ...grpc.CallOption) (*GetAddressGroupBindingPolicyResp, error)
 	ListHosts(ctx context.Context, in *ListHostsReq, opts ...grpc.CallOption) (*ListHostsResp, error)
@@ -96,8 +83,6 @@ type NetguardServiceClient interface {
 	GetNetwork(ctx context.Context, in *GetNetworkReq, opts ...grpc.CallOption) (*GetNetworkResp, error)
 	ListNetworkBindings(ctx context.Context, in *ListNetworkBindingsReq, opts ...grpc.CallOption) (*ListNetworkBindingsResp, error)
 	GetNetworkBinding(ctx context.Context, in *GetNetworkBindingReq, opts ...grpc.CallOption) (*GetNetworkBindingResp, error)
-	ListIEAgAgRules(ctx context.Context, in *ListIEAgAgRulesReq, opts ...grpc.CallOption) (*ListIEAgAgRulesResp, error)
-	GetIEAgAgRule(ctx context.Context, in *GetIEAgAgRuleReq, opts ...grpc.CallOption) (*GetIEAgAgRuleResp, error)
 	ListSvcSvcRules(ctx context.Context, in *ListSvcSvcRulesReq, opts ...grpc.CallOption) (*ListSvcSvcRulesResp, error)
 	GetSvcSvcRule(ctx context.Context, in *GetSvcSvcRuleReq, opts ...grpc.CallOption) (*GetSvcSvcRuleResp, error)
 	ListSvcFqdnRules(ctx context.Context, in *ListSvcFqdnRulesReq, opts ...grpc.CallOption) (*ListSvcFqdnRulesResp, error)
@@ -106,14 +91,11 @@ type NetguardServiceClient interface {
 	WatchAddressGroups(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error)
 	WatchAddressGroupBindings(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error)
 	WatchAddressGroupPortMappings(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error)
-	WatchRuleS2S(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error)
-	WatchServiceAliases(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error)
 	WatchAddressGroupBindingPolicies(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error)
 	WatchHosts(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error)
 	WatchHostBindings(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error)
 	WatchNetworks(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error)
 	WatchNetworkBindings(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error)
-	WatchIEAgAgRules(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error)
 	WatchSvcSvcRules(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error)
 	WatchSvcFqdnRules(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error)
 }
@@ -236,46 +218,6 @@ func (c *netguardServiceClient) GetAddressGroupPortMapping(ctx context.Context, 
 	return out, nil
 }
 
-func (c *netguardServiceClient) ListRuleS2S(ctx context.Context, in *ListRuleS2SReq, opts ...grpc.CallOption) (*ListRuleS2SResp, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListRuleS2SResp)
-	err := c.cc.Invoke(ctx, NetguardService_ListRuleS2S_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *netguardServiceClient) GetRuleS2S(ctx context.Context, in *GetRuleS2SReq, opts ...grpc.CallOption) (*GetRuleS2SResp, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetRuleS2SResp)
-	err := c.cc.Invoke(ctx, NetguardService_GetRuleS2S_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *netguardServiceClient) ListServiceAliases(ctx context.Context, in *ListServiceAliasesReq, opts ...grpc.CallOption) (*ListServiceAliasesResp, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListServiceAliasesResp)
-	err := c.cc.Invoke(ctx, NetguardService_ListServiceAliases_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *netguardServiceClient) GetServiceAlias(ctx context.Context, in *GetServiceAliasReq, opts ...grpc.CallOption) (*GetServiceAliasResp, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetServiceAliasResp)
-	err := c.cc.Invoke(ctx, NetguardService_GetServiceAlias_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *netguardServiceClient) ListAddressGroupBindingPolicies(ctx context.Context, in *ListAddressGroupBindingPoliciesReq, opts ...grpc.CallOption) (*ListAddressGroupBindingPoliciesResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListAddressGroupBindingPoliciesResp)
@@ -370,26 +312,6 @@ func (c *netguardServiceClient) GetNetworkBinding(ctx context.Context, in *GetNe
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetNetworkBindingResp)
 	err := c.cc.Invoke(ctx, NetguardService_GetNetworkBinding_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *netguardServiceClient) ListIEAgAgRules(ctx context.Context, in *ListIEAgAgRulesReq, opts ...grpc.CallOption) (*ListIEAgAgRulesResp, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListIEAgAgRulesResp)
-	err := c.cc.Invoke(ctx, NetguardService_ListIEAgAgRules_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *netguardServiceClient) GetIEAgAgRule(ctx context.Context, in *GetIEAgAgRuleReq, opts ...grpc.CallOption) (*GetIEAgAgRuleResp, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetIEAgAgRuleResp)
-	err := c.cc.Invoke(ctx, NetguardService_GetIEAgAgRule_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -512,47 +434,9 @@ func (c *netguardServiceClient) WatchAddressGroupPortMappings(ctx context.Contex
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type NetguardService_WatchAddressGroupPortMappingsClient = grpc.ServerStreamingClient[WatchEvent]
 
-func (c *netguardServiceClient) WatchRuleS2S(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &NetguardService_ServiceDesc.Streams[4], NetguardService_WatchRuleS2S_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[WatchRequest, WatchEvent]{ClientStream: stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type NetguardService_WatchRuleS2SClient = grpc.ServerStreamingClient[WatchEvent]
-
-func (c *netguardServiceClient) WatchServiceAliases(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &NetguardService_ServiceDesc.Streams[5], NetguardService_WatchServiceAliases_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[WatchRequest, WatchEvent]{ClientStream: stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type NetguardService_WatchServiceAliasesClient = grpc.ServerStreamingClient[WatchEvent]
-
 func (c *netguardServiceClient) WatchAddressGroupBindingPolicies(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &NetguardService_ServiceDesc.Streams[6], NetguardService_WatchAddressGroupBindingPolicies_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &NetguardService_ServiceDesc.Streams[4], NetguardService_WatchAddressGroupBindingPolicies_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -571,7 +455,7 @@ type NetguardService_WatchAddressGroupBindingPoliciesClient = grpc.ServerStreami
 
 func (c *netguardServiceClient) WatchHosts(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &NetguardService_ServiceDesc.Streams[7], NetguardService_WatchHosts_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &NetguardService_ServiceDesc.Streams[5], NetguardService_WatchHosts_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -590,7 +474,7 @@ type NetguardService_WatchHostsClient = grpc.ServerStreamingClient[WatchEvent]
 
 func (c *netguardServiceClient) WatchHostBindings(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &NetguardService_ServiceDesc.Streams[8], NetguardService_WatchHostBindings_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &NetguardService_ServiceDesc.Streams[6], NetguardService_WatchHostBindings_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -609,7 +493,7 @@ type NetguardService_WatchHostBindingsClient = grpc.ServerStreamingClient[WatchE
 
 func (c *netguardServiceClient) WatchNetworks(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &NetguardService_ServiceDesc.Streams[9], NetguardService_WatchNetworks_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &NetguardService_ServiceDesc.Streams[7], NetguardService_WatchNetworks_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -628,7 +512,7 @@ type NetguardService_WatchNetworksClient = grpc.ServerStreamingClient[WatchEvent
 
 func (c *netguardServiceClient) WatchNetworkBindings(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &NetguardService_ServiceDesc.Streams[10], NetguardService_WatchNetworkBindings_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &NetguardService_ServiceDesc.Streams[8], NetguardService_WatchNetworkBindings_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -645,28 +529,9 @@ func (c *netguardServiceClient) WatchNetworkBindings(ctx context.Context, in *Wa
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type NetguardService_WatchNetworkBindingsClient = grpc.ServerStreamingClient[WatchEvent]
 
-func (c *netguardServiceClient) WatchIEAgAgRules(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &NetguardService_ServiceDesc.Streams[11], NetguardService_WatchIEAgAgRules_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[WatchRequest, WatchEvent]{ClientStream: stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type NetguardService_WatchIEAgAgRulesClient = grpc.ServerStreamingClient[WatchEvent]
-
 func (c *netguardServiceClient) WatchSvcSvcRules(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &NetguardService_ServiceDesc.Streams[12], NetguardService_WatchSvcSvcRules_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &NetguardService_ServiceDesc.Streams[9], NetguardService_WatchSvcSvcRules_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -685,7 +550,7 @@ type NetguardService_WatchSvcSvcRulesClient = grpc.ServerStreamingClient[WatchEv
 
 func (c *netguardServiceClient) WatchSvcFqdnRules(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &NetguardService_ServiceDesc.Streams[13], NetguardService_WatchSvcFqdnRules_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &NetguardService_ServiceDesc.Streams[10], NetguardService_WatchSvcFqdnRules_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -717,10 +582,6 @@ type NetguardServiceServer interface {
 	GetAddressGroupBinding(context.Context, *GetAddressGroupBindingReq) (*GetAddressGroupBindingResp, error)
 	ListAddressGroupPortMappings(context.Context, *ListAddressGroupPortMappingsReq) (*ListAddressGroupPortMappingsResp, error)
 	GetAddressGroupPortMapping(context.Context, *GetAddressGroupPortMappingReq) (*GetAddressGroupPortMappingResp, error)
-	ListRuleS2S(context.Context, *ListRuleS2SReq) (*ListRuleS2SResp, error)
-	GetRuleS2S(context.Context, *GetRuleS2SReq) (*GetRuleS2SResp, error)
-	ListServiceAliases(context.Context, *ListServiceAliasesReq) (*ListServiceAliasesResp, error)
-	GetServiceAlias(context.Context, *GetServiceAliasReq) (*GetServiceAliasResp, error)
 	ListAddressGroupBindingPolicies(context.Context, *ListAddressGroupBindingPoliciesReq) (*ListAddressGroupBindingPoliciesResp, error)
 	GetAddressGroupBindingPolicy(context.Context, *GetAddressGroupBindingPolicyReq) (*GetAddressGroupBindingPolicyResp, error)
 	ListHosts(context.Context, *ListHostsReq) (*ListHostsResp, error)
@@ -731,8 +592,6 @@ type NetguardServiceServer interface {
 	GetNetwork(context.Context, *GetNetworkReq) (*GetNetworkResp, error)
 	ListNetworkBindings(context.Context, *ListNetworkBindingsReq) (*ListNetworkBindingsResp, error)
 	GetNetworkBinding(context.Context, *GetNetworkBindingReq) (*GetNetworkBindingResp, error)
-	ListIEAgAgRules(context.Context, *ListIEAgAgRulesReq) (*ListIEAgAgRulesResp, error)
-	GetIEAgAgRule(context.Context, *GetIEAgAgRuleReq) (*GetIEAgAgRuleResp, error)
 	ListSvcSvcRules(context.Context, *ListSvcSvcRulesReq) (*ListSvcSvcRulesResp, error)
 	GetSvcSvcRule(context.Context, *GetSvcSvcRuleReq) (*GetSvcSvcRuleResp, error)
 	ListSvcFqdnRules(context.Context, *ListSvcFqdnRulesReq) (*ListSvcFqdnRulesResp, error)
@@ -741,14 +600,11 @@ type NetguardServiceServer interface {
 	WatchAddressGroups(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error
 	WatchAddressGroupBindings(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error
 	WatchAddressGroupPortMappings(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error
-	WatchRuleS2S(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error
-	WatchServiceAliases(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error
 	WatchAddressGroupBindingPolicies(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error
 	WatchHosts(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error
 	WatchHostBindings(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error
 	WatchNetworks(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error
 	WatchNetworkBindings(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error
-	WatchIEAgAgRules(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error
 	WatchSvcSvcRules(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error
 	WatchSvcFqdnRules(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error
 	mustEmbedUnimplementedNetguardServiceServer()
@@ -794,18 +650,6 @@ func (UnimplementedNetguardServiceServer) ListAddressGroupPortMappings(context.C
 func (UnimplementedNetguardServiceServer) GetAddressGroupPortMapping(context.Context, *GetAddressGroupPortMappingReq) (*GetAddressGroupPortMappingResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetAddressGroupPortMapping not implemented")
 }
-func (UnimplementedNetguardServiceServer) ListRuleS2S(context.Context, *ListRuleS2SReq) (*ListRuleS2SResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListRuleS2S not implemented")
-}
-func (UnimplementedNetguardServiceServer) GetRuleS2S(context.Context, *GetRuleS2SReq) (*GetRuleS2SResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetRuleS2S not implemented")
-}
-func (UnimplementedNetguardServiceServer) ListServiceAliases(context.Context, *ListServiceAliasesReq) (*ListServiceAliasesResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListServiceAliases not implemented")
-}
-func (UnimplementedNetguardServiceServer) GetServiceAlias(context.Context, *GetServiceAliasReq) (*GetServiceAliasResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetServiceAlias not implemented")
-}
 func (UnimplementedNetguardServiceServer) ListAddressGroupBindingPolicies(context.Context, *ListAddressGroupBindingPoliciesReq) (*ListAddressGroupBindingPoliciesResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListAddressGroupBindingPolicies not implemented")
 }
@@ -836,12 +680,6 @@ func (UnimplementedNetguardServiceServer) ListNetworkBindings(context.Context, *
 func (UnimplementedNetguardServiceServer) GetNetworkBinding(context.Context, *GetNetworkBindingReq) (*GetNetworkBindingResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetNetworkBinding not implemented")
 }
-func (UnimplementedNetguardServiceServer) ListIEAgAgRules(context.Context, *ListIEAgAgRulesReq) (*ListIEAgAgRulesResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListIEAgAgRules not implemented")
-}
-func (UnimplementedNetguardServiceServer) GetIEAgAgRule(context.Context, *GetIEAgAgRuleReq) (*GetIEAgAgRuleResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetIEAgAgRule not implemented")
-}
 func (UnimplementedNetguardServiceServer) ListSvcSvcRules(context.Context, *ListSvcSvcRulesReq) (*ListSvcSvcRulesResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListSvcSvcRules not implemented")
 }
@@ -866,12 +704,6 @@ func (UnimplementedNetguardServiceServer) WatchAddressGroupBindings(*WatchReques
 func (UnimplementedNetguardServiceServer) WatchAddressGroupPortMappings(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error {
 	return status.Errorf(codes.Unimplemented, "method WatchAddressGroupPortMappings not implemented")
 }
-func (UnimplementedNetguardServiceServer) WatchRuleS2S(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error {
-	return status.Errorf(codes.Unimplemented, "method WatchRuleS2S not implemented")
-}
-func (UnimplementedNetguardServiceServer) WatchServiceAliases(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error {
-	return status.Errorf(codes.Unimplemented, "method WatchServiceAliases not implemented")
-}
 func (UnimplementedNetguardServiceServer) WatchAddressGroupBindingPolicies(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error {
 	return status.Errorf(codes.Unimplemented, "method WatchAddressGroupBindingPolicies not implemented")
 }
@@ -886,9 +718,6 @@ func (UnimplementedNetguardServiceServer) WatchNetworks(*WatchRequest, grpc.Serv
 }
 func (UnimplementedNetguardServiceServer) WatchNetworkBindings(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error {
 	return status.Errorf(codes.Unimplemented, "method WatchNetworkBindings not implemented")
-}
-func (UnimplementedNetguardServiceServer) WatchIEAgAgRules(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error {
-	return status.Errorf(codes.Unimplemented, "method WatchIEAgAgRules not implemented")
 }
 func (UnimplementedNetguardServiceServer) WatchSvcSvcRules(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error {
 	return status.Errorf(codes.Unimplemented, "method WatchSvcSvcRules not implemented")
@@ -1115,78 +944,6 @@ func _NetguardService_GetAddressGroupPortMapping_Handler(srv interface{}, ctx co
 	return interceptor(ctx, in, info, handler)
 }
 
-func _NetguardService_ListRuleS2S_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListRuleS2SReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NetguardServiceServer).ListRuleS2S(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: NetguardService_ListRuleS2S_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NetguardServiceServer).ListRuleS2S(ctx, req.(*ListRuleS2SReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _NetguardService_GetRuleS2S_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetRuleS2SReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NetguardServiceServer).GetRuleS2S(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: NetguardService_GetRuleS2S_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NetguardServiceServer).GetRuleS2S(ctx, req.(*GetRuleS2SReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _NetguardService_ListServiceAliases_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListServiceAliasesReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NetguardServiceServer).ListServiceAliases(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: NetguardService_ListServiceAliases_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NetguardServiceServer).ListServiceAliases(ctx, req.(*ListServiceAliasesReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _NetguardService_GetServiceAlias_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetServiceAliasReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NetguardServiceServer).GetServiceAlias(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: NetguardService_GetServiceAlias_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NetguardServiceServer).GetServiceAlias(ctx, req.(*GetServiceAliasReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _NetguardService_ListAddressGroupBindingPolicies_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListAddressGroupBindingPoliciesReq)
 	if err := dec(in); err != nil {
@@ -1367,42 +1124,6 @@ func _NetguardService_GetNetworkBinding_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
-func _NetguardService_ListIEAgAgRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListIEAgAgRulesReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NetguardServiceServer).ListIEAgAgRules(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: NetguardService_ListIEAgAgRules_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NetguardServiceServer).ListIEAgAgRules(ctx, req.(*ListIEAgAgRulesReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _NetguardService_GetIEAgAgRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetIEAgAgRuleReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(NetguardServiceServer).GetIEAgAgRule(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: NetguardService_GetIEAgAgRule_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NetguardServiceServer).GetIEAgAgRule(ctx, req.(*GetIEAgAgRuleReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _NetguardService_ListSvcSvcRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListSvcSvcRulesReq)
 	if err := dec(in); err != nil {
@@ -1519,28 +1240,6 @@ func _NetguardService_WatchAddressGroupPortMappings_Handler(srv interface{}, str
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type NetguardService_WatchAddressGroupPortMappingsServer = grpc.ServerStreamingServer[WatchEvent]
 
-func _NetguardService_WatchRuleS2S_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(WatchRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(NetguardServiceServer).WatchRuleS2S(m, &grpc.GenericServerStream[WatchRequest, WatchEvent]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type NetguardService_WatchRuleS2SServer = grpc.ServerStreamingServer[WatchEvent]
-
-func _NetguardService_WatchServiceAliases_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(WatchRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(NetguardServiceServer).WatchServiceAliases(m, &grpc.GenericServerStream[WatchRequest, WatchEvent]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type NetguardService_WatchServiceAliasesServer = grpc.ServerStreamingServer[WatchEvent]
-
 func _NetguardService_WatchAddressGroupBindingPolicies_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(WatchRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -1595,17 +1294,6 @@ func _NetguardService_WatchNetworkBindings_Handler(srv interface{}, stream grpc.
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type NetguardService_WatchNetworkBindingsServer = grpc.ServerStreamingServer[WatchEvent]
-
-func _NetguardService_WatchIEAgAgRules_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(WatchRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(NetguardServiceServer).WatchIEAgAgRules(m, &grpc.GenericServerStream[WatchRequest, WatchEvent]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type NetguardService_WatchIEAgAgRulesServer = grpc.ServerStreamingServer[WatchEvent]
 
 func _NetguardService_WatchSvcSvcRules_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(WatchRequest)
@@ -1681,22 +1369,6 @@ var NetguardService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _NetguardService_GetAddressGroupPortMapping_Handler,
 		},
 		{
-			MethodName: "ListRuleS2S",
-			Handler:    _NetguardService_ListRuleS2S_Handler,
-		},
-		{
-			MethodName: "GetRuleS2S",
-			Handler:    _NetguardService_GetRuleS2S_Handler,
-		},
-		{
-			MethodName: "ListServiceAliases",
-			Handler:    _NetguardService_ListServiceAliases_Handler,
-		},
-		{
-			MethodName: "GetServiceAlias",
-			Handler:    _NetguardService_GetServiceAlias_Handler,
-		},
-		{
 			MethodName: "ListAddressGroupBindingPolicies",
 			Handler:    _NetguardService_ListAddressGroupBindingPolicies_Handler,
 		},
@@ -1737,14 +1409,6 @@ var NetguardService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _NetguardService_GetNetworkBinding_Handler,
 		},
 		{
-			MethodName: "ListIEAgAgRules",
-			Handler:    _NetguardService_ListIEAgAgRules_Handler,
-		},
-		{
-			MethodName: "GetIEAgAgRule",
-			Handler:    _NetguardService_GetIEAgAgRule_Handler,
-		},
-		{
 			MethodName: "ListSvcSvcRules",
 			Handler:    _NetguardService_ListSvcSvcRules_Handler,
 		},
@@ -1783,16 +1447,6 @@ var NetguardService_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 		{
-			StreamName:    "WatchRuleS2S",
-			Handler:       _NetguardService_WatchRuleS2S_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "WatchServiceAliases",
-			Handler:       _NetguardService_WatchServiceAliases_Handler,
-			ServerStreams: true,
-		},
-		{
 			StreamName:    "WatchAddressGroupBindingPolicies",
 			Handler:       _NetguardService_WatchAddressGroupBindingPolicies_Handler,
 			ServerStreams: true,
@@ -1815,11 +1469,6 @@ var NetguardService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "WatchNetworkBindings",
 			Handler:       _NetguardService_WatchNetworkBindings_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "WatchIEAgAgRules",
-			Handler:       _NetguardService_WatchIEAgAgRules_Handler,
 			ServerStreams: true,
 		},
 		{

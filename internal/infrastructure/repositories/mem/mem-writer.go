@@ -17,9 +17,6 @@ type writer struct {
 	addressGroupBindings        map[string]models.AddressGroupBinding
 	addressGroupPortMappings    map[string]models.AddressGroupPortMapping
 	addressGroupBindingPolicies map[string]models.AddressGroupBindingPolicy
-	ruleS2S                     map[string]models.RuleS2S
-	serviceAliases              map[string]models.ServiceAlias
-	ieAgAgRules                 map[string]models.IEAgAgRule
 	networks                    map[string]models.Network
 	networkBindings             map[string]models.NetworkBinding
 	hosts                       map[string]models.Host
@@ -421,200 +418,6 @@ func (w *writer) SyncAddressGroupPortMappings(ctx context.Context, mappings []mo
 	return nil
 }
 
-func (w *writer) SyncRuleS2S(ctx context.Context, rules []models.RuleS2S, scope ports.Scope, opts ...ports.Option) error {
-	// Определение операции (по умолчанию FullSync)
-	syncOp := models.SyncOpFullSync
-
-	// Извлечение опций
-	for _, opt := range opts {
-		if so, ok := opt.(ports.SyncOption); ok {
-			syncOp = so.Operation
-		}
-	}
-
-	// Инициализация карты, если она еще не создана
-	if w.ruleS2S == nil {
-		w.ruleS2S = make(map[string]models.RuleS2S)
-		// Всегда копируем существующие правила, чтобы иметь полную карту для работы
-		for k, v := range w.registry.db.GetRuleS2S() {
-			w.ruleS2S[k] = v
-		}
-	}
-
-	// Обработка в зависимости от типа операции
-	switch syncOp {
-	case models.SyncOpFullSync:
-		// Если scope не пустой, удаляем только правила в указанной области
-		if scope != nil && !scope.IsEmpty() {
-			// Проверяем, что scope имеет тип ResourceIdentifierScope
-			if ris, ok := scope.(ports.ResourceIdentifierScope); ok && !ris.IsEmpty() {
-				// Создаем временную карту для хранения правил вне области видимости
-				tempRules := make(map[string]models.RuleS2S)
-
-				// Создаем карту идентификаторов в области видимости для быстрого поиска
-				scopeIds := make(map[string]bool)
-				for _, id := range ris.Identifiers {
-					scopeIds[id.Key()] = true
-				}
-
-				// Сохраняем правила вне области видимости
-				for k, v := range w.ruleS2S {
-					if !scopeIds[k] {
-						tempRules[k] = v
-					}
-				}
-
-				// Очищаем карту и восстанавливаем правила вне области видимости
-				w.ruleS2S = make(map[string]models.RuleS2S)
-				for k, v := range tempRules {
-					w.ruleS2S[k] = v
-				}
-			} else {
-				// Если scope не ResourceIdentifierScope, но не пустой,
-				// то мы не знаем, как его обрабатывать, поэтому не удаляем ничего
-			}
-		} else {
-			// Если область пуста, очищаем всю карту
-			w.ruleS2S = make(map[string]models.RuleS2S)
-		}
-
-		// Добавляем новые правила
-		for _, rule := range rules {
-			key := rule.Key()
-			if existing, ok := w.ruleS2S[key]; ok {
-				if rule.Meta.CreationTS.IsZero() {
-					rule.Meta.CreationTS = existing.Meta.CreationTS
-				}
-				if rule.Meta.UID == "" {
-					rule.Meta.UID = existing.Meta.UID
-				}
-			}
-			ensureMetaFill(&rule.Meta)
-			w.ruleS2S[key] = rule
-		}
-
-	case models.SyncOpUpsert:
-		// Только добавление и обновление
-		for _, rule := range rules {
-			key := rule.Key()
-			if existing, ok := w.ruleS2S[key]; ok {
-				if rule.Meta.CreationTS.IsZero() {
-					rule.Meta.CreationTS = existing.Meta.CreationTS
-				}
-				if rule.Meta.UID == "" {
-					rule.Meta.UID = existing.Meta.UID
-				}
-			}
-			ensureMetaFill(&rule.Meta)
-			w.ruleS2S[key] = rule
-		}
-
-	case models.SyncOpDelete:
-		// Только удаление
-		for _, rule := range rules {
-			delete(w.ruleS2S, rule.Key())
-		}
-	}
-
-	return nil
-}
-
-func (w *writer) SyncServiceAliases(ctx context.Context, aliases []models.ServiceAlias, scope ports.Scope, opts ...ports.Option) error {
-	// Определение операции (по умолчанию FullSync)
-	syncOp := models.SyncOpFullSync
-
-	// Извлечение опций
-	for _, opt := range opts {
-		if so, ok := opt.(ports.SyncOption); ok {
-			syncOp = so.Operation
-		}
-	}
-
-	// Инициализация карты, если она еще не создана
-	if w.serviceAliases == nil {
-		w.serviceAliases = make(map[string]models.ServiceAlias)
-		// Всегда копируем существующие алиасы сервисов, чтобы иметь полную карту для работы
-		for k, v := range w.registry.db.GetServiceAliases() {
-			w.serviceAliases[k] = v
-		}
-	}
-
-	// Обработка в зависимости от типа операции
-	switch syncOp {
-	case models.SyncOpFullSync:
-		// Если scope не пустой, удаляем только алиасы сервисов в указанной области
-		if scope != nil && !scope.IsEmpty() {
-			// Проверяем, что scope имеет тип ResourceIdentifierScope
-			if ris, ok := scope.(ports.ResourceIdentifierScope); ok && !ris.IsEmpty() {
-				// Создаем временную карту для хранения алиасов сервисов вне области видимости
-				tempAliases := make(map[string]models.ServiceAlias)
-
-				// Создаем карту идентификаторов в области видимости для быстрого поиска
-				scopeIds := make(map[string]bool)
-				for _, id := range ris.Identifiers {
-					scopeIds[id.Key()] = true
-				}
-
-				// Сохраняем алиасы сервисов вне области видимости
-				for k, v := range w.serviceAliases {
-					if !scopeIds[k] {
-						tempAliases[k] = v
-					}
-				}
-
-				// Очищаем карту и восстанавливаем алиасы сервисов вне области видимости
-				w.serviceAliases = make(map[string]models.ServiceAlias)
-				for k, v := range tempAliases {
-					w.serviceAliases[k] = v
-				}
-			} else {
-				// Если scope не ResourceIdentifierScope, но не пустой,
-				// то мы не знаем, как его обрабатывать, поэтому не удаляем ничего
-			}
-		} else {
-			// Если область пуста, очищаем всю карту
-			w.serviceAliases = make(map[string]models.ServiceAlias)
-		}
-
-		// Добавляем новые алиасы сервисов
-		for _, alias := range aliases {
-			if existing, ok := w.serviceAliases[alias.Key()]; ok {
-				if alias.Meta.CreationTS.IsZero() {
-					alias.Meta.CreationTS = existing.Meta.CreationTS
-				}
-				if alias.Meta.UID == "" {
-					alias.Meta.UID = existing.Meta.UID
-				}
-			}
-			ensureMetaFill(&alias.Meta)
-			w.serviceAliases[alias.Key()] = alias
-		}
-
-	case models.SyncOpUpsert:
-		// Только добавление и обновление
-		for _, alias := range aliases {
-			if existing, ok := w.serviceAliases[alias.Key()]; ok {
-				if alias.Meta.CreationTS.IsZero() {
-					alias.Meta.CreationTS = existing.Meta.CreationTS
-				}
-				if alias.Meta.UID == "" {
-					alias.Meta.UID = existing.Meta.UID
-				}
-			}
-			ensureMetaFill(&alias.Meta)
-			w.serviceAliases[alias.Key()] = alias
-		}
-
-	case models.SyncOpDelete:
-		// Только удаление
-		for _, alias := range aliases {
-			delete(w.serviceAliases, alias.Key())
-		}
-	}
-
-	return nil
-}
-
 func (w *writer) SyncAddressGroupBindingPolicies(ctx context.Context, policies []models.AddressGroupBindingPolicy, scope ports.Scope, opts ...ports.Option) error {
 	// Определение операции (по умолчанию FullSync)
 	syncOp := models.SyncOpFullSync
@@ -712,9 +515,6 @@ func (w *writer) Commit() error {
 	} else {
 	}
 
-	if w.serviceAliases != nil {
-		w.registry.db.SetServiceAliases(w.serviceAliases)
-	}
 	if w.addressGroups != nil {
 		for _, _ = range w.addressGroups {
 		}
@@ -729,12 +529,6 @@ func (w *writer) Commit() error {
 	}
 	if w.addressGroupBindingPolicies != nil {
 		w.registry.db.SetAddressGroupBindingPolicies(w.addressGroupBindingPolicies)
-	}
-	if w.ruleS2S != nil {
-		w.registry.db.SetRuleS2S(w.ruleS2S)
-	}
-	if w.ieAgAgRules != nil {
-		w.registry.db.SetIEAgAgRules(w.ieAgAgRules)
 	}
 
 	if w.networks != nil {
@@ -842,40 +636,6 @@ func (w *writer) DeleteAddressGroupPortMappingsByIDs(ctx context.Context, ids []
 	return nil
 }
 
-// DeleteRuleS2SByIDs deletes rule s2s by IDs
-func (w *writer) DeleteRuleS2SByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
-	if w.ruleS2S == nil {
-		w.ruleS2S = make(map[string]models.RuleS2S)
-		// Copy existing rule s2s
-		for k, v := range w.registry.db.GetRuleS2S() {
-			w.ruleS2S[k] = v
-		}
-	}
-
-	for _, id := range ids {
-		delete(w.ruleS2S, id.Key())
-	}
-
-	return nil
-}
-
-// DeleteServiceAliasesByIDs deletes service aliases by IDs
-func (w *writer) DeleteServiceAliasesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
-	if w.serviceAliases == nil {
-		w.serviceAliases = make(map[string]models.ServiceAlias)
-		// Copy existing service aliases
-		for k, v := range w.registry.db.GetServiceAliases() {
-			w.serviceAliases[k] = v
-		}
-	}
-
-	for _, id := range ids {
-		delete(w.serviceAliases, id.Key())
-	}
-
-	return nil
-}
-
 // DeleteAddressGroupBindingPoliciesByIDs deletes address group binding policies by IDs
 func (w *writer) DeleteAddressGroupBindingPoliciesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
 	if w.addressGroupBindingPolicies == nil {
@@ -888,124 +648,6 @@ func (w *writer) DeleteAddressGroupBindingPoliciesByIDs(ctx context.Context, ids
 
 	for _, id := range ids {
 		delete(w.addressGroupBindingPolicies, id.Key())
-	}
-
-	return nil
-}
-
-// SyncIEAgAgRules синхронизирует правила IEAgAgRule
-func (w *writer) SyncIEAgAgRules(ctx context.Context, rules []models.IEAgAgRule, scope ports.Scope, opts ...ports.Option) error {
-	// Определение операции (по умолчанию FullSync)
-	syncOp := models.SyncOpFullSync
-
-	// Извлечение опций
-	for _, opt := range opts {
-		if so, ok := opt.(ports.SyncOption); ok {
-			syncOp = so.Operation
-		}
-	}
-
-	// Инициализация карты, если она еще не создана
-	if w.ieAgAgRules == nil {
-		w.ieAgAgRules = make(map[string]models.IEAgAgRule)
-		// Всегда копируем существующие правила, чтобы иметь полную карту для работы
-		for k, v := range w.registry.db.GetIEAgAgRules() {
-			w.ieAgAgRules[k] = v
-		}
-	}
-
-	// Обработка в зависимости от типа операции
-	switch syncOp {
-	case models.SyncOpFullSync:
-		// Если scope не пустой, удаляем только правила в указанной области
-		if scope != nil && !scope.IsEmpty() {
-			// Проверяем, что scope имеет тип ResourceIdentifierScope
-			if ris, ok := scope.(ports.ResourceIdentifierScope); ok && !ris.IsEmpty() {
-				// Создаем временную карту для хранения правил вне области видимости
-				tempRules := make(map[string]models.IEAgAgRule)
-
-				// Создаем карту идентификаторов в области видимости для быстрого поиска
-				scopeIds := make(map[string]bool)
-				for _, id := range ris.Identifiers {
-					scopeIds[id.Key()] = true
-				}
-
-				// Сохраняем правила вне области видимости
-				for k, v := range w.ieAgAgRules {
-					if !scopeIds[k] {
-						tempRules[k] = v
-					}
-				}
-
-				// Очищаем карту и восстанавливаем правила вне области видимости
-				w.ieAgAgRules = make(map[string]models.IEAgAgRule)
-				for k, v := range tempRules {
-					w.ieAgAgRules[k] = v
-				}
-			} else {
-				// Если scope не ResourceIdentifierScope, но не пустой,
-				// то мы не знаем, как его обрабатывать, поэтому не удаляем ничего
-			}
-		} else {
-			// Если область пуста, очищаем всю карту
-			w.ieAgAgRules = make(map[string]models.IEAgAgRule)
-		}
-
-		// Добавляем новые правила
-		for _, rule := range rules {
-			key := rule.Key()
-			if existing, ok := w.ieAgAgRules[key]; ok {
-				if rule.Meta.CreationTS.IsZero() {
-					rule.Meta.CreationTS = existing.Meta.CreationTS
-				}
-				if rule.Meta.UID == "" {
-					rule.Meta.UID = existing.Meta.UID
-				}
-			}
-			ensureMetaFill(&rule.Meta)
-			w.ieAgAgRules[key] = rule
-		}
-
-	case models.SyncOpUpsert:
-		// Только добавление и обновление
-		for _, rule := range rules {
-			key := rule.Key()
-			if existing, ok := w.ieAgAgRules[key]; ok {
-				if rule.Meta.CreationTS.IsZero() {
-					rule.Meta.CreationTS = existing.Meta.CreationTS
-				}
-				if rule.Meta.UID == "" {
-					rule.Meta.UID = existing.Meta.UID
-				}
-			}
-			ensureMetaFill(&rule.Meta)
-			w.ieAgAgRules[key] = rule
-		}
-
-	case models.SyncOpDelete:
-		// Только удаление
-		for _, rule := range rules {
-			delete(w.ieAgAgRules, rule.Key())
-		}
-	}
-
-	return nil
-}
-
-// DeleteIEAgAgRulesByIDs deletes IEAgAgRules by IDs
-func (w *writer) DeleteIEAgAgRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
-	// Инициализация карты, если она еще не создана
-	if w.ieAgAgRules == nil {
-		w.ieAgAgRules = make(map[string]models.IEAgAgRule)
-		// Всегда копируем существующие правила, чтобы иметь полную карту для работы
-		for k, v := range w.registry.db.GetIEAgAgRules() {
-			w.ieAgAgRules[k] = v
-		}
-	}
-
-	// Удаляем правила по идентификаторам
-	for _, id := range ids {
-		delete(w.ieAgAgRules, id.Key())
 	}
 
 	return nil
@@ -1499,9 +1141,6 @@ func (w *writer) Abort() {
 	w.addressGroupBindings = nil
 	w.addressGroupPortMappings = nil
 	w.addressGroupBindingPolicies = nil
-	w.ruleS2S = nil
-	w.serviceAliases = nil
-	w.ieAgAgRules = nil
 	w.networks = nil
 	w.networkBindings = nil
 	w.hosts = nil

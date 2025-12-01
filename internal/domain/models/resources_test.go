@@ -3,8 +3,6 @@ package models
 import (
 	"testing"
 	"time"
-
-	"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 )
 
 func TestTransportProtocolConstants(t *testing.T) {
@@ -163,23 +161,6 @@ func TestAddressGroupBinding(t *testing.T) {
 	}
 }
 
-func TestNewServiceAlias(t *testing.T) {
-	srvAlias := ServiceAlias{
-		SelfRef:    NewSelfRef(NewResourceIdentifier("alias-to-web", WithNamespace("default"))),
-		ServiceRef: serviceRefWebDef,
-	}
-
-	if srvAlias.Key() != "default/alias-to-web" {
-		t.Errorf("Expected name 'default/alias-to-web', got '%s'", srvAlias.Key())
-
-	}
-
-	if ServiceRefKey(srvAlias.ServiceRef) != "default/web" {
-		t.Errorf("Expected name 'default/web', got '%s'", ServiceRefKey(srvAlias.ServiceRef))
-
-	}
-}
-
 func TestAddressGroupPortMapping(t *testing.T) {
 	mapping := AddressGroupPortMapping{
 		SelfRef: NewSelfRef(NewResourceIdentifier("internal-ports", WithNamespace("default"))),
@@ -213,45 +194,6 @@ func TestAddressGroupPortMapping(t *testing.T) {
 	tcpRanges := svcPorts.Ports[TCP]
 	if len(tcpRanges) != 2 {
 		t.Errorf("Expected 2 TCP port ranges, got %d", len(tcpRanges))
-	}
-}
-
-func TestRuleS2S(t *testing.T) {
-	rule := RuleS2S{
-		SelfRef: NewSelfRef(NewResourceIdentifier("web-to-db", WithNamespace("default"))),
-		Traffic: EGRESS,
-		ServiceLocalRef: v1beta1.NamespacedObjectReference{
-			ObjectReference: v1beta1.ObjectReference{
-				APIVersion: "netguard.sgroups.io/v1beta1",
-				Kind:       "ServiceAlias",
-				Name:       "alias-web",
-			},
-			Namespace: "default",
-		},
-		ServiceRef: v1beta1.NamespacedObjectReference{
-			ObjectReference: v1beta1.ObjectReference{
-				APIVersion: "netguard.sgroups.io/v1beta1",
-				Kind:       "ServiceAlias",
-				Name:       "alias-db",
-			},
-			Namespace: "default",
-		},
-	}
-
-	if rule.Key() != "default/web-to-db" {
-		t.Errorf("Expected name 'default/web-to-db', got '%s'", rule.Key())
-	}
-
-	if rule.Traffic != EGRESS {
-		t.Errorf("Expected traffic EGRESS, got %s", rule.Traffic)
-	}
-
-	if rule.ServiceLocalRef.Namespace+"/"+rule.ServiceLocalRef.Name != "default/alias-web" {
-		t.Errorf("Expected local service name 'default/alias-web', got '%s'", rule.ServiceLocalRef.Namespace+"/"+rule.ServiceLocalRef.Name)
-	}
-
-	if rule.ServiceRef.Namespace+"/"+rule.ServiceRef.Name != "default/alias-db" {
-		t.Errorf("Expected service name 'default/alias-db', got '%s'", rule.ServiceRef.Namespace+"/"+rule.ServiceRef.Name)
 	}
 }
 

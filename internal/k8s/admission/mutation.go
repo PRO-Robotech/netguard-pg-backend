@@ -55,18 +55,12 @@ func (w *MutationWebhook) Handle(ctx context.Context, req *admissionv1.Admission
 		return w.mutateAddressGroupBinding(ctx, req)
 	case "AddressGroupPortMapping":
 		return w.mutateAddressGroupPortMapping(ctx, req)
-	case "RuleS2S":
-		return w.mutateRuleS2S(ctx, req)
 	case "SvcSvcRule":
 		return w.mutateSvcSvcRule(ctx, req)
 	case "SvcFqdnRule":
 		return w.mutateSvcFqdnRule(ctx, req)
-	case "ServiceAlias":
-		return w.mutateServiceAlias(ctx, req)
 	case "AddressGroupBindingPolicy":
 		return w.mutateAddressGroupBindingPolicy(ctx, req)
-	case "IEAgAgRule":
-		return w.mutateIEAgAgRule(ctx, req)
 	case "HostBinding":
 		return w.mutateHostBinding(ctx, req)
 	case "NetworkBinding":
@@ -219,45 +213,6 @@ func (w *MutationWebhook) mutateAddressGroupPortMapping(ctx context.Context, req
 	return w.createPatchResponse(req.UID, patches)
 }
 
-// mutateRuleS2S applies mutations to RuleS2S resources
-func (w *MutationWebhook) mutateRuleS2S(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
-	var rule netguardv1beta1.RuleS2S
-	if err := runtime.DecodeInto(w.decoder, req.Object.Raw, &rule); err != nil {
-		return w.errorResponse(req.UID, fmt.Sprintf("Failed to decode RuleS2S: %v", err))
-	}
-
-	var patches []map[string]interface{}
-
-	// Add managed-by label
-	patches = append(patches, w.addManagedByLabel(&rule)...)
-
-	// Add created-by annotation
-	patches = append(patches, w.addCreatedByAnnotation(&rule)...)
-
-	// Add finalizer for graceful deletion
-	patches = append(patches, w.addFinalizer(&rule, "netguard.sgroups.io/backend-sync")...)
-
-	// Normalize namespace in ServiceLocalRef if empty
-	if rule.Spec.ServiceLocalRef.Namespace == "" {
-		patches = append(patches, map[string]interface{}{
-			"op":    "replace",
-			"path":  "/spec/serviceLocalRef/namespace",
-			"value": rule.Namespace,
-		})
-	}
-
-	// Normalize namespace in ServiceRef if empty
-	if rule.Spec.ServiceRef.Namespace == "" {
-		patches = append(patches, map[string]interface{}{
-			"op":    "replace",
-			"path":  "/spec/serviceRef/namespace",
-			"value": rule.Namespace,
-		})
-	}
-
-	return w.createPatchResponse(req.UID, patches)
-}
-
 // mutateSvcSvcRule applies mutations to SvcSvcRule resources
 func (w *MutationWebhook) mutateSvcSvcRule(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
 	var rule netguardv1beta1.SvcSvcRule
@@ -331,36 +286,6 @@ func (w *MutationWebhook) mutateSvcFqdnRule(ctx context.Context, req *admissionv
 	return w.createPatchResponse(req.UID, patches)
 }
 
-// mutateServiceAlias applies mutations to ServiceAlias resources
-func (w *MutationWebhook) mutateServiceAlias(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
-	var alias netguardv1beta1.ServiceAlias
-	if err := runtime.DecodeInto(w.decoder, req.Object.Raw, &alias); err != nil {
-		return w.errorResponse(req.UID, fmt.Sprintf("Failed to decode ServiceAlias: %v", err))
-	}
-
-	var patches []map[string]interface{}
-
-	// Add managed-by label
-	patches = append(patches, w.addManagedByLabel(&alias)...)
-
-	// Add created-by annotation
-	patches = append(patches, w.addCreatedByAnnotation(&alias)...)
-
-	// Add finalizer for graceful deletion
-	patches = append(patches, w.addFinalizer(&alias, "netguard.sgroups.io/backend-sync")...)
-
-	// Normalize namespace in ServiceRef if empty - ServiceAlias and Service must be in same namespace
-	if alias.Spec.ServiceRef.Namespace == "" {
-		patches = append(patches, map[string]interface{}{
-			"op":    "replace",
-			"path":  "/spec/serviceRef/namespace",
-			"value": alias.Namespace,
-		})
-	}
-
-	return w.createPatchResponse(req.UID, patches)
-}
-
 // mutateAddressGroupBindingPolicy applies mutations to AddressGroupBindingPolicy resources
 func (w *MutationWebhook) mutateAddressGroupBindingPolicy(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
 	var policy netguardv1beta1.AddressGroupBindingPolicy
@@ -396,24 +321,6 @@ func (w *MutationWebhook) mutateAddressGroupBindingPolicy(ctx context.Context, r
 			"value": policy.Namespace,
 		})
 	}
-
-	return w.createPatchResponse(req.UID, patches)
-}
-
-// mutateIEAgAgRule applies mutations to IEAgAgRule resources
-func (w *MutationWebhook) mutateIEAgAgRule(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
-	var rule netguardv1beta1.IEAgAgRule
-	if err := runtime.DecodeInto(w.decoder, req.Object.Raw, &rule); err != nil {
-		return w.errorResponse(req.UID, fmt.Sprintf("Failed to decode IEAgAgRule: %v", err))
-	}
-
-	var patches []map[string]interface{}
-
-	// Add managed-by label
-	patches = append(patches, w.addManagedByLabel(&rule)...)
-
-	// Add created-by annotation
-	patches = append(patches, w.addCreatedByAnnotation(&rule)...)
 
 	return w.createPatchResponse(req.UID, patches)
 }

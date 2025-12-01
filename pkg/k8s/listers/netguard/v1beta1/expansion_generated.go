@@ -66,14 +66,6 @@ type HostBindingListerExpansion interface{}
 // HostBindingNamespaceLister.
 type HostBindingNamespaceListerExpansion interface{}
 
-// IEAgAgRuleListerExpansion allows custom methods to be added to
-// IEAgAgRuleLister.
-type IEAgAgRuleListerExpansion interface{}
-
-// IEAgAgRuleNamespaceListerExpansion allows custom methods to be added to
-// IEAgAgRuleNamespaceLister.
-type IEAgAgRuleNamespaceListerExpansion interface{}
-
 // NetworkBindingListerExpansion allows custom methods to be added to
 // NetworkBindingLister.
 type NetworkBindingListerExpansion interface{}
@@ -82,14 +74,6 @@ type NetworkBindingListerExpansion interface{}
 // NetworkBindingNamespaceLister.
 type NetworkBindingNamespaceListerExpansion interface{}
 
-// RuleS2SListerExpansion allows custom methods to be added to
-// RuleS2SLister.
-type RuleS2SListerExpansion interface{}
-
-// RuleS2SNamespaceListerExpansion allows custom methods to be added to
-// RuleS2SNamespaceLister.
-type RuleS2SNamespaceListerExpansion interface{}
-
 // ServiceListerExpansion allows custom methods to be added to
 // ServiceLister.
 type ServiceListerExpansion interface{}
@@ -97,14 +81,6 @@ type ServiceListerExpansion interface{}
 // ServiceNamespaceListerExpansion allows custom methods to be added to
 // ServiceNamespaceLister.
 type ServiceNamespaceListerExpansion interface{}
-
-// ServiceAliasListerExpansion allows custom methods to be added to
-// ServiceAliasLister.
-type ServiceAliasListerExpansion interface{}
-
-// ServiceAliasNamespaceListerExpansion allows custom methods to be added to
-// ServiceAliasNamespaceLister.
-type ServiceAliasNamespaceListerExpansion interface{}
 
 // SvcFqdnRuleListerExpansion allows custom methods to be added to
 // SvcFqdnRuleLister.

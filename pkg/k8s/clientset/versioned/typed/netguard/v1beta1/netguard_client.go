@@ -34,11 +34,8 @@ type NetguardV1beta1Interface interface {
 	AddressGroupPortMappingsGetter
 	HostsGetter
 	HostBindingsGetter
-	IEAgAgRulesGetter
 	NetworkBindingsGetter
-	RuleS2SsGetter
 	ServicesGetter
-	ServiceAliasesGetter
 	SvcFqdnRulesGetter
 	SvcSvcRulesGetter
 }
@@ -72,24 +69,12 @@ func (c *NetguardV1beta1Client) HostBindings(namespace string) HostBindingInterf
 	return newHostBindings(c, namespace)
 }
 
-func (c *NetguardV1beta1Client) IEAgAgRules(namespace string) IEAgAgRuleInterface {
-	return newIEAgAgRules(c, namespace)
-}
-
 func (c *NetguardV1beta1Client) NetworkBindings(namespace string) NetworkBindingInterface {
 	return newNetworkBindings(c, namespace)
 }
 
-func (c *NetguardV1beta1Client) RuleS2Ss(namespace string) RuleS2SInterface {
-	return newRuleS2Ss(c, namespace)
-}
-
 func (c *NetguardV1beta1Client) Services(namespace string) ServiceInterface {
 	return newServices(c, namespace)
-}
-
-func (c *NetguardV1beta1Client) ServiceAliases(namespace string) ServiceAliasInterface {
-	return newServiceAliases(c, namespace)
 }
 
 func (c *NetguardV1beta1Client) SvcFqdnRules(namespace string) SvcFqdnRuleInterface {

@@ -30,15 +30,9 @@ type HostExpansion interface{}
 
 type HostBindingExpansion interface{}
 
-type IEAgAgRuleExpansion interface{}
-
 type NetworkBindingExpansion interface{}
 
-type RuleS2SExpansion interface{}
-
 type ServiceExpansion interface{}
-
-type ServiceAliasExpansion interface{}
 
 type SvcFqdnRuleExpansion interface{}
 

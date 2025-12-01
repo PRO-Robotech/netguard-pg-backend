@@ -103,9 +103,7 @@ func (m *MockReaderForAddressGroupValidator) ListServices(ctx context.Context, c
 				ResourceIdentifier: models.NewResourceIdentifier("test-service"),
 			},
 			AddressGroups: []models.AddressGroupRef{
-				{
-					ResourceIdentifier: models.NewResourceIdentifier(m.addressGroupID),
-				},
+				models.NewAddressGroupRef(m.addressGroupID),
 			},
 		}
 		return consume(service)
@@ -131,9 +129,7 @@ func (m *MockReaderForAddressGroupValidator) ListAddressGroupBindings(ctx contex
 			SelfRef: models.SelfRef{
 				ResourceIdentifier: models.NewResourceIdentifier("test-binding"),
 			},
-			AddressGroupRef: models.AddressGroupRef{
-				ResourceIdentifier: models.NewResourceIdentifier(m.addressGroupID),
-			},
+			AddressGroupRef: models.NewAddressGroupRef(m.addressGroupID),
 		}
 		return consume(binding)
 	}
@@ -141,14 +137,6 @@ func (m *MockReaderForAddressGroupValidator) ListAddressGroupBindings(ctx contex
 }
 
 func (m *MockReaderForAddressGroupValidator) ListAddressGroupPortMappings(ctx context.Context, consume func(models.AddressGroupPortMapping) error, scope ports.Scope) error {
-	return nil
-}
-
-func (m *MockReaderForAddressGroupValidator) ListRuleS2S(ctx context.Context, consume func(models.RuleS2S) error, scope ports.Scope) error {
-	return nil
-}
-
-func (m *MockReaderForAddressGroupValidator) ListServiceAliases(ctx context.Context, consume func(models.ServiceAlias) error, scope ports.Scope) error {
 	return nil
 }
 
@@ -179,30 +167,12 @@ func (m *MockReaderForAddressGroupValidator) GetAddressGroupPortMappingByID(ctx 
 	return nil, fmt.Errorf("address group port mapping not found")
 }
 
-func (m *MockReaderForAddressGroupValidator) GetRuleS2SByID(ctx context.Context, id models.ResourceIdentifier) (*models.RuleS2S, error) {
-	return nil, fmt.Errorf("rule s2s not found")
-}
-
-func (m *MockReaderForAddressGroupValidator) GetServiceAliasByID(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error) {
-	return nil, fmt.Errorf("service alias not found")
-}
-
 func (m *MockReaderForAddressGroupValidator) ListAddressGroupBindingPolicies(ctx context.Context, consume func(models.AddressGroupBindingPolicy) error, scope ports.Scope) error {
 	return nil
 }
 
 func (m *MockReaderForAddressGroupValidator) GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
 	return nil, fmt.Errorf("address group binding policy not found")
-}
-
-func (m *MockReaderForAddressGroupValidator) ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAgRule) error, scope ports.Scope) error {
-	return nil
-}
-
-func (m *MockReaderForAddressGroupValidator) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
-	// Since this mock is for AddressGroupValidator tests, we don't expect this method to be called
-	// But we still return a proper error instead of nil, nil
-	return nil, fmt.Errorf("IEAgAgRule not found")
 }
 
 func (m *MockReaderForAddressGroupValidator) ListNetworks(ctx context.Context, consume func(models.Network) error, scope ports.Scope) error {
@@ -219,4 +189,44 @@ func (m *MockReaderForAddressGroupValidator) GetNetworkByID(ctx context.Context,
 
 func (m *MockReaderForAddressGroupValidator) GetNetworkBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.NetworkBinding, error) {
 	return nil, fmt.Errorf("network binding not found")
+}
+
+func (m *MockReaderForAddressGroupValidator) ListHosts(ctx context.Context, consume func(models.Host) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReaderForAddressGroupValidator) ListHostBindings(ctx context.Context, consume func(models.HostBinding) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReaderForAddressGroupValidator) GetHostByID(ctx context.Context, id models.ResourceIdentifier) (*models.Host, error) {
+	return nil, fmt.Errorf("host not found")
+}
+
+func (m *MockReaderForAddressGroupValidator) GetHostBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.HostBinding, error) {
+	return nil, fmt.Errorf("host binding not found")
+}
+
+func (m *MockReaderForAddressGroupValidator) GetNetworkByCIDR(ctx context.Context, cidr string) (*models.Network, error) {
+	return nil, fmt.Errorf("network not found")
+}
+
+func (m *MockReaderForAddressGroupValidator) GetNetworksOverlappingCIDR(ctx context.Context, cidr string) ([]*models.Network, error) {
+	return nil, nil
+}
+
+func (m *MockReaderForAddressGroupValidator) ListSvcSvcRules(ctx context.Context, consume func(models.SvcSvcRule) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReaderForAddressGroupValidator) ListSvcFqdnRules(ctx context.Context, consume func(models.SvcFqdnRule) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReaderForAddressGroupValidator) GetSvcSvcRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcSvcRule, error) {
+	return nil, fmt.Errorf("svc svc rule not found")
+}
+
+func (m *MockReaderForAddressGroupValidator) GetSvcFqdnRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcFqdnRule, error) {
+	return nil, fmt.Errorf("svc fqdn rule not found")
 }

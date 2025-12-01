@@ -157,75 +157,6 @@ func (a *AddressGroupPortMappingBackendOperations) Delete(ctx context.Context, i
 	return a.client.DeleteAddressGroupPortMapping(ctx, id)
 }
 
-type RuleS2SBackendOperations struct {
-	client client.BackendClient
-}
-
-func NewRuleS2SBackendOperations(client client.BackendClient) BackendOperations[models.RuleS2S] {
-	return &RuleS2SBackendOperations{client: client}
-}
-func (r *RuleS2SBackendOperations) Get(ctx context.Context, id models.ResourceIdentifier) (*models.RuleS2S, error) {
-	return r.client.GetRuleS2S(ctx, id)
-}
-func (r *RuleS2SBackendOperations) List(ctx context.Context, scope ports.Scope) ([]models.RuleS2S, error) {
-	return r.client.ListRuleS2S(ctx, scope)
-}
-func (r *RuleS2SBackendOperations) Create(ctx context.Context, obj *models.RuleS2S) error {
-	return r.client.CreateRuleS2S(ctx, obj)
-}
-func (r *RuleS2SBackendOperations) Update(ctx context.Context, obj *models.RuleS2S) error {
-	return r.client.UpdateRuleS2S(ctx, obj)
-}
-func (r *RuleS2SBackendOperations) Delete(ctx context.Context, id models.ResourceIdentifier) error {
-	return r.client.DeleteRuleS2S(ctx, id)
-}
-
-type ServiceAliasBackendOperations struct {
-	client client.BackendClient
-}
-
-func NewServiceAliasBackendOperations(client client.BackendClient) BackendOperations[models.ServiceAlias] {
-	return &ServiceAliasBackendOperations{client: client}
-}
-func (s *ServiceAliasBackendOperations) Get(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error) {
-	return s.client.GetServiceAlias(ctx, id)
-}
-func (s *ServiceAliasBackendOperations) List(ctx context.Context, scope ports.Scope) ([]models.ServiceAlias, error) {
-	return s.client.ListServiceAliases(ctx, scope)
-}
-func (s *ServiceAliasBackendOperations) Create(ctx context.Context, obj *models.ServiceAlias) error {
-	return s.client.CreateServiceAlias(ctx, obj)
-}
-func (s *ServiceAliasBackendOperations) Update(ctx context.Context, obj *models.ServiceAlias) error {
-	return s.client.UpdateServiceAlias(ctx, obj)
-}
-func (s *ServiceAliasBackendOperations) Delete(ctx context.Context, id models.ResourceIdentifier) error {
-	return s.client.DeleteServiceAlias(ctx, id)
-}
-
-type IEAgAgRuleBackendOperations struct {
-	client client.BackendClient
-}
-
-func NewIEAgAgRuleBackendOperations(client client.BackendClient) BackendOperations[models.IEAgAgRule] {
-	return &IEAgAgRuleBackendOperations{client: client}
-}
-func (i *IEAgAgRuleBackendOperations) Get(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
-	return i.client.GetIEAgAgRule(ctx, id)
-}
-func (i *IEAgAgRuleBackendOperations) List(ctx context.Context, scope ports.Scope) ([]models.IEAgAgRule, error) {
-	return i.client.ListIEAgAgRules(ctx, scope)
-}
-func (i *IEAgAgRuleBackendOperations) Create(ctx context.Context, obj *models.IEAgAgRule) error {
-	return i.client.CreateIEAgAgRule(ctx, obj)
-}
-func (i *IEAgAgRuleBackendOperations) Update(ctx context.Context, obj *models.IEAgAgRule) error {
-	return i.client.UpdateIEAgAgRule(ctx, obj)
-}
-func (i *IEAgAgRuleBackendOperations) Delete(ctx context.Context, id models.ResourceIdentifier) error {
-	return i.client.DeleteIEAgAgRule(ctx, id)
-}
-
 type NetworkOperations struct {
 	netguardService *services.NetguardFacade
 }
@@ -456,15 +387,6 @@ func (a *AddressGroupBindingPolicyBackendOperations) MarkForDeletion(ctx context
 }
 func (a *AddressGroupPortMappingBackendOperations) MarkForDeletion(ctx context.Context, namespace, name, kind string) error {
 	return a.client.MarkForDeletion(ctx, namespace, name, kind)
-}
-func (r *RuleS2SBackendOperations) MarkForDeletion(ctx context.Context, namespace, name, kind string) error {
-	return r.client.MarkForDeletion(ctx, namespace, name, kind)
-}
-func (s *ServiceAliasBackendOperations) MarkForDeletion(ctx context.Context, namespace, name, kind string) error {
-	return s.client.MarkForDeletion(ctx, namespace, name, kind)
-}
-func (i *IEAgAgRuleBackendOperations) MarkForDeletion(ctx context.Context, namespace, name, kind string) error {
-	return i.client.MarkForDeletion(ctx, namespace, name, kind)
 }
 func (n *NetworkBackendOperations) MarkForDeletion(ctx context.Context, namespace, name, kind string) error {
 	return n.client.MarkForDeletion(ctx, namespace, name, kind)

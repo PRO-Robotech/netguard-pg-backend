@@ -53,24 +53,12 @@ func (c *FakeNetguardV1beta1) HostBindings(namespace string) v1beta1.HostBinding
 	return newFakeHostBindings(c, namespace)
 }
 
-func (c *FakeNetguardV1beta1) IEAgAgRules(namespace string) v1beta1.IEAgAgRuleInterface {
-	return newFakeIEAgAgRules(c, namespace)
-}
-
 func (c *FakeNetguardV1beta1) NetworkBindings(namespace string) v1beta1.NetworkBindingInterface {
 	return newFakeNetworkBindings(c, namespace)
 }
 
-func (c *FakeNetguardV1beta1) RuleS2Ss(namespace string) v1beta1.RuleS2SInterface {
-	return newFakeRuleS2Ss(c, namespace)
-}
-
 func (c *FakeNetguardV1beta1) Services(namespace string) v1beta1.ServiceInterface {
 	return newFakeServices(c, namespace)
-}
-
-func (c *FakeNetguardV1beta1) ServiceAliases(namespace string) v1beta1.ServiceAliasInterface {
-	return newFakeServiceAliases(c, namespace)
 }
 
 func (c *FakeNetguardV1beta1) SvcFqdnRules(namespace string) v1beta1.SvcFqdnRuleInterface {

@@ -88,38 +88,6 @@ func (r *GRPCReader) ListAddressGroupPortMappings(ctx context.Context, consume f
 	return nil
 }
 
-// ListRuleS2S реализует ports.Reader интерфейс
-func (r *GRPCReader) ListRuleS2S(ctx context.Context, consume func(models.RuleS2S) error, scope ports.Scope) error {
-	rules, err := r.grpcClient.ListRuleS2S(ctx, scope)
-	if err != nil {
-		return err
-	}
-
-	for _, rule := range rules {
-		if err := consume(rule); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// ListServiceAliases реализует ports.Reader интерфейс
-func (r *GRPCReader) ListServiceAliases(ctx context.Context, consume func(models.ServiceAlias) error, scope ports.Scope) error {
-	aliases, err := r.grpcClient.ListServiceAliases(ctx, scope)
-	if err != nil {
-		return err
-	}
-
-	for _, alias := range aliases {
-		if err := consume(alias); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 // ListAddressGroupBindingPolicies реализует ports.Reader интерфейс
 func (r *GRPCReader) ListAddressGroupBindingPolicies(ctx context.Context, consume func(models.AddressGroupBindingPolicy) error, scope ports.Scope) error {
 	policies, err := r.grpcClient.ListAddressGroupBindingPolicies(ctx, scope)
@@ -129,22 +97,6 @@ func (r *GRPCReader) ListAddressGroupBindingPolicies(ctx context.Context, consum
 
 	for _, policy := range policies {
 		if err := consume(policy); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// ListIEAgAgRules реализует ports.Reader интерфейс
-func (r *GRPCReader) ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAgRule) error, scope ports.Scope) error {
-	rules, err := r.grpcClient.ListIEAgAgRules(ctx, scope)
-	if err != nil {
-		return err
-	}
-
-	for _, rule := range rules {
-		if err := consume(rule); err != nil {
 			return err
 		}
 	}
@@ -177,16 +129,6 @@ func (r *GRPCReader) GetAddressGroupPortMappingByID(ctx context.Context, id mode
 	return r.grpcClient.GetAddressGroupPortMapping(ctx, id)
 }
 
-// GetRuleS2SByID реализует ports.Reader интерфейс
-func (r *GRPCReader) GetRuleS2SByID(ctx context.Context, id models.ResourceIdentifier) (*models.RuleS2S, error) {
-	return r.grpcClient.GetRuleS2S(ctx, id)
-}
-
-// GetServiceAliasByID реализует ports.Reader интерфейс
-func (r *GRPCReader) GetServiceAliasByID(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error) {
-	return r.grpcClient.GetServiceAlias(ctx, id)
-}
-
 func (r *GRPCReader) ListSvcFqdnRules(ctx context.Context, consume func(models.SvcFqdnRule) error, scope ports.Scope) error {
 	rules, err := r.grpcClient.ListSvcFqdnRules(ctx, scope)
 	if err != nil {
@@ -209,11 +151,6 @@ func (r *GRPCReader) GetSvcFqdnRuleByID(ctx context.Context, id models.ResourceI
 // GetAddressGroupBindingPolicyByID реализует ports.Reader интерфейс
 func (r *GRPCReader) GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
 	return r.grpcClient.GetAddressGroupBindingPolicy(ctx, id)
-}
-
-// GetIEAgAgRuleByID реализует ports.Reader интерфейс
-func (r *GRPCReader) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
-	return r.grpcClient.GetIEAgAgRule(ctx, id)
 }
 
 // GetNetworkByID реализует ports.Reader интерфейс

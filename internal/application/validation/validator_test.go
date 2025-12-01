@@ -21,14 +21,6 @@ func (m *MockReader) GetAddressGroupBindingPolicyByID(ctx context.Context, id mo
 	return nil, nil
 }
 
-func (m *MockReader) ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAgRule) error, scope ports.Scope) error {
-	return nil
-}
-
-func (m *MockReader) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
-	return nil, nil
-}
-
 func (m *MockReader) Close() error {
 	return nil
 }
@@ -46,14 +38,6 @@ func (m *MockReader) ListAddressGroupBindings(ctx context.Context, consume func(
 }
 
 func (m *MockReader) ListAddressGroupPortMappings(ctx context.Context, consume func(models.AddressGroupPortMapping) error, scope ports.Scope) error {
-	return nil
-}
-
-func (m *MockReader) ListRuleS2S(ctx context.Context, consume func(models.RuleS2S) error, scope ports.Scope) error {
-	return nil
-}
-
-func (m *MockReader) ListServiceAliases(ctx context.Context, consume func(models.ServiceAlias) error, scope ports.Scope) error {
 	return nil
 }
 
@@ -77,14 +61,6 @@ func (m *MockReader) GetAddressGroupPortMappingByID(ctx context.Context, id mode
 	return nil, nil
 }
 
-func (m *MockReader) GetRuleS2SByID(ctx context.Context, id models.ResourceIdentifier) (*models.RuleS2S, error) {
-	return nil, nil
-}
-
-func (m *MockReader) GetServiceAliasByID(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error) {
-	return nil, nil
-}
-
 func (m *MockReader) ListNetworks(ctx context.Context, consume func(models.Network) error, scope ports.Scope) error {
 	return nil
 }
@@ -99,6 +75,46 @@ func (m *MockReader) GetNetworkByID(ctx context.Context, id models.ResourceIdent
 
 func (m *MockReader) GetNetworkBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.NetworkBinding, error) {
 	return nil, fmt.Errorf("network binding not found")
+}
+
+func (m *MockReader) ListHosts(ctx context.Context, consume func(models.Host) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReader) ListHostBindings(ctx context.Context, consume func(models.HostBinding) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReader) GetHostByID(ctx context.Context, id models.ResourceIdentifier) (*models.Host, error) {
+	return nil, fmt.Errorf("host not found")
+}
+
+func (m *MockReader) GetHostBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.HostBinding, error) {
+	return nil, fmt.Errorf("host binding not found")
+}
+
+func (m *MockReader) GetNetworkByCIDR(ctx context.Context, cidr string) (*models.Network, error) {
+	return nil, fmt.Errorf("network not found")
+}
+
+func (m *MockReader) GetNetworksOverlappingCIDR(ctx context.Context, cidr string) ([]*models.Network, error) {
+	return nil, nil
+}
+
+func (m *MockReader) ListSvcSvcRules(ctx context.Context, consume func(models.SvcSvcRule) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReader) ListSvcFqdnRules(ctx context.Context, consume func(models.SvcFqdnRule) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReader) GetSvcSvcRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcSvcRule, error) {
+	return nil, fmt.Errorf("svc svc rule not found")
+}
+
+func (m *MockReader) GetSvcFqdnRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcFqdnRule, error) {
+	return nil, fmt.Errorf("svc fqdn rule not found")
 }
 
 // TestNewDependencyValidator tests that a new DependencyValidator can be created

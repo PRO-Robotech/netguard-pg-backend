@@ -36,13 +36,10 @@ message WatchEvent {
     AddressGroupBinding address_group_binding = 12;
     AddressGroupPortMapping address_group_port_mapping = 13;
     AddressGroupBindingPolicy address_group_binding_policy = 14;
-    RuleS2S rule_s2s = 15;
-    ServiceAlias service_alias = 16;
     Host host = 17;
     HostBinding host_binding = 18;
     Network network = 19;
     NetworkBinding network_binding = 20;
-    IEAgAgRule ie_ag_ag_rule = 21;
     SvcSvcRule svc_svc_rule = 22;
     SvcFqdnRule svc_fqdn_rule = 23;
   }

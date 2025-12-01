@@ -67,6 +67,7 @@ func StartTestEnvironment(t *testing.T) *TestEnvironment {
 	networkSyncer := syncers.NewNetworkSyncer(mockSGroup, logrLogger)
 	serviceSyncer := syncers.NewServiceSyncer(mockSGroup, logrLogger)
 	svcSvcRuleSyncer := syncers.NewSvcSvcRuleSyncer(mockSGroup, logrLogger)
+	svcFqdnRuleSyncer := syncers.NewSvcFqdnRuleSyncer(mockSGroup, logrLogger)
 
 	// Initialize OutboxWorker
 	workerConfig := worker.DefaultConfig()
@@ -84,10 +85,12 @@ func StartTestEnvironment(t *testing.T) *TestEnvironment {
 		networkSyncer,
 		serviceSyncer,
 		svcSvcRuleSyncer,
-		nil,
+		svcFqdnRuleSyncer,
+		nil, // conditionManager
 		zapLogger,
 		workerConfig,
 		connMonitor,
+		nil, // portMappingRegenerator
 	)
 
 	// Start worker in background

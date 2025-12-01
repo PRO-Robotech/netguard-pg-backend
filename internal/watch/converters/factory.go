@@ -19,13 +19,10 @@ func BuildAllConverters(facade *services.NetguardFacade) []ResourceConverter {
 		newAddressGroupBindingConverter(facade),
 		newAddressGroupPortMappingConverter(facade),
 		newAddressGroupBindingPolicyConverter(facade),
-		newRuleS2SConverter(facade),
-		newServiceAliasConverter(facade),
 		newHostConverter(facade),
 		newHostBindingConverter(facade),
 		newNetworkConverter(facade),
 		newNetworkBindingConverter(facade),
-		newIEAgAgRuleConverter(facade),
 		newSvcSvcRuleConverter(facade),
 		newSvcFqdnRuleConverter(facade),
 	}
@@ -101,34 +98,6 @@ func newAddressGroupBindingPolicyConverter(facade *services.NetguardFacade) Reso
 	)
 }
 
-func newRuleS2SConverter(facade *services.NetguardFacade) ResourceConverter {
-	conv := &convert.RuleS2SConverter{}
-	return newDomainConverter[models.RuleS2S](
-		"rule_s2s",
-		facade.GetRuleS2SByID,
-		func(ctx context.Context) ([]models.RuleS2S, error) {
-			return facade.GetRuleS2S(ctx, ports.EmptyScope{})
-		},
-		func(ctx context.Context, domainObj *models.RuleS2S) (runtime.Object, error) {
-			return conv.FromDomain(ctx, domainObj)
-		},
-	)
-}
-
-func newServiceAliasConverter(facade *services.NetguardFacade) ResourceConverter {
-	conv := &convert.ServiceAliasConverter{}
-	return newDomainConverter[models.ServiceAlias](
-		"service_aliases",
-		facade.GetServiceAliasByID,
-		func(ctx context.Context) ([]models.ServiceAlias, error) {
-			return facade.GetServiceAliases(ctx, ports.EmptyScope{})
-		},
-		func(ctx context.Context, domainObj *models.ServiceAlias) (runtime.Object, error) {
-			return conv.FromDomain(ctx, domainObj)
-		},
-	)
-}
-
 func newHostConverter(facade *services.NetguardFacade) ResourceConverter {
 	conv := &convert.HostConverter{}
 	return newDomainConverter[models.Host](
@@ -185,20 +154,6 @@ func newNetworkBindingConverter(facade *services.NetguardFacade) ResourceConvert
 	)
 }
 
-func newIEAgAgRuleConverter(facade *services.NetguardFacade) ResourceConverter {
-	conv := &convert.IEAgAgRuleConverter{}
-	return newDomainConverter[models.IEAgAgRule](
-		"ie_ag_ag_rules",
-		facade.GetIEAgAgRuleByID,
-		func(ctx context.Context) ([]models.IEAgAgRule, error) {
-			return facade.GetIEAgAgRules(ctx, ports.EmptyScope{})
-		},
-		func(ctx context.Context, domainObj *models.IEAgAgRule) (runtime.Object, error) {
-			return conv.FromDomain(ctx, domainObj)
-		},
-	)
-}
-
 func newSvcSvcRuleConverter(facade *services.NetguardFacade) ResourceConverter {
 	conv := &convert.SvcSvcRuleConverter{}
 	return newDomainConverter[models.SvcSvcRule](
@@ -226,4 +181,3 @@ func newSvcFqdnRuleConverter(facade *services.NetguardFacade) ResourceConverter 
 		},
 	)
 }
-

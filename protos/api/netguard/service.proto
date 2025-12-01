@@ -116,42 +116,6 @@ service NetguardService {
     };
   }
 
-  rpc ListRuleS2S(ListRuleS2SReq) returns (ListRuleS2SResp) {
-    option (google.api.http) = {
-      get: "/v1/rule-s2s"
-    };
-    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
-      description: "ListRuleS2S: gets list of rule s2s";
-    };
-  }
-
-  rpc GetRuleS2S(GetRuleS2SReq) returns (GetRuleS2SResp) {
-    option (google.api.http) = {
-      get: "/v1/rule-s2s/{identifier.namespace}/{identifier.name}"
-    };
-    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
-      description: "GetRuleS2S: gets a specific rule s2s by ID";
-    };
-  }
-
-  rpc ListServiceAliases(ListServiceAliasesReq) returns (ListServiceAliasesResp) {
-    option (google.api.http) = {
-      get: "/v1/service-aliases"
-    };
-    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
-      description: "ListServiceAliases: gets list of service aliases";
-    };
-  }
-
-  rpc GetServiceAlias(GetServiceAliasReq) returns (GetServiceAliasResp) {
-    option (google.api.http) = {
-      get: "/v1/service-aliases/{identifier.namespace}/{identifier.name}"
-    };
-    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
-      description: "GetServiceAlias: gets a specific service alias by ID";
-    };
-  }
-
   rpc ListAddressGroupBindingPolicies(ListAddressGroupBindingPoliciesReq) returns (ListAddressGroupBindingPoliciesResp) {
     option (google.api.http) = {
       get: "/v1/address-group-binding-policies"
@@ -242,24 +206,6 @@ service NetguardService {
     };
   }
 
-  rpc ListIEAgAgRules(ListIEAgAgRulesReq) returns (ListIEAgAgRulesResp) {
-    option (google.api.http) = {
-      get: "/v1/ie-ag-ag-rules"
-    };
-    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
-      description: "ListIEAgAgRules: gets list of IEAgAg rules";
-    };
-  }
-
-  rpc GetIEAgAgRule(GetIEAgAgRuleReq) returns (GetIEAgAgRuleResp) {
-    option (google.api.http) = {
-      get: "/v1/ie-ag-ag-rules/{identifier.namespace}/{identifier.name}"
-    };
-    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
-      description: "GetIEAgAgRule: gets a specific IEAgAg rule by ID";
-    };
-  }
-
   rpc ListSvcSvcRules(ListSvcSvcRulesReq) returns (ListSvcSvcRulesResp) {
     option (google.api.http) = {
       get: "/v1/svc-svc-rules"
@@ -300,14 +246,11 @@ service NetguardService {
   rpc WatchAddressGroups(WatchRequest) returns (stream WatchEvent);
   rpc WatchAddressGroupBindings(WatchRequest) returns (stream WatchEvent);
   rpc WatchAddressGroupPortMappings(WatchRequest) returns (stream WatchEvent);
-  rpc WatchRuleS2S(WatchRequest) returns (stream WatchEvent);
-  rpc WatchServiceAliases(WatchRequest) returns (stream WatchEvent);
   rpc WatchAddressGroupBindingPolicies(WatchRequest) returns (stream WatchEvent);
   rpc WatchHosts(WatchRequest) returns (stream WatchEvent);
   rpc WatchHostBindings(WatchRequest) returns (stream WatchEvent);
   rpc WatchNetworks(WatchRequest) returns (stream WatchEvent);
   rpc WatchNetworkBindings(WatchRequest) returns (stream WatchEvent);
-  rpc WatchIEAgAgRules(WatchRequest) returns (stream WatchEvent);
   rpc WatchSvcSvcRules(WatchRequest) returns (stream WatchEvent);
   rpc WatchSvcFqdnRules(WatchRequest) returns (stream WatchEvent);
 }

@@ -66,18 +66,6 @@ const (
 	// NetguardServiceGetAddressGroupPortMappingProcedure is the fully-qualified name of the
 	// NetguardService's GetAddressGroupPortMapping RPC.
 	NetguardServiceGetAddressGroupPortMappingProcedure = "/netguard.v1.NetguardService/GetAddressGroupPortMapping"
-	// NetguardServiceListRuleS2SProcedure is the fully-qualified name of the NetguardService's
-	// ListRuleS2S RPC.
-	NetguardServiceListRuleS2SProcedure = "/netguard.v1.NetguardService/ListRuleS2S"
-	// NetguardServiceGetRuleS2SProcedure is the fully-qualified name of the NetguardService's
-	// GetRuleS2S RPC.
-	NetguardServiceGetRuleS2SProcedure = "/netguard.v1.NetguardService/GetRuleS2S"
-	// NetguardServiceListServiceAliasesProcedure is the fully-qualified name of the NetguardService's
-	// ListServiceAliases RPC.
-	NetguardServiceListServiceAliasesProcedure = "/netguard.v1.NetguardService/ListServiceAliases"
-	// NetguardServiceGetServiceAliasProcedure is the fully-qualified name of the NetguardService's
-	// GetServiceAlias RPC.
-	NetguardServiceGetServiceAliasProcedure = "/netguard.v1.NetguardService/GetServiceAlias"
 	// NetguardServiceListAddressGroupBindingPoliciesProcedure is the fully-qualified name of the
 	// NetguardService's ListAddressGroupBindingPolicies RPC.
 	NetguardServiceListAddressGroupBindingPoliciesProcedure = "/netguard.v1.NetguardService/ListAddressGroupBindingPolicies"
@@ -107,12 +95,6 @@ const (
 	// NetguardServiceGetNetworkBindingProcedure is the fully-qualified name of the NetguardService's
 	// GetNetworkBinding RPC.
 	NetguardServiceGetNetworkBindingProcedure = "/netguard.v1.NetguardService/GetNetworkBinding"
-	// NetguardServiceListIEAgAgRulesProcedure is the fully-qualified name of the NetguardService's
-	// ListIEAgAgRules RPC.
-	NetguardServiceListIEAgAgRulesProcedure = "/netguard.v1.NetguardService/ListIEAgAgRules"
-	// NetguardServiceGetIEAgAgRuleProcedure is the fully-qualified name of the NetguardService's
-	// GetIEAgAgRule RPC.
-	NetguardServiceGetIEAgAgRuleProcedure = "/netguard.v1.NetguardService/GetIEAgAgRule"
 	// NetguardServiceListSvcSvcRulesProcedure is the fully-qualified name of the NetguardService's
 	// ListSvcSvcRules RPC.
 	NetguardServiceListSvcSvcRulesProcedure = "/netguard.v1.NetguardService/ListSvcSvcRules"
@@ -137,12 +119,6 @@ const (
 	// NetguardServiceWatchAddressGroupPortMappingsProcedure is the fully-qualified name of the
 	// NetguardService's WatchAddressGroupPortMappings RPC.
 	NetguardServiceWatchAddressGroupPortMappingsProcedure = "/netguard.v1.NetguardService/WatchAddressGroupPortMappings"
-	// NetguardServiceWatchRuleS2SProcedure is the fully-qualified name of the NetguardService's
-	// WatchRuleS2S RPC.
-	NetguardServiceWatchRuleS2SProcedure = "/netguard.v1.NetguardService/WatchRuleS2S"
-	// NetguardServiceWatchServiceAliasesProcedure is the fully-qualified name of the NetguardService's
-	// WatchServiceAliases RPC.
-	NetguardServiceWatchServiceAliasesProcedure = "/netguard.v1.NetguardService/WatchServiceAliases"
 	// NetguardServiceWatchAddressGroupBindingPoliciesProcedure is the fully-qualified name of the
 	// NetguardService's WatchAddressGroupBindingPolicies RPC.
 	NetguardServiceWatchAddressGroupBindingPoliciesProcedure = "/netguard.v1.NetguardService/WatchAddressGroupBindingPolicies"
@@ -158,9 +134,6 @@ const (
 	// NetguardServiceWatchNetworkBindingsProcedure is the fully-qualified name of the NetguardService's
 	// WatchNetworkBindings RPC.
 	NetguardServiceWatchNetworkBindingsProcedure = "/netguard.v1.NetguardService/WatchNetworkBindings"
-	// NetguardServiceWatchIEAgAgRulesProcedure is the fully-qualified name of the NetguardService's
-	// WatchIEAgAgRules RPC.
-	NetguardServiceWatchIEAgAgRulesProcedure = "/netguard.v1.NetguardService/WatchIEAgAgRules"
 	// NetguardServiceWatchSvcSvcRulesProcedure is the fully-qualified name of the NetguardService's
 	// WatchSvcSvcRules RPC.
 	NetguardServiceWatchSvcSvcRulesProcedure = "/netguard.v1.NetguardService/WatchSvcSvcRules"
@@ -182,10 +155,6 @@ type NetguardServiceClient interface {
 	GetAddressGroupBinding(context.Context, *connect.Request[netguard.GetAddressGroupBindingReq]) (*connect.Response[netguard.GetAddressGroupBindingResp], error)
 	ListAddressGroupPortMappings(context.Context, *connect.Request[netguard.ListAddressGroupPortMappingsReq]) (*connect.Response[netguard.ListAddressGroupPortMappingsResp], error)
 	GetAddressGroupPortMapping(context.Context, *connect.Request[netguard.GetAddressGroupPortMappingReq]) (*connect.Response[netguard.GetAddressGroupPortMappingResp], error)
-	ListRuleS2S(context.Context, *connect.Request[netguard.ListRuleS2SReq]) (*connect.Response[netguard.ListRuleS2SResp], error)
-	GetRuleS2S(context.Context, *connect.Request[netguard.GetRuleS2SReq]) (*connect.Response[netguard.GetRuleS2SResp], error)
-	ListServiceAliases(context.Context, *connect.Request[netguard.ListServiceAliasesReq]) (*connect.Response[netguard.ListServiceAliasesResp], error)
-	GetServiceAlias(context.Context, *connect.Request[netguard.GetServiceAliasReq]) (*connect.Response[netguard.GetServiceAliasResp], error)
 	ListAddressGroupBindingPolicies(context.Context, *connect.Request[netguard.ListAddressGroupBindingPoliciesReq]) (*connect.Response[netguard.ListAddressGroupBindingPoliciesResp], error)
 	GetAddressGroupBindingPolicy(context.Context, *connect.Request[netguard.GetAddressGroupBindingPolicyReq]) (*connect.Response[netguard.GetAddressGroupBindingPolicyResp], error)
 	ListHosts(context.Context, *connect.Request[netguard.ListHostsReq]) (*connect.Response[netguard.ListHostsResp], error)
@@ -196,8 +165,6 @@ type NetguardServiceClient interface {
 	GetNetwork(context.Context, *connect.Request[netguard.GetNetworkReq]) (*connect.Response[netguard.GetNetworkResp], error)
 	ListNetworkBindings(context.Context, *connect.Request[netguard.ListNetworkBindingsReq]) (*connect.Response[netguard.ListNetworkBindingsResp], error)
 	GetNetworkBinding(context.Context, *connect.Request[netguard.GetNetworkBindingReq]) (*connect.Response[netguard.GetNetworkBindingResp], error)
-	ListIEAgAgRules(context.Context, *connect.Request[netguard.ListIEAgAgRulesReq]) (*connect.Response[netguard.ListIEAgAgRulesResp], error)
-	GetIEAgAgRule(context.Context, *connect.Request[netguard.GetIEAgAgRuleReq]) (*connect.Response[netguard.GetIEAgAgRuleResp], error)
 	ListSvcSvcRules(context.Context, *connect.Request[netguard.ListSvcSvcRulesReq]) (*connect.Response[netguard.ListSvcSvcRulesResp], error)
 	GetSvcSvcRule(context.Context, *connect.Request[netguard.GetSvcSvcRuleReq]) (*connect.Response[netguard.GetSvcSvcRuleResp], error)
 	ListSvcFqdnRules(context.Context, *connect.Request[netguard.ListSvcFqdnRulesReq]) (*connect.Response[netguard.ListSvcFqdnRulesResp], error)
@@ -206,14 +173,11 @@ type NetguardServiceClient interface {
 	WatchAddressGroups(context.Context, *connect.Request[netguard.WatchRequest]) (*connect.ServerStreamForClient[netguard.WatchEvent], error)
 	WatchAddressGroupBindings(context.Context, *connect.Request[netguard.WatchRequest]) (*connect.ServerStreamForClient[netguard.WatchEvent], error)
 	WatchAddressGroupPortMappings(context.Context, *connect.Request[netguard.WatchRequest]) (*connect.ServerStreamForClient[netguard.WatchEvent], error)
-	WatchRuleS2S(context.Context, *connect.Request[netguard.WatchRequest]) (*connect.ServerStreamForClient[netguard.WatchEvent], error)
-	WatchServiceAliases(context.Context, *connect.Request[netguard.WatchRequest]) (*connect.ServerStreamForClient[netguard.WatchEvent], error)
 	WatchAddressGroupBindingPolicies(context.Context, *connect.Request[netguard.WatchRequest]) (*connect.ServerStreamForClient[netguard.WatchEvent], error)
 	WatchHosts(context.Context, *connect.Request[netguard.WatchRequest]) (*connect.ServerStreamForClient[netguard.WatchEvent], error)
 	WatchHostBindings(context.Context, *connect.Request[netguard.WatchRequest]) (*connect.ServerStreamForClient[netguard.WatchEvent], error)
 	WatchNetworks(context.Context, *connect.Request[netguard.WatchRequest]) (*connect.ServerStreamForClient[netguard.WatchEvent], error)
 	WatchNetworkBindings(context.Context, *connect.Request[netguard.WatchRequest]) (*connect.ServerStreamForClient[netguard.WatchEvent], error)
-	WatchIEAgAgRules(context.Context, *connect.Request[netguard.WatchRequest]) (*connect.ServerStreamForClient[netguard.WatchEvent], error)
 	WatchSvcSvcRules(context.Context, *connect.Request[netguard.WatchRequest]) (*connect.ServerStreamForClient[netguard.WatchEvent], error)
 	WatchSvcFqdnRules(context.Context, *connect.Request[netguard.WatchRequest]) (*connect.ServerStreamForClient[netguard.WatchEvent], error)
 }
@@ -295,30 +259,6 @@ func NewNetguardServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(netguardServiceMethods.ByName("GetAddressGroupPortMapping")),
 			connect.WithClientOptions(opts...),
 		),
-		listRuleS2S: connect.NewClient[netguard.ListRuleS2SReq, netguard.ListRuleS2SResp](
-			httpClient,
-			baseURL+NetguardServiceListRuleS2SProcedure,
-			connect.WithSchema(netguardServiceMethods.ByName("ListRuleS2S")),
-			connect.WithClientOptions(opts...),
-		),
-		getRuleS2S: connect.NewClient[netguard.GetRuleS2SReq, netguard.GetRuleS2SResp](
-			httpClient,
-			baseURL+NetguardServiceGetRuleS2SProcedure,
-			connect.WithSchema(netguardServiceMethods.ByName("GetRuleS2S")),
-			connect.WithClientOptions(opts...),
-		),
-		listServiceAliases: connect.NewClient[netguard.ListServiceAliasesReq, netguard.ListServiceAliasesResp](
-			httpClient,
-			baseURL+NetguardServiceListServiceAliasesProcedure,
-			connect.WithSchema(netguardServiceMethods.ByName("ListServiceAliases")),
-			connect.WithClientOptions(opts...),
-		),
-		getServiceAlias: connect.NewClient[netguard.GetServiceAliasReq, netguard.GetServiceAliasResp](
-			httpClient,
-			baseURL+NetguardServiceGetServiceAliasProcedure,
-			connect.WithSchema(netguardServiceMethods.ByName("GetServiceAlias")),
-			connect.WithClientOptions(opts...),
-		),
 		listAddressGroupBindingPolicies: connect.NewClient[netguard.ListAddressGroupBindingPoliciesReq, netguard.ListAddressGroupBindingPoliciesResp](
 			httpClient,
 			baseURL+NetguardServiceListAddressGroupBindingPoliciesProcedure,
@@ -379,18 +319,6 @@ func NewNetguardServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(netguardServiceMethods.ByName("GetNetworkBinding")),
 			connect.WithClientOptions(opts...),
 		),
-		listIEAgAgRules: connect.NewClient[netguard.ListIEAgAgRulesReq, netguard.ListIEAgAgRulesResp](
-			httpClient,
-			baseURL+NetguardServiceListIEAgAgRulesProcedure,
-			connect.WithSchema(netguardServiceMethods.ByName("ListIEAgAgRules")),
-			connect.WithClientOptions(opts...),
-		),
-		getIEAgAgRule: connect.NewClient[netguard.GetIEAgAgRuleReq, netguard.GetIEAgAgRuleResp](
-			httpClient,
-			baseURL+NetguardServiceGetIEAgAgRuleProcedure,
-			connect.WithSchema(netguardServiceMethods.ByName("GetIEAgAgRule")),
-			connect.WithClientOptions(opts...),
-		),
 		listSvcSvcRules: connect.NewClient[netguard.ListSvcSvcRulesReq, netguard.ListSvcSvcRulesResp](
 			httpClient,
 			baseURL+NetguardServiceListSvcSvcRulesProcedure,
@@ -439,18 +367,6 @@ func NewNetguardServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(netguardServiceMethods.ByName("WatchAddressGroupPortMappings")),
 			connect.WithClientOptions(opts...),
 		),
-		watchRuleS2S: connect.NewClient[netguard.WatchRequest, netguard.WatchEvent](
-			httpClient,
-			baseURL+NetguardServiceWatchRuleS2SProcedure,
-			connect.WithSchema(netguardServiceMethods.ByName("WatchRuleS2S")),
-			connect.WithClientOptions(opts...),
-		),
-		watchServiceAliases: connect.NewClient[netguard.WatchRequest, netguard.WatchEvent](
-			httpClient,
-			baseURL+NetguardServiceWatchServiceAliasesProcedure,
-			connect.WithSchema(netguardServiceMethods.ByName("WatchServiceAliases")),
-			connect.WithClientOptions(opts...),
-		),
 		watchAddressGroupBindingPolicies: connect.NewClient[netguard.WatchRequest, netguard.WatchEvent](
 			httpClient,
 			baseURL+NetguardServiceWatchAddressGroupBindingPoliciesProcedure,
@@ -481,12 +397,6 @@ func NewNetguardServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(netguardServiceMethods.ByName("WatchNetworkBindings")),
 			connect.WithClientOptions(opts...),
 		),
-		watchIEAgAgRules: connect.NewClient[netguard.WatchRequest, netguard.WatchEvent](
-			httpClient,
-			baseURL+NetguardServiceWatchIEAgAgRulesProcedure,
-			connect.WithSchema(netguardServiceMethods.ByName("WatchIEAgAgRules")),
-			connect.WithClientOptions(opts...),
-		),
 		watchSvcSvcRules: connect.NewClient[netguard.WatchRequest, netguard.WatchEvent](
 			httpClient,
 			baseURL+NetguardServiceWatchSvcSvcRulesProcedure,
@@ -515,10 +425,6 @@ type netguardServiceClient struct {
 	getAddressGroupBinding           *connect.Client[netguard.GetAddressGroupBindingReq, netguard.GetAddressGroupBindingResp]
 	listAddressGroupPortMappings     *connect.Client[netguard.ListAddressGroupPortMappingsReq, netguard.ListAddressGroupPortMappingsResp]
 	getAddressGroupPortMapping       *connect.Client[netguard.GetAddressGroupPortMappingReq, netguard.GetAddressGroupPortMappingResp]
-	listRuleS2S                      *connect.Client[netguard.ListRuleS2SReq, netguard.ListRuleS2SResp]
-	getRuleS2S                       *connect.Client[netguard.GetRuleS2SReq, netguard.GetRuleS2SResp]
-	listServiceAliases               *connect.Client[netguard.ListServiceAliasesReq, netguard.ListServiceAliasesResp]
-	getServiceAlias                  *connect.Client[netguard.GetServiceAliasReq, netguard.GetServiceAliasResp]
 	listAddressGroupBindingPolicies  *connect.Client[netguard.ListAddressGroupBindingPoliciesReq, netguard.ListAddressGroupBindingPoliciesResp]
 	getAddressGroupBindingPolicy     *connect.Client[netguard.GetAddressGroupBindingPolicyReq, netguard.GetAddressGroupBindingPolicyResp]
 	listHosts                        *connect.Client[netguard.ListHostsReq, netguard.ListHostsResp]
@@ -529,8 +435,6 @@ type netguardServiceClient struct {
 	getNetwork                       *connect.Client[netguard.GetNetworkReq, netguard.GetNetworkResp]
 	listNetworkBindings              *connect.Client[netguard.ListNetworkBindingsReq, netguard.ListNetworkBindingsResp]
 	getNetworkBinding                *connect.Client[netguard.GetNetworkBindingReq, netguard.GetNetworkBindingResp]
-	listIEAgAgRules                  *connect.Client[netguard.ListIEAgAgRulesReq, netguard.ListIEAgAgRulesResp]
-	getIEAgAgRule                    *connect.Client[netguard.GetIEAgAgRuleReq, netguard.GetIEAgAgRuleResp]
 	listSvcSvcRules                  *connect.Client[netguard.ListSvcSvcRulesReq, netguard.ListSvcSvcRulesResp]
 	getSvcSvcRule                    *connect.Client[netguard.GetSvcSvcRuleReq, netguard.GetSvcSvcRuleResp]
 	listSvcFqdnRules                 *connect.Client[netguard.ListSvcFqdnRulesReq, netguard.ListSvcFqdnRulesResp]
@@ -539,14 +443,11 @@ type netguardServiceClient struct {
 	watchAddressGroups               *connect.Client[netguard.WatchRequest, netguard.WatchEvent]
 	watchAddressGroupBindings        *connect.Client[netguard.WatchRequest, netguard.WatchEvent]
 	watchAddressGroupPortMappings    *connect.Client[netguard.WatchRequest, netguard.WatchEvent]
-	watchRuleS2S                     *connect.Client[netguard.WatchRequest, netguard.WatchEvent]
-	watchServiceAliases              *connect.Client[netguard.WatchRequest, netguard.WatchEvent]
 	watchAddressGroupBindingPolicies *connect.Client[netguard.WatchRequest, netguard.WatchEvent]
 	watchHosts                       *connect.Client[netguard.WatchRequest, netguard.WatchEvent]
 	watchHostBindings                *connect.Client[netguard.WatchRequest, netguard.WatchEvent]
 	watchNetworks                    *connect.Client[netguard.WatchRequest, netguard.WatchEvent]
 	watchNetworkBindings             *connect.Client[netguard.WatchRequest, netguard.WatchEvent]
-	watchIEAgAgRules                 *connect.Client[netguard.WatchRequest, netguard.WatchEvent]
 	watchSvcSvcRules                 *connect.Client[netguard.WatchRequest, netguard.WatchEvent]
 	watchSvcFqdnRules                *connect.Client[netguard.WatchRequest, netguard.WatchEvent]
 }
@@ -606,26 +507,6 @@ func (c *netguardServiceClient) GetAddressGroupPortMapping(ctx context.Context, 
 	return c.getAddressGroupPortMapping.CallUnary(ctx, req)
 }
 
-// ListRuleS2S calls netguard.v1.NetguardService.ListRuleS2S.
-func (c *netguardServiceClient) ListRuleS2S(ctx context.Context, req *connect.Request[netguard.ListRuleS2SReq]) (*connect.Response[netguard.ListRuleS2SResp], error) {
-	return c.listRuleS2S.CallUnary(ctx, req)
-}
-
-// GetRuleS2S calls netguard.v1.NetguardService.GetRuleS2S.
-func (c *netguardServiceClient) GetRuleS2S(ctx context.Context, req *connect.Request[netguard.GetRuleS2SReq]) (*connect.Response[netguard.GetRuleS2SResp], error) {
-	return c.getRuleS2S.CallUnary(ctx, req)
-}
-
-// ListServiceAliases calls netguard.v1.NetguardService.ListServiceAliases.
-func (c *netguardServiceClient) ListServiceAliases(ctx context.Context, req *connect.Request[netguard.ListServiceAliasesReq]) (*connect.Response[netguard.ListServiceAliasesResp], error) {
-	return c.listServiceAliases.CallUnary(ctx, req)
-}
-
-// GetServiceAlias calls netguard.v1.NetguardService.GetServiceAlias.
-func (c *netguardServiceClient) GetServiceAlias(ctx context.Context, req *connect.Request[netguard.GetServiceAliasReq]) (*connect.Response[netguard.GetServiceAliasResp], error) {
-	return c.getServiceAlias.CallUnary(ctx, req)
-}
-
 // ListAddressGroupBindingPolicies calls
 // netguard.v1.NetguardService.ListAddressGroupBindingPolicies.
 func (c *netguardServiceClient) ListAddressGroupBindingPolicies(ctx context.Context, req *connect.Request[netguard.ListAddressGroupBindingPoliciesReq]) (*connect.Response[netguard.ListAddressGroupBindingPoliciesResp], error) {
@@ -677,16 +558,6 @@ func (c *netguardServiceClient) GetNetworkBinding(ctx context.Context, req *conn
 	return c.getNetworkBinding.CallUnary(ctx, req)
 }
 
-// ListIEAgAgRules calls netguard.v1.NetguardService.ListIEAgAgRules.
-func (c *netguardServiceClient) ListIEAgAgRules(ctx context.Context, req *connect.Request[netguard.ListIEAgAgRulesReq]) (*connect.Response[netguard.ListIEAgAgRulesResp], error) {
-	return c.listIEAgAgRules.CallUnary(ctx, req)
-}
-
-// GetIEAgAgRule calls netguard.v1.NetguardService.GetIEAgAgRule.
-func (c *netguardServiceClient) GetIEAgAgRule(ctx context.Context, req *connect.Request[netguard.GetIEAgAgRuleReq]) (*connect.Response[netguard.GetIEAgAgRuleResp], error) {
-	return c.getIEAgAgRule.CallUnary(ctx, req)
-}
-
 // ListSvcSvcRules calls netguard.v1.NetguardService.ListSvcSvcRules.
 func (c *netguardServiceClient) ListSvcSvcRules(ctx context.Context, req *connect.Request[netguard.ListSvcSvcRulesReq]) (*connect.Response[netguard.ListSvcSvcRulesResp], error) {
 	return c.listSvcSvcRules.CallUnary(ctx, req)
@@ -727,16 +598,6 @@ func (c *netguardServiceClient) WatchAddressGroupPortMappings(ctx context.Contex
 	return c.watchAddressGroupPortMappings.CallServerStream(ctx, req)
 }
 
-// WatchRuleS2S calls netguard.v1.NetguardService.WatchRuleS2S.
-func (c *netguardServiceClient) WatchRuleS2S(ctx context.Context, req *connect.Request[netguard.WatchRequest]) (*connect.ServerStreamForClient[netguard.WatchEvent], error) {
-	return c.watchRuleS2S.CallServerStream(ctx, req)
-}
-
-// WatchServiceAliases calls netguard.v1.NetguardService.WatchServiceAliases.
-func (c *netguardServiceClient) WatchServiceAliases(ctx context.Context, req *connect.Request[netguard.WatchRequest]) (*connect.ServerStreamForClient[netguard.WatchEvent], error) {
-	return c.watchServiceAliases.CallServerStream(ctx, req)
-}
-
 // WatchAddressGroupBindingPolicies calls
 // netguard.v1.NetguardService.WatchAddressGroupBindingPolicies.
 func (c *netguardServiceClient) WatchAddressGroupBindingPolicies(ctx context.Context, req *connect.Request[netguard.WatchRequest]) (*connect.ServerStreamForClient[netguard.WatchEvent], error) {
@@ -763,11 +624,6 @@ func (c *netguardServiceClient) WatchNetworkBindings(ctx context.Context, req *c
 	return c.watchNetworkBindings.CallServerStream(ctx, req)
 }
 
-// WatchIEAgAgRules calls netguard.v1.NetguardService.WatchIEAgAgRules.
-func (c *netguardServiceClient) WatchIEAgAgRules(ctx context.Context, req *connect.Request[netguard.WatchRequest]) (*connect.ServerStreamForClient[netguard.WatchEvent], error) {
-	return c.watchIEAgAgRules.CallServerStream(ctx, req)
-}
-
 // WatchSvcSvcRules calls netguard.v1.NetguardService.WatchSvcSvcRules.
 func (c *netguardServiceClient) WatchSvcSvcRules(ctx context.Context, req *connect.Request[netguard.WatchRequest]) (*connect.ServerStreamForClient[netguard.WatchEvent], error) {
 	return c.watchSvcSvcRules.CallServerStream(ctx, req)
@@ -791,10 +647,6 @@ type NetguardServiceHandler interface {
 	GetAddressGroupBinding(context.Context, *connect.Request[netguard.GetAddressGroupBindingReq]) (*connect.Response[netguard.GetAddressGroupBindingResp], error)
 	ListAddressGroupPortMappings(context.Context, *connect.Request[netguard.ListAddressGroupPortMappingsReq]) (*connect.Response[netguard.ListAddressGroupPortMappingsResp], error)
 	GetAddressGroupPortMapping(context.Context, *connect.Request[netguard.GetAddressGroupPortMappingReq]) (*connect.Response[netguard.GetAddressGroupPortMappingResp], error)
-	ListRuleS2S(context.Context, *connect.Request[netguard.ListRuleS2SReq]) (*connect.Response[netguard.ListRuleS2SResp], error)
-	GetRuleS2S(context.Context, *connect.Request[netguard.GetRuleS2SReq]) (*connect.Response[netguard.GetRuleS2SResp], error)
-	ListServiceAliases(context.Context, *connect.Request[netguard.ListServiceAliasesReq]) (*connect.Response[netguard.ListServiceAliasesResp], error)
-	GetServiceAlias(context.Context, *connect.Request[netguard.GetServiceAliasReq]) (*connect.Response[netguard.GetServiceAliasResp], error)
 	ListAddressGroupBindingPolicies(context.Context, *connect.Request[netguard.ListAddressGroupBindingPoliciesReq]) (*connect.Response[netguard.ListAddressGroupBindingPoliciesResp], error)
 	GetAddressGroupBindingPolicy(context.Context, *connect.Request[netguard.GetAddressGroupBindingPolicyReq]) (*connect.Response[netguard.GetAddressGroupBindingPolicyResp], error)
 	ListHosts(context.Context, *connect.Request[netguard.ListHostsReq]) (*connect.Response[netguard.ListHostsResp], error)
@@ -805,8 +657,6 @@ type NetguardServiceHandler interface {
 	GetNetwork(context.Context, *connect.Request[netguard.GetNetworkReq]) (*connect.Response[netguard.GetNetworkResp], error)
 	ListNetworkBindings(context.Context, *connect.Request[netguard.ListNetworkBindingsReq]) (*connect.Response[netguard.ListNetworkBindingsResp], error)
 	GetNetworkBinding(context.Context, *connect.Request[netguard.GetNetworkBindingReq]) (*connect.Response[netguard.GetNetworkBindingResp], error)
-	ListIEAgAgRules(context.Context, *connect.Request[netguard.ListIEAgAgRulesReq]) (*connect.Response[netguard.ListIEAgAgRulesResp], error)
-	GetIEAgAgRule(context.Context, *connect.Request[netguard.GetIEAgAgRuleReq]) (*connect.Response[netguard.GetIEAgAgRuleResp], error)
 	ListSvcSvcRules(context.Context, *connect.Request[netguard.ListSvcSvcRulesReq]) (*connect.Response[netguard.ListSvcSvcRulesResp], error)
 	GetSvcSvcRule(context.Context, *connect.Request[netguard.GetSvcSvcRuleReq]) (*connect.Response[netguard.GetSvcSvcRuleResp], error)
 	ListSvcFqdnRules(context.Context, *connect.Request[netguard.ListSvcFqdnRulesReq]) (*connect.Response[netguard.ListSvcFqdnRulesResp], error)
@@ -815,14 +665,11 @@ type NetguardServiceHandler interface {
 	WatchAddressGroups(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error
 	WatchAddressGroupBindings(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error
 	WatchAddressGroupPortMappings(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error
-	WatchRuleS2S(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error
-	WatchServiceAliases(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error
 	WatchAddressGroupBindingPolicies(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error
 	WatchHosts(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error
 	WatchHostBindings(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error
 	WatchNetworks(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error
 	WatchNetworkBindings(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error
-	WatchIEAgAgRules(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error
 	WatchSvcSvcRules(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error
 	WatchSvcFqdnRules(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error
 }
@@ -900,30 +747,6 @@ func NewNetguardServiceHandler(svc NetguardServiceHandler, opts ...connect.Handl
 		connect.WithSchema(netguardServiceMethods.ByName("GetAddressGroupPortMapping")),
 		connect.WithHandlerOptions(opts...),
 	)
-	netguardServiceListRuleS2SHandler := connect.NewUnaryHandler(
-		NetguardServiceListRuleS2SProcedure,
-		svc.ListRuleS2S,
-		connect.WithSchema(netguardServiceMethods.ByName("ListRuleS2S")),
-		connect.WithHandlerOptions(opts...),
-	)
-	netguardServiceGetRuleS2SHandler := connect.NewUnaryHandler(
-		NetguardServiceGetRuleS2SProcedure,
-		svc.GetRuleS2S,
-		connect.WithSchema(netguardServiceMethods.ByName("GetRuleS2S")),
-		connect.WithHandlerOptions(opts...),
-	)
-	netguardServiceListServiceAliasesHandler := connect.NewUnaryHandler(
-		NetguardServiceListServiceAliasesProcedure,
-		svc.ListServiceAliases,
-		connect.WithSchema(netguardServiceMethods.ByName("ListServiceAliases")),
-		connect.WithHandlerOptions(opts...),
-	)
-	netguardServiceGetServiceAliasHandler := connect.NewUnaryHandler(
-		NetguardServiceGetServiceAliasProcedure,
-		svc.GetServiceAlias,
-		connect.WithSchema(netguardServiceMethods.ByName("GetServiceAlias")),
-		connect.WithHandlerOptions(opts...),
-	)
 	netguardServiceListAddressGroupBindingPoliciesHandler := connect.NewUnaryHandler(
 		NetguardServiceListAddressGroupBindingPoliciesProcedure,
 		svc.ListAddressGroupBindingPolicies,
@@ -984,18 +807,6 @@ func NewNetguardServiceHandler(svc NetguardServiceHandler, opts ...connect.Handl
 		connect.WithSchema(netguardServiceMethods.ByName("GetNetworkBinding")),
 		connect.WithHandlerOptions(opts...),
 	)
-	netguardServiceListIEAgAgRulesHandler := connect.NewUnaryHandler(
-		NetguardServiceListIEAgAgRulesProcedure,
-		svc.ListIEAgAgRules,
-		connect.WithSchema(netguardServiceMethods.ByName("ListIEAgAgRules")),
-		connect.WithHandlerOptions(opts...),
-	)
-	netguardServiceGetIEAgAgRuleHandler := connect.NewUnaryHandler(
-		NetguardServiceGetIEAgAgRuleProcedure,
-		svc.GetIEAgAgRule,
-		connect.WithSchema(netguardServiceMethods.ByName("GetIEAgAgRule")),
-		connect.WithHandlerOptions(opts...),
-	)
 	netguardServiceListSvcSvcRulesHandler := connect.NewUnaryHandler(
 		NetguardServiceListSvcSvcRulesProcedure,
 		svc.ListSvcSvcRules,
@@ -1044,18 +855,6 @@ func NewNetguardServiceHandler(svc NetguardServiceHandler, opts ...connect.Handl
 		connect.WithSchema(netguardServiceMethods.ByName("WatchAddressGroupPortMappings")),
 		connect.WithHandlerOptions(opts...),
 	)
-	netguardServiceWatchRuleS2SHandler := connect.NewServerStreamHandler(
-		NetguardServiceWatchRuleS2SProcedure,
-		svc.WatchRuleS2S,
-		connect.WithSchema(netguardServiceMethods.ByName("WatchRuleS2S")),
-		connect.WithHandlerOptions(opts...),
-	)
-	netguardServiceWatchServiceAliasesHandler := connect.NewServerStreamHandler(
-		NetguardServiceWatchServiceAliasesProcedure,
-		svc.WatchServiceAliases,
-		connect.WithSchema(netguardServiceMethods.ByName("WatchServiceAliases")),
-		connect.WithHandlerOptions(opts...),
-	)
 	netguardServiceWatchAddressGroupBindingPoliciesHandler := connect.NewServerStreamHandler(
 		NetguardServiceWatchAddressGroupBindingPoliciesProcedure,
 		svc.WatchAddressGroupBindingPolicies,
@@ -1084,12 +883,6 @@ func NewNetguardServiceHandler(svc NetguardServiceHandler, opts ...connect.Handl
 		NetguardServiceWatchNetworkBindingsProcedure,
 		svc.WatchNetworkBindings,
 		connect.WithSchema(netguardServiceMethods.ByName("WatchNetworkBindings")),
-		connect.WithHandlerOptions(opts...),
-	)
-	netguardServiceWatchIEAgAgRulesHandler := connect.NewServerStreamHandler(
-		NetguardServiceWatchIEAgAgRulesProcedure,
-		svc.WatchIEAgAgRules,
-		connect.WithSchema(netguardServiceMethods.ByName("WatchIEAgAgRules")),
 		connect.WithHandlerOptions(opts...),
 	)
 	netguardServiceWatchSvcSvcRulesHandler := connect.NewServerStreamHandler(
@@ -1128,14 +921,6 @@ func NewNetguardServiceHandler(svc NetguardServiceHandler, opts ...connect.Handl
 			netguardServiceListAddressGroupPortMappingsHandler.ServeHTTP(w, r)
 		case NetguardServiceGetAddressGroupPortMappingProcedure:
 			netguardServiceGetAddressGroupPortMappingHandler.ServeHTTP(w, r)
-		case NetguardServiceListRuleS2SProcedure:
-			netguardServiceListRuleS2SHandler.ServeHTTP(w, r)
-		case NetguardServiceGetRuleS2SProcedure:
-			netguardServiceGetRuleS2SHandler.ServeHTTP(w, r)
-		case NetguardServiceListServiceAliasesProcedure:
-			netguardServiceListServiceAliasesHandler.ServeHTTP(w, r)
-		case NetguardServiceGetServiceAliasProcedure:
-			netguardServiceGetServiceAliasHandler.ServeHTTP(w, r)
 		case NetguardServiceListAddressGroupBindingPoliciesProcedure:
 			netguardServiceListAddressGroupBindingPoliciesHandler.ServeHTTP(w, r)
 		case NetguardServiceGetAddressGroupBindingPolicyProcedure:
@@ -1156,10 +941,6 @@ func NewNetguardServiceHandler(svc NetguardServiceHandler, opts ...connect.Handl
 			netguardServiceListNetworkBindingsHandler.ServeHTTP(w, r)
 		case NetguardServiceGetNetworkBindingProcedure:
 			netguardServiceGetNetworkBindingHandler.ServeHTTP(w, r)
-		case NetguardServiceListIEAgAgRulesProcedure:
-			netguardServiceListIEAgAgRulesHandler.ServeHTTP(w, r)
-		case NetguardServiceGetIEAgAgRuleProcedure:
-			netguardServiceGetIEAgAgRuleHandler.ServeHTTP(w, r)
 		case NetguardServiceListSvcSvcRulesProcedure:
 			netguardServiceListSvcSvcRulesHandler.ServeHTTP(w, r)
 		case NetguardServiceGetSvcSvcRuleProcedure:
@@ -1176,10 +957,6 @@ func NewNetguardServiceHandler(svc NetguardServiceHandler, opts ...connect.Handl
 			netguardServiceWatchAddressGroupBindingsHandler.ServeHTTP(w, r)
 		case NetguardServiceWatchAddressGroupPortMappingsProcedure:
 			netguardServiceWatchAddressGroupPortMappingsHandler.ServeHTTP(w, r)
-		case NetguardServiceWatchRuleS2SProcedure:
-			netguardServiceWatchRuleS2SHandler.ServeHTTP(w, r)
-		case NetguardServiceWatchServiceAliasesProcedure:
-			netguardServiceWatchServiceAliasesHandler.ServeHTTP(w, r)
 		case NetguardServiceWatchAddressGroupBindingPoliciesProcedure:
 			netguardServiceWatchAddressGroupBindingPoliciesHandler.ServeHTTP(w, r)
 		case NetguardServiceWatchHostsProcedure:
@@ -1190,8 +967,6 @@ func NewNetguardServiceHandler(svc NetguardServiceHandler, opts ...connect.Handl
 			netguardServiceWatchNetworksHandler.ServeHTTP(w, r)
 		case NetguardServiceWatchNetworkBindingsProcedure:
 			netguardServiceWatchNetworkBindingsHandler.ServeHTTP(w, r)
-		case NetguardServiceWatchIEAgAgRulesProcedure:
-			netguardServiceWatchIEAgAgRulesHandler.ServeHTTP(w, r)
 		case NetguardServiceWatchSvcSvcRulesProcedure:
 			netguardServiceWatchSvcSvcRulesHandler.ServeHTTP(w, r)
 		case NetguardServiceWatchSvcFqdnRulesProcedure:
@@ -1249,22 +1024,6 @@ func (UnimplementedNetguardServiceHandler) GetAddressGroupPortMapping(context.Co
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetAddressGroupPortMapping is not implemented"))
 }
 
-func (UnimplementedNetguardServiceHandler) ListRuleS2S(context.Context, *connect.Request[netguard.ListRuleS2SReq]) (*connect.Response[netguard.ListRuleS2SResp], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.ListRuleS2S is not implemented"))
-}
-
-func (UnimplementedNetguardServiceHandler) GetRuleS2S(context.Context, *connect.Request[netguard.GetRuleS2SReq]) (*connect.Response[netguard.GetRuleS2SResp], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetRuleS2S is not implemented"))
-}
-
-func (UnimplementedNetguardServiceHandler) ListServiceAliases(context.Context, *connect.Request[netguard.ListServiceAliasesReq]) (*connect.Response[netguard.ListServiceAliasesResp], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.ListServiceAliases is not implemented"))
-}
-
-func (UnimplementedNetguardServiceHandler) GetServiceAlias(context.Context, *connect.Request[netguard.GetServiceAliasReq]) (*connect.Response[netguard.GetServiceAliasResp], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetServiceAlias is not implemented"))
-}
-
 func (UnimplementedNetguardServiceHandler) ListAddressGroupBindingPolicies(context.Context, *connect.Request[netguard.ListAddressGroupBindingPoliciesReq]) (*connect.Response[netguard.ListAddressGroupBindingPoliciesResp], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.ListAddressGroupBindingPolicies is not implemented"))
 }
@@ -1305,14 +1064,6 @@ func (UnimplementedNetguardServiceHandler) GetNetworkBinding(context.Context, *c
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetNetworkBinding is not implemented"))
 }
 
-func (UnimplementedNetguardServiceHandler) ListIEAgAgRules(context.Context, *connect.Request[netguard.ListIEAgAgRulesReq]) (*connect.Response[netguard.ListIEAgAgRulesResp], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.ListIEAgAgRules is not implemented"))
-}
-
-func (UnimplementedNetguardServiceHandler) GetIEAgAgRule(context.Context, *connect.Request[netguard.GetIEAgAgRuleReq]) (*connect.Response[netguard.GetIEAgAgRuleResp], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetIEAgAgRule is not implemented"))
-}
-
 func (UnimplementedNetguardServiceHandler) ListSvcSvcRules(context.Context, *connect.Request[netguard.ListSvcSvcRulesReq]) (*connect.Response[netguard.ListSvcSvcRulesResp], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.ListSvcSvcRules is not implemented"))
 }
@@ -1345,14 +1096,6 @@ func (UnimplementedNetguardServiceHandler) WatchAddressGroupPortMappings(context
 	return connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.WatchAddressGroupPortMappings is not implemented"))
 }
 
-func (UnimplementedNetguardServiceHandler) WatchRuleS2S(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error {
-	return connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.WatchRuleS2S is not implemented"))
-}
-
-func (UnimplementedNetguardServiceHandler) WatchServiceAliases(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error {
-	return connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.WatchServiceAliases is not implemented"))
-}
-
 func (UnimplementedNetguardServiceHandler) WatchAddressGroupBindingPolicies(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.WatchAddressGroupBindingPolicies is not implemented"))
 }
@@ -1371,10 +1114,6 @@ func (UnimplementedNetguardServiceHandler) WatchNetworks(context.Context, *conne
 
 func (UnimplementedNetguardServiceHandler) WatchNetworkBindings(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.WatchNetworkBindings is not implemented"))
-}
-
-func (UnimplementedNetguardServiceHandler) WatchIEAgAgRules(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error {
-	return connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.WatchIEAgAgRules is not implemented"))
 }
 
 func (UnimplementedNetguardServiceHandler) WatchSvcSvcRules(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error {

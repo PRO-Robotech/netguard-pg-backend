@@ -25,7 +25,6 @@ type ServiceServer struct {
 	netguardpb.UnimplementedNetguardServiceServer
 	serviceHandler      *handlers.ServiceHandler
 	addressGroupHandler *handlers.AddressGroupHandler
-	ruleHandler         *handlers.RuleHandler
 	svcSvcRuleHandler   *handlers.SvcSvcRuleHandler
 	svcFqdnRuleHandler  *handlers.SvcFqdnRuleHandler
 	networkHandler      *handlers.NetworkHandler
@@ -41,7 +40,6 @@ func NewServiceServer(service *services.NetguardFacade, watchCfg config.WatchCon
 	return &ServiceServer{
 		serviceHandler:      handlers.NewServiceHandler(service),
 		addressGroupHandler: handlers.NewAddressGroupHandler(service),
-		ruleHandler:         handlers.NewRuleHandler(service),
 		svcSvcRuleHandler:   handlers.NewSvcSvcRuleHandler(service),
 		svcFqdnRuleHandler:  handlers.NewSvcFqdnRuleHandler(service),
 		networkHandler:      handlers.NewNetworkHandler(service),
@@ -74,12 +72,6 @@ func (s *ServiceServer) ListServices(ctx context.Context, req *netguardpb.ListSe
 func (s *ServiceServer) GetService(ctx context.Context, req *netguardpb.GetServiceReq) (*netguardpb.GetServiceResp, error) {
 	return s.serviceHandler.GetService(ctx, req)
 }
-func (s *ServiceServer) ListServiceAliases(ctx context.Context, req *netguardpb.ListServiceAliasesReq) (*netguardpb.ListServiceAliasesResp, error) {
-	return s.serviceHandler.ListServiceAliases(ctx, req)
-}
-func (s *ServiceServer) GetServiceAlias(ctx context.Context, req *netguardpb.GetServiceAliasReq) (*netguardpb.GetServiceAliasResp, error) {
-	return s.serviceHandler.GetServiceAlias(ctx, req)
-}
 func (s *ServiceServer) ListAddressGroups(ctx context.Context, req *netguardpb.ListAddressGroupsReq) (*netguardpb.ListAddressGroupsResp, error) {
 	return s.addressGroupHandler.ListAddressGroups(ctx, req)
 }
@@ -103,18 +95,6 @@ func (s *ServiceServer) ListAddressGroupBindingPolicies(ctx context.Context, req
 }
 func (s *ServiceServer) GetAddressGroupBindingPolicy(ctx context.Context, req *netguardpb.GetAddressGroupBindingPolicyReq) (*netguardpb.GetAddressGroupBindingPolicyResp, error) {
 	return s.addressGroupHandler.GetAddressGroupBindingPolicy(ctx, req)
-}
-func (s *ServiceServer) ListRuleS2S(ctx context.Context, req *netguardpb.ListRuleS2SReq) (*netguardpb.ListRuleS2SResp, error) {
-	return s.ruleHandler.ListRuleS2S(ctx, req)
-}
-func (s *ServiceServer) GetRuleS2S(ctx context.Context, req *netguardpb.GetRuleS2SReq) (*netguardpb.GetRuleS2SResp, error) {
-	return s.ruleHandler.GetRuleS2S(ctx, req)
-}
-func (s *ServiceServer) ListIEAgAgRules(ctx context.Context, req *netguardpb.ListIEAgAgRulesReq) (*netguardpb.ListIEAgAgRulesResp, error) {
-	return s.ruleHandler.ListIEAgAgRules(ctx, req)
-}
-func (s *ServiceServer) GetIEAgAgRule(ctx context.Context, req *netguardpb.GetIEAgAgRuleReq) (*netguardpb.GetIEAgAgRuleResp, error) {
-	return s.ruleHandler.GetIEAgAgRule(ctx, req)
 }
 func (s *ServiceServer) ListSvcSvcRules(ctx context.Context, req *netguardpb.ListSvcSvcRulesReq) (*netguardpb.ListSvcSvcRulesResp, error) {
 	return s.svcSvcRuleHandler.ListSvcSvcRules(ctx, req)
@@ -147,14 +127,6 @@ func (s *ServiceServer) WatchAddressGroupPortMappings(req *netguardpb.WatchReque
 	return s.streamWatch("address_group_port_mappings", req, stream.Context(), stream.Send)
 }
 
-func (s *ServiceServer) WatchRuleS2S(req *netguardpb.WatchRequest, stream netguardpb.NetguardService_WatchRuleS2SServer) error {
-	return s.streamWatch("rule_s2s", req, stream.Context(), stream.Send)
-}
-
-func (s *ServiceServer) WatchServiceAliases(req *netguardpb.WatchRequest, stream netguardpb.NetguardService_WatchServiceAliasesServer) error {
-	return s.streamWatch("service_aliases", req, stream.Context(), stream.Send)
-}
-
 func (s *ServiceServer) WatchAddressGroupBindingPolicies(req *netguardpb.WatchRequest, stream netguardpb.NetguardService_WatchAddressGroupBindingPoliciesServer) error {
 	return s.streamWatch("address_group_binding_policies", req, stream.Context(), stream.Send)
 }
@@ -173,10 +145,6 @@ func (s *ServiceServer) WatchNetworks(req *netguardpb.WatchRequest, stream netgu
 
 func (s *ServiceServer) WatchNetworkBindings(req *netguardpb.WatchRequest, stream netguardpb.NetguardService_WatchNetworkBindingsServer) error {
 	return s.streamWatch("network_bindings", req, stream.Context(), stream.Send)
-}
-
-func (s *ServiceServer) WatchIEAgAgRules(req *netguardpb.WatchRequest, stream netguardpb.NetguardService_WatchIEAgAgRulesServer) error {
-	return s.streamWatch("ie_ag_ag_rules", req, stream.Context(), stream.Send)
 }
 
 func (s *ServiceServer) WatchSvcSvcRules(req *netguardpb.WatchRequest, stream netguardpb.NetguardService_WatchSvcSvcRulesServer) error {

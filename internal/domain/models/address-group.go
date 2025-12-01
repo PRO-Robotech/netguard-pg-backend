@@ -19,6 +19,14 @@ const (
 	HostSourceBinding HostRegistrationSource = "binding"
 )
 
+// RuleAction represents the action to take for a rule (ACCEPT or DROP)
+type RuleAction string
+
+const (
+	ActionAccept RuleAction = "ACCEPT"
+	ActionDrop   RuleAction = "DROP"
+)
+
 // HostReference represents a reference to a Host with additional metadata
 type HostReference struct {
 	// Reference to the Host object

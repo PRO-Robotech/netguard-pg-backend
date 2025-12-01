@@ -58,15 +58,6 @@ func NewAddressGroupBindingPolicyPtrOps(client client.BackendClient) BackendOper
 func NewAddressGroupPortMappingPtrOps(client client.BackendClient) BackendOperations[*models.AddressGroupPortMapping] {
 	return NewPtrBackendOperations(NewAddressGroupPortMappingBackendOperations(client))
 }
-func NewRuleS2SPtrOps(client client.BackendClient) BackendOperations[*models.RuleS2S] {
-	return NewPtrBackendOperations(NewRuleS2SBackendOperations(client))
-}
-func NewServiceAliasPtrOps(client client.BackendClient) BackendOperations[*models.ServiceAlias] {
-	return NewPtrBackendOperations(NewServiceAliasBackendOperations(client))
-}
-func NewIEAgAgRulePtrOps(client client.BackendClient) BackendOperations[*models.IEAgAgRule] {
-	return NewPtrBackendOperations(NewIEAgAgRuleBackendOperations(client))
-}
 func NewServicePtrOps(client client.BackendClient) BackendOperations[*models.Service] {
 	return NewPtrBackendOperations(NewServiceBackendOperations(client))
 }
