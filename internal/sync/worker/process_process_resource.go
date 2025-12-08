@@ -67,16 +67,7 @@ func (w *OutboxWorker) processProcessResource(
 	ctx context.Context,
 	item *domain.OutboxEntry,
 ) error {
-	w.logger.Info("processing process resource",
-		zap.String("resource_type", item.ResourceType),
-		zap.String("resource_id", item.ResourceID.String()),
-		zap.String("operation", string(item.Operation)))
-
-	// DELETE operations require coordinated deletion flow
 	if item.Operation == domain.SyncOperationDelete {
-		w.logger.Info("routing DELETE to coordinated deletion handler",
-			zap.String("resource_type", item.ResourceType),
-			zap.String("resource_id", item.ResourceID.String()))
 		return w.processProcessResourceDelete(ctx, item)
 	}
 
@@ -90,15 +81,8 @@ func (w *OutboxWorker) processProcessResource(
 	}
 
 	if len(affectedResources) == 0 {
-		w.logger.Warn("process resource has no affected resources",
-			zap.String("resource_type", item.ResourceType),
-			zap.String("resource_id", item.ResourceID.String()))
 		return w.markProcessResourceReady(ctx, item)
 	}
-
-	w.logger.Debug("checking affected resources",
-		zap.String("resource_type", item.ResourceType),
-		zap.Int("affected_count", len(affectedResources)))
 
 	pendingResources := []string{}
 	for i := range affectedResources {
@@ -141,11 +125,6 @@ func (w *OutboxWorker) processProcessResource(
 		w.logger.Warn("failed to update PendingSync condition", zap.Error(err))
 	}
 
-	w.logger.Info("process resource still pending dependencies",
-		zap.String("resource_type", item.ResourceType),
-		zap.String("resource_id", item.ResourceID.String()),
-		zap.Strings("pending_resources", pendingResources))
-
 	msg := fmt.Sprintf("Waiting for: %s", strings.Join(pendingResources, ", "))
 	retryErr := fmt.Errorf("waiting for affected resources: %s", msg)
 	return w.scheduleRetry(ctx, item, retryErr, 10*time.Second)
@@ -156,29 +135,7 @@ func (w *OutboxWorker) markProcessResourceReady(
 	ctx context.Context,
 	item *domain.OutboxEntry,
 ) error {
-	lastErr := ""
-	if item.LastError != nil {
-		lastErr = *item.LastError
-	}
-
-	w.logger.Info("marking process resource ready",
-		zap.String("resource_type", item.ResourceType),
-		zap.String("resource_id", item.ResourceID.String()),
-		zap.String("operation", string(item.Operation)))
-	w.logger.Debug("process resource state before mark ready",
-		zap.String("resource_type", item.ResourceType),
-		zap.String("resource_namespace", item.ResourceNamespace),
-		zap.String("resource_name", item.ResourceName),
-		zap.String("outbox_status", string(item.Status)),
-		zap.Int("attempts", item.Attempts),
-		zap.String("last_error", lastErr))
-
 	if item.Operation == domain.SyncOperationDelete {
-		// DELETE operations are handled by processProcessResourceDelete
-		// This path should not be reached for DELETE operations
-		w.logger.Warn("DELETE operation reached markProcessResourceReady - this is unexpected",
-			zap.String("resource_type", item.ResourceType),
-			zap.String("resource_id", item.ResourceID.String()))
 		return fmt.Errorf("DELETE operation should be handled by processProcessResourceDelete")
 	}
 
@@ -213,14 +170,6 @@ func (w *OutboxWorker) markProcessResourceReady(
 			return fmt.Errorf("failed to load HostBinding: %w", err)
 		}
 		if foundBinding == nil {
-			w.logger.Warn("process resource binding not found in registry",
-				zap.String("resource_type", item.ResourceType),
-				zap.String("resource_id", item.ResourceID.String()),
-				zap.String("resource_namespace", item.ResourceNamespace),
-				zap.String("resource_name", item.ResourceName),
-				zap.String("operation", string(item.Operation)),
-				zap.Int("attempts", item.Attempts),
-				zap.String("last_error", lastErr))
 			if err := w.markProcessOutboxCompleted(ctx, item); err != nil {
 				return fmt.Errorf("mark outbox completed for HostBinding: %w", err)
 			}
@@ -267,14 +216,6 @@ func (w *OutboxWorker) markProcessResourceReady(
 			return fmt.Errorf("failed to load NetworkBinding: %w", err)
 		}
 		if foundBinding == nil {
-			w.logger.Warn("process resource network binding not found in registry",
-				zap.String("resource_type", item.ResourceType),
-				zap.String("resource_id", item.ResourceID.String()),
-				zap.String("resource_namespace", item.ResourceNamespace),
-				zap.String("resource_name", item.ResourceName),
-				zap.String("operation", string(item.Operation)),
-				zap.Int("attempts", item.Attempts),
-				zap.String("last_error", lastErr))
 			if err := w.markProcessOutboxCompleted(ctx, item); err != nil {
 				return fmt.Errorf("mark outbox completed for NetworkBinding: %w", err)
 			}
@@ -321,14 +262,6 @@ func (w *OutboxWorker) markProcessResourceReady(
 			return fmt.Errorf("failed to load AddressGroupBinding: %w", err)
 		}
 		if foundBinding == nil {
-			w.logger.Warn("process resource address group binding not found in registry",
-				zap.String("resource_type", item.ResourceType),
-				zap.String("resource_id", item.ResourceID.String()),
-				zap.String("resource_namespace", item.ResourceNamespace),
-				zap.String("resource_name", item.ResourceName),
-				zap.String("operation", string(item.Operation)),
-				zap.Int("attempts", item.Attempts),
-				zap.String("last_error", lastErr))
 			if err := w.markProcessOutboxCompleted(ctx, item); err != nil {
 				return fmt.Errorf("mark outbox completed for AddressGroupBinding: %w", err)
 			}
@@ -365,10 +298,6 @@ func (w *OutboxWorker) markProcessResourceReady(
 		return fmt.Errorf("mark outbox completed: %w", err)
 	}
 
-	w.logger.Info("process resource marked ready successfully",
-		zap.String("resource_type", item.ResourceType),
-		zap.String("resource_id", item.ResourceID.String()))
-
 	return nil
 }
 
@@ -389,9 +318,6 @@ func (w *OutboxWorker) markProcessOutboxCompleted(
 			zap.Error(err))
 	}
 
-	w.logger.Info("process resource outbox marked as completed",
-		zap.String("resource_type", item.ResourceType),
-		zap.String("resource_id", item.ResourceID.String()))
 	return nil
 }
 
@@ -407,15 +333,6 @@ func (w *OutboxWorker) loadResourceFromRegistry(
 	return nil
 }
 
-// processProcessResourceDelete handles DELETE operations for process resources (bindings)
-// using the coordinated deletion architecture.
-//
-// ARCHITECTURE: Trigger-First Approach (Migration 044)
-// 1. Database triggers already updated affected resources when deletion_timestamp was set
-// 2. OutboxWorker only coordinates: wait for SGROUP sync, then physically delete
-// 3. No manual updates needed - triggers handle everything!
-//
-// See: docs/architecture/COORDINATED_BINDING_DELETION.md
 func (w *OutboxWorker) processProcessResourceDelete(
 	ctx context.Context,
 	item *domain.OutboxEntry,
@@ -445,12 +362,6 @@ func (w *OutboxWorker) processProcessResourceDelete(
 					zap.String("resource_type", item.ResourceType),
 					zap.String("resource_namespace", item.ResourceNamespace),
 					zap.String("resource_name", item.ResourceName))
-			} else {
-				w.logger.Warn("failed to capture binding snapshot before deletion",
-					zap.String("resource_type", item.ResourceType),
-					zap.String("resource_namespace", item.ResourceNamespace),
-					zap.String("resource_name", item.ResourceName),
-					zap.Error(snapErr))
 			}
 		} else {
 			bindingSnapshot = snapshot
@@ -461,12 +372,10 @@ func (w *OutboxWorker) processProcessResourceDelete(
 		return fmt.Errorf("deleting binding from DB: %w", err)
 	}
 
-	// Step 4: Rebuild port mappings impacted by this binding removal
 	if bindingSnapshot != nil {
 		w.regeneratePortMappingsAfterBindingDeletion(ctx, bindingSnapshot)
 	}
 
-	// Step 5: Delete outbox entry
 	if err := w.outboxRepo.Delete(ctx, item.ID); err != nil {
 		return fmt.Errorf("deleting outbox entry: %w", err)
 	}
@@ -748,20 +657,14 @@ func (w *OutboxWorker) updateAddressGroupForBindingDelete(
 		return fmt.Errorf("failed to load AddressGroup: %w", err)
 	}
 	if foundAG == nil {
-		w.logger.Warn("AddressGroup not found, may have been deleted",
-			zap.String("namespace", affected.Namespace),
-			zap.String("name", affected.Name))
-		return nil // Not an error - AG may have been deleted
+		return nil
 	}
 
-	// Find and remove Host from AggregatedHosts
-	// Get Host info from affects_resources (not from payload!)
 	affectedResources, err := extractAffectedResources(bindingEntry)
 	if err != nil {
 		return err
 	}
 
-	// Find the Host resource in affected resources
 	var hostNamespace, hostName string
 	for _, res := range affectedResources {
 		if res.Type == "Host" {
@@ -776,7 +679,6 @@ func (w *OutboxWorker) updateAddressGroupForBindingDelete(
 	}
 
 	// Remove Host from AggregatedHosts
-	originalCount := len(foundAG.AggregatedHosts)
 	newHosts := []models.HostReference{}
 	for _, aggHost := range foundAG.AggregatedHosts {
 		if aggHost.Ref.Namespace != hostNamespace || aggHost.Ref.Name != hostName {
@@ -785,15 +687,6 @@ func (w *OutboxWorker) updateAddressGroupForBindingDelete(
 	}
 	foundAG.AggregatedHosts = newHosts
 
-	w.logger.Info("removed Host from AddressGroup",
-		zap.String("ag_namespace", affected.Namespace),
-		zap.String("ag_name", affected.Name),
-		zap.String("host_namespace", hostNamespace),
-		zap.String("host_name", hostName),
-		zap.Int("original_count", originalCount),
-		zap.Int("new_count", len(newHosts)))
-
-	// Update conditions
 	foundAG.Meta.SetReadyCondition(metav1.ConditionFalse, "BindingDeleting", "Host binding removed, waiting for SGROUP sync")
 	foundAG.Meta.SetCondition(metav1.Condition{
 		Type:               "PendingSync",
@@ -810,8 +703,6 @@ func (w *OutboxWorker) updateAddressGroupForBindingDelete(
 		LastTransitionTime: metav1.Now(),
 	})
 
-	// Save AddressGroup (this will create UPDATE outbox entry)
-	// NOTE: NOT using ConditionOnlyOperation because we need to update aggregatedHosts!
 	resourceScope := ports.NewResourceIdentifierScope(models.ResourceIdentifier{
 		Name:      foundAG.Name,
 		Namespace: foundAG.Namespace,
@@ -820,10 +711,6 @@ func (w *OutboxWorker) updateAddressGroupForBindingDelete(
 	if err := writer.SyncAddressGroups(ctx, []models.AddressGroup{*foundAG}, resourceScope); err != nil {
 		return fmt.Errorf("failed to update AddressGroup: %w", err)
 	}
-
-	w.logger.Info("AddressGroup updated for binding delete",
-		zap.String("namespace", affected.Namespace),
-		zap.String("name", affected.Name))
 
 	return nil
 }
@@ -840,14 +727,9 @@ func (w *OutboxWorker) checkAffectedResourcesSynced(
 	}
 
 	if len(affectedResources) == 0 {
-		w.logger.Debug("no affected resources tracked for process resource",
-			zap.String("resource_type", item.ResourceType),
-			zap.String("resource_id", item.ResourceID.String()))
-		// No affected resources - considered synced
 		return true, nil
 	}
 
-	// Check each affected resource
 	for i := range affectedResources {
 		normalizeAffectedResource(&affectedResources[i])
 		affected := affectedResources[i]
@@ -864,30 +746,12 @@ func (w *OutboxWorker) checkAffectedResourcesSynced(
 					affected.Type, affected.Name, err)
 			}
 			if !exists {
-				w.logger.Debug("resource no longer exists, treating as synced",
-					zap.String("type", affected.Type),
-					zap.String("namespace", affected.Namespace),
-					zap.String("name", affected.Name))
 				continue
 			}
 
-			w.logger.Debug("resource not yet ready",
-				zap.String("type", affected.Type),
-				zap.String("namespace", affected.Namespace),
-				zap.String("name", affected.Name))
 			return false, nil
 		}
-
-		w.logger.Debug("resource ready",
-			zap.String("type", affected.Type),
-			zap.String("namespace", affected.Namespace),
-			zap.String("name", affected.Name))
 	}
-
-	// All resources ready and synced!
-	w.logger.Info("all affected resources synced to SGROUP",
-		zap.String("resource_type", item.ResourceType),
-		zap.Int("count", len(affectedResources)))
 
 	return true, nil
 }
@@ -911,11 +775,6 @@ func (w *OutboxWorker) deleteBindingFromDB(
 
 	query := fmt.Sprintf("DELETE FROM %s WHERE namespace = $1 AND name = $2", tableName)
 
-	w.logger.Info("physically deleting binding from database",
-		zap.String("table", tableName),
-		zap.String("namespace", item.ResourceNamespace),
-		zap.String("name", item.ResourceName))
-
 	result, err := w.pool.Exec(ctx, query, item.ResourceNamespace, item.ResourceName)
 	if err != nil {
 		return fmt.Errorf("failed to delete from %s: %w", tableName, err)
@@ -923,16 +782,8 @@ func (w *OutboxWorker) deleteBindingFromDB(
 
 	rowsAffected := result.RowsAffected()
 	if rowsAffected == 0 {
-		w.logger.Warn("binding not found in database, may have been deleted already",
-			zap.String("table", tableName),
-			zap.String("id", item.ResourceID.String()))
 		return nil // Not an error - binding may have been deleted manually
 	}
-
-	w.logger.Info("binding physically deleted from database",
-		zap.String("table", tableName),
-		zap.String("id", item.ResourceID.String()),
-		zap.Int64("rows_affected", rowsAffected))
 
 	return nil
 }
