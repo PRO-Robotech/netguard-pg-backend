@@ -3,13 +3,15 @@ package readers
 import (
 	"context"
 	"fmt"
-	"github.com/jackc/pgx/v5"
-	"github.com/pkg/errors"
+	"strings"
+	"time"
+
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/infrastructure/repositories/pg/internal/utils"
-	"strings"
-	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/pkg/errors"
 )
 
 func (r *Reader) ListAddressGroupBindings(ctx context.Context, consume func(models.AddressGroupBinding) error, scope ports.Scope) error {
@@ -42,8 +44,10 @@ func (r *Reader) ListAddressGroupBindings(ctx context.Context, consume func(mode
 			time.Sleep(time.Duration(10*(1<<attempt)) * time.Millisecond)
 			continue
 		}
+
 		return errors.Wrap(err, "failed to query address group bindings")
 	}
+
 	defer rows.Close()
 	for rows.Next() {
 		binding, err := r.scanAddressGroupBinding(rows)
@@ -56,6 +60,7 @@ func (r *Reader) ListAddressGroupBindings(ctx context.Context, consume func(mode
 	}
 	return rows.Err()
 }
+
 func (r *Reader) GetAddressGroupBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBinding, error) {
 	query := `
 		SELECT agb.namespace, agb.name, agb.service_namespace, agb.service_name,
@@ -73,8 +78,10 @@ func (r *Reader) GetAddressGroupBindingByID(ctx context.Context, id models.Resou
 		}
 		return nil, errors.Wrap(err, "failed to scan address group binding")
 	}
+
 	return binding, nil
 }
+
 func (r *Reader) scanAddressGroupBinding(rows pgx.Rows) (models.AddressGroupBinding, error) {
 	var binding models.AddressGroupBinding
 	var labelsJSON, annotationsJSON, conditionsJSON []byte
@@ -103,16 +110,20 @@ func (r *Reader) scanAddressGroupBinding(rows pgx.Rows) (models.AddressGroupBind
 	if err != nil {
 		return binding, err
 	}
+
 	binding.Meta, err = utils.ConvertK8sMetadata(fmt.Sprintf("%d", resourceVersion), labelsJSON, annotationsJSON, conditionsJSON, createdAt, updatedAt, deletionTS)
 	if err != nil {
 		return binding, err
 	}
+
 	binding.Meta.UID = uid
 	binding.SelfRef = models.NewSelfRef(models.NewResourceIdentifier(binding.Name, models.WithNamespace(binding.Namespace)))
 	binding.ServiceRef = models.NewServiceRef(serviceName, models.WithNamespace(serviceNamespace))
 	binding.AddressGroupRef = models.NewAddressGroupRef(addressGroupName, models.WithNamespace(addressGroupNamespace))
+
 	return binding, nil
 }
+
 func (r *Reader) scanAddressGroupBindingRow(row pgx.Row) (*models.AddressGroupBinding, error) {
 	var binding models.AddressGroupBinding
 	var labelsJSON, annotationsJSON, conditionsJSON []byte
@@ -141,6 +152,7 @@ func (r *Reader) scanAddressGroupBindingRow(row pgx.Row) (*models.AddressGroupBi
 	if err != nil {
 		return nil, err
 	}
+
 	binding.Meta, err = utils.ConvertK8sMetadata(fmt.Sprintf("%d", resourceVersion), labelsJSON, annotationsJSON, conditionsJSON, createdAt, updatedAt, deletionTS)
 	if err != nil {
 		return nil, err
@@ -149,5 +161,6 @@ func (r *Reader) scanAddressGroupBindingRow(row pgx.Row) (*models.AddressGroupBi
 	binding.SelfRef = models.NewSelfRef(models.NewResourceIdentifier(binding.Name, models.WithNamespace(binding.Namespace)))
 	binding.ServiceRef = models.NewServiceRef(serviceName, models.WithNamespace(serviceNamespace))
 	binding.AddressGroupRef = models.NewAddressGroupRef(addressGroupName, models.WithNamespace(addressGroupNamespace))
+
 	return &binding, nil
 }

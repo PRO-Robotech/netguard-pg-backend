@@ -3,13 +3,15 @@ package readers
 import (
 	"context"
 	"fmt"
-	"github.com/jackc/pgx/v5"
-	"github.com/pkg/errors"
+	"time"
+
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/infrastructure/repositories/pg/internal/utils"
 	"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
-	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/pkg/errors"
 )
 
 func (r *Reader) ListHostBindings(ctx context.Context, consume func(models.HostBinding) error, scope ports.Scope) error {
@@ -45,8 +47,10 @@ func (r *Reader) ListHostBindings(ctx context.Context, consume func(models.HostB
 			return err
 		}
 	}
+
 	return rows.Err()
 }
+
 func (r *Reader) GetHostBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.HostBinding, error) {
 	query := `
 		SELECT hb.namespace, hb.name,
@@ -65,8 +69,10 @@ func (r *Reader) GetHostBindingByID(ctx context.Context, id models.ResourceIdent
 		}
 		return nil, errors.Wrap(err, "failed to scan host binding")
 	}
+
 	return hostBinding, nil
 }
+
 func (r *Reader) scanHostBinding(rows pgx.Rows) (models.HostBinding, error) {
 	var hostBinding models.HostBinding
 	var labelsJSON, annotationsJSON, conditionsJSON []byte
@@ -116,8 +122,6 @@ func (r *Reader) scanHostBinding(rows pgx.Rows) (models.HostBinding, error) {
 		return models.HostBinding{}, errors.Wrap(err, "failed to parse host binding metadata")
 	}
 	hostBinding.Meta.UID = uid
-
-	// Deduplicate conditions loaded from database to prevent duplicate Ready/Validated/etc conditions
 	hostBinding.Meta.DeduplicateConditions()
 
 	return hostBinding, nil
@@ -171,8 +175,6 @@ func (r *Reader) scanHostBindingRow(row pgx.Row) (*models.HostBinding, error) {
 		return nil, errors.Wrap(err, "failed to parse host binding metadata")
 	}
 	hostBinding.Meta.UID = uid
-
-	// Deduplicate conditions loaded from database to prevent duplicate Ready/Validated/etc conditions
 	hostBinding.Meta.DeduplicateConditions()
 
 	return &hostBinding, nil

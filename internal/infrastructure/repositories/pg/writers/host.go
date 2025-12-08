@@ -107,10 +107,12 @@ func (w *Writer) upsertHost(ctx context.Context, host *models.Host) error {
 
 	// Check if host exists to determine if this is INSERT or UPDATE
 	var ipListJSON []byte
+	var metaInfoJSON []byte
 	var existingIpListJSON []byte
+	var existingMetaInfoJSON []byte
 	var existingResourceVersion sql.NullInt64
-	checkQuery := `SELECT COALESCE(ip_list, '[]'::jsonb), resource_version FROM hosts WHERE namespace = $1 AND name = $2`
-	queryErr := w.tx.QueryRow(ctx, checkQuery, host.Namespace, host.Name).Scan(&existingIpListJSON, &existingResourceVersion)
+	checkQuery := `SELECT COALESCE(ip_list, '[]'::jsonb), COALESCE(meta_info, '{}'::jsonb), resource_version FROM hosts WHERE namespace = $1 AND name = $2`
+	queryErr := w.tx.QueryRow(ctx, checkQuery, host.Namespace, host.Name).Scan(&existingIpListJSON, &existingMetaInfoJSON, &existingResourceVersion)
 	if queryErr != nil && !isNoRowsError(queryErr) {
 		return errors.Wrapf(queryErr, "failed to check existing host %s/%s", host.Namespace, host.Name)
 	}
@@ -132,6 +134,12 @@ func (w *Writer) upsertHost(ctx context.Context, host *models.Host) error {
 		_ = json.Unmarshal(existingIpListJSON, &existingIpList)
 	}
 
+	var existingMetaInfo *models.HostMetaInfo
+	if queryErr == nil && len(existingMetaInfoJSON) > 0 && string(existingMetaInfoJSON) != "{}" {
+		existingMetaInfo = &models.HostMetaInfo{}
+		_ = json.Unmarshal(existingMetaInfoJSON, existingMetaInfo)
+	}
+
 	if len(host.IpList) > 0 {
 		ipListJSON, err = json.Marshal(host.IpList)
 		if err != nil {
@@ -139,6 +147,16 @@ func (w *Writer) upsertHost(ctx context.Context, host *models.Host) error {
 		}
 	} else if len(existingIpList) > 0 {
 		ipListJSON = existingIpListJSON
+	}
+
+	// Handle MetaInfo - preserve existing if not set in new host
+	if host.MetaInfo != nil {
+		metaInfoJSON, err = json.Marshal(host.MetaInfo)
+		if err != nil {
+			return errors.Wrap(err, "failed to marshal MetaInfo")
+		}
+	} else if existingMetaInfo != nil {
+		metaInfoJSON = existingMetaInfoJSON
 	}
 
 	// Insert new K8s metadata to get new ResourceVersion
@@ -180,9 +198,9 @@ func (w *Writer) upsertHost(ctx context.Context, host *models.Host) error {
 			host_name_sync, address_group_name, is_bound,
 			binding_ref_namespace, binding_ref_name,
 			address_group_ref_namespace, address_group_ref_name,
-			ip_list,
+			ip_list, meta_info,
 			resource_version
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		ON CONFLICT (namespace, name) DO UPDATE SET
 			uuid = EXCLUDED.uuid,
 			host_name_sync = EXCLUDED.host_name_sync,
@@ -193,6 +211,7 @@ func (w *Writer) upsertHost(ctx context.Context, host *models.Host) error {
 			address_group_ref_namespace = EXCLUDED.address_group_ref_namespace,
 			address_group_ref_name = EXCLUDED.address_group_ref_name,
 			ip_list = EXCLUDED.ip_list,
+			meta_info = EXCLUDED.meta_info,
 			resource_version = EXCLUDED.resource_version`
 
 	_, err = w.tx.Exec(ctx, hostQuery,
@@ -200,7 +219,7 @@ func (w *Writer) upsertHost(ctx context.Context, host *models.Host) error {
 		hostNameSync, addressGroupName, host.IsBound,
 		bindingRefNamespace, bindingRefName,
 		addressGroupRefNamespace, addressGroupRefName,
-		ipListJSON,
+		ipListJSON, metaInfoJSON,
 		resourceVersion,
 	)
 	if err != nil {

@@ -112,6 +112,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostBindingSpec":                 schema_k8s_apis_netguard_v1beta1_HostBindingSpec(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostBindingStatus":               schema_k8s_apis_netguard_v1beta1_HostBindingStatus(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostList":                        schema_k8s_apis_netguard_v1beta1_HostList(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostMetaInfo":                    schema_k8s_apis_netguard_v1beta1_HostMetaInfo(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostReference":                   schema_k8s_apis_netguard_v1beta1_HostReference(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostSpec":                        schema_k8s_apis_netguard_v1beta1_HostSpec(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostStatus":                      schema_k8s_apis_netguard_v1beta1_HostStatus(ref),
@@ -3788,11 +3789,17 @@ func schema_k8s_apis_netguard_v1beta1_Host(ref common.ReferenceCallback) common.
 							},
 						},
 					},
+					"xMetaInfo": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MetaInfo contains meta information for this Host, synchronized from SGROUP (read-only)",
+							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostMetaInfo"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostSpec", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostStatus", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IPItem"},
+			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostMetaInfo", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostSpec", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostStatus", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IPItem"},
 	}
 }
 
@@ -4010,6 +4017,61 @@ func schema_k8s_apis_netguard_v1beta1_HostList(ref common.ReferenceCallback) com
 		},
 		Dependencies: []string{
 			"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.Host"},
+	}
+}
+
+func schema_k8s_apis_netguard_v1beta1_HostMetaInfo(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "HostMetaInfo contains meta information about the host from SGROUP (read-only)",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"hostName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "HostName is the hostname reported by the agent",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"os": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Os is the operating system (e.g., linux, windows)",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"platform": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Platform is the platform (e.g., ubuntu, centos)",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"platformFamily": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PlatformFamily is the platform family (e.g., debian, rhel)",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"platformVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PlatformVersion is the platform version",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"kernelVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "KernelVersion is the kernel version",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
 	}
 }
 

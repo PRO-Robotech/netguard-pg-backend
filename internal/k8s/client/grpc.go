@@ -1761,12 +1761,22 @@ func convertHostFromProto(protoHost *netguardpb.Host) models.Host {
 				IP: ipItem.GetIp(),
 			}
 		}
-	} else {
+	}
+	// Convert MetaInfo if present (read-only from SGROUP)
+	if protoHost.GetMetaInfo() != nil {
+		result.MetaInfo = &models.HostMetaInfo{
+			HostName:        protoHost.GetMetaInfo().GetHostName(),
+			Os:              protoHost.GetMetaInfo().GetOs(),
+			Platform:        protoHost.GetMetaInfo().GetPlatform(),
+			PlatformFamily:  protoHost.GetMetaInfo().GetPlatformFamily(),
+			PlatformVersion: protoHost.GetMetaInfo().GetPlatformVersion(),
+			KernelVersion:   protoHost.GetMetaInfo().GetKernelVersion(),
+		}
 	}
 	return result
 }
 func convertHostToPB(host models.Host) *netguardpb.Host {
-	return &netguardpb.Host{
+	pbHost := &netguardpb.Host{
 		SelfRef: &netguardpb.ResourceIdentifier{
 			Name:      host.Name,
 			Namespace: host.Namespace,
@@ -1808,6 +1818,27 @@ func convertHostToPB(host models.Host) *netguardpb.Host {
 			ObservedGeneration: host.Meta.ObservedGeneration,
 		},
 	}
+	// Convert IpList if present
+	if len(host.IpList) > 0 {
+		pbHost.IpList = make([]*netguardpb.IPItem, len(host.IpList))
+		for i, ipItem := range host.IpList {
+			pbHost.IpList[i] = &netguardpb.IPItem{
+				Ip: ipItem.IP,
+			}
+		}
+	}
+	// Convert MetaInfo if present (read-only from SGROUP)
+	if host.MetaInfo != nil {
+		pbHost.MetaInfo = &netguardpb.HostMetaInfo{
+			HostName:        host.MetaInfo.HostName,
+			Os:              host.MetaInfo.Os,
+			Platform:        host.MetaInfo.Platform,
+			PlatformFamily:  host.MetaInfo.PlatformFamily,
+			PlatformVersion: host.MetaInfo.PlatformVersion,
+			KernelVersion:   host.MetaInfo.KernelVersion,
+		}
+	}
+	return pbHost
 }
 func convertHostBindingFromProto(protoBinding *netguardpb.HostBinding) models.HostBinding {
 	result := models.HostBinding{

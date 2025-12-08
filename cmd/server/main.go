@@ -7,6 +7,11 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
 	"netguard-pg-backend/internal/api/netguard"
 	"netguard-pg-backend/internal/app/server"
 	"netguard-pg-backend/internal/application/services"
@@ -28,10 +33,6 @@ import (
 	"netguard-pg-backend/internal/sync/worker"
 	"netguard-pg-backend/internal/watch"
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
 	"github.com/go-logr/stdr"
 	_ "github.com/lib/pq"
@@ -326,13 +327,6 @@ func setupReverseSyncSystem(
 						return
 					case <-ticker.C:
 						if reverseSyncSystem.IsRunning() {
-							stats := reverseSyncSystem.GetStats()
-							processorCount := reverseSyncSystem.GetProcessorCount()
-							logger.Info("Reverse sync statistics",
-								zap.Int("processors", processorCount),
-								zap.Int64("total_events", stats.TotalEvents),
-								zap.Int64("processed_events", stats.ProcessedEvents),
-								zap.Int64("failed_events", stats.FailedEvents))
 						}
 					}
 				}
@@ -367,6 +361,7 @@ func setupOutboxWorker(
 	if err != nil {
 		logger.Fatal("failed to create sgroups client for worker", zap.Error(err))
 	}
+
 	hostSyncer := syncers.NewHostSyncer(sgroupsClient, logrLogger)
 	addressGroupSyncer := syncers.NewAddressGroupSyncer(sgroupsClient, logrLogger)
 	networkSyncer := syncers.NewNetworkSyncer(sgroupsClient, logrLogger)

@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"netguard-pg-backend/internal/domain/models"
-	"netguard-pg-backend/internal/domain/ports"
-	"netguard-pg-backend/internal/infrastructure/repositories/pg/internal/utils"
 	"sort"
 	"strings"
 	"time"
+
+	"netguard-pg-backend/internal/domain/models"
+	"netguard-pg-backend/internal/domain/ports"
+	"netguard-pg-backend/internal/infrastructure/repositories/pg/internal/utils"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/pkg/errors"
@@ -77,6 +78,7 @@ func (r *Reader) ListServices(ctx context.Context, consume func(models.Service) 
 	}
 	return rows.Err()
 }
+
 func (r *Reader) GetServiceByID(ctx context.Context, id models.ResourceIdentifier) (*models.Service, error) {
 	query := `
 	SELECT s.namespace, s.name, s.description, s.ingress_ports,
@@ -108,6 +110,7 @@ func (r *Reader) GetServiceByID(ctx context.Context, id models.ResourceIdentifie
 	}
 	return service, nil
 }
+
 func (r *Reader) scanService(rows pgx.Rows) (models.Service, error) {
 	var service models.Service
 	var addressGroupsJSON, aggregatedAddressGroupsJSON []byte

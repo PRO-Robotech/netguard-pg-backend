@@ -678,6 +678,33 @@ type IPItem struct {
 	IP string `json:"ip"`
 }
 
+// HostMetaInfo contains meta information about the host from SGROUP (read-only)
+type HostMetaInfo struct {
+	// HostName is the hostname reported by the agent
+	// +optional
+	HostName string `json:"hostName,omitempty"`
+
+	// Os is the operating system (e.g., linux, windows)
+	// +optional
+	Os string `json:"os,omitempty"`
+
+	// Platform is the platform (e.g., ubuntu, centos)
+	// +optional
+	Platform string `json:"platform,omitempty"`
+
+	// PlatformFamily is the platform family (e.g., debian, rhel)
+	// +optional
+	PlatformFamily string `json:"platformFamily,omitempty"`
+
+	// PlatformVersion is the platform version
+	// +optional
+	PlatformVersion string `json:"platformVersion,omitempty"`
+
+	// KernelVersion is the kernel version
+	// +optional
+	KernelVersion string `json:"kernelVersion,omitempty"`
+}
+
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -692,6 +719,10 @@ type Host struct {
 	// IPList contains IP addresses for this Host, synchronized from SGROUP
 	// +optional
 	IPList []IPItem `json:"xIPList"`
+
+	// MetaInfo contains meta information for this Host, synchronized from SGROUP (read-only)
+	// +optional
+	MetaInfo *HostMetaInfo `json:"xMetaInfo"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

@@ -58,6 +58,18 @@ func ConvertHost(protoHost *netguardpb.Host) models.Host {
 		}
 	}
 
+	// Convert MetaInfo if present (read-only from SGROUP)
+	if protoHost.MetaInfo != nil {
+		host.MetaInfo = &models.HostMetaInfo{
+			HostName:        protoHost.MetaInfo.HostName,
+			Os:              protoHost.MetaInfo.Os,
+			Platform:        protoHost.MetaInfo.Platform,
+			PlatformFamily:  protoHost.MetaInfo.PlatformFamily,
+			PlatformVersion: protoHost.MetaInfo.PlatformVersion,
+			KernelVersion:   protoHost.MetaInfo.KernelVersion,
+		}
+	}
+
 	return host
 }
 
@@ -104,6 +116,18 @@ func ConvertHostToPB(host models.Host) *netguardpb.Host {
 			pbHost.IpList[i] = &netguardpb.IPItem{
 				Ip: ipItem.IP,
 			}
+		}
+	}
+
+	// Convert MetaInfo if present (read-only from SGROUP)
+	if host.MetaInfo != nil {
+		pbHost.MetaInfo = &netguardpb.HostMetaInfo{
+			HostName:        host.MetaInfo.HostName,
+			Os:              host.MetaInfo.Os,
+			Platform:        host.MetaInfo.Platform,
+			PlatformFamily:  host.MetaInfo.PlatformFamily,
+			PlatformVersion: host.MetaInfo.PlatformVersion,
+			KernelVersion:   host.MetaInfo.KernelVersion,
 		}
 	}
 

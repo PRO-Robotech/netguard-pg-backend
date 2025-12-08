@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/jackc/pgx/v5"
-	"github.com/pkg/errors"
+	"time"
+
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/infrastructure/repositories/pg/internal/utils"
-	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/pkg/errors"
 )
 
 func (r *Reader) ListAddressGroupBindingPolicies(ctx context.Context, consume func(models.AddressGroupBindingPolicy) error, scope ports.Scope) error {
@@ -43,8 +45,10 @@ func (r *Reader) ListAddressGroupBindingPolicies(ctx context.Context, consume fu
 			return err
 		}
 	}
+
 	return rows.Err()
 }
+
 func (r *Reader) GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
 	query := `
 		SELECT agbp.namespace, agbp.name, agbp.address_group_ref, agbp.service_ref,
@@ -61,8 +65,10 @@ func (r *Reader) GetAddressGroupBindingPolicyByID(ctx context.Context, id models
 		}
 		return nil, errors.Wrap(err, "failed to scan address group binding policy")
 	}
+
 	return policy, nil
 }
+
 func (r *Reader) scanAddressGroupBindingPolicy(rows pgx.Rows) (models.AddressGroupBindingPolicy, error) {
 	var policy models.AddressGroupBindingPolicy
 	var labelsJSON, annotationsJSON, conditionsJSON []byte
@@ -87,6 +93,7 @@ func (r *Reader) scanAddressGroupBindingPolicy(rows pgx.Rows) (models.AddressGro
 	if err != nil {
 		return policy, err
 	}
+
 	policy.Meta, err = utils.ConvertK8sMetadata(fmt.Sprintf("%d", resourceVersion), labelsJSON, annotationsJSON, conditionsJSON, createdAt, updatedAt, deletionTS)
 	if err != nil {
 		return policy, err
@@ -97,13 +104,16 @@ func (r *Reader) scanAddressGroupBindingPolicy(rows pgx.Rows) (models.AddressGro
 			return policy, errors.Wrap(err, "failed to unmarshal address_group_ref")
 		}
 	}
+
 	if len(serviceRefJSON) > 0 {
 		if err := json.Unmarshal(serviceRefJSON, &policy.ServiceRef); err != nil {
 			return policy, errors.Wrap(err, "failed to unmarshal service_ref")
 		}
 	}
+
 	return policy, nil
 }
+
 func (r *Reader) scanAddressGroupBindingPolicyRow(row pgx.Row) (*models.AddressGroupBindingPolicy, error) {
 	var policy models.AddressGroupBindingPolicy
 	var labelsJSON, annotationsJSON, conditionsJSON []byte
@@ -143,5 +153,6 @@ func (r *Reader) scanAddressGroupBindingPolicyRow(row pgx.Row) (*models.AddressG
 			return nil, errors.Wrap(err, "failed to unmarshal service_ref")
 		}
 	}
+
 	return &policy, nil
 }

@@ -420,12 +420,6 @@ func (w *OutboxWorker) processProcessResourceDelete(
 	ctx context.Context,
 	item *domain.OutboxEntry,
 ) error {
-	w.logger.Info("processing process resource DELETE (coordinated deletion)",
-		zap.String("resource_type", item.ResourceType),
-		zap.String("resource_id", item.ResourceID.String()))
-
-	// Database triggers update dependent resources when deletion_timestamp is set.
-
 	if err := w.reprocessAffectedResourceConditions(ctx, item); err != nil {
 		w.logger.Warn("failed to reprocess affected resource conditions",
 			zap.String("resource_type", item.ResourceType),
@@ -433,22 +427,15 @@ func (w *OutboxWorker) processProcessResourceDelete(
 			zap.Error(err))
 	}
 
-	// Step 1: Check if all affected resources are synced to SGROUP
 	synced, err := w.checkAffectedResourcesSynced(ctx, item)
 	if err != nil {
 		return fmt.Errorf("checking sync status: %w", err)
 	}
 
 	if !synced {
-		// Not yet synced - return special error that won't increment attempts
-		w.logger.Debug("affected resources not yet synced, waiting",
-			zap.String("resource_type", item.ResourceType),
-			zap.String("resource_id", item.ResourceID.String()),
-			zap.Int("attempts", item.Attempts))
 		return ErrWaitingForSync
 	}
 
-	// Step 2: All affected resources synced - prepare regeneration snapshot if needed
 	var bindingSnapshot *models.AddressGroupBinding
 	if item.ResourceType == string(registry.TypeAddressGroupBinding) && w.portMappingRegenerator != nil {
 		snapshot, snapErr := w.snapshotAddressGroupBinding(ctx, item)
@@ -470,11 +457,6 @@ func (w *OutboxWorker) processProcessResourceDelete(
 		}
 	}
 
-	// Step 3: All affected resources synced - physically delete the binding
-	w.logger.Info("all affected resources synced, proceeding with physical deletion",
-		zap.String("resource_type", item.ResourceType),
-		zap.String("resource_id", item.ResourceID.String()))
-
 	if err := w.deleteBindingFromDB(ctx, item); err != nil {
 		return fmt.Errorf("deleting binding from DB: %w", err)
 	}
@@ -488,10 +470,6 @@ func (w *OutboxWorker) processProcessResourceDelete(
 	if err := w.outboxRepo.Delete(ctx, item.ID); err != nil {
 		return fmt.Errorf("deleting outbox entry: %w", err)
 	}
-
-	w.logger.Info("process resource DELETE completed successfully",
-		zap.String("resource_type", item.ResourceType),
-		zap.String("resource_id", item.ResourceID.String()))
 
 	return nil
 }
@@ -525,10 +503,6 @@ func (w *OutboxWorker) reprocessAffectedResourceConditions(
 	for i := range affectedResources {
 		normalizeAffectedResource(&affectedResources[i])
 		affected := affectedResources[i]
-		w.logger.Info("reprocessing affected resource conditions",
-			zap.String("type", affected.Type),
-			zap.String("namespace", affected.Namespace),
-			zap.String("name", affected.Name))
 		switch affected.Type {
 		case string(registry.TypeAddressGroup):
 			ag, err := reader.GetAddressGroupByID(ctx, models.ResourceIdentifier{Namespace: affected.Namespace, Name: affected.Name})
@@ -555,11 +529,6 @@ func (w *OutboxWorker) reprocessAffectedResourceConditions(
 					zap.String("namespace", ag.Namespace),
 					zap.String("name", ag.Name),
 					zap.Error(err))
-			} else {
-				w.logger.Info("AddressGroup conditions reprocessed",
-					zap.String("namespace", ag.Namespace),
-					zap.String("name", ag.Name),
-					zap.Int("conditions", len(ag.Meta.Conditions)))
 			}
 
 		case string(registry.TypeHost):
@@ -587,11 +556,6 @@ func (w *OutboxWorker) reprocessAffectedResourceConditions(
 					zap.String("namespace", host.Namespace),
 					zap.String("name", host.Name),
 					zap.Error(err))
-			} else {
-				w.logger.Info("Host conditions reprocessed",
-					zap.String("namespace", host.Namespace),
-					zap.String("name", host.Name),
-					zap.Int("conditions", len(host.Meta.Conditions)))
 			}
 		default:
 			w.logger.Debug("condition reprocess skipped for resource type",

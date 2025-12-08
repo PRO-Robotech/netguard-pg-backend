@@ -3,13 +3,15 @@ package readers
 import (
 	"context"
 	"fmt"
-	"github.com/jackc/pgx/v5"
-	"github.com/pkg/errors"
+	"time"
+
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/infrastructure/repositories/pg/internal/utils"
 	"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
-	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/pkg/errors"
 )
 
 func (r *Reader) ListNetworks(ctx context.Context, consume func(models.Network) error, scope ports.Scope) error {
@@ -45,8 +47,10 @@ func (r *Reader) ListNetworks(ctx context.Context, consume func(models.Network) 
 			return err
 		}
 	}
+
 	return rows.Err()
 }
+
 func (r *Reader) GetNetworkByID(ctx context.Context, id models.ResourceIdentifier) (*models.Network, error) {
 	query := `
 		SELECT n.namespace, n.name, n.cidr::text, n.network_items, n.is_bound,
@@ -65,8 +69,10 @@ func (r *Reader) GetNetworkByID(ctx context.Context, id models.ResourceIdentifie
 		}
 		return nil, errors.Wrap(err, "failed to scan network")
 	}
+
 	return network, nil
 }
+
 func (r *Reader) scanNetwork(rows pgx.Rows) (models.Network, error) {
 	var network models.Network
 	var labelsJSON, annotationsJSON, conditionsJSON []byte
@@ -126,8 +132,10 @@ func (r *Reader) scanNetwork(rows pgx.Rows) (models.Network, error) {
 			Namespace: *addressGroupRefNamespace,
 		}
 	}
+
 	return network, nil
 }
+
 func (r *Reader) scanNetworkRow(row pgx.Row) (*models.Network, error) {
 	var network models.Network
 	var labelsJSON, annotationsJSON, conditionsJSON []byte
@@ -187,8 +195,10 @@ func (r *Reader) scanNetworkRow(row pgx.Row) (*models.Network, error) {
 			Namespace: *addressGroupRefNamespace,
 		}
 	}
+
 	return &network, nil
 }
+
 func (r *Reader) GetNetworkByCIDR(ctx context.Context, cidr string) (*models.Network, error) {
 	query := `
 		SELECT n.namespace, n.name, n.cidr::text, n.network_items, n.is_bound,
@@ -248,5 +258,6 @@ func (r *Reader) GetNetworksOverlappingCIDR(ctx context.Context, cidr string) ([
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating networks: %w", err)
 	}
+
 	return networks, nil
 }

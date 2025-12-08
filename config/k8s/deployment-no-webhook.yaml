@@ -19,7 +19,7 @@ spec:
       serviceAccountName: netguard-apiserver
       containers:
         - name: apiserver
-          image: netguard/k8s-apiserver:latest
+          image: netguard/k8s-apiserver:local-dev
           imagePullPolicy: IfNotPresent
           command: [ "/root/k8s-apiserver" ]
           args: 

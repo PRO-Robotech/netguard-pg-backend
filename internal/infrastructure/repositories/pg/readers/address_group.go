@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -131,7 +130,7 @@ func (r *Reader) scanAddressGroup(rows pgx.Rows) (models.AddressGroup, error) {
 	} else {
 		addressGroup.AddressGroupName = addressGroup.Name
 	}
-	logAddressGroupState("pg_reader_list", &addressGroup)
+
 	return addressGroup, nil
 }
 func (r *Reader) scanAddressGroupRow(row pgx.Row) (*models.AddressGroup, error) {
@@ -199,20 +198,6 @@ func (r *Reader) scanAddressGroupRow(row pgx.Row) (*models.AddressGroup, error) 
 	} else {
 		addressGroup.AddressGroupName = addressGroup.Name
 	}
-	logAddressGroupState("pg_reader_get", &addressGroup)
-	return &addressGroup, nil
-}
 
-func logAddressGroupState(source string, ag *models.AddressGroup) {
-	if ag == nil {
-		return
-	}
-	log.Printf("[AddressGroupReader] source=%s ag=%s/%s rv=%s networks=%d hosts=%d aggregatedHosts=%d",
-		source,
-		ag.Namespace,
-		ag.Name,
-		ag.Meta.ResourceVersion,
-		len(ag.Networks),
-		len(ag.Hosts),
-		len(ag.AggregatedHosts))
+	return &addressGroup, nil
 }

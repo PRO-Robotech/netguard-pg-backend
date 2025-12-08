@@ -34,15 +34,13 @@ func (r *PostgreSQLHostReader) GetHostsWithoutIPSet(ctx context.Context, namespa
 	var hosts []models.Host
 	var scope ports.Scope = ports.EmptyScope{}
 
-	// For now, we'll list all hosts and filter by namespace in code
-	// TODO: Implement proper namespace scoping when available
 	err = reader.ListHosts(ctx, func(host models.Host) error {
 		// Apply namespace filter if specified
 		if namespace != "" && host.Namespace != namespace {
 			return nil
 		}
 		// Filter hosts without IPSet (empty or nil)
-		if len(host.IpList) == 0 {
+		if len(host.IpList) == 0 || host.MetaInfo == nil {
 			hosts = append(hosts, host)
 		}
 		return nil
@@ -63,9 +61,7 @@ func (r *PostgreSQLHostReader) GetHostByUUID(ctx context.Context, uuid string) (
 	}
 	defer reader.Close()
 
-	// Since we can't search by UUID directly, we need to list all hosts and find the one with matching UUID
 	var foundHost *models.Host
-
 	err = reader.ListHosts(ctx, func(host models.Host) error {
 		if host.UUID == uuid {
 			foundHost = &host
@@ -93,9 +89,8 @@ func (r *PostgreSQLHostReader) ListHosts(ctx context.Context, identifiers []sync
 	defer reader.Close()
 
 	var hosts []models.Host
-
-	// Create resource identifier scope for efficient querying
 	var resourceIds []models.ResourceIdentifier
+
 	for _, id := range identifiers {
 		resourceIds = append(resourceIds, models.ResourceIdentifier{
 			Namespace: id.Namespace,
@@ -131,6 +126,11 @@ func NewPostgreSQLHostWriter(registry ports.Registry) synchronizer.HostWriter {
 
 // UpdateHostIPSet updates the IPSet for a specific host
 func (w *PostgreSQLHostWriter) UpdateHostIPSet(ctx context.Context, hostID string, ipSet []string) error {
+	return w.updateHostData(ctx, hostID, ipSet, nil)
+}
+
+// updateHostData updates the IPSet and optionally MetaInfo for a specific host
+func (w *PostgreSQLHostWriter) updateHostData(ctx context.Context, hostID string, ipSet []string, metaInfo *types.HostMetaInfoUpdate) error {
 	// Parse hostID to get namespace and name
 	namespace, name, err := parseHostID(hostID)
 	if err != nil {
@@ -161,8 +161,18 @@ func (w *PostgreSQLHostWriter) UpdateHostIPSet(ctx context.Context, hostID strin
 		ipItems = append(ipItems, models.IPItem{IP: ip})
 	}
 
-	// Update the host's IPSet
 	existingHost.IpList = ipItems
+
+	if metaInfo != nil {
+		existingHost.MetaInfo = &models.HostMetaInfo{
+			HostName:        metaInfo.HostName,
+			Os:              metaInfo.Os,
+			Platform:        metaInfo.Platform,
+			PlatformFamily:  metaInfo.PlatformFamily,
+			PlatformVersion: metaInfo.PlatformVersion,
+			KernelVersion:   metaInfo.KernelVersion,
+		}
+	}
 
 	// Create a writer to update the host
 	writer, err := w.registry.Writer(ctx)
@@ -174,7 +184,7 @@ func (w *PostgreSQLHostWriter) UpdateHostIPSet(ctx context.Context, hostID strin
 	// Sync the updated host
 	err = writer.SyncHosts(ctx, []models.Host{*existingHost}, ports.EmptyScope{})
 	if err != nil {
-		return fmt.Errorf("failed to update host %s IPSet: %w", hostID, err)
+		return fmt.Errorf("failed to update host %s: %w", hostID, err)
 	}
 
 	// Commit the transaction
@@ -186,10 +196,10 @@ func (w *PostgreSQLHostWriter) UpdateHostIPSet(ctx context.Context, hostID strin
 	return nil
 }
 
-// UpdateHostsIPSet updates IPSet for multiple hosts in batch
+// UpdateHostsIPSet updates IPSet and MetaInfo for multiple hosts in batch
 func (w *PostgreSQLHostWriter) UpdateHostsIPSet(ctx context.Context, updates []types.HostIPSetUpdate) error {
 	for _, update := range updates {
-		err := w.UpdateHostIPSet(ctx, update.HostID, update.IPSet)
+		err := w.updateHostData(ctx, update.HostID, update.IPSet, update.MetaInfo)
 		if err != nil {
 			return fmt.Errorf("failed to update host %s in batch: %w", update.HostID, err)
 		}

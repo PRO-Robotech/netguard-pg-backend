@@ -18,6 +18,12 @@ type EntityProcessorInterface interface {
 	ProcessChanges(ctx context.Context, event monitor.SyncChangeEvent) error
 }
 
+// OnConnectionSync interface for processors that need to sync on each SGROUP connection/reconnection
+type OnConnectionSync interface {
+	// PerformConnectionSync is called on each SGROUP connection to sync existing data
+	PerformConnectionSync(ctx context.Context) error
+}
+
 // ReverseSyncManager manages the reverse synchronization system
 // It implements monitor.ConnectionListener to react to SGROUP connection events
 type ReverseSyncManager struct {
@@ -167,16 +173,23 @@ func (m *ReverseSyncManager) Start(ctx context.Context) error {
 		m.stats.StartTime = time.Now()
 	}
 
+	// Set running BEFORE subscribing to avoid race condition
+	// where EventConnected arrives before isRunning is true
+	m.isRunning = true
+
 	// Subscribe to connection monitor
 	if m.connectionMonitor != nil {
 		m.connectionMonitor.Subscribe(m)
 	}
 
-	m.isRunning = true
-
 	// Start health checks if configured
 	if m.config.HealthCheckInterval > 0 {
 		go m.runHealthChecks()
+	}
+
+	// Perform connection sync if already connected to SGROUP
+	if m.connectionMonitor != nil && m.connectionMonitor.IsConnected() {
+		go m.performConnectionSync()
 	}
 
 	return nil
@@ -214,7 +227,9 @@ func (m *ReverseSyncManager) OnConnectionEvent(event monitor.ConnectionEvent) {
 	switch event.Type {
 	case monitor.EventConnected:
 		m.isConnected = true
-		// Connection established - ready to process changes
+		if m.isRunning {
+			go m.performConnectionSync()
+		}
 
 	case monitor.EventDisconnected:
 		m.isConnected = false
@@ -481,4 +496,28 @@ func (m *ReverseSyncManager) updateEntityStats(entityType string, success bool, 
 	}
 
 	m.stats.EntityCounts[entityType] = entityStats
+}
+
+// performConnectionSync performs sync for all processors that support OnConnectionSync interface
+// This is called on each SGROUP connection/reconnection
+func (m *ReverseSyncManager) performConnectionSync() {
+	m.mu.RLock()
+	processors := make([]EntityProcessorInterface, 0, len(m.processors))
+	for _, p := range m.processors {
+		processors = append(processors, p)
+	}
+	ctx := m.ctx
+	m.mu.RUnlock()
+
+	if ctx == nil {
+		return
+	}
+
+	for _, processor := range processors {
+		if syncer, ok := processor.(OnConnectionSync); ok {
+			syncCtx, cancel := context.WithTimeout(ctx, m.config.ProcessingTimeout)
+			_ = syncer.PerformConnectionSync(syncCtx)
+			cancel()
+		}
+	}
 }

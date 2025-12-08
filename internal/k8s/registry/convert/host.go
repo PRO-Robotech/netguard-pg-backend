@@ -44,6 +44,18 @@ func (c *HostConverter) ToDomain(ctx context.Context, k8sObj *netguardv1beta1.Ho
 		}
 	}
 
+	// Convert MetaInfo from K8s to domain format (read-only from SGROUP)
+	if k8sObj.MetaInfo != nil {
+		domainHost.MetaInfo = &models.HostMetaInfo{
+			HostName:        k8sObj.MetaInfo.HostName,
+			Os:              k8sObj.MetaInfo.Os,
+			Platform:        k8sObj.MetaInfo.Platform,
+			PlatformFamily:  k8sObj.MetaInfo.PlatformFamily,
+			PlatformVersion: k8sObj.MetaInfo.PlatformVersion,
+			KernelVersion:   k8sObj.MetaInfo.KernelVersion,
+		}
+	}
+
 	return domainHost, nil
 }
 
@@ -75,7 +87,18 @@ func (c *HostConverter) FromDomain(ctx context.Context, domainObj *models.Host) 
 		for i, ipItem := range domainObj.IpList {
 			k8sHost.IPList[i] = netguardv1beta1.IPItem{IP: ipItem.IP}
 		}
-	} else {
+	}
+
+	// Convert MetaInfo from domain to K8s format (read-only from SGROUP)
+	if domainObj.MetaInfo != nil {
+		k8sHost.MetaInfo = &netguardv1beta1.HostMetaInfo{
+			HostName:        domainObj.MetaInfo.HostName,
+			Os:              domainObj.MetaInfo.Os,
+			Platform:        domainObj.MetaInfo.Platform,
+			PlatformFamily:  domainObj.MetaInfo.PlatformFamily,
+			PlatformVersion: domainObj.MetaInfo.PlatformVersion,
+			KernelVersion:   domainObj.MetaInfo.KernelVersion,
+		}
 	}
 
 	conditions, observedGeneration := ConvertStatusFromDomain(domainObj.Meta)

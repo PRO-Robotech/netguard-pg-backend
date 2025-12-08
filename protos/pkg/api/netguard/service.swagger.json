@@ -1468,6 +1468,10 @@
           },
           "title": "List of IP addresses from SGROUP synchronization"
         },
+        "metaInfo": {
+          "$ref": "#/definitions/v1HostMetaInfo",
+          "title": "Meta information from SGROUP synchronization (read-only)"
+        },
         "meta": {
           "$ref": "#/definitions/v1Meta"
         }
@@ -1502,6 +1506,36 @@
         "hostRef",
         "addressGroupRef"
       ]
+    },
+    "v1HostMetaInfo": {
+      "type": "object",
+      "properties": {
+        "hostName": {
+          "type": "string",
+          "title": "Hostname from agent"
+        },
+        "os": {
+          "type": "string",
+          "title": "Operating system"
+        },
+        "platform": {
+          "type": "string",
+          "title": "Platform (e.g., ubuntu, centos)"
+        },
+        "platformFamily": {
+          "type": "string",
+          "title": "Platform family (e.g., debian, rhel)"
+        },
+        "platformVersion": {
+          "type": "string",
+          "title": "Platform version"
+        },
+        "kernelVersion": {
+          "type": "string",
+          "title": "Kernel version"
+        }
+      },
+      "title": "HostMetaInfo - represents host meta information from SGROUP (read-only)"
     },
     "v1HostReference": {
       "type": "object",

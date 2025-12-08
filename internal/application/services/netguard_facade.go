@@ -571,12 +571,6 @@ func (f *NetguardFacade) GetNetworkBindingResourceService() *resources.NetworkBi
 	return f.networkBindingResourceService
 }
 func (f *NetguardFacade) MarkForDeletion(ctx context.Context, namespace, name, kind string) error {
-	klog.InfoS("NetguardFacade.MarkForDeletion invoked",
-		"namespace", namespace,
-		"name", name,
-		"kind", kind)
-
-	// Use ExecuteDeleteWithRetry to handle serialization failures (SQLSTATE 40001)
 	err := f.registry.ExecuteDeleteWithRetry(ctx, func(writer ports.Writer) error {
 		klog.V(2).InfoS("NetguardFacade.MarkForDeletion: Executing MarkForDeletionWithStatus",
 			"namespace", namespace, "name", name, "kind", kind)
@@ -589,8 +583,6 @@ func (f *NetguardFacade) MarkForDeletion(ctx context.Context, namespace, name, k
 		return err
 	}
 
-	klog.InfoS("NetguardFacade.MarkForDeletion completed",
-		"namespace", namespace, "name", name, "kind", kind)
 	return nil
 }
 

@@ -3,13 +3,15 @@ package readers
 import (
 	"context"
 	"fmt"
-	"github.com/jackc/pgx/v5"
-	"github.com/pkg/errors"
+	"time"
+
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/infrastructure/repositories/pg/internal/utils"
 	netguardv1beta1 "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
-	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/pkg/errors"
 )
 
 func (r *Reader) ListNetworkBindings(ctx context.Context, consume func(models.NetworkBinding) error, scope ports.Scope) error {
@@ -47,6 +49,7 @@ func (r *Reader) ListNetworkBindings(ctx context.Context, consume func(models.Ne
 	}
 	return rows.Err()
 }
+
 func (r *Reader) GetNetworkBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.NetworkBinding, error) {
 	query := `
 		SELECT nb.namespace, nb.name,
@@ -67,6 +70,7 @@ func (r *Reader) GetNetworkBindingByID(ctx context.Context, id models.ResourceId
 	}
 	return networkBinding, nil
 }
+
 func (r *Reader) scanNetworkBinding(rows pgx.Rows) (models.NetworkBinding, error) {
 	var networkBinding models.NetworkBinding
 	var labelsJSON, annotationsJSON, conditionsJSON []byte
@@ -123,6 +127,7 @@ func (r *Reader) scanNetworkBinding(rows pgx.Rows) (models.NetworkBinding, error
 	}
 	return networkBinding, nil
 }
+
 func (r *Reader) scanNetworkBindingRow(row pgx.Row) (*models.NetworkBinding, error) {
 	var networkBinding models.NetworkBinding
 	var labelsJSON, annotationsJSON, conditionsJSON []byte
@@ -177,5 +182,6 @@ func (r *Reader) scanNetworkBindingRow(row pgx.Row) (*models.NetworkBinding, err
 			Namespace: addressGroupNamespace,
 		}
 	}
+
 	return &networkBinding, nil
 }

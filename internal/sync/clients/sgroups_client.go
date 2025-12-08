@@ -175,7 +175,8 @@ func (c *sgroupsClient) GetStatuses(ctx context.Context) (chan *timestamppb.Time
 }
 
 // GetHostsByUUIDs retrieves hosts from SGROUP by their UUIDs
-func (c *sgroupsClient) GetHostsByUUIDs(ctx context.Context, uuids []string) ([]*pb.Host, error) {
+// Returns ListHostsResp_MetaHostInfo which contains both Host and MetaInfo
+func (c *sgroupsClient) GetHostsByUUIDs(ctx context.Context, uuids []string) ([]*pb.ListHostsResp_MetaHostInfo, error) {
 	// Create context with timeout
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
@@ -199,7 +200,8 @@ func (c *sgroupsClient) GetHostsByUUIDs(ctx context.Context, uuids []string) ([]
 }
 
 // ListAllHosts retrieves all hosts from SGROUP (for full sync)
-func (c *sgroupsClient) ListAllHosts(ctx context.Context) ([]*pb.Host, error) {
+// Returns ListHostsResp_MetaHostInfo which contains both Host and MetaInfo
+func (c *sgroupsClient) ListAllHosts(ctx context.Context) ([]*pb.ListHostsResp_MetaHostInfo, error) {
 	// Create context with timeout
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()
@@ -221,7 +223,8 @@ func (c *sgroupsClient) ListAllHosts(ctx context.Context) ([]*pb.Host, error) {
 }
 
 // GetHostsInSecurityGroup retrieves hosts from SGROUP that belong to specific security groups
-func (c *sgroupsClient) GetHostsInSecurityGroup(ctx context.Context, sgNames []string) ([]*pb.Host, error) {
+// Returns ListHostsResp_MetaHostInfo which contains both Host and MetaInfo
+func (c *sgroupsClient) GetHostsInSecurityGroup(ctx context.Context, sgNames []string) ([]*pb.ListHostsResp_MetaHostInfo, error) {
 	// Create context with timeout
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
 	defer cancel()

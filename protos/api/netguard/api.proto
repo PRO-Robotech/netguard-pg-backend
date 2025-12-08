@@ -312,6 +312,16 @@ message IPItem {
   string ip = 1;  // IP address
 }
 
+// HostMetaInfo - represents host meta information from SGROUP (read-only)
+message HostMetaInfo {
+  string host_name = 1;        // Hostname from agent
+  string os = 2;               // Operating system
+  string platform = 3;         // Platform (e.g., ubuntu, centos)
+  string platform_family = 4;  // Platform family (e.g., debian, rhel)
+  string platform_version = 5; // Platform version
+  string kernel_version = 6;   // Kernel version
+}
+
 // Host - represents a host resource (K8s representation of Agent)
 message Host {
   option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
@@ -329,6 +339,7 @@ message Host {
   NamespacedObjectReference binding_ref = 7;   // Reference to the HostBinding (includes namespace)
   NamespacedObjectReference address_group_ref = 8; // Reference to the bound AddressGroup (includes namespace)
   repeated IPItem ip_list = 10;                // List of IP addresses from SGROUP synchronization
+  HostMetaInfo meta_info = 12;                 // Meta information from SGROUP synchronization (read-only)
 
   Meta meta = 11;
 }
