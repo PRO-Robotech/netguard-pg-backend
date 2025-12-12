@@ -50,6 +50,7 @@ func ConvertSvcSvcRule(r *netguardpb.SvcSvcRule) models.SvcSvcRule {
 	result.Logs = r.Logs
 	result.Trace = r.Trace
 	result.Description = r.Description
+	result.Comment = r.Comment
 
 	return result
 }
@@ -74,6 +75,7 @@ func ConvertSvcSvcRuleToPB(r models.SvcSvcRule) *netguardpb.SvcSvcRule {
 		Logs:        r.Logs,
 		Trace:       r.Trace,
 		Description: r.Description,
+		Comment:     r.Comment,
 		Meta:        ConvertMetaToPB(r.Meta),
 	}
 

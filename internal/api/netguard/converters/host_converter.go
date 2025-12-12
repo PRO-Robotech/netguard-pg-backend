@@ -15,7 +15,8 @@ func ConvertHost(protoHost *netguardpb.Host) models.Host {
 				Namespace: protoHost.SelfRef.Namespace,
 			},
 		},
-		UUID: protoHost.Uuid,
+		UUID:    protoHost.Uuid,
+		Comment: protoHost.Comment,
 
 		// Status fields
 		HostName:         protoHost.HostNameSync,
@@ -68,7 +69,8 @@ func ConvertHostToPB(host models.Host) *netguardpb.Host {
 			Name:      host.Name,
 			Namespace: host.Namespace,
 		},
-		Uuid: host.UUID,
+		Uuid:    host.UUID,
+		Comment: host.Comment,
 
 		// Status fields
 		HostNameSync:     host.HostName,
@@ -119,7 +121,8 @@ func ConvertHostBinding(protoBinding *netguardpb.HostBinding) models.HostBinding
 				Namespace: protoBinding.SelfRef.Namespace,
 			},
 		},
-		Meta: ConvertMeta(protoBinding.Meta),
+		Comment: protoBinding.Comment,
+		Meta:    ConvertMeta(protoBinding.Meta),
 	}
 
 	// Set host reference
@@ -171,6 +174,7 @@ func ConvertHostBindingToPB(binding models.HostBinding) *netguardpb.HostBinding 
 			Namespace:  binding.AddressGroupRef.Namespace,
 		},
 
-		Meta: ConvertMetaToPB(binding.Meta),
+		Comment: binding.Comment,
+		Meta:    ConvertMetaToPB(binding.Meta),
 	}
 }

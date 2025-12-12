@@ -21,6 +21,9 @@ type NetworkBinding struct {
 	NetworkRef      v1beta1.NamespacedObjectReference `json:"networkRef"`
 	AddressGroupRef v1beta1.NamespacedObjectReference `json:"addressGroupRef"`
 
+	// Comment - optional user comment (Netguard-only)
+	Comment string `json:"comment,omitempty"`
+
 	// NetworkItem contains the network information
 	NetworkItem NetworkItem `json:"networkItem"`
 

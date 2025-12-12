@@ -65,6 +65,9 @@ message Service {
   // XSvcFqdnRules - READ-ONLY field populated by PostgreSQL triggers
   // Contains all service-to-FQDN rules where this Service participates as source
   XSvcFqdnRules x_svcfqdn_rules = 9;
+
+  // Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+  string comment = 50;
 }
 
 // IngressPort - defines a port configuration for ingress traffic
@@ -255,6 +258,9 @@ message Network {
   bool is_bound = 4;                               // Whether the network is bound to an AddressGroup
   NamespacedObjectReference binding_ref = 5;       // Reference to the NetworkBinding
   NamespacedObjectReference address_group_ref = 6; // Reference to the bound AddressGroup
+
+  // Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+  string comment = 50;
 }
 
 
@@ -278,6 +284,9 @@ message AddressGroup {
   string address_group_name = 8;  // Computed address group name (e.g., "namespace/name")
   repeated HostReference aggregated_hosts = 9; // All hosts from any source (spec + HostBinding)
   string description = 10;  // Optional description (Netguard-only)
+
+  // Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+  string comment = 50;
 }
 
 // AddressGroupBinding - binding between a service and an address group
@@ -291,6 +300,9 @@ message AddressGroupBinding {
   ServiceRef service_ref = 3;
   AddressGroupRef address_group_ref = 4;
   Meta meta = 6;
+
+  // Comment - optional user comment (Netguard-only)
+  string comment = 50;
 }
 
 // NetworkBinding - binding between a network and an address group
@@ -305,6 +317,9 @@ message NetworkBinding {
   NamespacedObjectReference address_group_ref = 3;  // Reference to the AddressGroup resource
   NetworkItem network_item = 4;  // Network item details
   Meta meta = 5;
+
+  // Comment - optional user comment (Netguard-only)
+  string comment = 50;
 }
 
 // IPItem - represents an IP address entry
@@ -331,6 +346,9 @@ message Host {
   repeated IPItem ip_list = 10;                // List of IP addresses from SGROUP synchronization
 
   Meta meta = 11;
+
+  // Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+  string comment = 50;
 }
 
 // HostBinding - represents a host binding resource
@@ -344,6 +362,9 @@ message HostBinding {
   NamespacedObjectReference host_ref = 2;      // Reference to the Host resource
   NamespacedObjectReference address_group_ref = 3; // Reference to the AddressGroup resource
   Meta meta = 4;
+
+  // Comment - optional user comment (Netguard-only)
+  string comment = 50;
 }
 
 // ProtocolPorts - mapping of protocols to port ranges
@@ -416,6 +437,9 @@ message SvcSvcRule {
   bool trace = 7;                       // Enable detailed tracing
   string description = 8;               // Optional description (Netguard-only)
   Meta meta = 9;                        // Kubernetes metadata
+
+  // Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+  string comment = 50;
 }
 
 // FqdnPortSpec - port specification for service-to-FQDN rules
@@ -441,6 +465,9 @@ message SvcFqdnRule {
   int32 priority = 9;                         // Rule priority (0-1000)
   string description = 10;                    // Optional description (Netguard-only)
   Meta meta = 11;                             // Kubernetes metadata
+
+  // Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+  string comment = 50;
 }
 
 // SyncStatusResp - sync status

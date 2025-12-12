@@ -86,6 +86,10 @@ type ServiceSpec struct {
 	// AddressGroups is a list of address group references
 	// +optional
 	AddressGroups []NamespacedObjectReference `json:"addressGroups,omitempty"`
+
+	// Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+	// +optional
+	Comment string `json:"comment,omitempty"`
 }
 
 // IngressPort defines a port configuration for ingress traffic
@@ -256,6 +260,10 @@ type AddressGroupSpec struct {
 	// Host namespace MUST match AddressGroup namespace
 	// +optional
 	Hosts []NamespacedObjectReference `json:"hosts,omitempty"`
+
+	// Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+	// +optional
+	Comment string `json:"comment,omitempty"`
 }
 
 // AddressGroupStatus defines the observed state of AddressGroup
@@ -302,6 +310,10 @@ type AddressGroupBindingSpec struct {
 
 	// AddressGroupRef is a reference to the AddressGroup resource
 	AddressGroupRef NamespacedObjectReference `json:"addressGroupRef"`
+
+	// Comment - optional user comment (Netguard-only)
+	// +optional
+	Comment string `json:"comment,omitempty"`
 }
 
 // ObjectReference contains enough information to let you inspect or modify the referred object
@@ -549,6 +561,10 @@ type PortSpec struct {
 type NetworkSpec struct {
 	// CIDR is the IP range in CIDR notation
 	CIDR string `json:"cidr"`
+
+	// Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+	// +optional
+	Comment string `json:"comment,omitempty"`
 }
 
 // NetworkStatus defines the observed state of Network
@@ -601,6 +617,10 @@ type NetworkBindingSpec struct {
 
 	// AddressGroupRef is a reference to the AddressGroup resource
 	AddressGroupRef NamespacedObjectReference `json:"addressGroupRef"`
+
+	// Comment - optional user comment (Netguard-only)
+	// +optional
+	Comment string `json:"comment,omitempty"`
 }
 
 // NetworkBindingStatus defines the observed state of NetworkBinding
@@ -640,6 +660,10 @@ type HostSpec struct {
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Pattern=`^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$`
 	UUID string `json:"uuid"`
+
+	// Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+	// +optional
+	Comment string `json:"comment,omitempty"`
 }
 
 // HostStatus defines the observed state of Host
@@ -710,6 +734,10 @@ type HostBindingSpec struct {
 
 	// AddressGroupRef is a reference to the AddressGroup resource
 	AddressGroupRef NamespacedObjectReference `json:"addressGroupRef"`
+
+	// Comment - optional user comment (Netguard-only)
+	// +optional
+	Comment string `json:"comment,omitempty"`
 }
 
 // HostBindingStatus defines the observed state of HostBinding
@@ -790,6 +818,10 @@ type SvcSvcRuleSpec struct {
 	// Description - optional human-readable description (Netguard-only)
 	// +optional
 	Description string `json:"description,omitempty"`
+
+	// Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+	// +optional
+	Comment string `json:"comment,omitempty"`
 }
 
 // SvcSvcRuleStatus defines the observed state
@@ -870,6 +902,10 @@ type SvcFqdnRuleSpec struct {
 	// Description - optional human-readable description
 	// +optional
 	Description string `json:"description,omitempty"`
+
+	// Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+	// +optional
+	Comment string `json:"comment,omitempty"`
 }
 
 // SvcFqdnPortSpec represents a single port specification for FQDN rule

@@ -65,6 +65,7 @@ func convertServiceFromProto(protoSvc *netguardpb.Service) models.Service {
 			),
 		},
 		Description: protoSvc.Description,
+		Comment:     protoSvc.Comment,
 	}
 	if protoSvc.Meta != nil {
 		service.Meta = models.Meta{
@@ -171,6 +172,7 @@ func convertServiceToProto(service models.Service) *netguardpb.Service {
 			Namespace: service.ResourceIdentifier.Namespace,
 		},
 		Description: service.Description,
+		Comment:     service.Comment,
 		Meta: &netguardpb.Meta{
 			Uid:             service.Meta.UID,
 			ResourceVersion: service.Meta.ResourceVersion,
@@ -265,6 +267,7 @@ func convertAddressGroupFromProto(protoAG *netguardpb.AddressGroup) models.Addre
 		Logs:             protoAG.Logs,
 		Trace:            protoAG.Trace,
 		Description:      protoAG.Description,
+		Comment:          protoAG.Comment,
 		AddressGroupName: protoAG.AddressGroupName,
 	}
 	if protoAG.Meta != nil {
@@ -356,6 +359,7 @@ func convertAddressGroupToProto(addressGroup models.AddressGroup) *netguardpb.Ad
 		Logs:          addressGroup.Logs,
 		Trace:         addressGroup.Trace,
 		Description:   addressGroup.Description,
+		Comment:       addressGroup.Comment,
 		Meta: &netguardpb.Meta{
 			Uid:             addressGroup.Meta.UID,
 			ResourceVersion: addressGroup.Meta.ResourceVersion,
@@ -418,6 +422,7 @@ func convertAddressGroupBindingFromProto(protoBinding *netguardpb.AddressGroupBi
 			},
 			Namespace: protoBinding.AddressGroupRef.Identifier.Namespace,
 		},
+		Comment: protoBinding.Comment,
 	}
 	if protoBinding.Meta != nil {
 		binding.Meta = models.Meta{
@@ -470,6 +475,7 @@ func convertAddressGroupBindingToProto(binding models.AddressGroupBinding) *netg
 				Namespace:  binding.AddressGroupRef.Namespace,
 			},
 		},
+		Comment: binding.Comment,
 	}
 	if !binding.Meta.CreationTS.IsZero() {
 		protoBinding.Meta = &netguardpb.Meta{
@@ -701,6 +707,7 @@ func convertSvcSvcRuleFromProto(proto *netguardpb.SvcSvcRule) models.SvcSvcRule 
 		Logs:        proto.Logs,
 		Trace:       proto.Trace,
 		Description: proto.Description,
+		Comment:     proto.Comment,
 	}
 	if proto.Meta != nil {
 		rule.Meta = models.Meta{
@@ -742,6 +749,7 @@ func convertSvcSvcRuleToProto(m models.SvcSvcRule) *netguardpb.SvcSvcRule {
 		Logs:        m.Logs,
 		Trace:       m.Trace,
 		Description: m.Description,
+		Comment:     m.Comment,
 	}
 	if !m.Meta.CreationTS.IsZero() {
 		proto.Meta = &netguardpb.Meta{
@@ -782,6 +790,7 @@ func convertSvcFqdnRuleFromProto(proto *netguardpb.SvcFqdnRule) models.SvcFqdnRu
 		Logs:        proto.Logs,
 		Trace:       proto.Trace,
 		Description: proto.Description,
+		Comment:     proto.Comment,
 	}
 	if proto.ServiceFrom != nil {
 		rule.ServiceFromRef = v1beta1.NamespacedObjectReference{
@@ -845,6 +854,7 @@ func convertSvcFqdnRuleToProto(rule models.SvcFqdnRule) *netguardpb.SvcFqdnRule 
 		Logs:        rule.Logs,
 		Trace:       rule.Trace,
 		Description: rule.Description,
+		Comment:     rule.Comment,
 	}
 	if rule.ServiceFromRef.Name != "" {
 		proto.ServiceFrom = &netguardpb.NamespacedObjectReference{

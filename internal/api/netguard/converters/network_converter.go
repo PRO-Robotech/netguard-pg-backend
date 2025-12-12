@@ -15,8 +15,9 @@ func ConvertNetwork(network *netguardpb.Network) models.Network {
 				Namespace: network.GetSelfRef().GetNamespace(),
 			},
 		},
-		CIDR: network.Cidr,
-		Meta: ConvertMeta(network.Meta),
+		CIDR:    network.Cidr,
+		Comment: network.Comment,
+		Meta:    ConvertMeta(network.Meta),
 	}
 
 	result.IsBound = network.GetIsBound()
@@ -53,8 +54,9 @@ func ConvertNetworkToPB(network models.Network) *netguardpb.Network {
 			Name:      network.Name,
 			Namespace: network.Namespace,
 		},
-		Cidr: network.CIDR,
-		Meta: ConvertMetaToPB(network.Meta),
+		Cidr:    network.CIDR,
+		Comment: network.Comment,
+		Meta:    ConvertMetaToPB(network.Meta),
 	}
 
 	// Add status fields
@@ -90,7 +92,8 @@ func ConvertNetworkBinding(binding *netguardpb.NetworkBinding) models.NetworkBin
 				Namespace: binding.GetSelfRef().GetNamespace(),
 			},
 		},
-		Meta: ConvertMeta(binding.Meta),
+		Comment: binding.Comment,
+		Meta:    ConvertMeta(binding.Meta),
 	}
 
 	// Convert NetworkRef with nil-safe access
@@ -146,7 +149,8 @@ func ConvertNetworkBindingToPB(binding models.NetworkBinding) *netguardpb.Networ
 			Name:       binding.AddressGroupRef.Name,
 			Namespace:  binding.AddressGroupRef.Namespace,
 		},
-		Meta: ConvertMetaToPB(binding.Meta),
+		Comment: binding.Comment,
+		Meta:    ConvertMetaToPB(binding.Meta),
 	}
 
 	// Convert NetworkItem

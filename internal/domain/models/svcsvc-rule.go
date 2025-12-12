@@ -19,6 +19,7 @@ type SvcSvcRule struct {
 	Logs           bool                              // Enable logging
 	Trace          bool                              // Enable tracing
 	Description    string                            // Optional description
+	Comment        string                            // Optional user comment (Netguard-only, not synced to SGROUPS)
 	Meta           Meta                              // K8s metadata (resourceVersion, etc.)
 }
 
