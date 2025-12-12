@@ -253,3 +253,105 @@ func TestConvertSvcSvcRule_ActionConversion(t *testing.T) {
 		})
 	}
 }
+
+func TestConvertSvcSvcRule_CommentField(t *testing.T) {
+	tests := []struct {
+		name     string
+		comment  string
+		expected string
+	}{
+		{
+			name:     "rule with comment",
+			comment:  "Internal API rule",
+			expected: "Internal API rule",
+		},
+		{
+			name:     "rule with empty comment",
+			comment:  "",
+			expected: "",
+		},
+		{
+			name:     "rule with long comment",
+			comment:  "This is a very long comment that describes the rule purpose and usage in production environment",
+			expected: "This is a very long comment that describes the rule purpose and usage in production environment",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			pbRule := &netguardpb.SvcSvcRule{
+				SelfRef: &netguardpb.ResourceIdentifier{
+					Name:      "test-rule",
+					Namespace: "test-ns",
+				},
+				Comment: tt.comment,
+			}
+
+			// Act
+			result := ConvertSvcSvcRule(pbRule)
+
+			// Assert
+			assert.Equal(t, tt.expected, result.Comment)
+		})
+	}
+}
+
+func TestConvertSvcSvcRuleToPB_CommentField(t *testing.T) {
+	tests := []struct {
+		name     string
+		comment  string
+		expected string
+	}{
+		{
+			name:     "domain rule with comment",
+			comment:  "Domain comment",
+			expected: "Domain comment",
+		},
+		{
+			name:     "domain rule without comment",
+			comment:  "",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			domainRule := models.SvcSvcRule{
+				SelfRef: models.SelfRef{
+					ResourceIdentifier: models.ResourceIdentifier{
+						Name:      "test-rule",
+						Namespace: "test-ns",
+					},
+				},
+				Comment: tt.comment,
+			}
+
+			// Act
+			result := ConvertSvcSvcRuleToPB(domainRule)
+
+			// Assert
+			assert.Equal(t, tt.expected, result.GetComment())
+		})
+	}
+}
+
+func TestConvertSvcSvcRule_BidirectionalComment(t *testing.T) {
+	// Arrange
+	originalComment := "Bidirectional comment test"
+	original := &netguardpb.SvcSvcRule{
+		SelfRef: &netguardpb.ResourceIdentifier{
+			Name:      "rule-001",
+			Namespace: "test-ns",
+		},
+		Comment: originalComment,
+	}
+
+	// Act
+	domain := ConvertSvcSvcRule(original)
+	backToProto := ConvertSvcSvcRuleToPB(domain)
+
+	// Assert
+	assert.Equal(t, originalComment, backToProto.GetComment())
+}

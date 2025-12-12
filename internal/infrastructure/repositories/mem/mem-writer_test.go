@@ -426,3 +426,247 @@ func TestSyncServicesWithDifferentOperations(t *testing.T) {
 		}
 	})
 }
+
+func TestSyncServicesWithComment(t *testing.T) {
+	registry := NewRegistry()
+	defer registry.Close()
+
+	ctx := context.Background()
+
+	t.Run("service with comment", func(t *testing.T) {
+		writer, err := registry.Writer(ctx)
+		if err != nil {
+			t.Fatalf("Failed to get writer: %v", err)
+		}
+
+		services := []models.Service{
+			{
+				SelfRef: models.NewSelfRef(models.NewResourceIdentifier(
+					"web-commented", models.WithNamespace("default"))),
+				Description: "Web service",
+				Comment:     "This is a test comment for web service",
+				IngressPorts: []models.IngressPort{
+					{Protocol: models.TCP, Port: "80", Description: "HTTP"},
+				},
+			},
+		}
+
+		err = writer.SyncServices(ctx, services, ports.EmptyScope{})
+		if err != nil {
+			t.Fatalf("Failed to sync services: %v", err)
+		}
+
+		err = writer.Commit()
+		if err != nil {
+			t.Fatalf("Failed to commit: %v", err)
+		}
+
+		// Verify comment was stored
+		reader, err := registry.Reader(ctx)
+		if err != nil {
+			t.Fatalf("Failed to get reader: %v", err)
+		}
+		defer reader.Close()
+
+		var foundServices []models.Service
+		err = reader.ListServices(ctx, func(service models.Service) error {
+			foundServices = append(foundServices, service)
+			return nil
+		}, ports.EmptyScope{})
+		if err != nil {
+			t.Fatalf("Failed to list services: %v", err)
+		}
+
+		if len(foundServices) == 0 {
+			t.Fatal("Expected at least 1 service")
+		}
+
+		var commentedService *models.Service
+		for i := range foundServices {
+			if foundServices[i].Name == "web-commented" {
+				commentedService = &foundServices[i]
+				break
+			}
+		}
+
+		if commentedService == nil {
+			t.Fatal("Service 'web-commented' not found")
+		}
+
+		if commentedService.Comment != "This is a test comment for web service" {
+			t.Errorf("Expected comment 'This is a test comment for web service', got '%s'", commentedService.Comment)
+		}
+	})
+
+	t.Run("service with empty comment", func(t *testing.T) {
+		registry := NewRegistry()
+		defer registry.Close()
+
+		writer, err := registry.Writer(ctx)
+		if err != nil {
+			t.Fatalf("Failed to get writer: %v", err)
+		}
+
+		services := []models.Service{
+			{
+				SelfRef: models.NewSelfRef(models.NewResourceIdentifier(
+					"web-no-comment", models.WithNamespace("default"))),
+				Description: "Web service without comment",
+				Comment:     "", // Empty comment
+			},
+		}
+
+		err = writer.SyncServices(ctx, services, ports.EmptyScope{})
+		if err != nil {
+			t.Fatalf("Failed to sync services: %v", err)
+		}
+
+		err = writer.Commit()
+		if err != nil {
+			t.Fatalf("Failed to commit: %v", err)
+		}
+
+		reader, err := registry.Reader(ctx)
+		if err != nil {
+			t.Fatalf("Failed to get reader: %v", err)
+		}
+		defer reader.Close()
+
+		var foundServices []models.Service
+		err = reader.ListServices(ctx, func(service models.Service) error {
+			foundServices = append(foundServices, service)
+			return nil
+		}, ports.EmptyScope{})
+		if err != nil {
+			t.Fatalf("Failed to list services: %v", err)
+		}
+
+		if len(foundServices) != 1 {
+			t.Fatalf("Expected 1 service, got %d", len(foundServices))
+		}
+
+		if foundServices[0].Comment != "" {
+			t.Errorf("Expected empty comment, got '%s'", foundServices[0].Comment)
+		}
+	})
+}
+
+func TestSyncNetworksWithComment(t *testing.T) {
+	registry := NewRegistry()
+	defer registry.Close()
+
+	ctx := context.Background()
+
+	t.Run("network with comment", func(t *testing.T) {
+		writer, err := registry.Writer(ctx)
+		if err != nil {
+			t.Fatalf("Failed to get writer: %v", err)
+		}
+
+		networks := []models.Network{
+			{
+				SelfRef: models.SelfRef{
+					ResourceIdentifier: models.ResourceIdentifier{
+						Namespace: "default",
+						Name:      "net-commented",
+					},
+				},
+				CIDR:    "10.0.0.0/24",
+				Comment: "Production network segment",
+			},
+		}
+
+		err = writer.SyncNetworks(ctx, networks, ports.EmptyScope{})
+		if err != nil {
+			t.Fatalf("Failed to sync networks: %v", err)
+		}
+
+		err = writer.Commit()
+		if err != nil {
+			t.Fatalf("Failed to commit: %v", err)
+		}
+
+		reader, err := registry.Reader(ctx)
+		if err != nil {
+			t.Fatalf("Failed to get reader: %v", err)
+		}
+		defer reader.Close()
+
+		var foundNetworks []models.Network
+		err = reader.ListNetworks(ctx, func(network models.Network) error {
+			foundNetworks = append(foundNetworks, network)
+			return nil
+		}, ports.EmptyScope{})
+		if err != nil {
+			t.Fatalf("Failed to list networks: %v", err)
+		}
+
+		if len(foundNetworks) != 1 {
+			t.Fatalf("Expected 1 network, got %d", len(foundNetworks))
+		}
+
+		if foundNetworks[0].Comment != "Production network segment" {
+			t.Errorf("Expected comment 'Production network segment', got '%s'", foundNetworks[0].Comment)
+		}
+	})
+}
+
+func TestSyncAddressGroupsWithComment(t *testing.T) {
+	registry := NewRegistry()
+	defer registry.Close()
+
+	ctx := context.Background()
+
+	t.Run("address group with comment", func(t *testing.T) {
+		writer, err := registry.Writer(ctx)
+		if err != nil {
+			t.Fatalf("Failed to get writer: %v", err)
+		}
+
+		addressGroups := []models.AddressGroup{
+			{
+				SelfRef: models.SelfRef{
+					ResourceIdentifier: models.ResourceIdentifier{
+						Namespace: "default",
+						Name:      "ag-commented",
+					},
+				},
+				DefaultAction: models.ActionAccept,
+				Comment:       "Production servers address group",
+			},
+		}
+
+		err = writer.SyncAddressGroups(ctx, addressGroups, ports.EmptyScope{})
+		if err != nil {
+			t.Fatalf("Failed to sync address groups: %v", err)
+		}
+
+		err = writer.Commit()
+		if err != nil {
+			t.Fatalf("Failed to commit: %v", err)
+		}
+
+		reader, err := registry.Reader(ctx)
+		if err != nil {
+			t.Fatalf("Failed to get reader: %v", err)
+		}
+		defer reader.Close()
+
+		var foundAGs []models.AddressGroup
+		err = reader.ListAddressGroups(ctx, func(ag models.AddressGroup) error {
+			foundAGs = append(foundAGs, ag)
+			return nil
+		}, ports.EmptyScope{})
+		if err != nil {
+			t.Fatalf("Failed to list address groups: %v", err)
+		}
+
+		if len(foundAGs) != 1 {
+			t.Fatalf("Expected 1 address group, got %d", len(foundAGs))
+		}
+
+		if foundAGs[0].Comment != "Production servers address group" {
+			t.Errorf("Expected comment 'Production servers address group', got '%s'", foundAGs[0].Comment)
+		}
+	})
+}
