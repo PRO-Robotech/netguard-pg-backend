@@ -14,7 +14,7 @@ import (
 
 func (r *Reader) ListNetworks(ctx context.Context, consume func(models.Network) error, scope ports.Scope) error {
 	query := `
-		SELECT n.namespace, n.name, n.cidr::text, n.network_items, n.is_bound,
+		SELECT n.namespace, n.name, n.cidr::text, n.comment, n.network_items, n.is_bound,
 		       n.binding_ref_namespace, n.binding_ref_name,
 		       n.address_group_ref_namespace, n.address_group_ref_name,
 			   m.resource_version, m.labels, m.annotations, m.conditions,
@@ -49,7 +49,7 @@ func (r *Reader) ListNetworks(ctx context.Context, consume func(models.Network) 
 }
 func (r *Reader) GetNetworkByID(ctx context.Context, id models.ResourceIdentifier) (*models.Network, error) {
 	query := `
-		SELECT n.namespace, n.name, n.cidr::text, n.network_items, n.is_bound,
+		SELECT n.namespace, n.name, n.cidr::text, n.comment, n.network_items, n.is_bound,
 		       n.binding_ref_namespace, n.binding_ref_name,
 		       n.address_group_ref_namespace, n.address_group_ref_name,
 			   m.resource_version, m.labels, m.annotations, m.conditions,
@@ -82,6 +82,7 @@ func (r *Reader) scanNetwork(rows pgx.Rows) (models.Network, error) {
 		&network.Namespace,
 		&network.Name,
 		&cidr,
+		&network.Comment,
 		&networkItemsJSON,
 		&isBound,
 		&bindingRefNamespace,
@@ -143,6 +144,7 @@ func (r *Reader) scanNetworkRow(row pgx.Row) (*models.Network, error) {
 		&network.Namespace,
 		&network.Name,
 		&cidr,
+		&network.Comment,
 		&networkItemsJSON,
 		&isBound,
 		&bindingRefNamespace,
@@ -191,7 +193,7 @@ func (r *Reader) scanNetworkRow(row pgx.Row) (*models.Network, error) {
 }
 func (r *Reader) GetNetworkByCIDR(ctx context.Context, cidr string) (*models.Network, error) {
 	query := `
-		SELECT n.namespace, n.name, n.cidr::text, n.network_items, n.is_bound,
+		SELECT n.namespace, n.name, n.cidr::text, n.comment, n.network_items, n.is_bound,
 		       n.binding_ref_namespace, n.binding_ref_name,
 		       n.address_group_ref_namespace, n.address_group_ref_name,
 			   m.resource_version, m.labels, m.annotations, m.conditions,
@@ -215,6 +217,7 @@ func (r *Reader) GetNetworksOverlappingCIDR(ctx context.Context, cidr string) ([
 			n.namespace,
 			n.name,
 			n.cidr::text,
+			n.comment,
 			n.network_items,
 			n.is_bound,
 			n.binding_ref_namespace,

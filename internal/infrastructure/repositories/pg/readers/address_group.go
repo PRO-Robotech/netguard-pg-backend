@@ -17,7 +17,7 @@ import (
 
 func (r *Reader) ListAddressGroups(ctx context.Context, consume func(models.AddressGroup) error, scope ports.Scope) error {
 	query := `
-		SELECT ag.namespace, ag.name, ag.default_action, ag.logs, ag.trace, ag.description, ag.networks, ag.hosts, ag.aggregated_hosts,
+		SELECT ag.namespace, ag.name, ag.default_action, ag.logs, ag.trace, ag.description, ag.comment, ag.networks, ag.hosts, ag.aggregated_hosts,
 			   m.resource_version, m.labels, m.annotations, m.conditions,
 			   m.created_at, m.updated_at, m.deletion_timestamp
 		FROM address_groups ag
@@ -50,7 +50,7 @@ func (r *Reader) ListAddressGroups(ctx context.Context, consume func(models.Addr
 
 func (r *Reader) GetAddressGroupByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroup, error) {
 	query := `
-		SELECT ag.namespace, ag.name, ag.default_action, ag.logs, ag.trace, ag.description, ag.networks, ag.hosts, ag.aggregated_hosts,
+		SELECT ag.namespace, ag.name, ag.default_action, ag.logs, ag.trace, ag.description, ag.comment, ag.networks, ag.hosts, ag.aggregated_hosts,
 			   m.resource_version, m.labels, m.annotations, m.conditions,
 			   m.created_at, m.updated_at, m.deletion_timestamp
 		FROM address_groups ag
@@ -72,7 +72,7 @@ func (r *Reader) scanAddressGroup(rows pgx.Rows) (models.AddressGroup, error) {
 	var createdAt, updatedAt time.Time
 	var deletionTS *time.Time
 	var resourceVersion int64
-	var description string
+	var description, comment string
 	err := rows.Scan(
 		&addressGroup.Namespace,
 		&addressGroup.Name,
@@ -80,6 +80,7 @@ func (r *Reader) scanAddressGroup(rows pgx.Rows) (models.AddressGroup, error) {
 		&addressGroup.Logs,
 		&addressGroup.Trace,
 		&description,
+		&comment,
 		&networksJSON,
 		&hostsJSON,
 		&aggregatedHostsJSON,
@@ -95,6 +96,7 @@ func (r *Reader) scanAddressGroup(rows pgx.Rows) (models.AddressGroup, error) {
 		return addressGroup, err
 	}
 	addressGroup.Description = description
+	addressGroup.Comment = comment
 	if len(networksJSON) > 0 {
 		if err := json.Unmarshal(networksJSON, &addressGroup.Networks); err != nil {
 			return addressGroup, errors.Wrap(err, "failed to unmarshal networks")
@@ -140,7 +142,7 @@ func (r *Reader) scanAddressGroupRow(row pgx.Row) (*models.AddressGroup, error) 
 	var createdAt, updatedAt time.Time
 	var deletionTS *time.Time
 	var resourceVersion int64
-	var description string
+	var description, comment string
 	err := row.Scan(
 		&addressGroup.Namespace,
 		&addressGroup.Name,
@@ -148,6 +150,7 @@ func (r *Reader) scanAddressGroupRow(row pgx.Row) (*models.AddressGroup, error) 
 		&addressGroup.Logs,
 		&addressGroup.Trace,
 		&description,
+		&comment,
 		&networksJSON,
 		&hostsJSON,
 		&aggregatedHostsJSON,
@@ -163,6 +166,7 @@ func (r *Reader) scanAddressGroupRow(row pgx.Row) (*models.AddressGroup, error) 
 		return nil, err
 	}
 	addressGroup.Description = description
+	addressGroup.Comment = comment
 	if len(networksJSON) > 0 {
 		if err := json.Unmarshal(networksJSON, &addressGroup.Networks); err != nil {
 			return nil, errors.Wrap(err, "failed to unmarshal networks")

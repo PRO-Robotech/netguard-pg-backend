@@ -109,19 +109,22 @@ func (w *Writer) upsertHostBinding(ctx context.Context, hostBinding *models.Host
 			namespace, name,
 			host_namespace, host_name,
 			address_group_namespace, address_group_name,
+			comment,
 			resource_version
-		) VALUES ($1, $2, $3, $4, $5, $6, $7)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (namespace, name) DO UPDATE SET
 			host_namespace = EXCLUDED.host_namespace,
 			host_name = EXCLUDED.host_name,
 			address_group_namespace = EXCLUDED.address_group_namespace,
 			address_group_name = EXCLUDED.address_group_name,
+			comment = EXCLUDED.comment,
 			resource_version = EXCLUDED.resource_version`
 
 	_, err = w.tx.Exec(ctx, hostBindingQuery,
 		hostBinding.Namespace, hostBinding.Name,
 		hostBinding.HostRef.Namespace, hostBinding.HostRef.Name,
 		hostBinding.AddressGroupRef.Namespace, hostBinding.AddressGroupRef.Name,
+		hostBinding.Comment,
 		resourceVersion,
 	)
 	if err != nil {

@@ -162,15 +162,16 @@ func (w *Writer) upsertSvcSvcRule(ctx context.Context, rule models.SvcSvcRule) e
 
 	// Upsert the rule
 	ruleQuery := `
-		INSERT INTO svc_svc_rules (namespace, name, service_from_ref, service_to_ref, action, priority, logs, trace, description, resource_version)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO svc_svc_rules (namespace, name, service_from_ref, service_to_ref, action, priority, logs, trace, description, comment, resource_version)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (namespace, name) DO UPDATE SET
 			action = $5,
 			priority = $6,
 			logs = $7,
 			trace = $8,
 			description = $9,
-			resource_version = $10`
+			comment = $10,
+			resource_version = $11`
 
 	_, err = w.tx.Exec(ctx, ruleQuery,
 		rule.Namespace,
@@ -182,6 +183,7 @@ func (w *Writer) upsertSvcSvcRule(ctx context.Context, rule models.SvcSvcRule) e
 		rule.Logs,
 		rule.Trace,
 		rule.Description,
+		rule.Comment,
 		resourceVersion,
 	)
 	if err != nil {

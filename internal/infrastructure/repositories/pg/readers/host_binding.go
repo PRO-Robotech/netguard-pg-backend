@@ -16,7 +16,7 @@ func (r *Reader) ListHostBindings(ctx context.Context, consume func(models.HostB
 	query := `
 		SELECT hb.namespace, hb.name,
 		       hb.host_namespace, hb.host_name,
-		       hb.address_group_namespace, hb.address_group_name,
+		       hb.address_group_namespace, hb.address_group_name, hb.comment,
 		       m.resource_version, m.uid, m.labels, m.annotations, m.conditions,
 		       m.created_at, m.updated_at, m.deletion_timestamp
 		FROM host_bindings hb
@@ -51,7 +51,7 @@ func (r *Reader) GetHostBindingByID(ctx context.Context, id models.ResourceIdent
 	query := `
 		SELECT hb.namespace, hb.name,
 		       hb.host_namespace, hb.host_name,
-		       hb.address_group_namespace, hb.address_group_name,
+		       hb.address_group_namespace, hb.address_group_name, hb.comment,
 		       m.resource_version, m.uid, m.labels, m.annotations, m.conditions,
 		       m.created_at, m.updated_at, m.deletion_timestamp
 		FROM host_bindings hb
@@ -83,6 +83,7 @@ func (r *Reader) scanHostBinding(rows pgx.Rows) (models.HostBinding, error) {
 		&hostName,
 		&addressGroupNamespace,
 		&addressGroupName,
+		&hostBinding.Comment,
 		&resourceVersion,
 		&uid,
 		&labelsJSON,
@@ -138,6 +139,7 @@ func (r *Reader) scanHostBindingRow(row pgx.Row) (*models.HostBinding, error) {
 		&hostName,
 		&addressGroupNamespace,
 		&addressGroupName,
+		&hostBinding.Comment,
 		&resourceVersion,
 		&uid,
 		&labelsJSON,

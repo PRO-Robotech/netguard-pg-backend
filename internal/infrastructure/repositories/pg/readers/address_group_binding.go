@@ -15,7 +15,7 @@ import (
 func (r *Reader) ListAddressGroupBindings(ctx context.Context, consume func(models.AddressGroupBinding) error, scope ports.Scope) error {
 	query := `
 		SELECT agb.namespace, agb.name, agb.service_namespace, agb.service_name,
-			   agb.address_group_namespace, agb.address_group_name,
+			   agb.address_group_namespace, agb.address_group_name, agb.comment,
 			   m.resource_version, m.uid::text, m.labels, m.annotations, m.conditions,
 		       m.created_at, m.updated_at, m.deletion_timestamp
 		FROM address_group_bindings agb
@@ -59,7 +59,7 @@ func (r *Reader) ListAddressGroupBindings(ctx context.Context, consume func(mode
 func (r *Reader) GetAddressGroupBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBinding, error) {
 	query := `
 		SELECT agb.namespace, agb.name, agb.service_namespace, agb.service_name,
-			   agb.address_group_namespace, agb.address_group_name,
+			   agb.address_group_namespace, agb.address_group_name, agb.comment,
 			   m.resource_version, m.uid::text, m.labels, m.annotations, m.conditions,
 			   m.created_at, m.updated_at, m.deletion_timestamp
 		FROM address_group_bindings agb
@@ -91,6 +91,7 @@ func (r *Reader) scanAddressGroupBinding(rows pgx.Rows) (models.AddressGroupBind
 		&serviceName,
 		&addressGroupNamespace,
 		&addressGroupName,
+		&binding.Comment,
 		&resourceVersion,
 		&uid,
 		&labelsJSON,
@@ -129,6 +130,7 @@ func (r *Reader) scanAddressGroupBindingRow(row pgx.Row) (*models.AddressGroupBi
 		&serviceName,
 		&addressGroupNamespace,
 		&addressGroupName,
+		&binding.Comment,
 		&resourceVersion,
 		&uid,
 		&labelsJSON,

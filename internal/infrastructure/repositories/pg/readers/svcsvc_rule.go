@@ -24,7 +24,7 @@ type serviceRefJSON struct {
 func (r *Reader) ListSvcSvcRules(ctx context.Context, consume func(models.SvcSvcRule) error, scope ports.Scope) error {
 	query := `
 		SELECT sr.namespace, sr.name, sr.service_from_ref, sr.service_to_ref,
-		       sr.action, sr.priority, sr.logs, sr.trace, sr.description,
+		       sr.action, sr.priority, sr.logs, sr.trace, sr.description, sr.comment,
 		       m.resource_version, m.labels, m.annotations, m.conditions,
 		       m.created_at, m.updated_at, m.deletion_timestamp
 		FROM svc_svc_rules sr
@@ -67,7 +67,7 @@ func (r *Reader) ListSvcSvcRules(ctx context.Context, consume func(models.SvcSvc
 func (r *Reader) GetSvcSvcRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcSvcRule, error) {
 	query := `
 		SELECT sr.namespace, sr.name, sr.service_from_ref, sr.service_to_ref,
-		       sr.action, sr.priority, sr.logs, sr.trace, sr.description,
+		       sr.action, sr.priority, sr.logs, sr.trace, sr.description, sr.comment,
 		       m.resource_version, m.labels, m.annotations, m.conditions,
 		       m.created_at, m.updated_at, m.deletion_timestamp
 		FROM svc_svc_rules sr
@@ -96,7 +96,7 @@ func (r *Reader) GetSvcSvcRuleByID(ctx context.Context, id models.ResourceIdenti
 func (r *Reader) FindRulesByService(ctx context.Context, namespace, serviceName string) ([]models.SvcSvcRule, error) {
 	query := `
 		SELECT sr.namespace, sr.name, sr.service_from_ref, sr.service_to_ref,
-		       sr.action, sr.priority, sr.logs, sr.trace, sr.description,
+		       sr.action, sr.priority, sr.logs, sr.trace, sr.description, sr.comment,
 		       m.resource_version, m.labels, m.annotations, m.conditions,
 		       m.created_at, m.updated_at, m.deletion_timestamp
 		FROM svc_svc_rules sr
@@ -126,7 +126,7 @@ func (r *Reader) FindRulesByService(ctx context.Context, namespace, serviceName 
 func (r *Reader) FindRuleByServicePair(ctx context.Context, ruleNamespace, serviceFromName, serviceFromNamespace, serviceToName, serviceToNamespace string) (*models.SvcSvcRule, error) {
 	query := `
 		SELECT sr.namespace, sr.name, sr.service_from_ref, sr.service_to_ref,
-		       sr.action, sr.priority, sr.logs, sr.trace, sr.description,
+		       sr.action, sr.priority, sr.logs, sr.trace, sr.description, sr.comment,
 		       m.resource_version, m.labels, m.annotations, m.conditions,
 		       m.created_at, m.updated_at, m.deletion_timestamp
 		FROM svc_svc_rules sr
@@ -165,6 +165,7 @@ func (r *Reader) scanSvcSvcRule(rows pgx.Rows) (models.SvcSvcRule, error) {
 		&rule.Logs,
 		&rule.Trace,
 		&rule.Description,
+		&rule.Comment,
 		&resourceVersion,
 		&labelsJSON,
 		&annotationsJSON,
@@ -233,6 +234,7 @@ func (r *Reader) scanSvcSvcRuleRow(row pgx.Row) (*models.SvcSvcRule, error) {
 		&rule.Logs,
 		&rule.Trace,
 		&rule.Description,
+		&rule.Comment,
 		&resourceVersion,
 		&labelsJSON,
 		&annotationsJSON,
