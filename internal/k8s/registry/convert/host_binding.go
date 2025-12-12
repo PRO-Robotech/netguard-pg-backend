@@ -30,6 +30,7 @@ func (c *HostBindingConverter) ToDomain(ctx context.Context, k8sObj *netguardv1b
 		},
 		HostRef:         k8sObj.Spec.HostRef,
 		AddressGroupRef: k8sObj.Spec.AddressGroupRef,
+		Comment:         k8sObj.Spec.Comment,
 		Meta:            ConvertMetadataToDomain(k8sObj.ObjectMeta, k8sObj.Status.Conditions, k8sObj.Status.ObservedGeneration),
 	}
 
@@ -49,6 +50,7 @@ func (c *HostBindingConverter) FromDomain(ctx context.Context, domainObj *models
 		Spec: netguardv1beta1.HostBindingSpec{
 			HostRef:         domainObj.HostRef,
 			AddressGroupRef: domainObj.AddressGroupRef,
+			Comment:         domainObj.Comment,
 		},
 	}
 

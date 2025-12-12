@@ -28,6 +28,7 @@ func (c *NetworkConverter) ToDomain(ctx context.Context, k8sObj *netguardv1beta1
 			},
 		},
 		CIDR:            k8sObj.Spec.CIDR,
+		Comment:         k8sObj.Spec.Comment,
 		NetworkName:     k8sObj.Status.NetworkName,
 		IsBound:         k8sObj.Status.IsBound,
 		BindingRef:      k8sObj.Status.BindingRef,
@@ -49,7 +50,8 @@ func (c *NetworkConverter) FromDomain(ctx context.Context, domainObj *models.Net
 		TypeMeta:   CreateStandardTypeMetaForResource("Network"),
 		ObjectMeta: ConvertMetadataFromDomain(domainObj.Meta, domainObj.ResourceIdentifier.Name, domainObj.ResourceIdentifier.Namespace),
 		Spec: netguardv1beta1.NetworkSpec{
-			CIDR: domainObj.CIDR,
+			CIDR:    domainObj.CIDR,
+			Comment: domainObj.Comment,
 		},
 	}
 

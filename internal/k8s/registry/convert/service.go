@@ -29,6 +29,7 @@ func (c *ServiceConverter) ToDomain(ctx context.Context, k8sObj *netguardv1beta1
 			},
 		},
 		Description: k8sObj.Spec.Description,
+		Comment:     k8sObj.Spec.Comment,
 		Meta:        ConvertMetadataToDomain(k8sObj.ObjectMeta, k8sObj.Status.Conditions, k8sObj.Status.ObservedGeneration),
 	}
 
@@ -91,6 +92,7 @@ func (c *ServiceConverter) FromDomain(ctx context.Context, domainObj *models.Ser
 		ObjectMeta: ConvertMetadataFromDomain(domainObj.Meta, domainObj.ResourceIdentifier.Name, domainObj.ResourceIdentifier.Namespace),
 		Spec: netguardv1beta1.ServiceSpec{
 			Description: domainObj.Description,
+			Comment:     domainObj.Comment,
 		},
 	}
 
