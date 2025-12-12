@@ -89,7 +89,7 @@ func TestNetworkValidator_ValidateCreate(t *testing.T) {
 				},
 			},
 			expectError: true,
-			errorMsg:    "RFC 1123 subdomain",
+			errorMsg:    "lowercase",
 		},
 		{
 			name: "missing CIDR",
@@ -186,7 +186,7 @@ func TestNetworkValidator_ValidateCreate(t *testing.T) {
 				},
 			},
 			expectError: true,
-			errorMsg:    "RFC 1123 subdomain",
+			errorMsg:    "lowercase",
 		},
 	}
 
@@ -328,7 +328,7 @@ func TestNetworkValidator_ValidateUpdate(t *testing.T) {
 			},
 			oldNetwork:  baseNetwork,
 			expectError: true,
-			errorMsg:    "RFC 1123 subdomain",
+			errorMsg:    "lowercase",
 		},
 	}
 

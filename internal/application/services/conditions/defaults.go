@@ -21,12 +21,6 @@ func (cm *ConditionManager) SetDefaultConditions(resource interface{}) {
 		r.Meta.SetSyncedCondition(metav1.ConditionUnknown, models.ReasonPending, "Synchronization pending")
 		r.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonPending, "AddressGroup is being processed")
 
-	case *models.RuleS2S:
-		r.Meta.TouchOnCreate()
-		r.Meta.SetValidatedCondition(metav1.ConditionUnknown, models.ReasonPending, "Validation pending")
-		r.Meta.SetSyncedCondition(metav1.ConditionUnknown, models.ReasonPending, "Synchronization pending")
-		r.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonPending, "RuleS2S is being processed")
-
 	case *models.AddressGroupBinding:
 		r.Meta.TouchOnCreate()
 		r.Meta.SetValidatedCondition(metav1.ConditionUnknown, models.ReasonPending, "Validation pending")
@@ -39,23 +33,11 @@ func (cm *ConditionManager) SetDefaultConditions(resource interface{}) {
 		r.Meta.SetSyncedCondition(metav1.ConditionUnknown, models.ReasonPending, "Synchronization pending")
 		r.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonPending, "AddressGroupPortMapping is being processed")
 
-	case *models.ServiceAlias:
-		r.Meta.TouchOnCreate()
-		r.Meta.SetValidatedCondition(metav1.ConditionUnknown, models.ReasonPending, "Validation pending")
-		r.Meta.SetSyncedCondition(metav1.ConditionUnknown, models.ReasonPending, "Synchronization pending")
-		r.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonPending, "ServiceAlias is being processed")
-
 	case *models.AddressGroupBindingPolicy:
 		r.Meta.TouchOnCreate()
 		r.Meta.SetValidatedCondition(metav1.ConditionUnknown, models.ReasonPending, "Validation pending")
 		r.Meta.SetSyncedCondition(metav1.ConditionUnknown, models.ReasonPending, "Synchronization pending")
 		r.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonPending, "AddressGroupBindingPolicy is being processed")
-
-	case *models.IEAgAgRule:
-		r.Meta.TouchOnCreate()
-		r.Meta.SetValidatedCondition(metav1.ConditionUnknown, models.ReasonPending, "Validation pending")
-		r.Meta.SetSyncedCondition(metav1.ConditionUnknown, models.ReasonPending, "Synchronization pending")
-		r.Meta.SetReadyCondition(metav1.ConditionFalse, models.ReasonPending, "IEAgAgRule is being processed")
 
 	case *models.Network:
 		r.Meta.TouchOnCreate()

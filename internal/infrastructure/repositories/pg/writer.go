@@ -55,14 +55,8 @@ func (w *writer) GetTx() pgx.Tx {
 func (w *writer) SyncServices(ctx context.Context, services []models.Service, scope ports.Scope, opts ...ports.Option) error {
 	return w.modularWriter.SyncServices(ctx, services, scope, opts...)
 }
-func (w *writer) SyncServiceAliases(ctx context.Context, aliases []models.ServiceAlias, scope ports.Scope, opts ...ports.Option) error {
-	return w.modularWriter.SyncServiceAliases(ctx, aliases, scope, opts...)
-}
 func (w *writer) DeleteServicesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
 	return w.modularWriter.DeleteServicesByIDs(ctx, ids, opts...)
-}
-func (w *writer) DeleteServiceAliasesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
-	return w.modularWriter.DeleteServiceAliasesByIDs(ctx, ids, opts...)
 }
 func (w *writer) SyncAddressGroups(ctx context.Context, addressGroups []models.AddressGroup, scope ports.Scope, opts ...ports.Option) error {
 	return w.modularWriter.SyncAddressGroups(ctx, addressGroups, scope, opts...)
@@ -87,18 +81,6 @@ func (w *writer) DeleteAddressGroupPortMappingsByIDs(ctx context.Context, ids []
 }
 func (w *writer) DeleteAddressGroupBindingPoliciesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
 	return w.modularWriter.DeleteAddressGroupBindingPoliciesByIDs(ctx, ids, opts...)
-}
-func (w *writer) SyncRuleS2S(ctx context.Context, rules []models.RuleS2S, scope ports.Scope, opts ...ports.Option) error {
-	return w.modularWriter.SyncRuleS2S(ctx, rules, scope, opts...)
-}
-func (w *writer) DeleteRuleS2SByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
-	return w.modularWriter.DeleteRuleS2SByIDs(ctx, ids)
-}
-func (w *writer) SyncIEAgAgRules(ctx context.Context, rules []models.IEAgAgRule, scope ports.Scope, opts ...ports.Option) error {
-	return w.modularWriter.SyncIEAgAgRules(ctx, rules, scope, opts...)
-}
-func (w *writer) DeleteIEAgAgRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
-	return w.modularWriter.DeleteIEAgAgRulesByIDs(ctx, ids)
 }
 func (w *writer) SyncNetworks(ctx context.Context, networks []models.Network, scope ports.Scope, opts ...ports.Option) error {
 	return w.modularWriter.SyncNetworks(ctx, networks, scope, opts...)

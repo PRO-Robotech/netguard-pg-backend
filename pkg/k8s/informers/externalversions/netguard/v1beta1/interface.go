@@ -36,16 +36,10 @@ type Interface interface {
 	Hosts() HostInformer
 	// HostBindings returns a HostBindingInformer.
 	HostBindings() HostBindingInformer
-	// IEAgAgRules returns a IEAgAgRuleInformer.
-	IEAgAgRules() IEAgAgRuleInformer
 	// NetworkBindings returns a NetworkBindingInformer.
 	NetworkBindings() NetworkBindingInformer
-	// RuleS2Ss returns a RuleS2SInformer.
-	RuleS2Ss() RuleS2SInformer
 	// Services returns a ServiceInformer.
 	Services() ServiceInformer
-	// ServiceAliases returns a ServiceAliasInformer.
-	ServiceAliases() ServiceAliasInformer
 	// SvcFqdnRules returns a SvcFqdnRuleInformer.
 	SvcFqdnRules() SvcFqdnRuleInformer
 	// SvcSvcRules returns a SvcSvcRuleInformer.
@@ -93,29 +87,14 @@ func (v *version) HostBindings() HostBindingInformer {
 	return &hostBindingInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
-// IEAgAgRules returns a IEAgAgRuleInformer.
-func (v *version) IEAgAgRules() IEAgAgRuleInformer {
-	return &iEAgAgRuleInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
-}
-
 // NetworkBindings returns a NetworkBindingInformer.
 func (v *version) NetworkBindings() NetworkBindingInformer {
 	return &networkBindingInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
-// RuleS2Ss returns a RuleS2SInformer.
-func (v *version) RuleS2Ss() RuleS2SInformer {
-	return &ruleS2SInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
-}
-
 // Services returns a ServiceInformer.
 func (v *version) Services() ServiceInformer {
 	return &serviceInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
-}
-
-// ServiceAliases returns a ServiceAliasInformer.
-func (v *version) ServiceAliases() ServiceAliasInformer {
-	return &serviceAliasInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // SvcFqdnRules returns a SvcFqdnRuleInformer.

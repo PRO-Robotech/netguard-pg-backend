@@ -72,7 +72,6 @@ func (cm *ConditionManager) ProcessAddressGroupConditions(ctx context.Context, a
 		LastTransitionTime: metav1.Now(),
 	})
 
-	cm.batchConditionUpdate("AddressGroup", ag)
 	return nil
 }
 func (cm *ConditionManager) SaveAddressGroupConditions(ctx context.Context, ag *models.AddressGroup) error {

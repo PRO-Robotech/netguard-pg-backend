@@ -9,13 +9,10 @@ import (
 // MemDB in-memory database
 type MemDB struct {
 	services                    map[string]models.Service
-	serviceAliases              map[string]models.ServiceAlias
 	addressGroups               map[string]models.AddressGroup
 	addressGroupBindings        map[string]models.AddressGroupBinding
 	addressGroupPortMappings    map[string]models.AddressGroupPortMapping
 	addressGroupBindingPolicies map[string]models.AddressGroupBindingPolicy
-	ruleS2S                     map[string]models.RuleS2S
-	ieAgAgRules                 map[string]models.IEAgAgRule
 	networks                    map[string]models.Network
 	networkBindings             map[string]models.NetworkBinding
 	hosts                       map[string]models.Host
@@ -28,13 +25,10 @@ type MemDB struct {
 func NewMemDB() *MemDB {
 	return &MemDB{
 		services:                    make(map[string]models.Service),
-		serviceAliases:              make(map[string]models.ServiceAlias),
 		addressGroups:               make(map[string]models.AddressGroup),
 		addressGroupBindings:        make(map[string]models.AddressGroupBinding),
 		addressGroupPortMappings:    make(map[string]models.AddressGroupPortMapping),
 		addressGroupBindingPolicies: make(map[string]models.AddressGroupBindingPolicy),
-		ruleS2S:                     make(map[string]models.RuleS2S),
-		ieAgAgRules:                 make(map[string]models.IEAgAgRule),
 		networks:                    make(map[string]models.Network),
 		networkBindings:             make(map[string]models.NetworkBinding),
 		hosts:                       make(map[string]models.Host),
@@ -86,17 +80,6 @@ func (db *MemDB) GetAddressGroupPortMappings() map[string]models.AddressGroupPor
 	return result
 }
 
-// GetRuleS2S returns all rule s2s
-func (db *MemDB) GetRuleS2S() map[string]models.RuleS2S {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-	result := make(map[string]models.RuleS2S, len(db.ruleS2S))
-	for k, v := range db.ruleS2S {
-		result[k] = v
-	}
-	return result
-}
-
 // GetSyncStatus returns the sync status
 func (db *MemDB) GetSyncStatus() models.SyncStatus {
 	db.mu.RLock()
@@ -139,31 +122,6 @@ func (db *MemDB) SetAddressGroupPortMappings(mappings map[string]models.AddressG
 	db.addressGroupPortMappings = mappings
 }
 
-// SetRuleS2S sets the rule s2s
-func (db *MemDB) SetRuleS2S(rules map[string]models.RuleS2S) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	db.ruleS2S = rules
-}
-
-// GetServiceAliases returns all service aliases
-func (db *MemDB) GetServiceAliases() map[string]models.ServiceAlias {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-	result := make(map[string]models.ServiceAlias, len(db.serviceAliases))
-	for k, v := range db.serviceAliases {
-		result[k] = v
-	}
-	return result
-}
-
-// SetServiceAliases sets the service aliases
-func (db *MemDB) SetServiceAliases(aliases map[string]models.ServiceAlias) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	db.serviceAliases = aliases
-}
-
 // GetAddressGroupBindingPolicies returns all address group binding policies
 func (db *MemDB) GetAddressGroupBindingPolicies() map[string]models.AddressGroupBindingPolicy {
 	db.mu.RLock()
@@ -180,24 +138,6 @@ func (db *MemDB) SetAddressGroupBindingPolicies(policies map[string]models.Addre
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	db.addressGroupBindingPolicies = policies
-}
-
-// GetIEAgAgRules returns all IEAgAgRules
-func (db *MemDB) GetIEAgAgRules() map[string]models.IEAgAgRule {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-	result := make(map[string]models.IEAgAgRule, len(db.ieAgAgRules))
-	for k, v := range db.ieAgAgRules {
-		result[k] = v
-	}
-	return result
-}
-
-// SetIEAgAgRules sets the IEAgAgRules
-func (db *MemDB) SetIEAgAgRules(rules map[string]models.IEAgAgRule) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	db.ieAgAgRules = rules
 }
 
 // GetNetworks returns all networks

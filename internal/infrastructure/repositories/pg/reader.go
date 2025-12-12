@@ -85,26 +85,6 @@ func (r *reader) GetSyncStatus(ctx context.Context) (*models.SyncStatus, error) 
 	return r.modularReader.GetSyncStatus(ctx)
 }
 
-// Placeholder methods for not-yet-implemented resources
-
-// RuleS2S methods - delegated to readers/rule_s2s.go
-func (r *reader) ListRuleS2S(ctx context.Context, consume func(models.RuleS2S) error, scope ports.Scope) error {
-	return r.modularReader.ListRuleS2S(ctx, consume, scope)
-}
-
-func (r *reader) GetRuleS2SByID(ctx context.Context, id models.ResourceIdentifier) (*models.RuleS2S, error) {
-	return r.modularReader.GetRuleS2SByID(ctx, id)
-}
-
-// ServiceAlias methods - delegated to readers/service_alias.go
-func (r *reader) ListServiceAliases(ctx context.Context, consume func(models.ServiceAlias) error, scope ports.Scope) error {
-	return r.modularReader.ListServiceAliases(ctx, consume, scope)
-}
-
-func (r *reader) GetServiceAliasByID(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error) {
-	return r.modularReader.GetServiceAliasByID(ctx, id)
-}
-
 // AddressGroupBindingPolicy methods - delegated to readers/address_group_binding_policy.go
 func (r *reader) ListAddressGroupBindingPolicies(ctx context.Context, consume func(models.AddressGroupBindingPolicy) error, scope ports.Scope) error {
 	return r.modularReader.ListAddressGroupBindingPolicies(ctx, consume, scope)
@@ -112,15 +92,6 @@ func (r *reader) ListAddressGroupBindingPolicies(ctx context.Context, consume fu
 
 func (r *reader) GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
 	return r.modularReader.GetAddressGroupBindingPolicyByID(ctx, id)
-}
-
-// IEAgAgRule methods - delegated to readers/ieagag_rule.go
-func (r *reader) ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAgRule) error, scope ports.Scope) error {
-	return r.modularReader.ListIEAgAgRules(ctx, consume, scope)
-}
-
-func (r *reader) GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
-	return r.modularReader.GetIEAgAgRuleByID(ctx, id)
 }
 
 // Network methods - delegated to readers/network.go

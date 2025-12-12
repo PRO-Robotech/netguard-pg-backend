@@ -248,11 +248,6 @@ func setupSyncManager(ctx context.Context, cfg *config.Config, sgroupsClient int
 		logger.Error("failed to register Host syncer", zap.Error(err))
 		return nil
 	}
-	ieagagRuleSyncer := syncers.NewIEAgAgRuleSyncer(sgroupsClient, logrLogger)
-	if err := syncManager.RegisterSyncer(types.SyncSubjectTypeIEAgAgRules, ieagagRuleSyncer); err != nil {
-		logger.Error("failed to register IEAgAgRule syncer", zap.Error(err))
-		return nil
-	}
 	serviceSyncer := syncers.NewServiceSyncer(sgroupsClient, logrLogger)
 	if err := syncManager.RegisterSyncer(types.SyncSubjectTypeServices, serviceSyncer); err != nil {
 		logger.Error("failed to register Service syncer", zap.Error(err))

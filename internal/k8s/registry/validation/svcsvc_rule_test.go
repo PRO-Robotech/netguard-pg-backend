@@ -143,7 +143,7 @@ func TestSvcSvcRuleValidator_ValidateCreate(t *testing.T) {
 			name:        "nil SvcSvcRule object",
 			rule:        nil,
 			expectError: true,
-			errorMsg:    "svcsvc_rule object cannot be nil",
+			errorMsg:    "object cannot be nil",
 		},
 		{
 			name: "missing name in metadata",

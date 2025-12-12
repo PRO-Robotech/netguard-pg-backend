@@ -108,7 +108,7 @@ func TestAddressGroupBindingPolicyValidator_ValidateCreate(t *testing.T) {
 				},
 			},
 			expectError: true,
-			errorMsg:    "RFC 1123 subdomain",
+			errorMsg:    "lowercase",
 		},
 		{
 			name: "missing AddressGroupRef fields",
@@ -359,7 +359,7 @@ func TestAddressGroupBindingPolicyValidator_ValidateCreate(t *testing.T) {
 				},
 			},
 			expectError: true,
-			errorMsg:    "RFC 1123 subdomain",
+			errorMsg:    "lowercase",
 		},
 		{
 			name: "invalid name format in ServiceRef",
@@ -388,7 +388,7 @@ func TestAddressGroupBindingPolicyValidator_ValidateCreate(t *testing.T) {
 				},
 			},
 			expectError: true,
-			errorMsg:    "RFC 1123 subdomain",
+			errorMsg:    "lowercase",
 		},
 		{
 			name: "cross-namespace references (valid)",
@@ -473,7 +473,7 @@ func TestAddressGroupBindingPolicyValidator_ValidateCreate(t *testing.T) {
 				},
 			},
 			expectError: true,
-			errorMsg:    "RFC 1123 subdomain",
+			errorMsg:    "lowercase",
 		},
 	}
 
@@ -652,7 +652,7 @@ func TestAddressGroupBindingPolicyValidator_ValidateUpdate(t *testing.T) {
 			},
 			oldPolicy:   basePolicy,
 			expectError: true,
-			errorMsg:    "RFC 1123 subdomain",
+			errorMsg:    "lowercase",
 		},
 	}
 

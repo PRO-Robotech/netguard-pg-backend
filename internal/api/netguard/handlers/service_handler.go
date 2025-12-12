@@ -53,37 +53,6 @@ func (h *ServiceHandler) GetService(ctx context.Context, req *netguardpb.GetServ
 	}, nil
 }
 
-// ListServiceAliases gets list of service aliases
-func (h *ServiceHandler) ListServiceAliases(ctx context.Context, req *netguardpb.ListServiceAliasesReq) (*netguardpb.ListServiceAliasesResp, error) {
-	scope := h.buildScopeWithOptions(req.Identifiers, req.ListOptions)
-
-	aliases, err := h.service.GetServiceAliases(ctx, scope)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get service aliases")
-	}
-
-	items := make([]*netguardpb.ServiceAlias, 0, len(aliases))
-	for _, a := range aliases {
-		items = append(items, converters.ConvertServiceAliasToPB(a))
-	}
-
-	return &netguardpb.ListServiceAliasesResp{Items: items}, nil
-}
-
-// GetServiceAlias gets a specific service alias by ID
-func (h *ServiceHandler) GetServiceAlias(ctx context.Context, req *netguardpb.GetServiceAliasReq) (*netguardpb.GetServiceAliasResp, error) {
-	id := converters.ResourceIdentifierFromPB(req.GetIdentifier())
-
-	alias, err := h.service.GetServiceAliasByID(ctx, id)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get service alias")
-	}
-
-	return &netguardpb.GetServiceAliasResp{
-		ServiceAlias: converters.ConvertServiceAliasToPB(*alias),
-	}, nil
-}
-
 // buildScope creates a scope from resource identifiers
 func (h *ServiceHandler) buildScope(identifiers []*netguardpb.ResourceIdentifier) ports.Scope {
 	if len(identifiers) == 0 {

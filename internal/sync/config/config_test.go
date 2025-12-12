@@ -17,11 +17,6 @@ func TestDefaultReverseSyncSystemConfig(t *testing.T) {
 	assert.Equal(t, 5, config.Manager.MaxConcurrentProcessors)
 	assert.Equal(t, 60*time.Second, config.Manager.HealthCheckInterval)
 
-	// Test SGROUP Detector config
-	assert.Equal(t, 5*time.Second, config.SGROUPDetector.ReconnectInterval)
-	assert.Equal(t, 10, config.SGROUPDetector.MaxRetries)
-	assert.Equal(t, "sgroup", config.SGROUPDetector.ChangeEventSource)
-
 	// Test Host Synchronizer config
 	assert.Equal(t, 50, config.HostSynchronizer.BatchSize)
 	assert.Equal(t, 5, config.HostSynchronizer.MaxConcurrency)
@@ -50,10 +45,6 @@ func TestDevelopmentConfig(t *testing.T) {
 	assert.Equal(t, "debug", config.System.LogLevel)
 	assert.Equal(t, "development", config.System.Environment)
 
-	// Test faster reconnection for development
-	assert.Equal(t, 2*time.Second, config.SGROUPDetector.ReconnectInterval)
-	assert.Equal(t, 5, config.SGROUPDetector.MaxRetries)
-
 	// Test smaller batches for debugging
 	assert.Equal(t, 10, config.HostSynchronizer.BatchSize)
 	assert.Equal(t, 2, config.Manager.MaxConcurrentProcessors)
@@ -69,10 +60,6 @@ func TestProductionConfig(t *testing.T) {
 	// Test production-specific settings
 	assert.Equal(t, "info", config.System.LogLevel)
 	assert.Equal(t, "production", config.System.Environment)
-
-	// Test longer reconnection intervals for stability
-	assert.Equal(t, 10*time.Second, config.SGROUPDetector.ReconnectInterval)
-	assert.Equal(t, 20, config.SGROUPDetector.MaxRetries)
 
 	// Test larger batches for efficiency
 	assert.Equal(t, 100, config.HostSynchronizer.BatchSize)
@@ -92,10 +79,6 @@ func TestTestConfig(t *testing.T) {
 	// Test test-specific settings
 	assert.Equal(t, "debug", config.System.LogLevel)
 	assert.Equal(t, "test", config.System.Environment)
-
-	// Test fast reconnection for tests
-	assert.Equal(t, 100*time.Millisecond, config.SGROUPDetector.ReconnectInterval)
-	assert.Equal(t, 2, config.SGROUPDetector.MaxRetries)
 
 	// Test small batches for predictability
 	assert.Equal(t, 2, config.HostSynchronizer.BatchSize)
@@ -143,26 +126,6 @@ func TestReverseSyncSystemConfig_Validate(t *testing.T) {
 			}(),
 			wantError: true,
 			errorMsg:  "manager max concurrent processors must be positive",
-		},
-		{
-			name: "invalid SGROUP detector reconnect interval",
-			config: func() ReverseSyncSystemConfig {
-				c := DefaultReverseSyncSystemConfig()
-				c.SGROUPDetector.ReconnectInterval = 0
-				return c
-			}(),
-			wantError: true,
-			errorMsg:  "SGROUP detector reconnect interval must be positive",
-		},
-		{
-			name: "invalid SGROUP detector max retries",
-			config: func() ReverseSyncSystemConfig {
-				c := DefaultReverseSyncSystemConfig()
-				c.SGROUPDetector.MaxRetries = -1
-				return c
-			}(),
-			wantError: true,
-			errorMsg:  "SGROUP detector max retries must be non-negative",
 		},
 		{
 			name: "invalid host synchronizer batch size",
@@ -304,13 +267,10 @@ func TestConfigurationDifferences(t *testing.T) {
 	prod := ProductionConfig()
 	test := TestConfig()
 
-	// Development should have faster settings than production
-	assert.Less(t, dev.SGROUPDetector.ReconnectInterval, prod.SGROUPDetector.ReconnectInterval)
-	assert.Less(t, dev.SGROUPDetector.MaxRetries, prod.SGROUPDetector.MaxRetries)
+	// Development should have smaller batch size than production
 	assert.Less(t, dev.HostSynchronizer.BatchSize, prod.HostSynchronizer.BatchSize)
 
 	// Test should have the fastest settings
-	assert.Less(t, test.SGROUPDetector.ReconnectInterval, dev.SGROUPDetector.ReconnectInterval)
 	assert.Less(t, test.Manager.ProcessingTimeout, dev.Manager.ProcessingTimeout)
 	assert.Equal(t, time.Duration(0), test.Manager.HealthCheckInterval)
 }

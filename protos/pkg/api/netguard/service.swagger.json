@@ -521,90 +521,6 @@
         ]
       }
     },
-    "/v1/ie-ag-ag-rules": {
-      "get": {
-        "description": "ListIEAgAgRules: gets list of IEAgAg rules",
-        "operationId": "NetguardService_ListIEAgAgRules",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1ListIEAgAgRulesResp"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "listOptions.namespace",
-            "description": "Namespace filter (empty = all namespaces)\nDEPRECATED: Use field_selectors with \"metadata.namespace\" instead for consistency",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "name": "listOptions.continueToken",
-            "description": "Pagination token for retrieving next page of results",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "name": "listOptions.limit",
-            "description": "Limit number of results (0 = no limit)",
-            "in": "query",
-            "required": false,
-            "type": "integer",
-            "format": "int32"
-          }
-        ],
-        "tags": [
-          "NetguardService"
-        ]
-      }
-    },
-    "/v1/ie-ag-ag-rules/{identifier.namespace}/{identifier.name}": {
-      "get": {
-        "description": "GetIEAgAgRule: gets a specific IEAgAg rule by ID",
-        "operationId": "NetguardService_GetIEAgAgRule",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1GetIEAgAgRuleResp"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "identifier.namespace",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "identifier.name",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "NetguardService"
-        ]
-      }
-    },
     "/v1/network-bindings": {
       "get": {
         "description": "ListNetworkBindings: gets list of network bindings",
@@ -745,174 +661,6 @@
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/v1GetNetworkResp"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "identifier.namespace",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "identifier.name",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "NetguardService"
-        ]
-      }
-    },
-    "/v1/rule-s2s": {
-      "get": {
-        "description": "ListRuleS2S: gets list of rule s2s",
-        "operationId": "NetguardService_ListRuleS2S",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1ListRuleS2SResp"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "listOptions.namespace",
-            "description": "Namespace filter (empty = all namespaces)\nDEPRECATED: Use field_selectors with \"metadata.namespace\" instead for consistency",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "name": "listOptions.continueToken",
-            "description": "Pagination token for retrieving next page of results",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "name": "listOptions.limit",
-            "description": "Limit number of results (0 = no limit)",
-            "in": "query",
-            "required": false,
-            "type": "integer",
-            "format": "int32"
-          }
-        ],
-        "tags": [
-          "NetguardService"
-        ]
-      }
-    },
-    "/v1/rule-s2s/{identifier.namespace}/{identifier.name}": {
-      "get": {
-        "description": "GetRuleS2S: gets a specific rule s2s by ID",
-        "operationId": "NetguardService_GetRuleS2S",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1GetRuleS2SResp"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "identifier.namespace",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "identifier.name",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "NetguardService"
-        ]
-      }
-    },
-    "/v1/service-aliases": {
-      "get": {
-        "description": "ListServiceAliases: gets list of service aliases",
-        "operationId": "NetguardService_ListServiceAliases",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1ListServiceAliasesResp"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "listOptions.namespace",
-            "description": "Namespace filter (empty = all namespaces)\nDEPRECATED: Use field_selectors with \"metadata.namespace\" instead for consistency",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "name": "listOptions.continueToken",
-            "description": "Pagination token for retrieving next page of results",
-            "in": "query",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "name": "listOptions.limit",
-            "description": "Limit number of results (0 = no limit)",
-            "in": "query",
-            "required": false,
-            "type": "integer",
-            "format": "int32"
-          }
-        ],
-        "tags": [
-          "NetguardService"
-        ]
-      }
-    },
-    "/v1/service-aliases/{identifier.namespace}/{identifier.name}": {
-      "get": {
-        "description": "GetServiceAlias: gets a specific service alias by ID",
-        "operationId": "NetguardService_GetServiceAlias",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1GetServiceAliasResp"
             }
           },
           "default": {
@@ -1636,15 +1384,6 @@
       },
       "title": "GetHostResp - response with a specific host"
     },
-    "v1GetIEAgAgRuleResp": {
-      "type": "object",
-      "properties": {
-        "ieagagRule": {
-          "$ref": "#/definitions/v1IEAgAgRule"
-        }
-      },
-      "title": "GetIEAgAgRuleResp - response with a specific IEAgAgRule"
-    },
     "v1GetNetworkBindingResp": {
       "type": "object",
       "properties": {
@@ -1662,24 +1401,6 @@
         }
       },
       "title": "GetNetworkResp - response with a specific network"
-    },
-    "v1GetRuleS2SResp": {
-      "type": "object",
-      "properties": {
-        "ruleS2s": {
-          "$ref": "#/definitions/v1RuleS2S"
-        }
-      },
-      "title": "GetRuleS2SResp - response with a specific rule s2s"
-    },
-    "v1GetServiceAliasResp": {
-      "type": "object",
-      "properties": {
-        "serviceAlias": {
-          "$ref": "#/definitions/v1ServiceAlias"
-        }
-      },
-      "title": "GetServiceAliasResp - response with a specific service alias"
     },
     "v1GetServiceResp": {
       "type": "object",
@@ -1809,58 +1530,6 @@
       "default": "HOST_SOURCE_SPEC",
       "description": "- HOST_SOURCE_SPEC: Host registered via AddressGroup.spec.hosts\n - HOST_SOURCE_BINDING: Host registered via HostBinding resource",
       "title": "HostRegistrationSource represents the source of host registration"
-    },
-    "v1IEAgAgRule": {
-      "type": "object",
-      "properties": {
-        "selfRef": {
-          "$ref": "#/definitions/v1ResourceIdentifier"
-        },
-        "transport": {
-          "$ref": "#/definitions/NetIPTransport"
-        },
-        "traffic": {
-          "$ref": "#/definitions/v1Traffic"
-        },
-        "addressGroupLocal": {
-          "$ref": "#/definitions/v1AddressGroupRef"
-        },
-        "addressGroup": {
-          "$ref": "#/definitions/v1AddressGroupRef"
-        },
-        "ports": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1PortSpec"
-          }
-        },
-        "action": {
-          "$ref": "#/definitions/v1RuleAction"
-        },
-        "logs": {
-          "type": "boolean"
-        },
-        "priority": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "meta": {
-          "$ref": "#/definitions/v1Meta"
-        },
-        "trace": {
-          "type": "boolean"
-        }
-      },
-      "title": "IEAgAgRule - rule between two address groups",
-      "required": [
-        "selfRef",
-        "transport",
-        "traffic",
-        "addressGroupLocal",
-        "addressGroup",
-        "action"
-      ]
     },
     "v1IPItem": {
       "type": "object",
@@ -2001,19 +1670,6 @@
       },
       "title": "ListHostsResp - response with list of hosts"
     },
-    "v1ListIEAgAgRulesResp": {
-      "type": "object",
-      "properties": {
-        "items": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1IEAgAgRule"
-          }
-        }
-      },
-      "title": "ListIEAgAgRulesResp - response with list of IEAgAgRules"
-    },
     "v1ListNetworkBindingsResp": {
       "type": "object",
       "properties": {
@@ -2074,32 +1730,6 @@
         }
       },
       "title": "ListOptions specifies filtering and pagination options for List operations"
-    },
-    "v1ListRuleS2SResp": {
-      "type": "object",
-      "properties": {
-        "items": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1RuleS2S"
-          }
-        }
-      },
-      "title": "ListRuleS2SResp - response with list of rule s2s"
-    },
-    "v1ListServiceAliasesResp": {
-      "type": "object",
-      "properties": {
-        "items": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1ServiceAlias"
-          }
-        }
-      },
-      "title": "ListServiceAliasesResp - response with list of service aliases"
     },
     "v1ListServicesResp": {
       "type": "object",
@@ -2369,18 +1999,6 @@
       },
       "title": "PortRanges - list of port ranges"
     },
-    "v1PortSpec": {
-      "type": "object",
-      "properties": {
-        "source": {
-          "type": "string"
-        },
-        "destination": {
-          "type": "string"
-        }
-      },
-      "title": "PortSpec - port specification"
-    },
     "v1ProtocolPorts": {
       "type": "object",
       "properties": {
@@ -2415,55 +2033,6 @@
       "default": "UNDEFINED",
       "description": "- UNDEFINED: UNDEFINED - undefined action (should not be used)\n - DROP: DROP - drops network packet\n - ACCEPT: ACCEPT - accepts network packet",
       "title": "RuleAction - action for rules and address groups"
-    },
-    "v1RuleS2S": {
-      "type": "object",
-      "properties": {
-        "selfRef": {
-          "$ref": "#/definitions/v1ResourceIdentifier"
-        },
-        "traffic": {
-          "$ref": "#/definitions/v1Traffic"
-        },
-        "serviceLocalRef": {
-          "$ref": "#/definitions/v1ServiceRef",
-          "title": "Now uses NamespacedObjectReference internally"
-        },
-        "serviceRef": {
-          "$ref": "#/definitions/v1ServiceRef",
-          "title": "Now uses NamespacedObjectReference internally"
-        },
-        "ieagAgRuleRefs": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1ResourceIdentifier"
-          },
-          "title": "DEPRECATED: Use ieag_ag_rule_object_refs"
-        },
-        "ieagAgRuleObjectRefs": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1NamespacedObjectReference"
-          },
-          "title": "NEW: Full object references"
-        },
-        "meta": {
-          "$ref": "#/definitions/v1Meta"
-        },
-        "trace": {
-          "type": "boolean"
-        }
-      },
-      "title": "RuleS2S - rule between two services",
-      "required": [
-        "name",
-        "namespace",
-        "traffic",
-        "serviceLocalRef",
-        "serviceRef"
-      ]
     },
     "v1Service": {
       "type": "object",
@@ -2510,26 +2079,6 @@
       "title": "Service - represents a service with ports",
       "required": [
         "selfRef"
-      ]
-    },
-    "v1ServiceAlias": {
-      "type": "object",
-      "properties": {
-        "selfRef": {
-          "$ref": "#/definitions/v1ResourceIdentifier"
-        },
-        "serviceRef": {
-          "$ref": "#/definitions/v1ServiceRef"
-        },
-        "meta": {
-          "$ref": "#/definitions/v1Meta"
-        }
-      },
-      "title": "ServiceAlias - alias for a service",
-      "required": [
-        "name",
-        "namespace",
-        "serviceRef"
       ]
     },
     "v1ServicePortsRef": {
@@ -2749,19 +2298,6 @@
       },
       "title": "SyncHosts - subject of Hosts to sync"
     },
-    "v1SyncIEAgAgRules": {
-      "type": "object",
-      "properties": {
-        "ieagagRules": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1IEAgAgRule"
-          }
-        }
-      },
-      "title": "SyncIEAgAgRules - subject of IEAgAgRules to sync"
-    },
     "v1SyncNetworkBindings": {
       "type": "object",
       "properties": {
@@ -2823,21 +2359,9 @@
           "$ref": "#/definitions/v1SyncAddressGroupPortMappings",
           "title": "Subject of Address Group Port Mappings"
         },
-        "ruleS2s": {
-          "$ref": "#/definitions/v1SyncRuleS2S",
-          "title": "Subject of Rule S2S"
-        },
-        "serviceAliases": {
-          "$ref": "#/definitions/v1SyncServiceAliases",
-          "title": "Subject of Service Aliases"
-        },
         "addressGroupBindingPolicies": {
           "$ref": "#/definitions/v1SyncAddressGroupBindingPolicies",
           "title": "Subject of Address Group Binding Policies"
-        },
-        "ieagagRules": {
-          "$ref": "#/definitions/v1SyncIEAgAgRules",
-          "title": "Subject of IEAgAgRules"
         },
         "networks": {
           "$ref": "#/definitions/v1SyncNetworks",
@@ -2865,32 +2389,6 @@
         }
       },
       "title": "SyncReq - request to sync"
-    },
-    "v1SyncRuleS2S": {
-      "type": "object",
-      "properties": {
-        "ruleS2s": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1RuleS2S"
-          }
-        }
-      },
-      "title": "SyncRuleS2S - subject of Rule S2S to sync"
-    },
-    "v1SyncServiceAliases": {
-      "type": "object",
-      "properties": {
-        "serviceAliases": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1ServiceAlias"
-          }
-        }
-      },
-      "title": "SyncServiceAliases - subject of Service Aliases to sync"
     },
     "v1SyncServices": {
       "type": "object",
@@ -2941,14 +2439,6 @@
       },
       "title": "SyncSvcSvcRules - subject of SvcSvcRules to sync"
     },
-    "v1Traffic": {
-      "type": "string",
-      "enum": [
-        "Ingress",
-        "Egress"
-      ],
-      "default": "Ingress"
-    },
     "v1WatchEvent": {
       "type": "object",
       "properties": {
@@ -2977,12 +2467,6 @@
         "addressGroupBindingPolicy": {
           "$ref": "#/definitions/v1AddressGroupBindingPolicy"
         },
-        "ruleS2s": {
-          "$ref": "#/definitions/v1RuleS2S"
-        },
-        "serviceAlias": {
-          "$ref": "#/definitions/v1ServiceAlias"
-        },
         "host": {
           "$ref": "#/definitions/v1Host"
         },
@@ -2994,9 +2478,6 @@
         },
         "networkBinding": {
           "$ref": "#/definitions/v1NetworkBinding"
-        },
-        "ieAgAgRule": {
-          "$ref": "#/definitions/v1IEAgAgRule"
         },
         "svcSvcRule": {
           "$ref": "#/definitions/v1SvcSvcRule"

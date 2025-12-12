@@ -184,48 +184,6 @@ func ConvertServiceToPB(svc models.Service) *netguardpb.Service {
 	return result
 }
 
-// ConvertServiceAlias converts protobuf ServiceAlias to domain model
-func ConvertServiceAlias(a *netguardpb.ServiceAlias) models.ServiceAlias {
-	// Convert ServiceRef with nil-safe access
-	var serviceName, serviceNamespace string
-	if svcRef := a.GetServiceRef(); svcRef != nil {
-		if svcId := svcRef.GetIdentifier(); svcId != nil {
-			serviceName = svcId.GetName()
-			serviceNamespace = svcId.GetNamespace()
-		}
-	}
-	if serviceName == "" {
-		// Return partial object if ServiceRef is incomplete - let caller handle validation
-		return models.ServiceAlias{
-			SelfRef: models.NewSelfRef(GetSelfRef(a.GetSelfRef())),
-			Meta:    ConvertMeta(a.Meta),
-		}
-	}
-
-	return models.ServiceAlias{
-		SelfRef:    models.NewSelfRef(GetSelfRef(a.GetSelfRef())),
-		ServiceRef: models.NewServiceRef(serviceName, models.WithNamespace(serviceNamespace)),
-		Meta:       ConvertMeta(a.Meta),
-	}
-}
-
-// ConvertServiceAliasToPB converts domain ServiceAlias to protobuf
-func ConvertServiceAliasToPB(a models.ServiceAlias) *netguardpb.ServiceAlias {
-	return &netguardpb.ServiceAlias{
-		SelfRef: &netguardpb.ResourceIdentifier{
-			Name:      a.ResourceIdentifier.Name,
-			Namespace: a.ResourceIdentifier.Namespace,
-		},
-		ServiceRef: &netguardpb.ServiceRef{
-			Identifier: &netguardpb.ResourceIdentifier{
-				Name:      a.ServiceRef.Name,
-				Namespace: a.ServiceRef.Namespace,
-			},
-		},
-		Meta: ConvertMetaToPB(a.Meta),
-	}
-}
-
 // Helper functions for AddressGroup registration source conversion
 func convertAGRegistrationSourceFromPB(source netguardpb.AddressGroupRegistrationSource) models.AddressGroupRegistrationSource {
 	switch source {

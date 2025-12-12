@@ -271,124 +271,6 @@ func (s *ValidationService) ValidateAddressGroupPortMappingForDeletion(ctx conte
 }
 
 // =============================================================================
-// RuleS2S Validation
-// =============================================================================
-
-// ValidateRuleS2SForCreation validates a RuleS2S for creation
-func (s *ValidationService) ValidateRuleS2SForCreation(ctx context.Context, rule models.RuleS2S) error {
-	reader, err := s.registry.Reader(ctx)
-	if err != nil {
-		return errors.Wrap(err, "failed to get reader")
-	}
-	defer reader.Close()
-
-	validator := validation.NewDependencyValidator(reader)
-	ruleValidator := validator.GetRuleS2SValidator()
-
-	if err := ruleValidator.ValidateForCreation(ctx, rule); err != nil {
-		return errors.Wrapf(err, "RuleS2S validation failed for creation: %s", rule.Key())
-	}
-
-	return nil
-}
-
-// ValidateRuleS2SForUpdate validates a RuleS2S for update
-func (s *ValidationService) ValidateRuleS2SForUpdate(ctx context.Context, oldRule, newRule models.RuleS2S) error {
-	reader, err := s.registry.Reader(ctx)
-	if err != nil {
-		return errors.Wrap(err, "failed to get reader")
-	}
-	defer reader.Close()
-
-	validator := validation.NewDependencyValidator(reader)
-	ruleValidator := validator.GetRuleS2SValidator()
-
-	if err := ruleValidator.ValidateForUpdate(ctx, oldRule, newRule); err != nil {
-		return errors.Wrapf(err, "RuleS2S validation failed for update: %s", newRule.Key())
-	}
-
-	return nil
-}
-
-// ValidateRuleS2SForDeletion validates a RuleS2S for deletion
-func (s *ValidationService) ValidateRuleS2SForDeletion(ctx context.Context, rule models.RuleS2S) error {
-	reader, err := s.registry.Reader(ctx)
-	if err != nil {
-		return errors.Wrap(err, "failed to get reader")
-	}
-	defer reader.Close()
-
-	validator := validation.NewDependencyValidator(reader)
-	ruleValidator := validator.GetRuleS2SValidator()
-
-	// Basic existence check for deletion - rule should exist
-	if err := ruleValidator.ValidateExists(ctx, rule.SelfRef.ResourceIdentifier); err != nil {
-		return errors.Wrapf(err, "RuleS2S validation failed for deletion: %s", rule.Key())
-	}
-
-	return nil
-}
-
-// =============================================================================
-// ServiceAlias Validation
-// =============================================================================
-
-// ValidateServiceAliasForCreation validates a service alias for creation
-func (s *ValidationService) ValidateServiceAliasForCreation(ctx context.Context, alias models.ServiceAlias) error {
-	reader, err := s.registry.Reader(ctx)
-	if err != nil {
-		return errors.Wrap(err, "failed to get reader")
-	}
-	defer reader.Close()
-
-	validator := validation.NewDependencyValidator(reader)
-	aliasValidator := validator.GetServiceAliasValidator()
-
-	if err := aliasValidator.ValidateForCreation(ctx, &alias); err != nil {
-		return errors.Wrapf(err, "service alias validation failed for creation: %s", alias.Key())
-	}
-
-	return nil
-}
-
-// ValidateServiceAliasForUpdate validates a service alias for update
-func (s *ValidationService) ValidateServiceAliasForUpdate(ctx context.Context, oldAlias, newAlias models.ServiceAlias) error {
-	reader, err := s.registry.Reader(ctx)
-	if err != nil {
-		return errors.Wrap(err, "failed to get reader")
-	}
-	defer reader.Close()
-
-	validator := validation.NewDependencyValidator(reader)
-	aliasValidator := validator.GetServiceAliasValidator()
-
-	if err := aliasValidator.ValidateForUpdate(ctx, oldAlias, newAlias); err != nil {
-		return errors.Wrapf(err, "service alias validation failed for update: %s", newAlias.Key())
-	}
-
-	return nil
-}
-
-// ValidateServiceAliasForDeletion validates a service alias for deletion
-func (s *ValidationService) ValidateServiceAliasForDeletion(ctx context.Context, alias models.ServiceAlias) error {
-	reader, err := s.registry.Reader(ctx)
-	if err != nil {
-		return errors.Wrap(err, "failed to get reader")
-	}
-	defer reader.Close()
-
-	validator := validation.NewDependencyValidator(reader)
-	aliasValidator := validator.GetServiceAliasValidator()
-
-	// Basic existence check for deletion - alias should exist
-	if err := aliasValidator.ValidateExists(ctx, alias.SelfRef.ResourceIdentifier); err != nil {
-		return errors.Wrapf(err, "service alias validation failed for deletion: %s", alias.Key())
-	}
-
-	return nil
-}
-
-// =============================================================================
 // AddressGroupBindingPolicy Validation
 // =============================================================================
 
@@ -657,16 +539,6 @@ func (s *ValidationService) ValidateMultipleResourcesForOperation(ctx context.Co
 				err = s.ValidateAddressGroupForDeletion(ctx, r)
 			}
 
-		case models.RuleS2S:
-			switch operation {
-			case "create":
-				err = s.ValidateRuleS2SForCreation(ctx, r)
-			case "update":
-				err = fmt.Errorf("bulk update validation requires old version for RuleS2S %s", r.Key())
-			case "delete":
-				err = s.ValidateRuleS2SForDeletion(ctx, r)
-			}
-
 		default:
 			err = fmt.Errorf("unsupported resource type for validation: %T", r)
 		}
@@ -719,18 +591,6 @@ func (s *ValidationService) ValidateAddressGroupForCreationWithReader(ctx contex
 	return nil
 }
 
-// ValidateRuleS2SForCreationWithReader validates a RuleS2S for creation using existing reader
-func (s *ValidationService) ValidateRuleS2SForCreationWithReader(ctx context.Context, rule models.RuleS2S, reader ports.Reader) error {
-	validator := validation.NewDependencyValidator(reader)
-	ruleValidator := validator.GetRuleS2SValidator()
-
-	if err := ruleValidator.ValidateForCreation(ctx, rule); err != nil {
-		return errors.Wrapf(err, "RuleS2S validation failed for creation: %s", rule.Key())
-	}
-
-	return nil
-}
-
 // =============================================================================
 // Cross-Resource Validation
 // =============================================================================
@@ -762,33 +622,6 @@ func (s *ValidationService) ValidateResourceDependencies(ctx context.Context, re
 			return errors.Wrapf(err, "address group dependency validation failed for binding %s", r.Key())
 		}
 
-	case models.RuleS2S:
-		// Validate that both service aliases exist
-		_, err := reader.GetServiceAliasByID(ctx, models.ResourceIdentifier{
-			Name:      r.ServiceRef.Name,
-			Namespace: r.ServiceRef.Namespace,
-		})
-		if err != nil {
-			return errors.Wrapf(err, "target service alias dependency validation failed for rule %s", r.Key())
-		}
-
-		_, err = reader.GetServiceAliasByID(ctx, models.ResourceIdentifier{
-			Name:      r.ServiceLocalRef.Name,
-			Namespace: r.ServiceLocalRef.Namespace,
-		})
-		if err != nil {
-			return errors.Wrapf(err, "local service alias dependency validation failed for rule %s", r.Key())
-		}
-
-	case models.ServiceAlias:
-		// Validate that the referenced service exists
-		_, err := reader.GetServiceByID(ctx, models.ResourceIdentifier{
-			Name:      r.ServiceRef.Name,
-			Namespace: r.ServiceRef.Namespace,
-		})
-		if err != nil {
-			return errors.Wrapf(err, "service dependency validation failed for alias %s", r.Key())
-		}
 	}
 
 	return nil

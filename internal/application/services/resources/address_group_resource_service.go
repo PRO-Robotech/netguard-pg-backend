@@ -34,15 +34,12 @@ type AddressGroupConditionManagerInterface interface {
 
 // AddressGroupResourceService handles AddressGroup, AddressGroupBinding, AddressGroupPortMapping, and AddressGroupBindingPolicy operations
 type AddressGroupResourceService struct {
-	registry           ports.Registry
-	syncManager        interfaces.SyncManager
-	conditionManager   AddressGroupConditionManagerInterface
-	validationService  *ValidationService
-	ruleS2SRegenerator RuleS2SRegenerator
-	hostService        *HostResourceService
+	registry          ports.Registry
+	syncManager       interfaces.SyncManager
+	conditionManager  AddressGroupConditionManagerInterface
+	validationService *ValidationService
+	hostService       *HostResourceService
 }
-
-// RuleS2SRegenerator interface is now defined in interfaces.go to avoid circular dependencies
 
 // NewAddressGroupResourceService creates a new AddressGroupResourceService
 func NewAddressGroupResourceService(
@@ -53,18 +50,12 @@ func NewAddressGroupResourceService(
 	hostService *HostResourceService,
 ) *AddressGroupResourceService {
 	return &AddressGroupResourceService{
-		registry:           registry,
-		syncManager:        syncManager,
-		conditionManager:   conditionManager,
-		validationService:  validationService,
-		ruleS2SRegenerator: nil, // Will be set later via SetRuleS2SRegenerator
-		hostService:        hostService,
+		registry:          registry,
+		syncManager:       syncManager,
+		conditionManager:  conditionManager,
+		validationService: validationService,
+		hostService:       hostService,
 	}
-}
-
-// SetRuleS2SRegenerator sets the RuleS2S regenerator (used to avoid circular dependencies)
-func (s *AddressGroupResourceService) SetRuleS2SRegenerator(regenerator RuleS2SRegenerator) {
-	s.ruleS2SRegenerator = regenerator
 }
 
 // =============================================================================
@@ -742,31 +733,6 @@ func (s *AddressGroupResourceService) CreateAddressGroupBinding(ctx context.Cont
 	} else {
 	}
 
-	serviceID := models.ResourceIdentifier{
-		Name:      binding.ServiceRef.Name,
-		Namespace: binding.ServiceRef.Namespace,
-	}
-	// Aggregated address groups are updated by trigger 'trigger_update_aggregated_ags_on_binding_change'.
-	if s.ruleS2SRegenerator != nil {
-		if err := s.ruleS2SRegenerator.NotifyServiceAddressGroupsChanged(ctx, serviceID); err != nil {
-			klog.Errorf("Failed to notify RuleS2S service about AddressGroupBinding %s: %v",
-				binding.Key(), err)
-			// Don't fail the operation, but log the issue
-		} else {
-		}
-	}
-
-	if s.ruleS2SRegenerator != nil {
-		bindingID := models.ResourceIdentifier{Name: binding.Name, Namespace: binding.Namespace}
-		if err := s.ruleS2SRegenerator.RegenerateIEAgAgRulesForAddressGroupBinding(ctx, bindingID); err != nil {
-			klog.Errorf("Failed to regenerate IEAgAg rules for new AddressGroupBinding %s: %v",
-				binding.Key(), err)
-			// Don't fail the operation if IEAgAg rule regeneration fails
-		} else {
-		}
-	} else {
-	}
-
 	return nil
 }
 
@@ -825,23 +791,6 @@ func (s *AddressGroupResourceService) UpdateAddressGroupBinding(ctx context.Cont
 		}
 	}
 
-	serviceID := models.ResourceIdentifier{Name: binding.ServiceRef.Name, Namespace: binding.ServiceRef.Namespace}
-	if s.ruleS2SRegenerator != nil {
-		if err := s.ruleS2SRegenerator.NotifyServiceAddressGroupsChanged(ctx, serviceID); err != nil {
-			klog.Errorf("Failed to notify RuleS2S regenerator for updated AddressGroupBinding %s: %v",
-				binding.Key(), err)
-			// Don't fail the operation, but log the issue
-		}
-	}
-
-	if s.ruleS2SRegenerator != nil {
-		bindingID := models.ResourceIdentifier{Name: binding.Name, Namespace: binding.Namespace}
-		if err := s.ruleS2SRegenerator.RegenerateIEAgAgRulesForAddressGroupBinding(ctx, bindingID); err != nil {
-			klog.Errorf("Failed to regenerate IEAgAg rules for AddressGroupBinding %s: %v",
-				binding.Key(), err)
-		}
-	}
-
 	return nil
 }
 
@@ -884,16 +833,6 @@ func (s *AddressGroupResourceService) syncAddressGroupBindingsWithRetry(ctx cont
 		return err
 	}
 
-	// Post-commit: notify RuleS2S regenerator (outside transaction)
-	if s.ruleS2SRegenerator != nil {
-		for key, serviceID := range serviceIDs {
-			if err := s.ruleS2SRegenerator.NotifyServiceAddressGroupsChanged(ctx, serviceID); err != nil {
-				klog.Errorf("Failed to notify RuleS2S regenerator for service %s: %v", key, err)
-				// Don't fail the operation, but log the issue
-			}
-		}
-	}
-
 	return nil
 }
 
@@ -929,23 +868,6 @@ func (s *AddressGroupResourceService) syncAddressGroupBindingsTransaction(ctx co
 			if err := s.conditionManager.ProcessAddressGroupBindingConditions(ctx, &bindings[i]); err != nil {
 				klog.Errorf("Failed to process address group binding conditions for %s/%s: %v",
 					bindings[i].Namespace, bindings[i].Name, err)
-			}
-		}
-	}
-
-	serviceIDs := make(map[string]models.ResourceIdentifier)
-	for _, binding := range bindings {
-		key := binding.ServiceRef.Namespace + "/" + binding.ServiceRef.Name
-		serviceIDs[key] = models.ResourceIdentifier{Name: binding.ServiceRef.Name, Namespace: binding.ServiceRef.Namespace}
-	}
-
-	// Aggregated address groups are updated by trigger 'trigger_update_aggregated_ags_on_binding_change'.
-	if s.ruleS2SRegenerator != nil {
-		// Notify for each unique service (including DELETE operations for dependency cleanup)
-		for key, serviceID := range serviceIDs {
-			if err := s.ruleS2SRegenerator.NotifyServiceAddressGroupsChanged(ctx, serviceID); err != nil {
-				klog.Errorf("Failed to notify RuleS2S regenerator for service %s: %v", key, err)
-				// Don't fail the operation, but log the issue
 			}
 		}
 	}
@@ -1004,21 +926,6 @@ func (s *AddressGroupResourceService) DeleteAddressGroupBindingsByIDs(ctx contex
 		return writer.DeleteAddressGroupBindingsByIDs(ctx, ids)
 	}); err != nil {
 		return errors.Wrap(err, "failed to delete address group bindings")
-	}
-
-	if s.ruleS2SRegenerator != nil {
-		// Collect unique service IDs to avoid duplicate notifications
-		serviceIDs := make(map[string]models.ResourceIdentifier)
-		for _, binding := range bindingsToRemove {
-			key := binding.ServiceRef.Namespace + "/" + binding.ServiceRef.Name
-			serviceIDs[key] = models.ResourceIdentifier{Name: binding.ServiceRef.Name, Namespace: binding.ServiceRef.Namespace}
-		}
-
-		// Aggregated address groups are updated by trigger 'trigger_update_aggregated_ags_on_binding_change'.
-		for _, serviceID := range serviceIDs {
-			if err := s.ruleS2SRegenerator.NotifyServiceAddressGroupsChanged(ctx, serviceID); err != nil {
-			}
-		}
 	}
 
 	// After successful deletion, regenerate port mappings for affected AddressGroups

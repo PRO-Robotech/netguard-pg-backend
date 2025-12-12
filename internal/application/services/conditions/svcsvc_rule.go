@@ -14,14 +14,7 @@ import (
 
 func (cm *ConditionManager) ProcessSvcSvcRuleConditions(ctx context.Context, rule *models.SvcSvcRule) error {
 	changed := rule.Meta.ClearErrorConditionIfPresent()
-	flushUpdate := func() {
-		if !changed {
-			return
-		}
-		rule.Meta.TouchOnWrite("v1")
-		cm.batchConditionUpdate("SvcSvcRule", rule)
-		changed = false
-	}
+	_ = changed // Used for condition tracking
 
 	reader, err := cm.registry.Reader(ctx)
 	if err != nil {
@@ -32,7 +25,6 @@ func (cm *ConditionManager) ProcessSvcSvcRuleConditions(ctx context.Context, rul
 		if rule.Meta.EnsureReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "Backend validation unavailable") {
 			changed = true
 		}
-		flushUpdate()
 		return nil
 	}
 	defer reader.Close()
@@ -56,7 +48,6 @@ func (cm *ConditionManager) ProcessSvcSvcRuleConditions(ctx context.Context, rul
 		if rule.Meta.EnsureReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "ServiceFrom validation failed") {
 			changed = true
 		}
-		flushUpdate()
 		return nil
 	}
 
@@ -74,7 +65,6 @@ func (cm *ConditionManager) ProcessSvcSvcRuleConditions(ctx context.Context, rul
 		if rule.Meta.EnsureReadyCondition(metav1.ConditionFalse, models.ReasonNotReady, "ServiceTo validation failed") {
 			changed = true
 		}
-		flushUpdate()
 		return nil
 	}
 
@@ -90,7 +80,6 @@ func (cm *ConditionManager) ProcessSvcSvcRuleConditions(ctx context.Context, rul
 		if rule.Meta.EnsureValidatedCondition(metav1.ConditionFalse, models.ReasonValidationFailed, "Dependency validation failed") {
 			changed = true
 		}
-		flushUpdate()
 		return nil
 	} else if !serviceFromExists {
 		klog.Warningf("SvcSvcRule %s/%s not ready: ServiceFrom %s not found", rule.Namespace, rule.Name, rule.ServiceFromRefKey())
@@ -103,7 +92,6 @@ func (cm *ConditionManager) ProcessSvcSvcRuleConditions(ctx context.Context, rul
 		if rule.Meta.EnsureValidatedCondition(metav1.ConditionFalse, models.ReasonValidationFailed, "ServiceFrom dependency missing") {
 			changed = true
 		}
-		flushUpdate()
 		return nil
 	} else if !serviceToExists {
 		klog.Warningf("SvcSvcRule %s/%s not ready: ServiceTo %s not found", rule.Namespace, rule.Name, rule.ServiceToRefKey())
@@ -116,7 +104,6 @@ func (cm *ConditionManager) ProcessSvcSvcRuleConditions(ctx context.Context, rul
 		if rule.Meta.EnsureValidatedCondition(metav1.ConditionFalse, models.ReasonValidationFailed, "ServiceTo dependency missing") {
 			changed = true
 		}
-		flushUpdate()
 		return nil
 	}
 
@@ -128,7 +115,6 @@ func (cm *ConditionManager) ProcessSvcSvcRuleConditions(ctx context.Context, rul
 	if rule.Meta.EnsureReadyCondition(metav1.ConditionTrue, models.ReasonReady, "SvcSvcRule is ready, all services exist") {
 		changed = true
 	}
-	flushUpdate()
 	return nil
 }
 

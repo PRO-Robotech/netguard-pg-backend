@@ -8,7 +8,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/PRO-Robotech/protos/pkg/api/common"
 	pb "github.com/PRO-Robotech/protos/pkg/api/sgroups"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -17,7 +16,6 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/sync/interfaces"
 	"netguard-pg-backend/internal/sync/types"
 )
@@ -295,22 +293,6 @@ func (c *sgroupsClient) convertSyncRequestToProto(req *types.SyncRequest) (*pb.S
 		} else {
 			return nil, fmt.Errorf("invalid data type for Hosts subject, expected *pb.SyncHosts, got %T", req.Data)
 		}
-	case types.SyncSubjectTypeIEAgAgRules:
-		// Support both single IEAgAgRule and batch SyncIESgSgRules
-		if rules, ok := req.Data.(*pb.SyncIESgSgRules); ok {
-			// Batch case: already aggregated by syncer
-			pbReq.Subject = &pb.SyncReq_IeSgSgRules{IeSgSgRules: rules}
-		} else if rule, ok := req.Data.(*models.IEAgAgRule); ok {
-			// Legacy single rule case (backward compatibility)
-			pbRule := convertIEAgAgRuleToSGroupsProto(*rule)
-			pbReq.Subject = &pb.SyncReq_IeSgSgRules{
-				IeSgSgRules: &pb.SyncIESgSgRules{
-					Rules: []*pb.IESgSgRule{pbRule},
-				},
-			}
-		} else {
-			return nil, fmt.Errorf("invalid data type for IEAgAgRules subject, expected *pb.SyncIESgSgRules or *models.IEAgAgRule, got %T", req.Data)
-		}
 	case types.SyncSubjectTypeServices:
 		// Support batch SyncServices
 		if services, ok := req.Data.(*pb.SyncServices); ok {
@@ -336,64 +318,6 @@ func (c *sgroupsClient) convertSyncRequestToProto(req *types.SyncRequest) (*pb.S
 	}
 
 	return pbReq, nil
-}
-
-// convertIEAgAgRuleToSGroupsProto converts domain IEAgAgRule to sgroups IESgSgRule protobuf
-func convertIEAgAgRuleToSGroupsProto(rule models.IEAgAgRule) *pb.IESgSgRule {
-	// Convert Transport (using common package)
-	var transport common.Networks_NetIP_Transport
-	switch rule.Transport {
-	case models.TCP:
-		transport = common.Networks_NetIP_TCP
-	case models.UDP:
-		transport = common.Networks_NetIP_UDP
-	default:
-		transport = common.Networks_NetIP_TCP // default to TCP
-	}
-
-	// Convert Traffic (using common package)
-	var traffic common.Traffic
-	switch rule.Traffic {
-	case models.INGRESS:
-		traffic = common.Traffic_Ingress
-	case models.EGRESS:
-		traffic = common.Traffic_Egress
-	default:
-		traffic = common.Traffic_Ingress // default to Ingress
-	}
-
-	// Convert Action (using sgroups package)
-	var action pb.RuleAction
-	switch rule.Action {
-	case models.ActionAccept:
-		action = pb.RuleAction_ACCEPT
-	case models.ActionDrop:
-		action = pb.RuleAction_DROP
-	default:
-		action = pb.RuleAction_ACCEPT // default to ACCEPT
-	}
-
-	// Convert Ports
-	var ports []*pb.AccPorts
-	for _, port := range rule.Ports {
-		if port.Destination != "" {
-			ports = append(ports, &pb.AccPorts{
-				S: port.Source,      // Source port (can be empty)
-				D: port.Destination, // Destination port
-			})
-		}
-	}
-
-	return &pb.IESgSgRule{
-		Transport: transport,
-		SG:        fmt.Sprintf("%s/%s", rule.AddressGroup.Namespace, rule.AddressGroup.Name),           // Remote AddressGroup (namespace/name)
-		SgLocal:   fmt.Sprintf("%s/%s", rule.AddressGroupLocal.Namespace, rule.AddressGroupLocal.Name), // Local AddressGroup (namespace/name)
-		Traffic:   traffic,
-		Ports:     ports,
-		Logs:      rule.Logs,
-		Action:    action,
-		Trace:     rule.Trace,
-	}
 }
 
 // DefaultSGroupsConfig returns default configuration for sgroups client

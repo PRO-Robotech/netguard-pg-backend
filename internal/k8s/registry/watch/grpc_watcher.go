@@ -147,10 +147,6 @@ func decoderForResource(resourceType string) (runtimeDecoder, error) {
 		return buildAddressGroupPortMappingDecoder(), nil
 	case "addressgroupbindingpolicies":
 		return buildAddressGroupBindingPolicyDecoder(), nil
-	case "rules2s":
-		return buildRuleS2SDecoder(), nil
-	case "servicealiases":
-		return buildServiceAliasDecoder(), nil
 	case "hosts":
 		return buildHostDecoder(), nil
 	case "hostbindings":
@@ -159,8 +155,6 @@ func decoderForResource(resourceType string) (runtimeDecoder, error) {
 		return buildNetworkDecoder(), nil
 	case "networkbindings":
 		return buildNetworkBindingDecoder(), nil
-	case "ieagagrules":
-		return buildIEAgAgRuleDecoder(), nil
 	case "svcsvcrules":
 		return buildSvcSvcRuleDecoder(), nil
 	case "svcfqdnrules":
@@ -230,30 +224,6 @@ func buildAddressGroupBindingPolicyDecoder() runtimeDecoder {
 	}
 }
 
-func buildRuleS2SDecoder() runtimeDecoder {
-	k8sConv := &convertk8s.RuleS2SConverter{}
-	return func(ctx context.Context, evt *watchpb.WatchEvent) (runtime.Object, error) {
-		pb := evt.GetRuleS2S()
-		if pb == nil {
-			return nil, fmt.Errorf("rule s2s payload missing")
-		}
-		domain := apiconverters.ConvertRuleS2S(pb)
-		return k8sConv.FromDomain(ctx, &domain)
-	}
-}
-
-func buildServiceAliasDecoder() runtimeDecoder {
-	k8sConv := &convertk8s.ServiceAliasConverter{}
-	return func(ctx context.Context, evt *watchpb.WatchEvent) (runtime.Object, error) {
-		pb := evt.GetServiceAlias()
-		if pb == nil {
-			return nil, fmt.Errorf("service alias payload missing")
-		}
-		domain := apiconverters.ConvertServiceAlias(pb)
-		return k8sConv.FromDomain(ctx, &domain)
-	}
-}
-
 func buildHostDecoder() runtimeDecoder {
 	k8sConv := &convertk8s.HostConverter{}
 	return func(ctx context.Context, evt *watchpb.WatchEvent) (runtime.Object, error) {
@@ -298,18 +268,6 @@ func buildNetworkBindingDecoder() runtimeDecoder {
 			return nil, fmt.Errorf("network binding payload missing")
 		}
 		domain := apiconverters.ConvertNetworkBinding(pb)
-		return k8sConv.FromDomain(ctx, &domain)
-	}
-}
-
-func buildIEAgAgRuleDecoder() runtimeDecoder {
-	k8sConv := &convertk8s.IEAgAgRuleConverter{}
-	return func(ctx context.Context, evt *watchpb.WatchEvent) (runtime.Object, error) {
-		pb := evt.GetIeAgAgRule()
-		if pb == nil {
-			return nil, fmt.Errorf("ie-ag-ag rule payload missing")
-		}
-		domain := apiconverters.ConvertIEAgAgRule(pb)
 		return k8sConv.FromDomain(ctx, &domain)
 	}
 }

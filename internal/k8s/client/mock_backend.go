@@ -7,7 +7,6 @@ import (
 	"netguard-pg-backend/internal/application/validation"
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
-	"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1"
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
 )
 
@@ -242,36 +241,6 @@ func (m *MockBackendClient) UpdateAddressGroupPortMapping(ctx context.Context, m
 func (m *MockBackendClient) DeleteAddressGroupPortMapping(ctx context.Context, id models.ResourceIdentifier) error {
 	return nil
 }
-func (m *MockBackendClient) GetRuleS2S(ctx context.Context, id models.ResourceIdentifier) (*models.RuleS2S, error) {
-	return nil, fmt.Errorf("not implemented in mock")
-}
-func (m *MockBackendClient) ListRuleS2S(ctx context.Context, scope ports.Scope) ([]models.RuleS2S, error) {
-	return nil, nil
-}
-func (m *MockBackendClient) CreateRuleS2S(ctx context.Context, rule *models.RuleS2S) error {
-	return nil
-}
-func (m *MockBackendClient) UpdateRuleS2S(ctx context.Context, rule *models.RuleS2S) error {
-	return nil
-}
-func (m *MockBackendClient) DeleteRuleS2S(ctx context.Context, id models.ResourceIdentifier) error {
-	return nil
-}
-func (m *MockBackendClient) GetServiceAlias(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error) {
-	return nil, fmt.Errorf("not implemented in mock")
-}
-func (m *MockBackendClient) ListServiceAliases(ctx context.Context, scope ports.Scope) ([]models.ServiceAlias, error) {
-	return nil, nil
-}
-func (m *MockBackendClient) CreateServiceAlias(ctx context.Context, alias *models.ServiceAlias) error {
-	return nil
-}
-func (m *MockBackendClient) UpdateServiceAlias(ctx context.Context, alias *models.ServiceAlias) error {
-	return nil
-}
-func (m *MockBackendClient) DeleteServiceAlias(ctx context.Context, id models.ResourceIdentifier) error {
-	return nil
-}
 func (m *MockBackendClient) GetAddressGroupBindingPolicy(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
 	return nil, fmt.Errorf("not implemented in mock")
 }
@@ -286,21 +255,6 @@ func (m *MockBackendClient) UpdateAddressGroupBindingPolicy(ctx context.Context,
 }
 func (m *MockBackendClient) DeleteAddressGroupBindingPolicy(ctx context.Context, id models.ResourceIdentifier) error {
 	return nil
-}
-func (m *MockBackendClient) GetIEAgAgRule(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
-	return nil, fmt.Errorf("not implemented in mock")
-}
-func (m *MockBackendClient) ListIEAgAgRules(ctx context.Context, scope ports.Scope) ([]models.IEAgAgRule, error) {
-	return nil, nil
-}
-func (m *MockBackendClient) CreateIEAgAgRule(ctx context.Context, rule *models.IEAgAgRule) error {
-	return nil
-}
-func (m *MockBackendClient) UpdateIEAgAgRule(ctx context.Context, rule *models.IEAgAgRule) error {
-	return nil
-}
-func (m *MockBackendClient) DeleteIEAgAgRule(ctx context.Context, id models.ResourceIdentifier) error {
-	return fmt.Errorf("not implemented")
 }
 func (m *MockBackendClient) GetNetwork(ctx context.Context, id models.ResourceIdentifier) (*models.Network, error) {
 	for _, network := range m.networks {
@@ -398,17 +352,8 @@ func (m *MockBackendClient) UpdateAddressGroupBindingMeta(ctx context.Context, i
 func (m *MockBackendClient) UpdateAddressGroupPortMappingMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
 	return nil
 }
-func (m *MockBackendClient) UpdateRuleS2SMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
-	return nil
-}
-func (m *MockBackendClient) UpdateServiceAliasMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
-	return nil
-}
 func (m *MockBackendClient) UpdateAddressGroupBindingPolicyMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
 	return nil
-}
-func (m *MockBackendClient) UpdateIEAgAgRuleMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
-	return fmt.Errorf("not implemented")
 }
 func (m *MockBackendClient) UpdateNetworkMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
 	for i, network := range m.networks {
@@ -445,35 +390,6 @@ func (m *MockBackendClient) ListAddressGroupsForService(ctx context.Context, ser
 		}, nil
 	}
 	return []models.AddressGroup{}, nil
-}
-func (m *MockBackendClient) ListRuleS2SDstOwnRef(ctx context.Context, serviceID models.ResourceIdentifier) ([]models.RuleS2S, error) {
-	return []models.RuleS2S{
-		{
-			SelfRef: models.SelfRef{
-				ResourceIdentifier: models.NewResourceIdentifier(
-					"test-rule-cross-ns",
-					models.WithNamespace("other-namespace"),
-				),
-			},
-			ServiceLocalRef: v1beta1.NamespacedObjectReference{
-				ObjectReference: v1beta1.ObjectReference{
-					APIVersion: "netguard.sgroups.io/v1beta1",
-					Kind:       "ServiceAlias",
-					Name:       "local-service",
-				},
-				Namespace: "other-namespace",
-			},
-			ServiceRef: v1beta1.NamespacedObjectReference{
-				ObjectReference: v1beta1.ObjectReference{
-					APIVersion: "netguard.sgroups.io/v1beta1",
-					Kind:       "ServiceAlias",
-					Name:       serviceID.Name,
-				},
-				Namespace: serviceID.Namespace,
-			},
-			Traffic: models.INGRESS,
-		},
-	}, nil
 }
 func (m *MockBackendClient) ListAccessPorts(ctx context.Context, mappingID models.ResourceIdentifier) ([]models.ServicePortsRef, error) {
 	return []models.ServicePortsRef{
@@ -642,14 +558,6 @@ func (m *MockBackendClient) WatchAddressGroupPortMappings(ctx context.Context, r
 	return nil, fmt.Errorf("watch not implemented in mock backend")
 }
 
-func (m *MockBackendClient) WatchRuleS2S(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchRuleS2SClient, error) {
-	return nil, fmt.Errorf("watch not implemented in mock backend")
-}
-
-func (m *MockBackendClient) WatchServiceAliases(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchServiceAliasesClient, error) {
-	return nil, fmt.Errorf("watch not implemented in mock backend")
-}
-
 func (m *MockBackendClient) WatchAddressGroupBindingPolicies(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchAddressGroupBindingPoliciesClient, error) {
 	return nil, fmt.Errorf("watch not implemented in mock backend")
 }
@@ -667,10 +575,6 @@ func (m *MockBackendClient) WatchNetworks(ctx context.Context, req *netguardpb.W
 }
 
 func (m *MockBackendClient) WatchNetworkBindings(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchNetworkBindingsClient, error) {
-	return nil, fmt.Errorf("watch not implemented in mock backend")
-}
-
-func (m *MockBackendClient) WatchIEAgAgRules(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchIEAgAgRulesClient, error) {
 	return nil, fmt.Errorf("watch not implemented in mock backend")
 }
 

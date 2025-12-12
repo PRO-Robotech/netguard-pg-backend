@@ -381,18 +381,6 @@ message AddressGroupPortMapping {
   Meta meta = 6;
 }
 
-// ServiceAlias - alias for a service
-message ServiceAlias {
-  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
-    json_schema: {
-      required: ["name", "namespace", "service_ref"]
-    }
-  };
-  ResourceIdentifier self_ref = 1;
-  ServiceRef service_ref = 2;
-  Meta meta = 6;
-}
-
 // AddressGroupBindingPolicy - policy allowing binding of a service to an address group
 message AddressGroupBindingPolicy {
   option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
@@ -404,43 +392,6 @@ message AddressGroupBindingPolicy {
   ServiceRef service_ref = 2;
   AddressGroupRef address_group_ref = 3;
   Meta meta = 6;
-}
-
-// RuleS2S - rule between two services
-message RuleS2S {
-  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
-    json_schema: {
-      required: ["name", "namespace", "traffic", "service_local_ref", "service_ref"]
-    }
-  };
-  ResourceIdentifier self_ref = 1;
-  Traffic traffic = 2;
-  ServiceRef service_local_ref = 3;  // Now uses NamespacedObjectReference internally
-  ServiceRef service_ref = 4;         // Now uses NamespacedObjectReference internally
-  repeated ResourceIdentifier ieag_ag_rule_refs = 5;            // DEPRECATED: Use ieag_ag_rule_object_refs
-  repeated NamespacedObjectReference ieag_ag_rule_object_refs = 8;  // NEW: Full object references
-  Meta meta = 6;
-  bool trace = 7;
-}
-
-// IEAgAgRule - rule between two address groups
-message IEAgAgRule {
-  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
-    json_schema: {
-      required: ["self_ref", "transport", "traffic", "address_group_local", "address_group", "action"]
-    }
-  };
-  ResourceIdentifier self_ref = 1;
-  Networks.NetIP.Transport transport = 2;
-  Traffic traffic = 3;
-  AddressGroupRef address_group_local = 4;
-  AddressGroupRef address_group = 5;
-  repeated PortSpec ports = 6;
-  RuleAction action = 7;
-  bool logs = 8;
-  int32 priority = 9;
-  Meta meta = 10;
-  bool trace = 11;
 }
 
 // PortSpec - port specification
@@ -532,24 +483,9 @@ message SyncAddressGroupPortMappings {
   repeated AddressGroupPortMapping address_group_port_mappings = 1;
 }
 
-// SyncRuleS2S - subject of Rule S2S to sync
-message SyncRuleS2S {
-  repeated RuleS2S rule_s2s = 1;
-}
-
-// SyncServiceAliases - subject of Service Aliases to sync
-message SyncServiceAliases {
-  repeated ServiceAlias service_aliases = 1;
-}
-
 // SyncAddressGroupBindingPolicies - subject of Address Group Binding Policies to sync
 message SyncAddressGroupBindingPolicies {
   repeated AddressGroupBindingPolicy address_group_binding_policies = 1;
-}
-
-// SyncIEAgAgRules - subject of IEAgAgRules to sync
-message SyncIEAgAgRules {
-  repeated IEAgAgRule ieagag_rules = 1;
 }
 
 // SyncNetworks - subject of Networks to sync
@@ -649,28 +585,6 @@ message ListAddressGroupPortMappingsResp {
   repeated AddressGroupPortMapping items = 1;
 }
 
-// ListRuleS2SReq - request to list rule s2s
-message ListRuleS2SReq {
-  repeated ResourceIdentifier identifiers = 1;
-  ListOptions list_options = 2;
-}
-
-// ListRuleS2SResp - response with list of rule s2s
-message ListRuleS2SResp {
-  repeated RuleS2S items = 1;
-}
-
-// ListServiceAliasesReq - request to list service aliases
-message ListServiceAliasesReq {
-  repeated ResourceIdentifier identifiers = 1;
-  ListOptions list_options = 2;
-}
-
-// ListServiceAliasesResp - response with list of service aliases
-message ListServiceAliasesResp {
-  repeated ServiceAlias items = 1;
-}
-
 // GetAddressGroupBindingReq - request to get a specific address group binding
 message GetAddressGroupBindingReq {
   ResourceIdentifier identifier = 1;
@@ -689,26 +603,6 @@ message GetAddressGroupPortMappingReq {
 // GetAddressGroupPortMappingResp - response with a specific address group port mapping
 message GetAddressGroupPortMappingResp {
   AddressGroupPortMapping address_group_port_mapping = 1;
-}
-
-// GetRuleS2SReq - request to get a specific rule s2s
-message GetRuleS2SReq {
-  ResourceIdentifier identifier = 1;
-}
-
-// GetRuleS2SResp - response with a specific rule s2s
-message GetRuleS2SResp {
-  RuleS2S rule_s2s = 1;
-}
-
-// GetServiceAliasReq - request to get a specific service alias
-message GetServiceAliasReq {
-  ResourceIdentifier identifier = 1;
-}
-
-// GetServiceAliasResp - response with a specific service alias
-message GetServiceAliasResp {
-  ServiceAlias service_alias = 1;
 }
 
 // ListAddressGroupBindingPoliciesReq - request to list address group binding policies
@@ -730,27 +624,6 @@ message GetAddressGroupBindingPolicyReq {
 // GetAddressGroupBindingPolicyResp - response with a specific address group binding policy
 message GetAddressGroupBindingPolicyResp {
   AddressGroupBindingPolicy address_group_binding_policy = 1;
-}
-
-// ListIEAgAgRulesReq - request to list IEAgAgRules
-message ListIEAgAgRulesReq {
-  repeated ResourceIdentifier identifiers = 1;
-  ListOptions list_options = 2;
-}
-
-// ListIEAgAgRulesResp - response with list of IEAgAgRules
-message ListIEAgAgRulesResp {
-  repeated IEAgAgRule items = 1;
-}
-
-// GetIEAgAgRuleReq - request to get a specific IEAgAgRule
-message GetIEAgAgRuleReq {
-  ResourceIdentifier identifier = 1;
-}
-
-// GetIEAgAgRuleResp - response with a specific IEAgAgRule
-message GetIEAgAgRuleResp {
-  IEAgAgRule ieagag_rule = 1;
 }
 
 // ListNetworksReq - request to list networks
@@ -898,17 +771,8 @@ message SyncReq {
     // Subject of Address Group Port Mappings
     SyncAddressGroupPortMappings address_group_port_mappings = 5;
 
-    // Subject of Rule S2S
-    SyncRuleS2S rule_s2s = 6;
-
-    // Subject of Service Aliases
-    SyncServiceAliases service_aliases = 7;
-
     // Subject of Address Group Binding Policies
     SyncAddressGroupBindingPolicies address_group_binding_policies = 8;
-
-    // Subject of IEAgAgRules
-    SyncIEAgAgRules ieagag_rules = 9;
 
     // Subject of Networks
     SyncNetworks networks = 10;

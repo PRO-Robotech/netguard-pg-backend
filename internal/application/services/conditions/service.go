@@ -74,12 +74,10 @@ func (cm *ConditionManager) ProcessServiceConditions(ctx context.Context, servic
 		}
 		klog.Infof("ConditionManager: Service %s/%s is pending SGROUP sync, NOT overriding Ready=False",
 			service.Namespace, service.Name)
-		cm.batchConditionUpdate("Service", service)
 		return nil
 	}
 
 	service.Meta.SetReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Service is ready for use")
-	cm.batchConditionUpdate("Service", service)
 	return nil
 }
 

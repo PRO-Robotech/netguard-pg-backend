@@ -18,10 +18,7 @@ type (
 		ListAddressGroups(ctx context.Context, consume func(models.AddressGroup) error, scope Scope) error
 		ListAddressGroupBindings(ctx context.Context, consume func(models.AddressGroupBinding) error, scope Scope) error
 		ListAddressGroupPortMappings(ctx context.Context, consume func(models.AddressGroupPortMapping) error, scope Scope) error
-		ListRuleS2S(ctx context.Context, consume func(models.RuleS2S) error, scope Scope) error
-		ListServiceAliases(ctx context.Context, consume func(models.ServiceAlias) error, scope Scope) error
 		ListAddressGroupBindingPolicies(ctx context.Context, consume func(models.AddressGroupBindingPolicy) error, scope Scope) error
-		ListIEAgAgRules(ctx context.Context, consume func(models.IEAgAgRule) error, scope Scope) error
 		ListNetworks(ctx context.Context, consume func(models.Network) error, scope Scope) error
 		ListNetworkBindings(ctx context.Context, consume func(models.NetworkBinding) error, scope Scope) error
 		ListHosts(ctx context.Context, consume func(models.Host) error, scope Scope) error
@@ -33,10 +30,7 @@ type (
 		GetAddressGroupByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroup, error)
 		GetAddressGroupBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBinding, error)
 		GetAddressGroupPortMappingByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupPortMapping, error)
-		GetRuleS2SByID(ctx context.Context, id models.ResourceIdentifier) (*models.RuleS2S, error)
-		GetServiceAliasByID(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error)
 		GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error)
-		GetIEAgAgRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error)
 		GetNetworkByID(ctx context.Context, id models.ResourceIdentifier) (*models.Network, error)
 		GetNetworkByCIDR(ctx context.Context, cidr string) (*models.Network, error)
 		GetNetworksOverlappingCIDR(ctx context.Context, cidr string) ([]*models.Network, error)
@@ -55,10 +49,7 @@ type (
 		SyncAddressGroups(ctx context.Context, addressGroups []models.AddressGroup, scope Scope, opts ...Option) error
 		SyncAddressGroupBindings(ctx context.Context, bindings []models.AddressGroupBinding, scope Scope, opts ...Option) error
 		SyncAddressGroupPortMappings(ctx context.Context, mappings []models.AddressGroupPortMapping, scope Scope, opts ...Option) error
-		SyncRuleS2S(ctx context.Context, rules []models.RuleS2S, scope Scope, opts ...Option) error
-		SyncServiceAliases(ctx context.Context, aliases []models.ServiceAlias, scope Scope, opts ...Option) error
 		SyncAddressGroupBindingPolicies(ctx context.Context, policies []models.AddressGroupBindingPolicy, scope Scope, opts ...Option) error
-		SyncIEAgAgRules(ctx context.Context, rules []models.IEAgAgRule, scope Scope, opts ...Option) error
 		SyncNetworks(ctx context.Context, networks []models.Network, scope Scope, opts ...Option) error
 		SyncNetworkBindings(ctx context.Context, bindings []models.NetworkBinding, scope Scope, opts ...Option) error
 		SyncHosts(ctx context.Context, hosts []models.Host, scope Scope, opts ...Option) error
@@ -69,10 +60,7 @@ type (
 		DeleteAddressGroupsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
 		DeleteAddressGroupBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
 		DeleteAddressGroupPortMappingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
-		DeleteRuleS2SByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
-		DeleteServiceAliasesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
 		DeleteAddressGroupBindingPoliciesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
-		DeleteIEAgAgRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
 		DeleteNetworksByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
 		DeleteNetworkBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
 		DeleteHostsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error

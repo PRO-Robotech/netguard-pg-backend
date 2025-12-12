@@ -26,9 +26,9 @@ func Test_convertToSyncOperation(t *testing.T) {
 			expected: "Upsert",
 		},
 		{
-			name:     "UPDATE converts to Update",
+			name:     "UPDATE converts to Upsert",
 			input:    domain.SyncOperationUpdate,
-			expected: "Update",
+			expected: "Upsert",
 		},
 		{
 			name:     "DELETE converts to Delete",

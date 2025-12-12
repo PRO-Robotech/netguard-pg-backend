@@ -38,18 +38,12 @@ func (w *ValidationWebhook) ValidateAdmissionReview(ctx context.Context, req *ad
 		response = w.validateAddressGroupBinding(ctx, req)
 	case "AddressGroupPortMapping":
 		response = w.validateAddressGroupPortMapping(ctx, req)
-	case "RuleS2S":
-		response = w.validateRuleS2S(ctx, req)
 	case "SvcSvcRule":
 		response = w.validateSvcSvcRule(ctx, req)
 	case "SvcFqdnRule":
 		response = w.validateSvcFqdnRule(ctx, req)
-	case "ServiceAlias":
-		response = w.validateServiceAlias(ctx, req)
 	case "AddressGroupBindingPolicy":
 		response = w.validateAddressGroupBindingPolicy(ctx, req)
-	case "IEAgAgRule":
-		response = w.validateIEAgAgRule(ctx, req)
 	case "Network":
 		response = w.validateNetwork(ctx, req)
 	case "NetworkBinding":
@@ -340,73 +334,6 @@ func (w *ValidationWebhook) validateAddressGroupPortMapping(ctx context.Context,
 	return w.allowResponse(req.UID, "AddressGroupPortMapping validation passed")
 }
 
-func (w *ValidationWebhook) validateRuleS2S(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
-	if req.Operation == admissionv1.Delete {
-
-		// Get validator for dependency checking
-		validator := w.backendClient.GetDependencyValidator()
-		ruleValidator := validator.GetRuleS2SValidator()
-
-		// Check dependencies before deletion
-		ruleID := models.NewResourceIdentifier(req.Name, models.WithNamespace(req.Namespace))
-		if err := ruleValidator.CheckDependencies(ctx, ruleID); err != nil {
-			return w.errorResponse(req.UID, fmt.Sprintf("Cannot delete RuleS2S: %v", err))
-		}
-
-		return w.allowResponse(req.UID, "RuleS2S deletion validation passed")
-	}
-
-	var rule netguardv1beta1.RuleS2S
-	if err := json.Unmarshal(req.Object.Raw, &rule); err != nil {
-		return w.errorResponse(req.UID, fmt.Sprintf("Failed to unmarshal RuleS2S: %v", err))
-	}
-
-	// Получаем Reader для валидации
-	reader, err := w.backendClient.GetReader(ctx)
-	if err != nil {
-		return w.errorResponse(req.UID, fmt.Sprintf("Failed to get reader: %v", err))
-	}
-	defer reader.Close()
-
-	// Получаем валидатор
-	validator := w.backendClient.GetDependencyValidator()
-	ruleValidator := validator.GetRuleS2SValidator()
-
-	// Конвертируем в domain модель
-	domainRule := convertRuleS2SToDomain(rule)
-
-	switch req.Operation {
-	case admissionv1.Create:
-		k8sValidator := k8svalidation.NewRuleS2SValidator()
-		if errs := k8sValidator.ValidateCreate(ctx, &rule); len(errs) > 0 {
-			return w.errorResponse(req.UID, fmt.Sprintf("RuleS2S K8s validation failed: %v", errs.ToAggregate()))
-		}
-
-		if err := ruleValidator.ValidateForCreation(ctx, domainRule); err != nil {
-			return w.errorResponse(req.UID, fmt.Sprintf("RuleS2S validation failed: %v", err))
-		}
-
-	case admissionv1.Update:
-		// Получаем старую версию для валидации обновления
-		var oldRule netguardv1beta1.RuleS2S
-		if err := json.Unmarshal(req.OldObject.Raw, &oldRule); err != nil {
-			return w.errorResponse(req.UID, fmt.Sprintf("Failed to unmarshal old RuleS2S: %v", err))
-		}
-
-		oldDomainRule := convertRuleS2SToDomain(oldRule)
-
-		// Валидация для обновления
-		if err := ruleValidator.ValidateForUpdate(ctx, oldDomainRule, domainRule); err != nil {
-			return w.errorResponse(req.UID, fmt.Sprintf("RuleS2S update validation failed: %v", err))
-		}
-
-	case admissionv1.Delete:
-		// Для Delete операций не используем валидацию - она будет в API Server при вызове backend
-	}
-
-	return w.allowResponse(req.UID, "RuleS2S validation passed")
-}
-
 func (w *ValidationWebhook) validateSvcSvcRule(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
 	var svcsvcRule netguardv1beta1.SvcSvcRule
 	if err := json.Unmarshal(req.Object.Raw, &svcsvcRule); err != nil {
@@ -467,102 +394,6 @@ func (w *ValidationWebhook) validateSvcFqdnRule(ctx context.Context, req *admiss
 	return w.allowResponse(req.UID, "SvcFqdnRule validation passed")
 }
 
-func (w *ValidationWebhook) validateServiceAlias(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
-	// DELETE requests do not include an object payload, so handle them separately before unmarshalling.
-	if req.Operation == admissionv1.Delete {
-
-		// Get validator for dependency checking
-		validator := w.backendClient.GetDependencyValidator()
-		serviceAliasValidator := validator.GetServiceAliasValidator()
-
-		// Check dependencies before deletion
-		serviceAliasID := models.NewResourceIdentifier(req.Name, models.WithNamespace(req.Namespace))
-		if err := serviceAliasValidator.CheckDependencies(ctx, serviceAliasID); err != nil {
-			return w.errorResponse(req.UID, fmt.Sprintf("Cannot delete ServiceAlias: %v", err))
-		}
-
-		return w.allowResponse(req.UID, "ServiceAlias deletion validation passed")
-	}
-
-	var alias netguardv1beta1.ServiceAlias
-	if err := json.Unmarshal(req.Object.Raw, &alias); err != nil {
-		return w.errorResponse(req.UID, fmt.Sprintf("Failed to unmarshal ServiceAlias: %v", err))
-	}
-
-	// Получаем Reader для валидации
-	reader, err := w.backendClient.GetReader(ctx)
-	if err != nil {
-		return w.errorResponse(req.UID, fmt.Sprintf("Failed to get reader: %v", err))
-	}
-	defer reader.Close()
-
-	// Получаем валидатор
-	validator := w.backendClient.GetDependencyValidator()
-	aliasValidator := validator.GetServiceAliasValidator()
-
-	// Конвертируем в domain модель
-	domainAlias := convertServiceAliasToDomain(alias)
-
-	switch req.Operation {
-	case admissionv1.Create:
-		k8sValidator := k8svalidation.NewServiceAliasValidator()
-		if errs := k8sValidator.ValidateCreate(ctx, &alias); len(errs) > 0 {
-			return w.errorResponse(req.UID, fmt.Sprintf("ServiceAlias K8s validation failed: %v", errs.ToAggregate()))
-		}
-
-		if err := aliasValidator.ValidateForCreation(ctx, &domainAlias); err != nil {
-			return w.errorResponse(req.UID, fmt.Sprintf("ServiceAlias validation failed: %v", err))
-		}
-
-	case admissionv1.Update:
-
-		// Получаем старую версию для валидации обновления
-		var oldAlias netguardv1beta1.ServiceAlias
-		if err := json.Unmarshal(req.OldObject.Raw, &oldAlias); err != nil {
-			return w.errorResponse(req.UID, fmt.Sprintf("Failed to unmarshal old ServiceAlias: %v", err))
-		}
-
-		oldDomainAlias := convertServiceAliasToDomain(oldAlias)
-
-		// Валидация для обновления
-		if err := aliasValidator.ValidateForUpdate(ctx, oldDomainAlias, domainAlias); err != nil {
-			return w.errorResponse(req.UID, fmt.Sprintf("ServiceAlias update validation failed: %v", err))
-		}
-
-	case admissionv1.Delete:
-		// For DELETE operations, validate dependencies to prevent orphaned references
-
-		// Get backend client to check dependencies
-		if w.backendClient == nil {
-			return w.errorResponse(req.UID, "Backend client not available for dependency validation")
-		}
-
-		// Use dependency validator to check if ServiceAlias can be deleted
-		serviceAliasID := models.ResourceIdentifier{
-			Name:      req.Name,
-			Namespace: req.Namespace,
-		}
-
-		// Get a reader to check dependencies
-		reader, err := w.backendClient.GetReader(ctx)
-		if err != nil {
-			return w.errorResponse(req.UID, fmt.Sprintf("Failed to access backend for dependency validation: %v", err))
-		}
-		defer reader.Close()
-
-		validator := validation.NewDependencyValidator(reader)
-		aliasValidator := validator.GetServiceAliasValidator()
-
-		// Check if ServiceAlias has dependencies that would prevent deletion
-		if err := aliasValidator.CheckDependencies(ctx, serviceAliasID); err != nil {
-			return w.errorResponse(req.UID, fmt.Sprintf("Cannot delete ServiceAlias: %v", err))
-		}
-
-	}
-
-	return w.allowResponse(req.UID, "ServiceAlias validation passed")
-}
-
 func (w *ValidationWebhook) validateAddressGroupBindingPolicy(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
 	var policy netguardv1beta1.AddressGroupBindingPolicy
 	if err := json.Unmarshal(req.Object.Raw, &policy); err != nil {
@@ -613,58 +444,6 @@ func (w *ValidationWebhook) validateAddressGroupBindingPolicy(ctx context.Contex
 	}
 
 	return w.allowResponse(req.UID, "AddressGroupBindingPolicy validation passed")
-}
-
-func (w *ValidationWebhook) validateIEAgAgRule(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
-	var ieAgAgRule netguardv1beta1.IEAgAgRule
-	if err := json.Unmarshal(req.Object.Raw, &ieAgAgRule); err != nil {
-		return w.errorResponse(req.UID, fmt.Sprintf("Failed to unmarshal IEAgAgRule: %v", err))
-	}
-
-	// Получаем Reader для валидации
-	reader, err := w.backendClient.GetReader(ctx)
-	if err != nil {
-		return w.errorResponse(req.UID, fmt.Sprintf("Failed to get reader: %v", err))
-	}
-	defer reader.Close()
-
-	// Получаем валидатор
-	validator := w.backendClient.GetDependencyValidator()
-	ieAgAgRuleValidator := validator.GetIEAgAgRuleValidator()
-
-	// Конвертируем в domain модель
-	domainIEAgAgRule := convertIEAgAgRuleToDomain(ieAgAgRule)
-
-	switch req.Operation {
-	case admissionv1.Create:
-		k8sValidator := k8svalidation.NewIEAgAgRuleValidator()
-		if errs := k8sValidator.ValidateCreate(ctx, &ieAgAgRule); len(errs) > 0 {
-			return w.errorResponse(req.UID, fmt.Sprintf("IEAgAgRule K8s validation failed: %v", errs.ToAggregate()))
-		}
-
-		if err := ieAgAgRuleValidator.ValidateForCreation(ctx, domainIEAgAgRule); err != nil {
-			return w.errorResponse(req.UID, fmt.Sprintf("IEAgAgRule validation failed: %v", err))
-		}
-
-	case admissionv1.Update:
-		// Получаем старую версию для валидации обновления
-		var oldIEAgAgRule netguardv1beta1.IEAgAgRule
-		if err := json.Unmarshal(req.OldObject.Raw, &oldIEAgAgRule); err != nil {
-			return w.errorResponse(req.UID, fmt.Sprintf("Failed to unmarshal old IEAgAgRule: %v", err))
-		}
-
-		oldDomainIEAgAgRule := convertIEAgAgRuleToDomain(oldIEAgAgRule)
-
-		// Валидация для обновления
-		if err := ieAgAgRuleValidator.ValidateForUpdate(ctx, oldDomainIEAgAgRule, domainIEAgAgRule); err != nil {
-			return w.errorResponse(req.UID, fmt.Sprintf("IEAgAgRule update validation failed: %v", err))
-		}
-
-	case admissionv1.Delete:
-		// Для Delete операций не используем валидацию - она будет в API Server при вызове backend
-	}
-
-	return w.allowResponse(req.UID, "IEAgAgRule validation passed")
 }
 
 func (w *ValidationWebhook) validateNetwork(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
@@ -954,60 +733,6 @@ func convertAddressGroupPortMappingToDomain(k8sMapping netguardv1beta1.AddressGr
 	return mapping
 }
 
-func convertRuleS2SToDomain(k8sRule netguardv1beta1.RuleS2S) models.RuleS2S {
-	rule := models.RuleS2S{
-		SelfRef: models.SelfRef{
-			ResourceIdentifier: models.ResourceIdentifier{
-				Name:      k8sRule.Name,
-				Namespace: k8sRule.Namespace,
-			},
-		},
-		Traffic: models.Traffic(k8sRule.Spec.Traffic),
-		Trace:   k8sRule.Spec.Trace,
-		ServiceLocalRef: func() netguardv1beta1.NamespacedObjectReference {
-			var ref netguardv1beta1.NamespacedObjectReference
-			ref.Name = k8sRule.Spec.ServiceLocalRef.Name
-			ref.Namespace = k8sRule.Spec.ServiceLocalRef.Namespace
-			return ref
-		}(),
-		ServiceRef: func() netguardv1beta1.NamespacedObjectReference {
-			var ref netguardv1beta1.NamespacedObjectReference
-			ref.Name = k8sRule.Spec.ServiceRef.Name
-			ref.Namespace = k8sRule.Spec.ServiceRef.Namespace
-			return ref
-		}(),
-	}
-
-	// Convert IEAgAgRuleRefs from status
-	if len(k8sRule.Status.IEAgAgRuleRefs) > 0 {
-		rule.IEAgAgRuleRefs = make([]netguardv1beta1.NamespacedObjectReference, len(k8sRule.Status.IEAgAgRuleRefs))
-		for i, ref := range k8sRule.Status.IEAgAgRuleRefs {
-			var objRef netguardv1beta1.NamespacedObjectReference
-			objRef.Name = ref.Name
-			objRef.Namespace = ref.Namespace
-			rule.IEAgAgRuleRefs[i] = objRef
-		}
-	}
-
-	return rule
-}
-
-func convertServiceAliasToDomain(k8sAlias netguardv1beta1.ServiceAlias) models.ServiceAlias {
-	var serviceRef models.ServiceRef
-	serviceRef.Name = k8sAlias.Spec.ServiceRef.Name
-	serviceRef.Namespace = k8sAlias.Spec.ServiceRef.Namespace // Use the actual namespace from NamespacedObjectReference (auto-populated by mutation webhook)
-
-	return models.ServiceAlias{
-		SelfRef: models.SelfRef{
-			ResourceIdentifier: models.ResourceIdentifier{
-				Name:      k8sAlias.Name,
-				Namespace: k8sAlias.Namespace,
-			},
-		},
-		ServiceRef: serviceRef,
-	}
-}
-
 func convertAddressGroupBindingPolicyToDomain(k8sPolicy netguardv1beta1.AddressGroupBindingPolicy) models.AddressGroupBindingPolicy {
 	var serviceRef models.ServiceRef
 	serviceRef.Name = k8sPolicy.Spec.ServiceRef.Name
@@ -1028,60 +753,6 @@ func convertAddressGroupBindingPolicyToDomain(k8sPolicy netguardv1beta1.AddressG
 		AddressGroupRef: addressGroupRef,
 		// Ports поля нет в domain модели AddressGroupBindingPolicy
 	}
-}
-
-func convertIEAgAgRuleToDomain(k8sRule netguardv1beta1.IEAgAgRule) models.IEAgAgRule {
-	// Create embedded struct instances using variable assignment
-	var selfRefResourceId models.ResourceIdentifier
-	selfRefResourceId.Name = k8sRule.Name
-	selfRefResourceId.Namespace = k8sRule.Namespace
-
-	var selfRef models.SelfRef
-	selfRef.ResourceIdentifier = selfRefResourceId
-
-	var addressGroupLocal models.AddressGroupRef
-	addressGroupLocal.Name = k8sRule.Spec.AddressGroupLocal.Name
-	addressGroupLocal.Namespace = k8sRule.Namespace // ObjectReference не имеет Namespace, используем namespace самого объекта
-
-	var addressGroup models.AddressGroupRef
-	addressGroup.Name = k8sRule.Spec.AddressGroup.Name
-	addressGroup.Namespace = k8sRule.Namespace // ObjectReference не имеет Namespace, используем namespace самого объекта
-
-	rule := models.IEAgAgRule{
-		SelfRef:           selfRef,
-		Transport:         models.TransportProtocol(k8sRule.Spec.Transport),
-		Traffic:           models.Traffic(k8sRule.Spec.Traffic),
-		Action:            models.RuleAction(k8sRule.Spec.Action),
-		Trace:             k8sRule.Spec.Trace,
-		AddressGroupLocal: addressGroupLocal,
-		AddressGroup:      addressGroup,
-	}
-
-	// Конвертация портов - используем правильную логику
-	for _, port := range k8sRule.Spec.Ports {
-		var destination string
-		if port.PortRange != nil {
-			// Формируем строку диапазона портов
-			destination = fmt.Sprintf("%d-%d", port.PortRange.From, port.PortRange.To)
-		} else if port.Port > 0 {
-			// Одиночный порт
-			destination = fmt.Sprintf("%d", port.Port)
-		}
-
-		if destination != "" {
-			// Проверяем что порт валидный используя validation.ParsePortRanges
-			_, err := validation.ParsePortRanges(destination)
-			if err != nil {
-				continue
-			}
-
-			rule.Ports = append(rule.Ports, models.PortSpec{
-				Destination: destination,
-			})
-		}
-	}
-
-	return rule
 }
 
 func convertNetworkToDomain(k8sNetwork netguardv1beta1.Network) models.Network {

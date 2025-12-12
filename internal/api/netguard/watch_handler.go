@@ -226,13 +226,10 @@ func buildEncoders() map[string]eventEncoder {
 		"address_group_bindings":         encodeAddressGroupBindingEvent(),
 		"address_group_port_mappings":    encodeAddressGroupPortMappingEvent(),
 		"address_group_binding_policies": encodeAddressGroupBindingPolicyEvent(),
-		"rule_s2s":                       encodeRuleS2SEvent(),
-		"service_aliases":                encodeServiceAliasEvent(),
 		"hosts":                          encodeHostEvent(),
 		"host_bindings":                  encodeHostBindingEvent(),
 		"networks":                       encodeNetworkEvent(),
 		"network_bindings":               encodeNetworkBindingEvent(),
-		"ie_ag_ag_rules":                 encodeIEAgAgRuleEvent(),
 		"svc_svc_rules":                  encodeSvcSvcRuleEvent(),
 		"svc_fqdn_rules":                 encodeSvcFqdnRuleEvent(),
 	}
@@ -328,42 +325,6 @@ func encodeAddressGroupBindingPolicyEvent() eventEncoder {
 	}
 }
 
-func encodeRuleS2SEvent() eventEncoder {
-	k8sConv := &convertk8s.RuleS2SConverter{}
-	return func(ctx context.Context, obj runtime.Object, event *netguardpb.WatchEvent) error {
-		k8sObj, ok := obj.(*v1beta1.RuleS2S)
-		if !ok {
-			return fmt.Errorf("expected *RuleS2S, got %T", obj)
-		}
-		domainObj, err := k8sConv.ToDomain(ctx, k8sObj)
-		if err != nil {
-			return err
-		}
-		event.Object = &netguardpb.WatchEvent_RuleS2S{
-			RuleS2S: converters.ConvertRuleS2SToPB(*domainObj),
-		}
-		return nil
-	}
-}
-
-func encodeServiceAliasEvent() eventEncoder {
-	k8sConv := &convertk8s.ServiceAliasConverter{}
-	return func(ctx context.Context, obj runtime.Object, event *netguardpb.WatchEvent) error {
-		k8sObj, ok := obj.(*v1beta1.ServiceAlias)
-		if !ok {
-			return fmt.Errorf("expected *ServiceAlias, got %T", obj)
-		}
-		domainObj, err := k8sConv.ToDomain(ctx, k8sObj)
-		if err != nil {
-			return err
-		}
-		event.Object = &netguardpb.WatchEvent_ServiceAlias{
-			ServiceAlias: converters.ConvertServiceAliasToPB(*domainObj),
-		}
-		return nil
-	}
-}
-
 func encodeHostEvent() eventEncoder {
 	k8sConv := &convertk8s.HostConverter{}
 	return func(ctx context.Context, obj runtime.Object, event *netguardpb.WatchEvent) error {
@@ -431,24 +392,6 @@ func encodeNetworkBindingEvent() eventEncoder {
 		}
 		event.Object = &netguardpb.WatchEvent_NetworkBinding{
 			NetworkBinding: converters.ConvertNetworkBindingToPB(*domainObj),
-		}
-		return nil
-	}
-}
-
-func encodeIEAgAgRuleEvent() eventEncoder {
-	k8sConv := &convertk8s.IEAgAgRuleConverter{}
-	return func(ctx context.Context, obj runtime.Object, event *netguardpb.WatchEvent) error {
-		k8sObj, ok := obj.(*v1beta1.IEAgAgRule)
-		if !ok {
-			return fmt.Errorf("expected *IEAgAgRule, got %T", obj)
-		}
-		domainObj, err := k8sConv.ToDomain(ctx, k8sObj)
-		if err != nil {
-			return err
-		}
-		event.Object = &netguardpb.WatchEvent_IeAgAgRule{
-			IeAgAgRule: converters.ConvertIEAgAgRuleToPB(*domainObj),
 		}
 		return nil
 	}

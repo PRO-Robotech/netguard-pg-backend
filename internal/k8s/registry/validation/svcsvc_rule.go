@@ -20,6 +20,9 @@ var _ base.Validator[*v1beta1.SvcSvcRule] = &SvcSvcRuleValidator{}
 
 // ValidateCreate validates a new SvcSvcRule being created
 func (v *SvcSvcRuleValidator) ValidateCreate(ctx context.Context, obj *v1beta1.SvcSvcRule) field.ErrorList {
+	if obj == nil {
+		return field.ErrorList{field.Required(field.NewPath(""), "object cannot be nil")}
+	}
 	return v.validate(ctx, obj, obj.Namespace)
 }
 

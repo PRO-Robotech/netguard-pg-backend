@@ -28,18 +28,15 @@ const (
 	SyncSubjectTypeGroups        SyncSubjectType = "Groups"
 	SyncSubjectTypeNetworks      SyncSubjectType = "Networks"
 	SyncSubjectTypeRules         SyncSubjectType = "Rules"
-	SyncSubjectTypeIEAgAgRules   SyncSubjectType = "IEAgAgRules"
 	SyncSubjectTypeIECidrAgRules SyncSubjectType = "IECidrAgRules"
 
 	// New types for backend
 	SyncSubjectTypeServices             SyncSubjectType = "Services"
-	SyncSubjectTypeServiceAliases       SyncSubjectType = "ServiceAliases"
-	SyncSubjectTypeRulesS2S             SyncSubjectType = "RulesS2S"
 	SyncSubjectTypeAddressGroupBindings SyncSubjectType = "AddressGroupBindings"
 	SyncSubjectTypeNetworkBindings      SyncSubjectType = "NetworkBindings"
 	SyncSubjectTypeHosts                SyncSubjectType = "Hosts"
 	SyncSubjectTypeHostBindings         SyncSubjectType = "HostBindings"
-	SyncSubjectTypeSvcSvcRules          SyncSubjectType = "SvcSvcRules" // NEW! Service-to-Service rules
+	SyncSubjectTypeSvcSvcRules          SyncSubjectType = "SvcSvcRules"
 	SyncSubjectTypeSvcFqdnRules         SyncSubjectType = "SvcFqdnRules"
 )
 

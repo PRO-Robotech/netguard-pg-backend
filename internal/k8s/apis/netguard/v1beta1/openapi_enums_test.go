@@ -155,13 +155,12 @@ func TestGetOpenAPIDefinitionsWithEnums_Integration(t *testing.T) {
 
 		// Assert
 		// Проверяем, что базовые автогенерированные определения присутствуют
+		// Note: RuleS2S, RuleS2SSpec, IEAgAgRule, IEAgAgRuleSpec были удалены
 		expectedBaseDefs := []string{
-			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.RuleS2S",
-			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.RuleS2SSpec",
-			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IEAgAgRule",
-			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IEAgAgRuleSpec",
 			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IngressPort",
 			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupSpec",
+			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcSvcRuleSpec",
+			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcFqdnRuleSpec",
 		}
 
 		for _, expectedDef := range expectedBaseDefs {
@@ -189,45 +188,42 @@ func TestGetOpenAPIDefinitionsWithEnums_Integration(t *testing.T) {
 		}
 	})
 
-	t.Run("StructFieldsHaveEnumValues", func(t *testing.T) {
+	t.Run("SvcSvcRuleSpecFieldsHaveEnumValues", func(t *testing.T) {
 		// Act
 		allDefs := v1beta1.GetOpenAPIDefinitionsWithEnums(refCallback)
 
-		// Assert - IEAgAgRuleSpec fields should have enum values
-		ieAgAgRuleDef, exists := allDefs["netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IEAgAgRuleSpec"]
-		require.True(t, exists, "IEAgAgRuleSpec definition should exist")
+		// Assert - SvcSvcRuleSpec fields should have enum values
+		svcSvcRuleSpecDef, exists := allDefs["netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcSvcRuleSpec"]
+		require.True(t, exists, "SvcSvcRuleSpec definition should exist")
 
-		// Check transport field
-		transportField, exists := ieAgAgRuleDef.Schema.Properties["transport"]
-		require.True(t, exists, "transport field should exist")
-		assert.Equal(t, []interface{}{"TCP", "UDP"}, transportField.SchemaProps.Enum,
-			"transport field should have enum values")
-
-		// Check traffic field
-		trafficField, exists := ieAgAgRuleDef.Schema.Properties["traffic"]
-		require.True(t, exists, "traffic field should exist")
-		assert.Equal(t, []interface{}{"INGRESS", "EGRESS"}, trafficField.SchemaProps.Enum,
-			"traffic field should have enum values")
+		// Note: SvcSvcRuleSpec does not have transport field (only SvcFqdnRuleSpec has it)
 
 		// Check action field
-		actionField, exists := ieAgAgRuleDef.Schema.Properties["action"]
+		actionField, exists := svcSvcRuleSpecDef.Schema.Properties["action"]
 		require.True(t, exists, "action field should exist")
 		assert.Equal(t, []interface{}{"ACCEPT", "DROP"}, actionField.SchemaProps.Enum,
 			"action field should have enum values")
 	})
 
-	t.Run("RuleS2SSpecFieldsHaveEnumValues", func(t *testing.T) {
+	t.Run("SvcFqdnRuleSpecFieldsHaveEnumValues", func(t *testing.T) {
 		// Act
 		allDefs := v1beta1.GetOpenAPIDefinitionsWithEnums(refCallback)
 
-		// Assert - RuleS2SSpec traffic field should have enum values
-		ruleS2SSpecDef, exists := allDefs["netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.RuleS2SSpec"]
-		require.True(t, exists, "RuleS2SSpec definition should exist")
+		// Assert - SvcFqdnRuleSpec fields should have enum values
+		svcFqdnRuleSpecDef, exists := allDefs["netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcFqdnRuleSpec"]
+		require.True(t, exists, "SvcFqdnRuleSpec definition should exist")
 
-		trafficField, exists := ruleS2SSpecDef.Schema.Properties["traffic"]
-		require.True(t, exists, "traffic field should exist")
-		assert.Equal(t, []interface{}{"INGRESS", "EGRESS"}, trafficField.SchemaProps.Enum,
-			"RuleS2SSpec traffic field should have enum values")
+		// Check transport field
+		transportField, exists := svcFqdnRuleSpecDef.Schema.Properties["transport"]
+		require.True(t, exists, "transport field should exist")
+		assert.Equal(t, []interface{}{"TCP", "UDP"}, transportField.SchemaProps.Enum,
+			"transport field should have enum values")
+
+		// Check action field
+		actionField, exists := svcFqdnRuleSpecDef.Schema.Properties["action"]
+		require.True(t, exists, "action field should exist")
+		assert.Equal(t, []interface{}{"ACCEPT", "DROP"}, actionField.SchemaProps.Enum,
+			"action field should have enum values")
 	})
 
 	t.Run("IngressPortFieldsHaveEnumValues", func(t *testing.T) {
@@ -330,9 +326,8 @@ func TestOpenAPIEnumSerialization_JSONValidation(t *testing.T) {
 		allDefs := v1beta1.GetOpenAPIDefinitionsWithEnums(refCallback)
 
 		// Test key modified definitions
+		// Note: IEAgAgRuleSpec and RuleS2SSpec were removed
 		modifiedDefs := []string{
-			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IEAgAgRuleSpec",
-			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.RuleS2SSpec",
 			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IngressPort",
 			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupSpec",
 			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcSvcRuleSpec",

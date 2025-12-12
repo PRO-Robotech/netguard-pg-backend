@@ -66,5 +66,3 @@ func TestConvertAddressGroupToProtoNetworks(t *testing.T) {
 	require.Equal(t, "Network", pb.Networks[0].Kind)
 	require.Equal(t, "ns/example", pb.AddressGroupName)
 }
-
-

@@ -305,29 +305,11 @@ func (w *simpleWriter) SyncAddressGroupPortMappings(ctx context.Context, mapping
 func (w *simpleWriter) DeleteAddressGroupPortMappingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
 	return w.modularWriter.DeleteAddressGroupPortMappingsByIDs(ctx, ids, opts...)
 }
-func (w *simpleWriter) SyncRuleS2S(ctx context.Context, rules []models.RuleS2S, scope ports.Scope, opts ...ports.Option) error {
-	return w.modularWriter.SyncRuleS2S(ctx, rules, scope, opts...)
-}
-func (w *simpleWriter) DeleteRuleS2SByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
-	return w.modularWriter.DeleteRuleS2SByIDs(ctx, ids)
-}
-func (w *simpleWriter) SyncServiceAliases(ctx context.Context, aliases []models.ServiceAlias, scope ports.Scope, opts ...ports.Option) error {
-	return w.modularWriter.SyncServiceAliases(ctx, aliases, scope, opts...)
-}
-func (w *simpleWriter) DeleteServiceAliasesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
-	return w.modularWriter.DeleteServiceAliasesByIDs(ctx, ids, opts...)
-}
 func (w *simpleWriter) SyncAddressGroupBindingPolicies(ctx context.Context, policies []models.AddressGroupBindingPolicy, scope ports.Scope, opts ...ports.Option) error {
 	return w.modularWriter.SyncAddressGroupBindingPolicies(ctx, policies, scope, opts...)
 }
 func (w *simpleWriter) DeleteAddressGroupBindingPoliciesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
 	return w.modularWriter.DeleteAddressGroupBindingPoliciesByIDs(ctx, ids, opts...)
-}
-func (w *simpleWriter) SyncIEAgAgRules(ctx context.Context, rules []models.IEAgAgRule, scope ports.Scope, opts ...ports.Option) error {
-	return w.modularWriter.SyncIEAgAgRules(ctx, rules, scope, opts...)
-}
-func (w *simpleWriter) DeleteIEAgAgRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
-	return w.modularWriter.DeleteIEAgAgRulesByIDs(ctx, ids)
 }
 func (w *simpleWriter) SyncNetworks(ctx context.Context, networks []models.Network, scope ports.Scope, opts ...ports.Option) error {
 	return w.modularWriter.SyncNetworks(ctx, networks, scope, opts...)

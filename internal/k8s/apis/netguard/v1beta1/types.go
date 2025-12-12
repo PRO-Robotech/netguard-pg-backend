@@ -169,24 +169,6 @@ type AddressGroupsSpecList struct {
 	Items           []AddressGroupsSpec `json:"items"`
 }
 
-// RuleS2SDstOwnRefSpec defines the RuleS2S objects that reference this Service from other namespaces
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-type RuleS2SDstOwnRefSpec struct {
-	metav1.TypeMeta `json:",inline"`
-	// +optional
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-	// Items contains the list of RuleS2S references
-	Items []NamespacedObjectReference `json:"items,omitempty"`
-}
-
-// RuleS2SDstOwnRefSpecList contains a list of RuleS2SDstOwnRefSpec
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-type RuleS2SDstOwnRefSpecList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []RuleS2SDstOwnRefSpec `json:"items"`
-}
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ServiceList contains a list of Service
@@ -512,101 +494,6 @@ type AddressGroupPortMappingList struct {
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// RuleS2S defines service-to-service rules
-type RuleS2S struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-
-	Spec   RuleS2SSpec   `json:"spec,omitempty"`
-	Status RuleS2SStatus `json:"status,omitempty"`
-}
-
-// RuleS2SSpec defines the desired state of RuleS2S
-type RuleS2SSpec struct {
-	// Traffic direction: ingress or egress
-	// +kubebuilder:validation:Enum=INGRESS;EGRESS
-	// +kubebuilder:validation:Required
-	Traffic Traffic `json:"traffic"`
-
-	// ServiceLocalRef is a reference to the local service
-	// +kubebuilder:validation:Required
-	ServiceLocalRef NamespacedObjectReference `json:"serviceLocalRef"`
-
-	// ServiceRef is a reference to the target service
-	// +kubebuilder:validation:Required
-	ServiceRef NamespacedObjectReference `json:"serviceRef"`
-
-	// Whether to enable trace
-	// +optional
-	Trace bool `json:"trace"`
-}
-
-// RuleS2SStatus defines the observed state of RuleS2S
-type RuleS2SStatus struct {
-	// Conditions represent the latest available observations of the rule's current state
-	// +optional
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
-
-	// ObservedGeneration is the most recent generation observed by the controller
-	// +optional
-	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
-
-	// IEAgAgRuleRefs contains references to the IEAgAgRules created for this RuleS2S
-	// +optional
-	IEAgAgRuleRefs []NamespacedObjectReference `json:"ieAgAgRuleRefs,omitempty"`
-}
-
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
-// RuleS2SList contains a list of RuleS2S
-type RuleS2SList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []RuleS2S `json:"items"`
-}
-
-// +genclient
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
-// ServiceAlias defines an alias for a service
-type ServiceAlias struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-
-	Spec   ServiceAliasSpec   `json:"spec,omitempty"`
-	Status ServiceAliasStatus `json:"status,omitempty"`
-}
-
-// ServiceAliasSpec defines the desired state of ServiceAlias
-type ServiceAliasSpec struct {
-	// ServiceRef is a reference to the Service resource this alias points to
-	// +kubebuilder:validation:Required
-	ServiceRef NamespacedObjectReference `json:"serviceRef"`
-}
-
-// ServiceAliasStatus defines the observed state of ServiceAlias
-type ServiceAliasStatus struct {
-	// Conditions represent the latest available observations of the alias's current state
-	// +optional
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
-
-	// ObservedGeneration is the most recent generation observed by the controller
-	// +optional
-	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
-}
-
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
-// ServiceAliasList contains a list of ServiceAlias
-type ServiceAliasList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []ServiceAlias `json:"items"`
-}
-
-// +genclient
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
 // AddressGroupBindingPolicy defines policies for address group bindings
 type AddressGroupBindingPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -645,58 +532,6 @@ type AddressGroupBindingPolicyList struct {
 	Items           []AddressGroupBindingPolicy `json:"items"`
 }
 
-// +genclient
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
-// IEAgAgRule defines ingress/egress address group to address group rules
-type IEAgAgRule struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-
-	Spec   IEAgAgRuleSpec   `json:"spec,omitempty"`
-	Status IEAgAgRuleStatus `json:"status,omitempty"`
-}
-
-// IEAgAgRuleSpec defines the desired state of IEAgAgRule
-type IEAgAgRuleSpec struct {
-	// Description of the rule
-	// +optional
-	Description string `json:"description,omitempty"`
-
-	// Transport protocol (TCP, UDP, etc.)
-	// +kubebuilder:validation:Enum=TCP;UDP
-	// +kubebuilder:validation:Required
-	Transport TransportProtocol `json:"transport"`
-
-	// Traffic direction (Ingress, Egress)
-	// +kubebuilder:validation:Enum=INGRESS;EGRESS
-	// +kubebuilder:validation:Required
-	Traffic Traffic `json:"traffic"`
-
-	// AddressGroupLocal is the local address group reference
-	AddressGroupLocal NamespacedObjectReference `json:"addressGroupLocal"`
-
-	// AddressGroup is the remote address group reference
-	AddressGroup NamespacedObjectReference `json:"addressGroup"`
-
-	// Ports defines the port specifications
-	// +optional
-	Ports []PortSpec `json:"ports,omitempty"`
-
-	// Action for the rule (ACCEPT, DROP)
-	// +kubebuilder:validation:Enum=ACCEPT;DROP
-	// +optional
-	Action RuleAction `json:"action,omitempty"`
-
-	// Priority of the rule
-	// +optional
-	Priority int32 `json:"priority,omitempty"`
-
-	// Whether to enable trace
-	// +optional
-	Trace bool `json:"trace"`
-}
-
 // PortSpec defines a port specification
 type PortSpec struct {
 	// Port number
@@ -708,26 +543,6 @@ type PortSpec struct {
 	// PortRange defines a range of ports
 	// +optional
 	PortRange *PortRange `json:"portRange,omitempty"`
-}
-
-// IEAgAgRuleStatus defines the observed state of IEAgAgRule
-type IEAgAgRuleStatus struct {
-	// Conditions represent the latest available observations of the rule's current state
-	// +optional
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
-
-	// ObservedGeneration is the most recent generation observed by the controller
-	// +optional
-	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
-}
-
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
-// IEAgAgRuleList contains a list of IEAgAgRule
-type IEAgAgRuleList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []IEAgAgRule `json:"items"`
 }
 
 // NetworkSpec defines the desired state of Network

@@ -25,12 +25,9 @@ import (
 	portmappingstorage "netguard-pg-backend/internal/k8s/registry/addressgroupportmapping"
 	hoststorage "netguard-pg-backend/internal/k8s/registry/host"
 	hostbindingstorage "netguard-pg-backend/internal/k8s/registry/host_binding"
-	ieagagstorage "netguard-pg-backend/internal/k8s/registry/ieagagrule"
 	networkstorage "netguard-pg-backend/internal/k8s/registry/network"
 	networkbindingstorage "netguard-pg-backend/internal/k8s/registry/network_binding"
-	rules2sstorage "netguard-pg-backend/internal/k8s/registry/rules2s"
 	svcstorage "netguard-pg-backend/internal/k8s/registry/service"
-	aliasstorage "netguard-pg-backend/internal/k8s/registry/servicealias"
 	svcfqdnstorage "netguard-pg-backend/internal/k8s/registry/svcfqdn_rule"
 	svcsvcstorage "netguard-pg-backend/internal/k8s/registry/svcsvc_rule"
 
@@ -218,12 +215,9 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 	// Shared storage instances - using old BackendClient approach for now
 	agStore := agstorage.NewAddressGroupStorage(bClient)
 	svcStore := svcstorage.NewServiceStorageWithClient(bClient) // Use correct BackendClient approach
-	aliasStore := aliasstorage.NewServiceAliasStorage(bClient)
 	policyStore := policybindingstorage.NewAddressGroupBindingPolicyStorage(bClient)
 	bindingStore := bindingstorage.NewAddressGroupBindingStorage(bClient)
 	pmStore := portmappingstorage.NewAddressGroupPortMappingStorage(bClient)
-	rules2sStore := rules2sstorage.NewRuleS2SStorage(bClient)
-	ieagagStore := ieagagstorage.NewIEAgAgRuleStorage(bClient)
 	svcSvcRuleStore := svcsvcstorage.NewSvcSvcRuleStorage(bClient)
 	svcFqdnRuleStore := svcfqdnstorage.NewSvcFqdnRuleStorage(bClient)
 
@@ -239,12 +233,9 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 		// Основные ресурсы
 		"addressgroups":               agStore,
 		"services":                    svcStore,
-		"servicealiases":              aliasStore,
 		"addressgroupbindingpolicies": policyStore,
 		"addressgroupbindings":        bindingStore,
 		"addressgroupportmappings":    pmStore,
-		"rules2s":                     rules2sStore,
-		"ieagagrules":                 ieagagStore,
 		"svcsvcrules":                 svcSvcRuleStore,
 		"svcfqdnrules":                svcFqdnRuleStore,
 		"networks":                    networkStore,
@@ -254,17 +245,13 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 
 		"addressgroups/status":               agstorage.NewStatusREST(agStore),
 		"services/status":                    svcstorage.NewStatusREST(svcStore),
-		"servicealiases/status":              aliasstorage.NewStatusREST(aliasStore),
 		"addressgroupbindingpolicies/status": policybindingstorage.NewStatusREST(policyStore),
 		"addressgroupbindings/status":        bindingstorage.NewStatusREST(bindingStore),
 		"addressgroupportmappings/status":    portmappingstorage.NewStatusREST(pmStore),
-		"rules2s/status":                     rules2sstorage.NewStatusREST(rules2sStore),
-		"ieagagrules/status":                 ieagagstorage.NewStatusREST(ieagagStore),
 		"svcsvcrules/status":                 svcsvcstorage.NewStatusREST(svcSvcRuleStore),
 		"svcfqdnrules/status":                svcfqdnstorage.NewStatusREST(svcFqdnRuleStore),
 
 		"services/addressgroups":               svcstorage.NewAddressGroupsREST(bClient),
-		"services/rules2sdstownref":            svcstorage.NewRuleS2SDstOwnRefREST(bClient),
 		"addressgroupportmappings/accessports": portmappingstorage.NewAccessPortsREST(bClient),
 		"addressgroups/networks":               agstorage.NewNetworksREST(bClient),
 	}

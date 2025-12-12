@@ -61,7 +61,6 @@ func (cm *ConditionManager) ProcessNetworkConditions(ctx context.Context, networ
 		}
 
 		network.Meta.SetValidatedCondition(metav1.ConditionTrue, models.ReasonValidated, "Network passed validation")
-		cm.batchConditionUpdate("Network", network)
 		return nil
 	}
 

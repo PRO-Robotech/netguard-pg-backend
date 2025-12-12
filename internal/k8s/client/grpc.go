@@ -535,241 +535,6 @@ func (c *GRPCBackendClient) syncAddressGroupPortMapping(ctx context.Context, syn
 	}
 	return nil
 }
-func (c *GRPCBackendClient) GetRuleS2S(ctx context.Context, id models.ResourceIdentifier) (*models.RuleS2S, error) {
-	if !c.limiter.Allow() {
-		return nil, fmt.Errorf("rate limit exceeded")
-	}
-	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
-	defer cancel()
-	req := &netguardpb.GetRuleS2SReq{
-		Identifier: &netguardpb.ResourceIdentifier{
-			Namespace: id.Namespace,
-			Name:      id.Name,
-		},
-	}
-	resp, err := c.client.GetRuleS2S(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get ruleS2S: %w", err)
-	}
-	rule := convertRuleS2SFromProto(resp.RuleS2S)
-	return &rule, nil
-}
-func (c *GRPCBackendClient) ListRuleS2S(ctx context.Context, scope ports.Scope) ([]models.RuleS2S, error) {
-	if !c.limiter.Allow() {
-		return nil, fmt.Errorf("rate limit exceeded")
-	}
-	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
-	defer cancel()
-	var identifiers []*netguardpb.ResourceIdentifier
-	var listOptions *netguardpb.ListOptions
-
-	if scope != nil {
-		// Handle FieldSelectorScope (contains identifiers + selectors)
-		if fss, ok := scope.(ports.FieldSelectorScope); ok {
-			// Extract identifiers
-			if len(fss.Identifiers) > 0 {
-				for _, id := range fss.Identifiers {
-					identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
-						Namespace: id.Namespace,
-						Name:      id.Name,
-					})
-				}
-			}
-			// Extract field/label selectors
-			if len(fss.FieldSelectors) > 0 || len(fss.LabelSelectors) > 0 {
-				listOptions = &netguardpb.ListOptions{
-					FieldSelectors: fss.FieldSelectors,
-					LabelSelectors: fss.LabelSelectors,
-				}
-			}
-		} else if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
-			// Fallback to ResourceIdentifierScope (no selectors)
-			for _, id := range ris.Identifiers {
-				identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
-					Namespace: id.Namespace,
-					Name:      id.Name,
-				})
-			}
-		}
-	}
-	req := &netguardpb.ListRuleS2SReq{
-		Identifiers: identifiers,
-		ListOptions: listOptions,
-	}
-	resp, err := c.client.ListRuleS2S(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list ruleS2S: %w", err)
-	}
-	rules := make([]models.RuleS2S, 0, len(resp.Items))
-	for _, protoRule := range resp.Items {
-		rules = append(rules, convertRuleS2SFromProto(protoRule))
-	}
-	return rules, nil
-}
-func (c *GRPCBackendClient) CreateRuleS2S(ctx context.Context, rule *models.RuleS2S) error {
-	return c.syncRuleS2S(ctx, models.SyncOpUpsert, []*models.RuleS2S{rule})
-}
-func (c *GRPCBackendClient) UpdateRuleS2S(ctx context.Context, rule *models.RuleS2S) error {
-	return c.syncRuleS2S(ctx, models.SyncOpUpsert, []*models.RuleS2S{rule})
-}
-func (c *GRPCBackendClient) DeleteRuleS2S(ctx context.Context, id models.ResourceIdentifier) error {
-	fullRule, err := c.GetRuleS2S(ctx, id)
-	if err != nil {
-		return fmt.Errorf("failed to get full rule for delete: %w", err)
-	}
-	return c.syncRuleS2S(ctx, models.SyncOpDelete, []*models.RuleS2S{fullRule})
-}
-func (c *GRPCBackendClient) syncRuleS2S(ctx context.Context, syncOp models.SyncOp, rules []*models.RuleS2S) error {
-	if !c.limiter.Allow() {
-		return fmt.Errorf("rate limit exceeded")
-	}
-	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
-	defer cancel()
-	protoRules := make([]*netguardpb.RuleS2S, 0, len(rules))
-	for _, rule := range rules {
-		protoRules = append(protoRules, convertRuleS2SToProto(*rule))
-	}
-	var protoSyncOp netguardpb.SyncOp
-	switch syncOp {
-	case models.SyncOpUpsert:
-		protoSyncOp = netguardpb.SyncOp_Upsert
-	case models.SyncOpDelete:
-		protoSyncOp = netguardpb.SyncOp_Delete
-	case models.SyncOpFullSync:
-		protoSyncOp = netguardpb.SyncOp_FullSync
-	default:
-		protoSyncOp = netguardpb.SyncOp_NoOp
-	}
-	req := &netguardpb.SyncReq{
-		SyncOp: protoSyncOp,
-		Subject: &netguardpb.SyncReq_RuleS2S{
-			RuleS2S: &netguardpb.SyncRuleS2S{
-				RuleS2S: protoRules,
-			},
-		},
-	}
-	_, err := c.client.Sync(ctx, req)
-	if err != nil {
-		return fmt.Errorf("failed to sync ruleS2S: %w", err)
-	}
-	return nil
-}
-func (c *GRPCBackendClient) GetServiceAlias(ctx context.Context, id models.ResourceIdentifier) (*models.ServiceAlias, error) {
-	if !c.limiter.Allow() {
-		return nil, fmt.Errorf("rate limit exceeded")
-	}
-	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
-	defer cancel()
-	req := &netguardpb.GetServiceAliasReq{
-		Identifier: &netguardpb.ResourceIdentifier{
-			Namespace: id.Namespace,
-			Name:      id.Name,
-		},
-	}
-	resp, err := c.client.GetServiceAlias(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get service alias: %w", err)
-	}
-	alias := convertServiceAliasFromProto(resp.ServiceAlias)
-	return &alias, nil
-}
-func (c *GRPCBackendClient) ListServiceAliases(ctx context.Context, scope ports.Scope) ([]models.ServiceAlias, error) {
-	if !c.limiter.Allow() {
-		return nil, fmt.Errorf("rate limit exceeded")
-	}
-	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
-	defer cancel()
-	var identifiers []*netguardpb.ResourceIdentifier
-	var listOptions *netguardpb.ListOptions
-
-	if scope != nil {
-		// Handle FieldSelectorScope (contains identifiers + selectors)
-		if fss, ok := scope.(ports.FieldSelectorScope); ok {
-			// Extract identifiers
-			if len(fss.Identifiers) > 0 {
-				for _, id := range fss.Identifiers {
-					identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
-						Namespace: id.Namespace,
-						Name:      id.Name,
-					})
-				}
-			}
-			// Extract field/label selectors
-			if len(fss.FieldSelectors) > 0 || len(fss.LabelSelectors) > 0 {
-				listOptions = &netguardpb.ListOptions{
-					FieldSelectors: fss.FieldSelectors,
-					LabelSelectors: fss.LabelSelectors,
-				}
-			}
-		} else if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
-			// Fallback to ResourceIdentifierScope (no selectors)
-			for _, id := range ris.Identifiers {
-				identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
-					Namespace: id.Namespace,
-					Name:      id.Name,
-				})
-			}
-		}
-	}
-	req := &netguardpb.ListServiceAliasesReq{
-		Identifiers: identifiers,
-		ListOptions: listOptions,
-	}
-	resp, err := c.client.ListServiceAliases(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list service aliases: %w", err)
-	}
-	aliases := make([]models.ServiceAlias, 0, len(resp.Items))
-	for _, protoAlias := range resp.Items {
-		aliases = append(aliases, convertServiceAliasFromProto(protoAlias))
-	}
-	return aliases, nil
-}
-func (c *GRPCBackendClient) CreateServiceAlias(ctx context.Context, alias *models.ServiceAlias) error {
-	return c.syncServiceAlias(ctx, models.SyncOpUpsert, []*models.ServiceAlias{alias})
-}
-func (c *GRPCBackendClient) UpdateServiceAlias(ctx context.Context, alias *models.ServiceAlias) error {
-	return c.syncServiceAlias(ctx, models.SyncOpUpsert, []*models.ServiceAlias{alias})
-}
-func (c *GRPCBackendClient) DeleteServiceAlias(ctx context.Context, id models.ResourceIdentifier) error {
-	fullAlias, err := c.GetServiceAlias(ctx, id)
-	if err != nil {
-		return fmt.Errorf("failed to get full alias for delete: %w", err)
-	}
-	return c.syncServiceAlias(ctx, models.SyncOpDelete, []*models.ServiceAlias{fullAlias})
-}
-func (c *GRPCBackendClient) syncServiceAlias(ctx context.Context, syncOp models.SyncOp, aliases []*models.ServiceAlias) error {
-	if !c.limiter.Allow() {
-		return fmt.Errorf("rate limit exceeded")
-	}
-	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
-	defer cancel()
-	protoAliases := make([]*netguardpb.ServiceAlias, 0, len(aliases))
-	for _, alias := range aliases {
-		protoAliases = append(protoAliases, convertServiceAliasToProto(*alias))
-	}
-	var protoSyncOp netguardpb.SyncOp
-	switch syncOp {
-	case models.SyncOpUpsert:
-		protoSyncOp = netguardpb.SyncOp_Upsert
-	case models.SyncOpDelete:
-		protoSyncOp = netguardpb.SyncOp_Delete
-	case models.SyncOpFullSync:
-		protoSyncOp = netguardpb.SyncOp_FullSync
-	default:
-		protoSyncOp = netguardpb.SyncOp_NoOp
-	}
-	req := &netguardpb.SyncReq{
-		SyncOp: protoSyncOp,
-		Subject: &netguardpb.SyncReq_ServiceAliases{
-			ServiceAliases: &netguardpb.SyncServiceAliases{
-				ServiceAliases: protoAliases,
-			},
-		},
-	}
-	_, err := c.client.Sync(ctx, req)
-	return err
-}
 func (c *GRPCBackendClient) GetAddressGroupBindingPolicy(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
 	if !c.limiter.Allow() {
 		return nil, fmt.Errorf("rate limit exceeded")
@@ -888,89 +653,6 @@ func (c *GRPCBackendClient) syncAddressGroupBindingPolicy(ctx context.Context, s
 		return fmt.Errorf("failed to sync address group binding policies: %w", err)
 	}
 	return nil
-}
-func (c *GRPCBackendClient) GetIEAgAgRule(ctx context.Context, id models.ResourceIdentifier) (*models.IEAgAgRule, error) {
-	if !c.limiter.Allow() {
-		return nil, fmt.Errorf("rate limit exceeded")
-	}
-	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
-	defer cancel()
-	req := &netguardpb.GetIEAgAgRuleReq{
-		Identifier: &netguardpb.ResourceIdentifier{
-			Namespace: id.Namespace,
-			Name:      id.Name,
-		},
-	}
-	resp, err := c.client.GetIEAgAgRule(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get IEAgAgRule: %w", err)
-	}
-	rule := convertIEAgAgRuleFromProto(resp.IeagagRule)
-	return &rule, nil
-}
-func (c *GRPCBackendClient) ListIEAgAgRules(ctx context.Context, scope ports.Scope) ([]models.IEAgAgRule, error) {
-	if !c.limiter.Allow() {
-		return nil, fmt.Errorf("rate limit exceeded")
-	}
-	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
-	defer cancel()
-	var identifiers []*netguardpb.ResourceIdentifier
-	var listOptions *netguardpb.ListOptions
-
-	if scope != nil {
-		// Handle FieldSelectorScope (contains identifiers + selectors)
-		if fss, ok := scope.(ports.FieldSelectorScope); ok {
-			// Extract identifiers
-			if len(fss.Identifiers) > 0 {
-				for _, id := range fss.Identifiers {
-					identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
-						Namespace: id.Namespace,
-						Name:      id.Name,
-					})
-				}
-			}
-			// Extract field/label selectors
-			if len(fss.FieldSelectors) > 0 || len(fss.LabelSelectors) > 0 {
-				listOptions = &netguardpb.ListOptions{
-					FieldSelectors: fss.FieldSelectors,
-					LabelSelectors: fss.LabelSelectors,
-				}
-			}
-		} else if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
-			// Fallback to ResourceIdentifierScope (no selectors)
-			for _, id := range ris.Identifiers {
-				identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
-					Namespace: id.Namespace,
-					Name:      id.Name,
-				})
-			}
-		}
-	}
-	req := &netguardpb.ListIEAgAgRulesReq{
-		Identifiers: identifiers,
-		ListOptions: listOptions,
-	}
-	resp, err := c.client.ListIEAgAgRules(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list IEAgAgRules: %w", err)
-	}
-	rules := make([]models.IEAgAgRule, 0, len(resp.Items))
-	for _, protoRule := range resp.Items {
-		rules = append(rules, convertIEAgAgRuleFromProto(protoRule))
-	}
-	return rules, nil
-}
-func (c *GRPCBackendClient) CreateIEAgAgRule(ctx context.Context, rule *models.IEAgAgRule) error {
-	return c.syncIEAgAgRule(ctx, models.SyncOpUpsert, []*models.IEAgAgRule{rule})
-}
-func (c *GRPCBackendClient) UpdateIEAgAgRule(ctx context.Context, rule *models.IEAgAgRule) error {
-	return c.syncIEAgAgRule(ctx, models.SyncOpUpsert, []*models.IEAgAgRule{rule})
-}
-func (c *GRPCBackendClient) DeleteIEAgAgRule(ctx context.Context, id models.ResourceIdentifier) error {
-	rule := &models.IEAgAgRule{
-		SelfRef: models.SelfRef{ResourceIdentifier: id},
-	}
-	return c.syncIEAgAgRule(ctx, models.SyncOpDelete, []*models.IEAgAgRule{rule})
 }
 func (c *GRPCBackendClient) GetNetwork(ctx context.Context, id models.ResourceIdentifier) (*models.Network, error) {
 	if !c.limiter.Allow() {
@@ -1151,41 +833,6 @@ func (c *GRPCBackendClient) DeleteNetworkBinding(ctx context.Context, id models.
 	}
 	bindings := []models.NetworkBinding{*binding}
 	return c.Sync(ctx, models.SyncOpDelete, bindings)
-}
-func (c *GRPCBackendClient) syncIEAgAgRule(ctx context.Context, syncOp models.SyncOp, rules []*models.IEAgAgRule) error {
-	if !c.limiter.Allow() {
-		return fmt.Errorf("rate limit exceeded")
-	}
-	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
-	defer cancel()
-	protoRules := make([]*netguardpb.IEAgAgRule, 0, len(rules))
-	for _, rule := range rules {
-		protoRules = append(protoRules, convertIEAgAgRuleToProto(*rule))
-	}
-	var protoSyncOp netguardpb.SyncOp
-	switch syncOp {
-	case models.SyncOpUpsert:
-		protoSyncOp = netguardpb.SyncOp_Upsert
-	case models.SyncOpDelete:
-		protoSyncOp = netguardpb.SyncOp_Delete
-	case models.SyncOpFullSync:
-		protoSyncOp = netguardpb.SyncOp_FullSync
-	default:
-		protoSyncOp = netguardpb.SyncOp_NoOp
-	}
-	req := &netguardpb.SyncReq{
-		SyncOp: protoSyncOp,
-		Subject: &netguardpb.SyncReq_IeagagRules{
-			IeagagRules: &netguardpb.SyncIEAgAgRules{
-				IeagagRules: protoRules,
-			},
-		},
-	}
-	_, err := c.client.Sync(ctx, req)
-	if err != nil {
-		return fmt.Errorf("failed to sync IEAgAgRules: %w", err)
-	}
-	return nil
 }
 func (c *GRPCBackendClient) GetSvcSvcRule(ctx context.Context, id models.ResourceIdentifier) (*models.SvcSvcRule, error) {
 	if !c.limiter.Allow() {
@@ -1474,12 +1121,6 @@ func (c *GRPCBackendClient) Sync(ctx context.Context, syncOp models.SyncOp, reso
 			ptrs = append(ptrs, &res[i])
 		}
 		return c.syncService(ctx, syncOp, ptrs)
-	case []models.ServiceAlias:
-		ptrs := make([]*models.ServiceAlias, 0, len(res))
-		for i := range res {
-			ptrs = append(ptrs, &res[i])
-		}
-		return c.syncServiceAlias(ctx, syncOp, ptrs)
 	case []models.AddressGroupBindingPolicy:
 		ptrs := make([]*models.AddressGroupBindingPolicy, 0, len(res))
 		for i := range res {
@@ -1590,22 +1231,6 @@ func (c *GRPCBackendClient) UpdateAddressGroupPortMappingMeta(ctx context.Contex
 	mapping.Meta = meta
 	return c.UpdateAddressGroupPortMapping(ctx, mapping)
 }
-func (c *GRPCBackendClient) UpdateRuleS2SMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
-	rule, err := c.GetRuleS2S(ctx, id)
-	if err != nil {
-		return fmt.Errorf("failed to get ruleS2S for meta update: %w", err)
-	}
-	rule.Meta = meta
-	return c.UpdateRuleS2S(ctx, rule)
-}
-func (c *GRPCBackendClient) UpdateServiceAliasMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
-	alias, err := c.GetServiceAlias(ctx, id)
-	if err != nil {
-		return fmt.Errorf("failed to get service alias for meta update: %w", err)
-	}
-	alias.Meta = meta
-	return c.UpdateServiceAlias(ctx, alias)
-}
 func (c *GRPCBackendClient) UpdateAddressGroupBindingPolicyMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
 	policy, err := c.GetAddressGroupBindingPolicy(ctx, id)
 	if err != nil {
@@ -1613,14 +1238,6 @@ func (c *GRPCBackendClient) UpdateAddressGroupBindingPolicyMeta(ctx context.Cont
 	}
 	policy.Meta = meta
 	return c.UpdateAddressGroupBindingPolicy(ctx, policy)
-}
-func (c *GRPCBackendClient) UpdateIEAgAgRuleMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
-	rule, err := c.GetIEAgAgRule(ctx, id)
-	if err != nil {
-		return fmt.Errorf("failed to get IEAgAgRule for meta update: %w", err)
-	}
-	rule.Meta = meta
-	return c.UpdateIEAgAgRule(ctx, rule)
 }
 func (c *GRPCBackendClient) UpdateNetworkMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
 	network, err := c.GetNetwork(ctx, id)
@@ -1663,21 +1280,6 @@ func (c *GRPCBackendClient) ListAddressGroupsForService(ctx context.Context, ser
 		addressGroups = append(addressGroups, *ag)
 	}
 	return addressGroups, nil
-}
-func (c *GRPCBackendClient) ListRuleS2SDstOwnRef(ctx context.Context, serviceID models.ResourceIdentifier) ([]models.RuleS2S, error) {
-	allRules, err := c.ListRuleS2S(ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list all ruleS2S: %w", err)
-	}
-	var crossNamespaceRules []models.RuleS2S
-	for _, rule := range allRules {
-		if rule.ServiceRef.Name == serviceID.Name &&
-			rule.ServiceRef.Namespace == serviceID.Namespace &&
-			rule.Namespace != serviceID.Namespace {
-			crossNamespaceRules = append(crossNamespaceRules, rule)
-		}
-	}
-	return crossNamespaceRules, nil
 }
 func (c *GRPCBackendClient) ListAccessPorts(ctx context.Context, mappingID models.ResourceIdentifier) ([]models.ServicePortsRef, error) {
 	mapping, err := c.GetAddressGroupPortMapping(ctx, mappingID)
@@ -2100,93 +1702,6 @@ func convertNetworkBindingToPB(binding models.NetworkBinding) *netguardpb.Networ
 	}
 	return pbBinding
 }
-func convertIEAgAgRuleFromProto(protoRule *netguardpb.IEAgAgRule) models.IEAgAgRule {
-	var transport models.TransportProtocol
-	switch protoRule.Transport {
-	case netguardpb.Networks_NetIP_TCP:
-		transport = models.TCP
-	case netguardpb.Networks_NetIP_UDP:
-		transport = models.UDP
-	default:
-		transport = models.TCP
-	}
-	var traffic models.Traffic
-	switch protoRule.Traffic {
-	case netguardpb.Traffic_Ingress:
-		traffic = models.INGRESS
-	case netguardpb.Traffic_Egress:
-		traffic = models.EGRESS
-	default:
-		traffic = models.INGRESS
-	}
-	var action models.RuleAction
-	switch protoRule.Action {
-	case netguardpb.RuleAction_ACCEPT:
-		action = models.ActionAccept
-	case netguardpb.RuleAction_DROP:
-		action = models.ActionDrop
-	default:
-		action = models.ActionAccept
-	}
-	result := models.IEAgAgRule{
-		SelfRef: models.SelfRef{
-			ResourceIdentifier: models.ResourceIdentifier{
-				Name:      protoRule.GetSelfRef().GetName(),
-				Namespace: protoRule.GetSelfRef().GetNamespace(),
-			},
-		},
-		Transport: transport,
-		Traffic:   traffic,
-		Action:    action,
-		Logs:      protoRule.Logs,
-		Priority:  protoRule.Priority,
-		Meta:      models.Meta{},
-		Trace:     protoRule.Trace,
-	}
-	if protoRule.AddressGroupLocal != nil && protoRule.AddressGroupLocal.Identifier != nil {
-		result.AddressGroupLocal = v1beta1.NamespacedObjectReference{
-			ObjectReference: v1beta1.ObjectReference{
-				APIVersion: "netguard.sgroups.io/v1beta1",
-				Kind:       "AddressGroup",
-				Name:       protoRule.AddressGroupLocal.Identifier.Name,
-			},
-			Namespace: protoRule.AddressGroupLocal.Identifier.Namespace,
-		}
-	}
-	if protoRule.AddressGroup != nil && protoRule.AddressGroup.Identifier != nil {
-		result.AddressGroup = v1beta1.NamespacedObjectReference{
-			ObjectReference: v1beta1.ObjectReference{
-				APIVersion: "netguard.sgroups.io/v1beta1",
-				Kind:       "AddressGroup",
-				Name:       protoRule.AddressGroup.Identifier.Name,
-			},
-			Namespace: protoRule.AddressGroup.Identifier.Namespace,
-		}
-	}
-	for _, protoPort := range protoRule.Ports {
-		result.Ports = append(result.Ports, models.PortSpec{
-			Source:      protoPort.Source,
-			Destination: protoPort.Destination,
-		})
-	}
-	if protoRule.Meta != nil {
-		result.Meta = models.Meta{
-			UID:             protoRule.Meta.Uid,
-			ResourceVersion: protoRule.Meta.ResourceVersion,
-			Generation:      protoRule.Meta.Generation,
-			Labels:          protoRule.Meta.Labels,
-			Annotations:     protoRule.Meta.Annotations,
-		}
-		if protoRule.Meta.CreationTs != nil {
-			result.Meta.CreationTS = metav1.NewTime(protoRule.Meta.CreationTs.AsTime())
-		}
-		if protoRule.Meta.Conditions != nil {
-			result.Meta.Conditions = models.ProtoConditionsToK8s(protoRule.Meta.Conditions)
-		}
-		result.Meta.ObservedGeneration = protoRule.Meta.ObservedGeneration
-	}
-	return result
-}
 func convertHostFromProto(protoHost *netguardpb.Host) models.Host {
 	result := models.Host{
 		SelfRef: models.SelfRef{
@@ -2464,14 +1979,6 @@ func (c *GRPCBackendClient) WatchAddressGroupPortMappings(ctx context.Context, r
 	return c.client.WatchAddressGroupPortMappings(ctx, req)
 }
 
-func (c *GRPCBackendClient) WatchRuleS2S(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchRuleS2SClient, error) {
-	return c.client.WatchRuleS2S(ctx, req)
-}
-
-func (c *GRPCBackendClient) WatchServiceAliases(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchServiceAliasesClient, error) {
-	return c.client.WatchServiceAliases(ctx, req)
-}
-
 func (c *GRPCBackendClient) WatchAddressGroupBindingPolicies(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchAddressGroupBindingPoliciesClient, error) {
 	return c.client.WatchAddressGroupBindingPolicies(ctx, req)
 }
@@ -2490,10 +1997,6 @@ func (c *GRPCBackendClient) WatchNetworks(ctx context.Context, req *netguardpb.W
 
 func (c *GRPCBackendClient) WatchNetworkBindings(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchNetworkBindingsClient, error) {
 	return c.client.WatchNetworkBindings(ctx, req)
-}
-
-func (c *GRPCBackendClient) WatchIEAgAgRules(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchIEAgAgRulesClient, error) {
-	return c.client.WatchIEAgAgRules(ctx, req)
 }
 
 func (c *GRPCBackendClient) WatchSvcSvcRules(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchSvcSvcRulesClient, error) {

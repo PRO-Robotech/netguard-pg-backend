@@ -6,7 +6,6 @@ import (
 	"netguard-pg-backend/internal/api/netguard/converters"
 	"netguard-pg-backend/internal/application/services"
 	"netguard-pg-backend/internal/domain/models"
-	"netguard-pg-backend/internal/k8s/client"
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
 
 	"github.com/pkg/errors"
@@ -86,37 +85,6 @@ func (d *Dispatcher) DispatchSync(ctx context.Context, syncOp models.SyncOp, sub
 			mappings = append(mappings, converters.ConvertAddressGroupPortMapping(m))
 		}
 		return d.service.Sync(ctx, syncOp, mappings)
-
-	case *netguardpb.SyncReq_RuleS2S:
-		if s.RuleS2S == nil || len(s.RuleS2S.RuleS2S) == 0 {
-			return nil
-		}
-		rules := make([]models.RuleS2S, 0, len(s.RuleS2S.RuleS2S))
-		for _, r := range s.RuleS2S.RuleS2S {
-			rules = append(rules, converters.ConvertRuleS2S(r))
-		}
-		return d.service.Sync(ctx, syncOp, rules)
-
-	case *netguardpb.SyncReq_ServiceAliases:
-		if s.ServiceAliases == nil || len(s.ServiceAliases.ServiceAliases) == 0 {
-			return nil
-		}
-		aliases := make([]models.ServiceAlias, 0, len(s.ServiceAliases.ServiceAliases))
-		for _, a := range s.ServiceAliases.ServiceAliases {
-			aliases = append(aliases, converters.ConvertServiceAlias(a))
-		}
-		return d.service.Sync(ctx, syncOp, aliases)
-
-	case *netguardpb.SyncReq_IeagagRules:
-		if s.IeagagRules == nil || len(s.IeagagRules.IeagagRules) == 0 {
-			return nil
-		}
-		rules := make([]models.IEAgAgRule, 0, len(s.IeagagRules.IeagagRules))
-		for _, r := range s.IeagagRules.IeagagRules {
-			rule := client.ConvertIEAgAgRuleFromProto(r)
-			rules = append(rules, rule)
-		}
-		return d.service.Sync(ctx, syncOp, rules)
 
 	case *netguardpb.SyncReq_AddressGroupBindingPolicies:
 		if s.AddressGroupBindingPolicies == nil || len(s.AddressGroupBindingPolicies.AddressGroupBindingPolicies) == 0 {
