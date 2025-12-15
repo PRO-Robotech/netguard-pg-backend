@@ -206,8 +206,8 @@ func (s *hostSynchronizer) syncHostBatch(ctx context.Context, uuids []string, ho
 	result := types.NewHostSyncResult()
 	result.SetTotalRequested(len(uuids))
 
-	// Get host data from SGROUP (returns MetaHostInfo containing both Host and MetaInfo)
-	metaHostInfos, err := s.sgroupReader.GetHostsByUUIDs(ctx, uuids)
+	// Get host data from SGROUP (Host contains MetaInfo field)
+	sgroupHosts, err := s.sgroupReader.GetHostsByUUIDs(ctx, uuids)
 	if err != nil {
 		// Mark all as failed
 		for _, uuid := range uuids {
@@ -216,11 +216,11 @@ func (s *hostSynchronizer) syncHostBatch(ctx context.Context, uuids []string, ho
 		return result, err
 	}
 
-	// Create map of UUID -> MetaHostInfo (contains Host and MetaInfo)
-	sgroupHostMap := make(map[string]*pb.ListHostsResp_MetaHostInfo)
-	for _, metaHostInfo := range metaHostInfos {
-		if metaHostInfo != nil && metaHostInfo.GetHost() != nil && metaHostInfo.GetHost().GetUuid() != "" {
-			sgroupHostMap[metaHostInfo.GetHost().GetUuid()] = metaHostInfo
+	// Create map of UUID -> Host
+	sgroupHostMap := make(map[string]*pb.Host)
+	for _, host := range sgroupHosts {
+		if host != nil && host.GetUuid() != "" {
+			sgroupHostMap[host.GetUuid()] = host
 		}
 	}
 
@@ -229,7 +229,7 @@ func (s *hostSynchronizer) syncHostBatch(ctx context.Context, uuids []string, ho
 
 	for _, uuid := range uuids {
 		netguardHost, hasNetguardHost := hostMap[uuid]
-		metaHostInfo, hasSGroupHost := sgroupHostMap[uuid]
+		sgroupHost, hasSGroupHost := sgroupHostMap[uuid]
 
 		if !hasNetguardHost {
 			result.AddFailedHost(uuid, "host not found in NETGUARD")
@@ -241,9 +241,8 @@ func (s *hostSynchronizer) syncHostBatch(ctx context.Context, uuids []string, ho
 			continue
 		}
 
-		// Extract Host and MetaInfo from MetaHostInfo
-		sgroupHost := metaHostInfo.GetHost()
-		sgroupMetaInfo := metaHostInfo.GetMetaInfo()
+		// Extract MetaInfo from Host (MetaInfo is now embedded in Host)
+		sgroupMetaInfo := sgroupHost.GetMetaInfo()
 
 		// Extract IPSet from SGROUP host
 		var ipSet []string
