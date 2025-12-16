@@ -1144,6 +1144,10 @@
         "description": {
           "type": "string",
           "title": "Optional description (Netguard-only)"
+        },
+        "comment": {
+          "type": "string",
+          "title": "Comment - optional user comment (Netguard-only, not synced to SGROUPS)"
         }
       },
       "title": "AddressGroup - represents an address group configuration for Netguard",
@@ -1166,6 +1170,10 @@
         },
         "meta": {
           "$ref": "#/definitions/v1Meta"
+        },
+        "comment": {
+          "type": "string",
+          "title": "Comment - optional user comment (Netguard-only)"
         }
       },
       "title": "AddressGroupBinding - binding between a service and an address group",
@@ -1474,6 +1482,10 @@
         },
         "meta": {
           "$ref": "#/definitions/v1Meta"
+        },
+        "comment": {
+          "type": "string",
+          "title": "Comment - optional user comment (Netguard-only, not synced to SGROUPS)"
         }
       },
       "title": "Host - represents a host resource (K8s representation of Agent)",
@@ -1498,6 +1510,10 @@
         },
         "meta": {
           "$ref": "#/definitions/v1Meta"
+        },
+        "comment": {
+          "type": "string",
+          "title": "Comment - optional user comment (Netguard-only)"
         }
       },
       "title": "HostBinding - represents a host binding resource",
@@ -1948,6 +1964,10 @@
         "addressGroupRef": {
           "$ref": "#/definitions/v1NamespacedObjectReference",
           "title": "Reference to the bound AddressGroup"
+        },
+        "comment": {
+          "type": "string",
+          "title": "Comment - optional user comment (Netguard-only, not synced to SGROUPS)"
         }
       },
       "title": "Network - represents a network configuration for Netguard",
@@ -1976,6 +1996,10 @@
         },
         "meta": {
           "$ref": "#/definitions/v1Meta"
+        },
+        "comment": {
+          "type": "string",
+          "title": "Comment - optional user comment (Netguard-only)"
         }
       },
       "title": "NetworkBinding - binding between a network and an address group",
@@ -2108,6 +2132,10 @@
         "xSvcfqdnRules": {
           "$ref": "#/definitions/v1XSvcFqdnRules",
           "title": "XSvcFqdnRules - READ-ONLY field populated by PostgreSQL triggers\nContains all service-to-FQDN rules where this Service participates as source"
+        },
+        "comment": {
+          "type": "string",
+          "title": "Comment - optional user comment (Netguard-only, not synced to SGROUPS)"
         }
       },
       "title": "Service - represents a service with ports",
@@ -2196,6 +2224,10 @@
         "meta": {
           "$ref": "#/definitions/v1Meta",
           "title": "Kubernetes metadata"
+        },
+        "comment": {
+          "type": "string",
+          "title": "Comment - optional user comment (Netguard-only, not synced to SGROUPS)"
         }
       },
       "title": "SvcFqdnRule - service-to-FQDN firewall rule",
@@ -2244,6 +2276,10 @@
         "meta": {
           "$ref": "#/definitions/v1Meta",
           "title": "Kubernetes metadata"
+        },
+        "comment": {
+          "type": "string",
+          "title": "Comment - optional user comment (Netguard-only, not synced to SGROUPS)"
         }
       },
       "title": "SvcSvcRule - service-to-service firewall rule",

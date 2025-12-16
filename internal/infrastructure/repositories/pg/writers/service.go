@@ -179,18 +179,20 @@ func (w *Writer) upsertService(ctx context.Context, service models.Service) erro
 
 	// Then, upsert the service using the resource version
 	serviceQuery := `
-		INSERT INTO services (namespace, name, description, ingress_ports, address_groups, resource_version)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO services (namespace, name, description, comment, ingress_ports, address_groups, resource_version)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (namespace, name) DO UPDATE SET
 			description = $3,
-			ingress_ports = $4,
-			address_groups = $5,
-			resource_version = $6`
+			comment = $4,
+			ingress_ports = $5,
+			address_groups = $6,
+			resource_version = $7`
 
 	if err := w.exec(ctx, serviceQuery,
 		service.Namespace,
 		service.Name,
 		service.Description,
+		service.Comment,
 		ingressPortsJSON,
 		addressGroupsJSON,
 		resourceVersion,

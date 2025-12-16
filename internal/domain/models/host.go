@@ -31,6 +31,9 @@ type Host struct {
 	// Specification from HostSpec
 	UUID string `json:"uuid"`
 
+	// Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+	Comment string `json:"comment,omitempty"`
+
 	// Status
 	HostName         string                             `json:"hostName,omitempty"`
 	AddressGroupName string                             `json:"addressGroupName,omitempty"`

@@ -55,6 +55,7 @@ func (c *SvcFqdnRuleConverter) ToDomain(ctx context.Context, k8sObj *netguardv1b
 		Action:         action,
 		Priority:       k8sObj.Spec.Priority,
 		Description:    k8sObj.Spec.Description,
+		Comment:        k8sObj.Spec.Comment,
 		Meta:           ConvertMetadataToDomain(k8sObj.ObjectMeta, k8sObj.Status.Conditions, k8sObj.Status.ObservedGeneration),
 	}
 
@@ -97,6 +98,7 @@ func (c *SvcFqdnRuleConverter) FromDomain(ctx context.Context, domainObj *models
 			Action:      action,
 			Priority:    domainObj.Priority,
 			Description: domainObj.Description,
+			Comment:     domainObj.Comment,
 		},
 	}
 

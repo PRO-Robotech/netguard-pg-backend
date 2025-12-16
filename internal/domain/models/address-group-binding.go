@@ -9,6 +9,7 @@ type AddressGroupBinding struct {
 	SelfRef
 	ServiceRef      v1beta1.NamespacedObjectReference // Full object reference with apiVersion, kind and namespace
 	AddressGroupRef v1beta1.NamespacedObjectReference // Full object reference with apiVersion, kind and namespace
+	Comment         string                            // Optional user comment (Netguard-only)
 	Meta            Meta
 }
 

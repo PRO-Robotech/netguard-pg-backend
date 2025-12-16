@@ -135,3 +135,75 @@ func TestServiceConverter_FromDomain(t *testing.T) {
 		})
 	}
 }
+
+func TestServiceConverter_CommentField(t *testing.T) {
+	ctx := context.Background()
+	converter := NewServiceConverter()
+
+	t.Run("ToDomain carries comment", func(t *testing.T) {
+		k8sService := &netguardv1beta1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-service",
+				Namespace: "default",
+			},
+			Spec: netguardv1beta1.ServiceSpec{
+				Comment: "K8s service comment",
+			},
+		}
+
+		result, err := converter.ToDomain(ctx, k8sService)
+		require.NoError(t, err)
+		assert.Equal(t, "K8s service comment", result.Comment)
+	})
+
+	t.Run("ToDomain with empty comment", func(t *testing.T) {
+		k8sService := &netguardv1beta1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-service",
+				Namespace: "default",
+			},
+			Spec: netguardv1beta1.ServiceSpec{},
+		}
+
+		result, err := converter.ToDomain(ctx, k8sService)
+		require.NoError(t, err)
+		assert.Equal(t, "", result.Comment)
+	})
+
+	t.Run("FromDomain carries comment", func(t *testing.T) {
+		domainService := &models.Service{
+			SelfRef: models.SelfRef{
+				ResourceIdentifier: models.ResourceIdentifier{
+					Name:      "test-service",
+					Namespace: "default",
+				},
+			},
+			Comment: "Domain service comment",
+		}
+
+		result, err := converter.FromDomain(ctx, domainService)
+		require.NoError(t, err)
+		assert.Equal(t, "Domain service comment", result.Spec.Comment)
+	})
+
+	t.Run("bidirectional comment conversion", func(t *testing.T) {
+		originalComment := "Bidirectional comment"
+		k8sService := &netguardv1beta1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-service",
+				Namespace: "default",
+			},
+			Spec: netguardv1beta1.ServiceSpec{
+				Comment: originalComment,
+			},
+		}
+
+		domain, err := converter.ToDomain(ctx, k8sService)
+		require.NoError(t, err)
+
+		backToK8s, err := converter.FromDomain(ctx, domain)
+		require.NoError(t, err)
+
+		assert.Equal(t, originalComment, backToK8s.Spec.Comment)
+	})
+}

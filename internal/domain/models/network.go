@@ -17,6 +17,9 @@ type Network struct {
 	// Specification
 	CIDR string `json:"cidr"`
 
+	// Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+	Comment string `json:"comment,omitempty"`
+
 	// Status
 	NetworkName     string                             `json:"networkName,omitempty"`
 	IsBound         bool                               `json:"isBound"`

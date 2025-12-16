@@ -183,25 +183,27 @@ func (w *Writer) upsertNetwork(ctx context.Context, network *models.Network) err
 
 	// Then, upsert the network using the NEW resource version
 	networkQuery := `
-		INSERT INTO networks (namespace, name, cidr, network_items, is_bound,
+		INSERT INTO networks (namespace, name, cidr, comment, network_items, is_bound,
 			binding_ref_namespace, binding_ref_name,
 			address_group_ref_namespace, address_group_ref_name,
 			resource_version)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (namespace, name) DO UPDATE SET
 			cidr = $3,
-			network_items = $4,
-			is_bound = $5,
-			binding_ref_namespace = $6,
-			binding_ref_name = $7,
-			address_group_ref_namespace = $8,
-			address_group_ref_name = $9,
-			resource_version = $10`
+			comment = $4,
+			network_items = $5,
+			is_bound = $6,
+			binding_ref_namespace = $7,
+			binding_ref_name = $8,
+			address_group_ref_namespace = $9,
+			address_group_ref_name = $10,
+			resource_version = $11`
 
 	if err := w.exec(ctx, networkQuery,
 		network.Namespace,
 		network.Name,
 		network.CIDR, // Add CIDR as separate column
+		network.Comment,
 		networkItemsJSON,
 		network.IsBound,
 		bindingRefNamespace,

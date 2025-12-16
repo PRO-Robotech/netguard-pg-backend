@@ -19,6 +19,7 @@ func ConvertSvcFqdnRule(rule *netguardpb.SvcFqdnRule) models.SvcFqdnRule {
 		Action:      ConvertActionFromPB(rule.GetAction()),
 		Priority:    rule.GetPriority(),
 		Description: rule.GetDescription(),
+		Comment:     rule.GetComment(),
 		Meta:        ConvertMeta(rule.Meta),
 	}
 
@@ -67,6 +68,7 @@ func ConvertSvcFqdnRuleToPB(rule models.SvcFqdnRule) *netguardpb.SvcFqdnRule {
 		Action:      ConvertActionToPB(rule.Action),
 		Priority:    rule.Priority,
 		Description: rule.Description,
+		Comment:     rule.Comment,
 		Meta:        ConvertMetaToPB(rule.Meta),
 	}
 

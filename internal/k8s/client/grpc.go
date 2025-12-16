@@ -1554,8 +1554,9 @@ func convertNetworkFromProto(protoNetwork *netguardpb.Network) models.Network {
 				Namespace: protoNetwork.GetSelfRef().GetNamespace(),
 			},
 		},
-		CIDR: protoNetwork.Cidr,
-		Meta: models.Meta{},
+		CIDR:    protoNetwork.Cidr,
+		Comment: protoNetwork.Comment,
+		Meta:    models.Meta{},
 	}
 	if protoNetwork.Meta != nil {
 		result.Meta = models.Meta{
@@ -1602,7 +1603,8 @@ func convertNetworkToPB(network models.Network) *netguardpb.Network {
 			Name:      network.Name,
 			Namespace: network.Namespace,
 		},
-		Cidr: network.CIDR,
+		Cidr:    network.CIDR,
+		Comment: network.Comment,
 	}
 	pbNetwork.Meta = &netguardpb.Meta{
 		Uid:                network.Meta.UID,
@@ -1626,7 +1628,8 @@ func convertNetworkBindingFromProto(protoBinding *netguardpb.NetworkBinding) mod
 				Namespace: protoBinding.GetSelfRef().GetNamespace(),
 			},
 		},
-		Meta: models.Meta{},
+		Comment: protoBinding.Comment,
+		Meta:    models.Meta{},
 	}
 	result.NetworkRef = v1beta1.NamespacedObjectReference{
 		ObjectReference: v1beta1.ObjectReference{
@@ -1683,6 +1686,7 @@ func convertNetworkBindingToPB(binding models.NetworkBinding) *netguardpb.Networ
 			Name:       binding.AddressGroupRef.Name,
 			Namespace:  binding.AddressGroupRef.Namespace,
 		},
+		Comment: binding.Comment,
 	}
 	pbBinding.NetworkItem = &netguardpb.NetworkItem{
 		Name: binding.NetworkItem.Name,
@@ -1711,6 +1715,7 @@ func convertHostFromProto(protoHost *netguardpb.Host) models.Host {
 			},
 		},
 		UUID:             protoHost.GetUuid(),
+		Comment:          protoHost.GetComment(),
 		HostName:         protoHost.GetHostNameSync(),
 		AddressGroupName: protoHost.GetAddressGroupName(),
 		IsBound:          protoHost.GetIsBound(),
@@ -1782,6 +1787,7 @@ func convertHostToPB(host models.Host) *netguardpb.Host {
 			Namespace: host.Namespace,
 		},
 		Uuid:             host.UUID,
+		Comment:          host.Comment,
 		HostNameSync:     host.HostName,
 		AddressGroupName: host.AddressGroupName,
 		IsBound:          host.IsBound,
@@ -1848,6 +1854,7 @@ func convertHostBindingFromProto(protoBinding *netguardpb.HostBinding) models.Ho
 				Namespace: protoBinding.GetSelfRef().GetNamespace(),
 			},
 		},
+		Comment: protoBinding.GetComment(),
 	}
 	if protoBinding.GetHostRef() != nil {
 		result.HostRef = v1beta1.NamespacedObjectReference{
@@ -1908,6 +1915,7 @@ func convertHostBindingToPB(hostBinding models.HostBinding) *netguardpb.HostBind
 			Name:       hostBinding.AddressGroupRef.Name,
 			Namespace:  hostBinding.AddressGroupRef.Namespace,
 		},
+		Comment: hostBinding.Comment,
 		Meta: &netguardpb.Meta{
 			Uid:                hostBinding.Meta.UID,
 			ResourceVersion:    hostBinding.Meta.ResourceVersion,

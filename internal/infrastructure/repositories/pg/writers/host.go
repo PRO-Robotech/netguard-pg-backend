@@ -194,7 +194,7 @@ func (w *Writer) upsertHost(ctx context.Context, host *models.Host) error {
 
 	hostQuery := `
 		INSERT INTO hosts (
-			namespace, name, uuid,
+			namespace, name, uuid, comment,
 			host_name_sync, address_group_name, is_bound,
 			binding_ref_namespace, binding_ref_name,
 			address_group_ref_namespace, address_group_ref_name,
@@ -203,6 +203,7 @@ func (w *Writer) upsertHost(ctx context.Context, host *models.Host) error {
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		ON CONFLICT (namespace, name) DO UPDATE SET
 			uuid = EXCLUDED.uuid,
+			comment = EXCLUDED.comment,
 			host_name_sync = EXCLUDED.host_name_sync,
 			address_group_name = EXCLUDED.address_group_name,
 			is_bound = EXCLUDED.is_bound,
@@ -215,7 +216,7 @@ func (w *Writer) upsertHost(ctx context.Context, host *models.Host) error {
 			resource_version = EXCLUDED.resource_version`
 
 	_, err = w.tx.Exec(ctx, hostQuery,
-		host.Namespace, host.Name, host.UUID,
+		host.Namespace, host.Name, host.UUID, host.Comment,
 		hostNameSync, addressGroupName, host.IsBound,
 		bindingRefNamespace, bindingRefName,
 		addressGroupRefNamespace, addressGroupRefName,

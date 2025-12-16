@@ -34,7 +34,7 @@ type svcFqdnRulePortJSON struct {
 func (r *Reader) ListSvcFqdnRules(ctx context.Context, consume func(models.SvcFqdnRule) error, scope ports.Scope) error {
 	query := `
         SELECT fr.namespace, fr.name, fr.service_from_ref, fr.fqdn, fr.transport,
-               fr.ports, fr.logs, fr.trace, fr.action, fr.priority, fr.description,
+               fr.ports, fr.logs, fr.trace, fr.action, fr.priority, fr.description, fr.comment,
                m.resource_version, m.labels, m.annotations, m.conditions,
                m.created_at, m.updated_at, m.deletion_timestamp
         FROM svc_fqdn_rules fr
@@ -81,7 +81,7 @@ func (r *Reader) ListSvcFqdnRules(ctx context.Context, consume func(models.SvcFq
 func (r *Reader) GetSvcFqdnRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcFqdnRule, error) {
 	query := `
         SELECT fr.namespace, fr.name, fr.service_from_ref, fr.fqdn, fr.transport,
-               fr.ports, fr.logs, fr.trace, fr.action, fr.priority, fr.description,
+               fr.ports, fr.logs, fr.trace, fr.action, fr.priority, fr.description, fr.comment,
                m.resource_version, m.labels, m.annotations, m.conditions,
                m.created_at, m.updated_at, m.deletion_timestamp
         FROM svc_fqdn_rules fr
@@ -113,7 +113,7 @@ func (r *Reader) GetSvcFqdnRuleByID(ctx context.Context, id models.ResourceIdent
 func (r *Reader) FindSvcFqdnRulesByService(ctx context.Context, namespace, serviceName string) ([]models.SvcFqdnRule, error) {
 	query := `
         SELECT fr.namespace, fr.name, fr.service_from_ref, fr.fqdn, fr.transport,
-               fr.ports, fr.logs, fr.trace, fr.action, fr.priority, fr.description,
+               fr.ports, fr.logs, fr.trace, fr.action, fr.priority, fr.description, fr.comment,
                m.resource_version, m.labels, m.annotations, m.conditions,
                m.created_at, m.updated_at, m.deletion_timestamp
         FROM svc_fqdn_rules fr
@@ -162,6 +162,7 @@ func (r *Reader) scanSvcFqdnRule(rows pgx.Rows) (models.SvcFqdnRule, error) {
 		&actionStr,
 		&rule.Priority,
 		&rule.Description,
+		&rule.Comment,
 		&resourceVersion,
 		&labelsJSON,
 		&annotationsJSON,
@@ -204,6 +205,7 @@ func (r *Reader) scanSvcFqdnRuleRow(row pgx.Row) (*models.SvcFqdnRule, error) {
 		&actionStr,
 		&rule.Priority,
 		&rule.Description,
+		&rule.Comment,
 		&resourceVersion,
 		&labelsJSON,
 		&annotationsJSON,

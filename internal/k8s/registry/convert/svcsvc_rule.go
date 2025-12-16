@@ -41,6 +41,7 @@ func (c *SvcSvcRuleConverter) ToDomain(ctx context.Context, k8sObj *netguardv1be
 		Logs:           k8sObj.Spec.Logs,
 		Trace:          k8sObj.Spec.Trace,
 		Description:    k8sObj.Spec.Description,
+		Comment:        k8sObj.Spec.Comment,
 		Meta:           ConvertMetadataToDomain(k8sObj.ObjectMeta, k8sObj.Status.Conditions, k8sObj.Status.ObservedGeneration),
 	}
 
@@ -71,6 +72,7 @@ func (c *SvcSvcRuleConverter) FromDomain(ctx context.Context, domainObj *models.
 			Logs:        domainObj.Logs,
 			Trace:       domainObj.Trace,
 			Description: domainObj.Description,
+			Comment:     domainObj.Comment,
 		},
 	}
 

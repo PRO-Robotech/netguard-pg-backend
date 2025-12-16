@@ -35,7 +35,7 @@ type svcFqdnRuleRefJSON struct {
 
 func (r *Reader) ListServices(ctx context.Context, consume func(models.Service) error, scope ports.Scope) error {
 	query := `
-	SELECT s.namespace, s.name, s.description, s.ingress_ports,
+	SELECT s.namespace, s.name, s.description, s.comment, s.ingress_ports,
 	       s.address_groups, s.aggregated_address_groups,
 	       s.xsvcsvc_rules_as_from, s.xsvcsvc_rules_as_to,
 	       s.xsvc_fqdn_rules,
@@ -81,7 +81,7 @@ func (r *Reader) ListServices(ctx context.Context, consume func(models.Service) 
 
 func (r *Reader) GetServiceByID(ctx context.Context, id models.ResourceIdentifier) (*models.Service, error) {
 	query := `
-	SELECT s.namespace, s.name, s.description, s.ingress_ports,
+	SELECT s.namespace, s.name, s.description, s.comment, s.ingress_ports,
 	       s.address_groups, s.aggregated_address_groups,
 	       s.xsvcsvc_rules_as_from, s.xsvcsvc_rules_as_to,
 	       s.xsvc_fqdn_rules,
@@ -125,6 +125,7 @@ func (r *Reader) scanService(rows pgx.Rows) (models.Service, error) {
 		&service.Namespace,
 		&service.Name,
 		&service.Description,
+		&service.Comment,
 		&ingressPortsJSON,
 		&addressGroupsJSON,
 		&aggregatedAddressGroupsJSON,
@@ -225,6 +226,7 @@ func (r *Reader) scanServiceRow(row pgx.Row) (*models.Service, error) {
 		&service.Namespace,
 		&service.Name,
 		&service.Description,
+		&service.Comment,
 		&ingressPortsJSON,
 		&addressGroupsJSON,
 		&aggregatedAddressGroupsJSON,

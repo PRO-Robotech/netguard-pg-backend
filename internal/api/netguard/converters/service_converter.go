@@ -11,6 +11,7 @@ func ConvertService(svc *netguardpb.Service) models.Service {
 	result := models.Service{
 		SelfRef:     models.NewSelfRef(GetSelfRef(svc.GetSelfRef())),
 		Description: svc.Description,
+		Comment:     svc.Comment,
 		Meta:        ConvertMeta(svc.Meta),
 	}
 
@@ -104,6 +105,7 @@ func ConvertServiceToPB(svc models.Service) *netguardpb.Service {
 			Namespace: svc.ResourceIdentifier.Namespace,
 		},
 		Description: svc.Description,
+		Comment:     svc.Comment,
 		Meta:        ConvertMetaToPB(svc.Meta),
 	}
 

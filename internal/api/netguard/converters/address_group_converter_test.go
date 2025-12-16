@@ -66,3 +66,91 @@ func TestConvertAddressGroupToProtoNetworks(t *testing.T) {
 	require.Equal(t, "Network", pb.Networks[0].Kind)
 	require.Equal(t, "ns/example", pb.AddressGroupName)
 }
+
+func TestConvertAddressGroup_CommentField(t *testing.T) {
+	tests := []struct {
+		name     string
+		comment  string
+		expected string
+	}{
+		{
+			name:     "address group with comment",
+			comment:  "Production servers group",
+			expected: "Production servers group",
+		},
+		{
+			name:     "address group with empty comment",
+			comment:  "",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pb := &netguardpb.AddressGroup{
+				SelfRef: &netguardpb.ResourceIdentifier{
+					Name:      "example",
+					Namespace: "ns",
+				},
+				Comment: tt.comment,
+			}
+
+			result := ConvertAddressGroup(pb)
+
+			require.Equal(t, tt.expected, result.Comment)
+		})
+	}
+}
+
+func TestConvertAddressGroupToPB_CommentField(t *testing.T) {
+	tests := []struct {
+		name     string
+		comment  string
+		expected string
+	}{
+		{
+			name:     "domain address group with comment",
+			comment:  "Domain comment",
+			expected: "Domain comment",
+		},
+		{
+			name:     "domain address group without comment",
+			comment:  "",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			model := models.AddressGroup{
+				SelfRef: models.SelfRef{
+					ResourceIdentifier: models.NewResourceIdentifier(
+						"example",
+						models.WithNamespace("ns"),
+					),
+				},
+				Comment: tt.comment,
+			}
+
+			pb := ConvertAddressGroupToPB(model)
+
+			require.Equal(t, tt.expected, pb.GetComment())
+		})
+	}
+}
+
+func TestConvertAddressGroup_BidirectionalComment(t *testing.T) {
+	originalComment := "Bidirectional AG comment"
+	pb := &netguardpb.AddressGroup{
+		SelfRef: &netguardpb.ResourceIdentifier{
+			Name:      "example",
+			Namespace: "ns",
+		},
+		Comment: originalComment,
+	}
+
+	domain := ConvertAddressGroup(pb)
+	backToProto := ConvertAddressGroupToPB(domain)
+
+	require.Equal(t, originalComment, backToProto.GetComment())
+}

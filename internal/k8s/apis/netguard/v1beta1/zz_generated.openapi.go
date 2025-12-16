@@ -31,7 +31,6 @@ import (
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
 		"k8s.io/apimachinery/pkg/api/resource.Quantity":                                          schema_apimachinery_pkg_api_resource_Quantity(ref),
-		"k8s.io/apimachinery/pkg/api/resource.int64Amount":                                       schema_apimachinery_pkg_api_resource_int64Amount(ref),
 		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroup":                                          schema_pkg_apis_meta_v1_APIGroup(ref),
 		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroupList":                                      schema_pkg_apis_meta_v1_APIGroupList(ref),
 		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResource":                                       schema_pkg_apis_meta_v1_APIResource(ref),
@@ -1160,15 +1159,12 @@ func schema_pkg_apis_meta_v1_InternalEvent(ref common.ReferenceCallback) common.
 					"Object": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Object is:\n * If Type is Added or Modified: the new state of the object.\n * If Type is Deleted: the state of the object immediately before deletion.\n * If Type is Bookmark: the object (instance of a type being watched) where\n   only ResourceVersion field is set. On successful restart of watch from a\n   bookmark resourceVersion, client is guaranteed to not get repeat event\n   nor miss any events.\n * If Type is Error: *api.Status is recommended; other types may make sense\n   depending on context.",
-							Ref:         ref("k8s.io/apimachinery/pkg/runtime.Object"),
 						},
 					},
 				},
 				Required: []string{"Type", "Object"},
 			},
 		},
-		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/runtime.Object"},
 	}
 }
 
@@ -3260,6 +3256,13 @@ func schema_k8s_apis_netguard_v1beta1_AddressGroupBindingSpec(ref common.Referen
 							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"),
 						},
 					},
+					"comment": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Comment - optional user comment (Netguard-only)",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"serviceRef", "addressGroupRef"},
 			},
@@ -3584,6 +3587,13 @@ func schema_k8s_apis_netguard_v1beta1_AddressGroupSpec(ref common.ReferenceCallb
 									},
 								},
 							},
+						},
+					},
+					"comment": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Comment - optional user comment (Netguard-only, not synced to SGROUPS)",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 				},
@@ -3920,6 +3930,13 @@ func schema_k8s_apis_netguard_v1beta1_HostBindingSpec(ref common.ReferenceCallba
 							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"),
 						},
 					},
+					"comment": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Comment - optional user comment (Netguard-only)",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"hostRef", "addressGroupRef"},
 			},
@@ -4125,6 +4142,13 @@ func schema_k8s_apis_netguard_v1beta1_HostSpec(ref common.ReferenceCallback) com
 						SchemaProps: spec.SchemaProps{
 							Description: "UUID is the unique identifier of the host",
 							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"comment": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Comment - optional user comment (Netguard-only, not synced to SGROUPS)",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -4479,6 +4503,13 @@ func schema_k8s_apis_netguard_v1beta1_NetworkBindingSpec(ref common.ReferenceCal
 							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"),
 						},
 					},
+					"comment": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Comment - optional user comment (Netguard-only)",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"networkRef", "addressGroupRef"},
 			},
@@ -4681,6 +4712,13 @@ func schema_k8s_apis_netguard_v1beta1_NetworkSpec(ref common.ReferenceCallback) 
 						SchemaProps: spec.SchemaProps{
 							Description: "CIDR is the IP range in CIDR notation",
 							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"comment": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Comment - optional user comment (Netguard-only, not synced to SGROUPS)",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -5239,6 +5277,13 @@ func schema_k8s_apis_netguard_v1beta1_ServiceSpec(ref common.ReferenceCallback) 
 							},
 						},
 					},
+					"comment": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Comment - optional user comment (Netguard-only, not synced to SGROUPS)",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},
@@ -5484,6 +5529,13 @@ func schema_k8s_apis_netguard_v1beta1_SvcFqdnRuleSpec(ref common.ReferenceCallba
 							Format:      "",
 						},
 					},
+					"comment": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Comment - optional user comment (Netguard-only, not synced to SGROUPS)",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"serviceFrom", "fqdn", "transport", "ports", "action"},
 			},
@@ -5688,6 +5740,13 @@ func schema_k8s_apis_netguard_v1beta1_SvcSvcRuleSpec(ref common.ReferenceCallbac
 					"description": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Description - optional human-readable description (Netguard-only)",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"comment": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Comment - optional user comment (Netguard-only, not synced to SGROUPS)",
 							Type:        []string{"string"},
 							Format:      "",
 						},

@@ -148,9 +148,9 @@ func (w *Writer) upsertSvcFqdnRule(ctx context.Context, rule models.SvcFqdnRule)
 	query := `
         INSERT INTO svc_fqdn_rules (
             namespace, name, service_from_ref, fqdn, transport, ports,
-            logs, trace, action, priority, description, resource_version
+            logs, trace, action, priority, description, comment, resource_version
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         ON CONFLICT (namespace, name) DO UPDATE SET
             fqdn = $4,
             transport = $5,
@@ -160,7 +160,8 @@ func (w *Writer) upsertSvcFqdnRule(ctx context.Context, rule models.SvcFqdnRule)
             action = $9,
             priority = $10,
             description = $11,
-            resource_version = $12`
+            comment = $12,
+            resource_version = $13`
 
 	if _, err := w.tx.Exec(ctx, query,
 		rule.Namespace,
@@ -174,6 +175,7 @@ func (w *Writer) upsertSvcFqdnRule(ctx context.Context, rule models.SvcFqdnRule)
 		actionStr,
 		rule.Priority,
 		rule.Description,
+		rule.Comment,
 		resourceVersion,
 	); err != nil {
 		return errors.Wrapf(err, "failed to upsert svc fqdn rule %s/%s", rule.Namespace, rule.Name)

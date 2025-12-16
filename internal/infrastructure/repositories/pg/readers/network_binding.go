@@ -18,7 +18,7 @@ func (r *Reader) ListNetworkBindings(ctx context.Context, consume func(models.Ne
 	query := `
 		SELECT nb.namespace, nb.name,
 		       nb.network_namespace, nb.network_name,
-		       nb.address_group_namespace, nb.address_group_name,
+		       nb.address_group_namespace, nb.address_group_name, nb.comment,
 			   m.resource_version, m.uid, m.labels, m.annotations, m.conditions,
 			   m.created_at, m.updated_at, m.deletion_timestamp
 		FROM network_bindings nb
@@ -54,7 +54,7 @@ func (r *Reader) GetNetworkBindingByID(ctx context.Context, id models.ResourceId
 	query := `
 		SELECT nb.namespace, nb.name,
 		       nb.network_namespace, nb.network_name,
-		       nb.address_group_namespace, nb.address_group_name,
+		       nb.address_group_namespace, nb.address_group_name, nb.comment,
 			   m.resource_version, m.uid, m.labels, m.annotations, m.conditions,
 			   m.created_at, m.updated_at, m.deletion_timestamp
 		FROM network_bindings nb
@@ -87,6 +87,7 @@ func (r *Reader) scanNetworkBinding(rows pgx.Rows) (models.NetworkBinding, error
 		&networkName,
 		&addressGroupNamespace,
 		&addressGroupName,
+		&networkBinding.Comment,
 		&resourceVersion,
 		&uid,
 		&labelsJSON,
@@ -144,6 +145,7 @@ func (r *Reader) scanNetworkBindingRow(row pgx.Row) (*models.NetworkBinding, err
 		&networkName,
 		&addressGroupNamespace,
 		&addressGroupName,
+		&networkBinding.Comment,
 		&resourceVersion,
 		&uid,
 		&labelsJSON,

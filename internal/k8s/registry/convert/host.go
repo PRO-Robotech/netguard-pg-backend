@@ -28,6 +28,7 @@ func (c *HostConverter) ToDomain(ctx context.Context, k8sObj *netguardv1beta1.Ho
 			},
 		},
 		UUID:             k8sObj.Spec.UUID,
+		Comment:          k8sObj.Spec.Comment,
 		HostName:         k8sObj.Status.HostName,
 		AddressGroupName: k8sObj.Status.AddressGroupName,
 		IsBound:          k8sObj.Status.IsBound,
@@ -70,7 +71,8 @@ func (c *HostConverter) FromDomain(ctx context.Context, domainObj *models.Host) 
 		TypeMeta:   CreateStandardTypeMetaForResource("Host"),
 		ObjectMeta: ConvertMetadataFromDomain(domainObj.Meta, domainObj.ResourceIdentifier.Name, domainObj.ResourceIdentifier.Namespace),
 		Spec: netguardv1beta1.HostSpec{
-			UUID: domainObj.UUID,
+			UUID:    domainObj.UUID,
+			Comment: domainObj.Comment,
 		},
 		Status: netguardv1beta1.HostStatus{
 			HostName:         domainObj.HostName,

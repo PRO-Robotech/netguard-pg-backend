@@ -17,7 +17,7 @@ import (
 
 func (r *Reader) ListHosts(ctx context.Context, consume func(models.Host) error, scope ports.Scope) error {
 	query := `
-		SELECT h.namespace, h.name, h.uuid,
+		SELECT h.namespace, h.name, h.uuid, h.comment,
 		       h.host_name_sync, h.address_group_name, h.is_bound,
 		       h.binding_ref_namespace, h.binding_ref_name,
 		       h.address_group_ref_namespace, h.address_group_ref_name,
@@ -53,7 +53,7 @@ func (r *Reader) ListHosts(ctx context.Context, consume func(models.Host) error,
 }
 func (r *Reader) GetHostByID(ctx context.Context, id models.ResourceIdentifier) (*models.Host, error) {
 	query := `
-		SELECT h.namespace, h.name, h.uuid,
+		SELECT h.namespace, h.name, h.uuid, h.comment,
 		       h.host_name_sync, h.address_group_name, h.is_bound,
 		       h.binding_ref_namespace, h.binding_ref_name,
 		       h.address_group_ref_namespace, h.address_group_ref_name,
@@ -90,6 +90,7 @@ func (r *Reader) scanHost(rows pgx.Rows) (models.Host, error) {
 		&host.Namespace,
 		&host.Name,
 		&uuid,
+		&host.Comment,
 		&hostNameSync,
 		&addressGroupName,
 		&isBound,
@@ -177,6 +178,7 @@ func (r *Reader) scanHostRow(row pgx.Row) (*models.Host, error) {
 		&host.Namespace,
 		&host.Name,
 		&uuid,
+		&host.Comment,
 		&hostNameSync,
 		&addressGroupName,
 		&isBound,

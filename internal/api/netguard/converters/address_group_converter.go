@@ -14,6 +14,7 @@ func ConvertAddressGroup(ag *netguardpb.AddressGroup) models.AddressGroup {
 		Logs:             ag.Logs,
 		Trace:            ag.Trace,
 		Description:      ag.Description,
+		Comment:          ag.Comment,
 		Meta:             ConvertMeta(ag.Meta),
 		AddressGroupName: ag.AddressGroupName,
 	}
@@ -88,6 +89,7 @@ func ConvertAddressGroupToPB(ag models.AddressGroup) *netguardpb.AddressGroup {
 		Logs:             ag.Logs,
 		Trace:            ag.Trace,
 		Description:      ag.Description,
+		Comment:          ag.Comment,
 		AddressGroupName: ag.AddressGroupName,
 		Meta:             ConvertMetaToPB(ag.Meta),
 	}
@@ -139,6 +141,7 @@ func ConvertAddressGroupToPB(ag models.AddressGroup) *netguardpb.AddressGroup {
 func ConvertAddressGroupBinding(b *netguardpb.AddressGroupBinding) models.AddressGroupBinding {
 	result := models.AddressGroupBinding{
 		SelfRef: models.NewSelfRef(GetSelfRef(b.GetSelfRef())),
+		Comment: b.Comment,
 		Meta:    ConvertMeta(b.Meta),
 	}
 
@@ -192,7 +195,8 @@ func ConvertAddressGroupBindingToPB(b models.AddressGroupBinding) *netguardpb.Ad
 				Namespace: b.AddressGroupRef.Namespace,
 			},
 		},
-		Meta: ConvertMetaToPB(b.Meta),
+		Comment: b.Comment,
+		Meta:    ConvertMetaToPB(b.Meta),
 	}
 }
 

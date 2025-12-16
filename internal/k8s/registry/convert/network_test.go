@@ -246,3 +246,80 @@ func TestNetworkConverter_ToList(t *testing.T) {
 		})
 	}
 }
+
+func TestNetworkConverter_CommentField(t *testing.T) {
+	converter := NewNetworkConverter()
+	ctx := context.Background()
+
+	t.Run("ToDomain carries comment", func(t *testing.T) {
+		k8sNetwork := &netguardv1beta1.Network{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-network",
+				Namespace: "default",
+			},
+			Spec: netguardv1beta1.NetworkSpec{
+				CIDR:    "10.0.0.0/24",
+				Comment: "K8s network comment",
+			},
+		}
+
+		result, err := converter.ToDomain(ctx, k8sNetwork)
+		require.NoError(t, err)
+		assert.Equal(t, "K8s network comment", result.Comment)
+	})
+
+	t.Run("ToDomain with empty comment", func(t *testing.T) {
+		k8sNetwork := &netguardv1beta1.Network{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-network",
+				Namespace: "default",
+			},
+			Spec: netguardv1beta1.NetworkSpec{
+				CIDR: "10.0.0.0/24",
+			},
+		}
+
+		result, err := converter.ToDomain(ctx, k8sNetwork)
+		require.NoError(t, err)
+		assert.Equal(t, "", result.Comment)
+	})
+
+	t.Run("FromDomain carries comment", func(t *testing.T) {
+		domainNetwork := &models.Network{
+			SelfRef: models.SelfRef{
+				ResourceIdentifier: models.ResourceIdentifier{
+					Name:      "test-network",
+					Namespace: "default",
+				},
+			},
+			CIDR:    "10.0.0.0/24",
+			Comment: "Domain network comment",
+		}
+
+		result, err := converter.FromDomain(ctx, domainNetwork)
+		require.NoError(t, err)
+		assert.Equal(t, "Domain network comment", result.Spec.Comment)
+	})
+
+	t.Run("bidirectional comment conversion", func(t *testing.T) {
+		originalComment := "Bidirectional network comment"
+		k8sNetwork := &netguardv1beta1.Network{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-network",
+				Namespace: "default",
+			},
+			Spec: netguardv1beta1.NetworkSpec{
+				CIDR:    "10.0.0.0/24",
+				Comment: originalComment,
+			},
+		}
+
+		domain, err := converter.ToDomain(ctx, k8sNetwork)
+		require.NoError(t, err)
+
+		backToK8s, err := converter.FromDomain(ctx, domain)
+		require.NoError(t, err)
+
+		assert.Equal(t, originalComment, backToK8s.Spec.Comment)
+	})
+}
