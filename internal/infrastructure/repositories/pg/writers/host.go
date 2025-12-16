@@ -200,7 +200,7 @@ func (w *Writer) upsertHost(ctx context.Context, host *models.Host) error {
 			address_group_ref_namespace, address_group_ref_name,
 			ip_list, meta_info,
 			resource_version
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		ON CONFLICT (namespace, name) DO UPDATE SET
 			uuid = EXCLUDED.uuid,
 			comment = EXCLUDED.comment,
