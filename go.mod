@@ -39,14 +39,13 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/jonboulle/clockwork v0.5.0 // indirect
-	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.4.0 // indirect
 )
 
 require (
 	cel.dev/expr v0.23.0 // indirect
 	github.com/BurntSushi/toml v1.2.1 // indirect
 	github.com/NYTimes/gziphandler v1.1.1 // indirect
-	github.com/PRO-Robotech/protos v1.0.4-dev.4
+	github.com/PRO-Robotech/protos v1.0.4-dev.5
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect

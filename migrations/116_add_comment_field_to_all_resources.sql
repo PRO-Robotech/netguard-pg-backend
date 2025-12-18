@@ -1,5 +1,4 @@
 -- +goose Up
--- Add comment field to all resource tables (Netguard-only, not synced to SGROUPS)
 
 ALTER TABLE services ADD COLUMN comment TEXT NOT NULL DEFAULT '';
 ALTER TABLE address_groups ADD COLUMN comment TEXT NOT NULL DEFAULT '';

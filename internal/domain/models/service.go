@@ -26,6 +26,9 @@ type Service struct {
 	// XSvcFqdnRules contains service-to-FQDN rules referencing this Service (READ-ONLY)
 	XSvcFqdnRules *XSvcFqdnRules
 
+	// XIECidrSvcRules contains IE-CIDR-SVC rules referencing this Service (READ-ONLY)
+	XIECidrSvcRules *XIECidrSvcRules
+
 	// Comment - optional user comment (Netguard-only, not synced to SGROUPS)
 	Comment string
 

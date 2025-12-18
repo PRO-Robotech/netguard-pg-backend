@@ -148,6 +148,25 @@ func (r *GRPCReader) GetSvcFqdnRuleByID(ctx context.Context, id models.ResourceI
 	return r.grpcClient.GetSvcFqdnRule(ctx, id)
 }
 
+func (r *GRPCReader) ListIECidrSvcRules(ctx context.Context, consume func(models.IECidrSvcRule) error, scope ports.Scope) error {
+	rules, err := r.grpcClient.ListIECidrSvcRules(ctx, scope)
+	if err != nil {
+		return err
+	}
+
+	for _, rule := range rules {
+		if err := consume(rule); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *GRPCReader) GetIECidrSvcRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IECidrSvcRule, error) {
+	return r.grpcClient.GetIECidrSvcRule(ctx, id)
+}
+
 // GetAddressGroupBindingPolicyByID реализует ports.Reader интерфейс
 func (r *GRPCReader) GetAddressGroupBindingPolicyByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupBindingPolicy, error) {
 	return r.grpcClient.GetAddressGroupBindingPolicy(ctx, id)

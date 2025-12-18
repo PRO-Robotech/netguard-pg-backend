@@ -84,6 +84,7 @@ func (w *Writer) MarkForDeletionWithStatus(namespace, name, kind string) error {
 		"SvcSvcRule":          "svc_svc_rules",
 		"SvcFqdnRule":         "svc_fqdn_rules",
 		"IEAgAgRule":          "ie_ag_ag_rules",
+		"IECidrSvcRule":       "ie_cidr_svc_rules",
 	}
 	tableName, ok := tableMap[kind]
 	if !ok {

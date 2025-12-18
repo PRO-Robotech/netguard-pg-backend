@@ -716,6 +716,120 @@ func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item 
 				},
 			},
 		}, payload, nil
+	case string(registry.TypeIECidrSvcRule):
+		var base *models.IECidrSvcRule
+		if item.Operation != domain.SyncOperationCreate {
+			if existing, err := w.loadEntityResource(ctx, item.ResourceType, namespace, name); err == nil {
+				if existingRule, ok := existing.(*models.IECidrSvcRule); ok {
+					temp := *existingRule
+					base = &temp
+				}
+			}
+		}
+		rule := &models.IECidrSvcRule{
+			SelfRef: models.SelfRef{
+				ResourceIdentifier: models.ResourceIdentifier{
+					Namespace: namespace,
+					Name:      name,
+				},
+			},
+		}
+		if base != nil {
+			rule.ServiceRef = base.ServiceRef
+			rule.CIDR = base.CIDR
+			rule.Transport = base.Transport
+			rule.Traffic = base.Traffic
+			rule.Ports = append([]models.IECidrSvcPortSpec(nil), base.Ports...)
+			rule.Logs = base.Logs
+			rule.Trace = base.Trace
+			rule.Action = base.Action
+			rule.Priority = base.Priority
+			rule.Description = base.Description
+			rule.Comment = base.Comment
+		}
+		if refData, ok := payload["service_ref"].(map[string]interface{}); ok {
+			rule.ServiceRef = v1beta1.NamespacedObjectReference{
+				ObjectReference: v1beta1.ObjectReference{
+					APIVersion: getStringFromMap(refData, "apiVersion"),
+					Kind:       getStringFromMap(refData, "kind"),
+					Name:       getStringFromMap(refData, "name"),
+				},
+				Namespace: getStringFromMap(refData, "namespace"),
+			}
+		}
+		if rule.ServiceRef.Namespace == "" && rule.ServiceRef.Name != "" {
+			rule.ServiceRef.Namespace = namespace
+		}
+		if cidr, ok := payload["cidr"].(string); ok && cidr != "" {
+			rule.CIDR = cidr
+		}
+		if transportRaw, ok := payload["transport"].(string); ok && transportRaw != "" {
+			switch strings.ToUpper(transportRaw) {
+			case string(models.UDP):
+				rule.Transport = models.UDP
+			default:
+				rule.Transport = models.TCP
+			}
+		}
+		if trafficRaw, ok := payload["traffic"].(string); ok && trafficRaw != "" {
+			switch strings.ToUpper(trafficRaw) {
+			case string(models.EGRESS):
+				rule.Traffic = models.EGRESS
+			default:
+				rule.Traffic = models.INGRESS
+			}
+		}
+		if portsRaw, ok := payload["ports"]; ok {
+			parsedPorts := make([]models.IECidrSvcPortSpec, 0)
+			switch typed := portsRaw.(type) {
+			case []interface{}:
+				for _, entry := range typed {
+					if entryMap, ok := entry.(map[string]interface{}); ok {
+						parsedPorts = append(parsedPorts, models.IECidrSvcPortSpec{
+							S: getStringFromMap(entryMap, "s"),
+							D: getStringFromMap(entryMap, "d"),
+						})
+					}
+				}
+			}
+			if len(parsedPorts) > 0 {
+				rule.Ports = parsedPorts
+			}
+		}
+		if logsRaw, ok := payload["logs"].(bool); ok {
+			rule.Logs = logsRaw
+		}
+		if traceRaw, ok := payload["trace"].(bool); ok {
+			rule.Trace = traceRaw
+		}
+		if actionRaw, ok := payload["action"].(string); ok && actionRaw != "" {
+			rule.Action = models.RuleAction(actionRaw)
+		}
+		if priorityRaw, ok := payload["priority"]; ok {
+			switch v := priorityRaw.(type) {
+			case float64:
+				rule.Priority = int32(v)
+			case int:
+				rule.Priority = int32(v)
+			case int32:
+				rule.Priority = v
+			case int64:
+				rule.Priority = int32(v)
+			}
+		}
+		if desc, ok := payload["description"].(string); ok {
+			rule.Description = desc
+		}
+		if comment, ok := payload["comment"].(string); ok {
+			rule.Comment = comment
+		}
+		if rule.Transport == "" {
+			rule.Transport = models.TCP
+		}
+		if rule.Traffic == "" {
+			rule.Traffic = models.INGRESS
+		}
+		return rule, payload, nil
 	default:
 		return nil, nil, fmt.Errorf("unknown resource type: %s", item.ResourceType)
 	}
@@ -863,6 +977,12 @@ func (w *OutboxWorker) loadEntityResource(
 			return nil, err
 		}
 		return rule, nil
+	case string(registry.TypeIECidrSvcRule):
+		rule, err := reader.GetIECidrSvcRuleByID(ctx, models.ResourceIdentifier{Namespace: namespace, Name: name})
+		if err != nil {
+			return nil, err
+		}
+		return rule, nil
 	default:
 		return nil, fmt.Errorf("unknown resource type: %s", resourceType)
 	}
@@ -897,6 +1017,8 @@ func (w *OutboxWorker) getSyncerForEntity(resourceType string) (interfaces.Entit
 		return w.svcSvcRuleSyncer, nil
 	case string(registry.TypeSvcFqdnRule):
 		return w.svcFqdnRuleSyncer, nil
+	case string(registry.TypeIECidrSvcRule):
+		return w.ieCidrSvcRuleSyncer, nil
 	default:
 		return nil, fmt.Errorf("no syncer registered for type: %s", resourceType)
 	}
@@ -1043,6 +1165,24 @@ func (w *OutboxWorker) markEntityResourceReady(
 			return nil
 		}
 		needsWrite = true
+	case *models.IECidrSvcRule:
+		changed := r.Meta.EnsureReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
+		changed = r.Meta.EnsureSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced") || changed
+		if !changed {
+			break
+		}
+		rule := *r
+		scope := ports.NewResourceIdentifierScope(models.ResourceIdentifier{
+			Name:      r.Name,
+			Namespace: r.Namespace,
+		})
+		writeFunc = func(writer ports.Writer) error {
+			if err := writer.SyncIECidrSvcRules(ctx, []models.IECidrSvcRule{rule}, scope, ports.ConditionOnlyOperation{}); err != nil {
+				return fmt.Errorf("failed to update iecidrsvc rule: %w", err)
+			}
+			return nil
+		}
+		needsWrite = true
 	default:
 		return fmt.Errorf("unknown resource type for update: %T", resource)
 	}
@@ -1086,13 +1226,14 @@ func convertToSyncOperation(op domain.SyncOperation) types.SyncOperation {
 }
 
 type EntitySyncerAdapter struct {
-	hostSyncer         *syncers.HostSyncer
-	addressGroupSyncer *syncers.AddressGroupSyncer
-	networkSyncer      *syncers.NetworkSyncer
-	serviceSyncer      *syncers.ServiceSyncer
-	svcSvcRuleSyncer   *syncers.SvcSvcRuleSyncer
-	svcFqdnRuleSyncer  *syncers.SvcFqdnRuleSyncer
-	subjectType        types.SyncSubjectType
+	hostSyncer          *syncers.HostSyncer
+	addressGroupSyncer  *syncers.AddressGroupSyncer
+	networkSyncer       *syncers.NetworkSyncer
+	serviceSyncer       *syncers.ServiceSyncer
+	svcSvcRuleSyncer    *syncers.SvcSvcRuleSyncer
+	svcFqdnRuleSyncer   *syncers.SvcFqdnRuleSyncer
+	ieCidrSvcRuleSyncer *syncers.IECidrSvcRuleSyncer
+	subjectType         types.SyncSubjectType
 }
 
 func (a *EntitySyncerAdapter) Sync(ctx context.Context, entity interfaces.SyncableEntity, operation types.SyncOperation) error {
@@ -1109,6 +1250,8 @@ func (a *EntitySyncerAdapter) Sync(ctx context.Context, entity interfaces.Syncab
 		return a.svcSvcRuleSyncer.Sync(ctx, entity, operation)
 	case types.SyncSubjectTypeSvcFqdnRules:
 		return a.svcFqdnRuleSyncer.Sync(ctx, entity, operation)
+	case types.SyncSubjectTypeIECidrSvcRules:
+		return a.ieCidrSvcRuleSyncer.Sync(ctx, entity, operation)
 	default:
 		return fmt.Errorf("unsupported subject type: %s", a.subjectType)
 	}
@@ -1127,6 +1270,8 @@ func (a *EntitySyncerAdapter) SyncBatch(ctx context.Context, entities []interfac
 		return a.svcSvcRuleSyncer.SyncBatch(ctx, entities, operation)
 	case types.SyncSubjectTypeSvcFqdnRules:
 		return a.svcFqdnRuleSyncer.SyncBatch(ctx, entities, operation)
+	case types.SyncSubjectTypeIECidrSvcRules:
+		return a.ieCidrSvcRuleSyncer.SyncBatch(ctx, entities, operation)
 	default:
 		return fmt.Errorf("unsupported subject type: %s", a.subjectType)
 	}
@@ -1162,6 +1307,8 @@ func (w *OutboxWorker) deleteResourceFromDB(ctx context.Context, item *domain.Ou
 		deleteQuery = `DELETE FROM svc_svc_rules WHERE namespace = $1 AND name = $2`
 	case string(registry.TypeSvcFqdnRule):
 		deleteQuery = `DELETE FROM svc_fqdn_rules WHERE namespace = $1 AND name = $2`
+	case string(registry.TypeIECidrSvcRule):
+		deleteQuery = `DELETE FROM ie_cidr_svc_rules WHERE namespace = $1 AND name = $2`
 	default:
 		return fmt.Errorf("unknown resource type for deletion: %s", item.ResourceType)
 	}

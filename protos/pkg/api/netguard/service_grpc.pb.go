@@ -45,6 +45,8 @@ const (
 	NetguardService_GetSvcSvcRule_FullMethodName                    = "/netguard.v1.NetguardService/GetSvcSvcRule"
 	NetguardService_ListSvcFqdnRules_FullMethodName                 = "/netguard.v1.NetguardService/ListSvcFqdnRules"
 	NetguardService_GetSvcFqdnRule_FullMethodName                   = "/netguard.v1.NetguardService/GetSvcFqdnRule"
+	NetguardService_ListIECidrSvcRules_FullMethodName               = "/netguard.v1.NetguardService/ListIECidrSvcRules"
+	NetguardService_GetIECidrSvcRule_FullMethodName                 = "/netguard.v1.NetguardService/GetIECidrSvcRule"
 	NetguardService_WatchServices_FullMethodName                    = "/netguard.v1.NetguardService/WatchServices"
 	NetguardService_WatchAddressGroups_FullMethodName               = "/netguard.v1.NetguardService/WatchAddressGroups"
 	NetguardService_WatchAddressGroupBindings_FullMethodName        = "/netguard.v1.NetguardService/WatchAddressGroupBindings"
@@ -56,6 +58,7 @@ const (
 	NetguardService_WatchNetworkBindings_FullMethodName             = "/netguard.v1.NetguardService/WatchNetworkBindings"
 	NetguardService_WatchSvcSvcRules_FullMethodName                 = "/netguard.v1.NetguardService/WatchSvcSvcRules"
 	NetguardService_WatchSvcFqdnRules_FullMethodName                = "/netguard.v1.NetguardService/WatchSvcFqdnRules"
+	NetguardService_WatchIECidrSvcRules_FullMethodName              = "/netguard.v1.NetguardService/WatchIECidrSvcRules"
 )
 
 // NetguardServiceClient is the client API for NetguardService service.
@@ -87,6 +90,8 @@ type NetguardServiceClient interface {
 	GetSvcSvcRule(ctx context.Context, in *GetSvcSvcRuleReq, opts ...grpc.CallOption) (*GetSvcSvcRuleResp, error)
 	ListSvcFqdnRules(ctx context.Context, in *ListSvcFqdnRulesReq, opts ...grpc.CallOption) (*ListSvcFqdnRulesResp, error)
 	GetSvcFqdnRule(ctx context.Context, in *GetSvcFqdnRuleReq, opts ...grpc.CallOption) (*GetSvcFqdnRuleResp, error)
+	ListIECidrSvcRules(ctx context.Context, in *ListIECidrSvcRulesReq, opts ...grpc.CallOption) (*ListIECidrSvcRulesResp, error)
+	GetIECidrSvcRule(ctx context.Context, in *GetIECidrSvcRuleReq, opts ...grpc.CallOption) (*GetIECidrSvcRuleResp, error)
 	WatchServices(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error)
 	WatchAddressGroups(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error)
 	WatchAddressGroupBindings(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error)
@@ -98,6 +103,7 @@ type NetguardServiceClient interface {
 	WatchNetworkBindings(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error)
 	WatchSvcSvcRules(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error)
 	WatchSvcFqdnRules(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error)
+	WatchIECidrSvcRules(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error)
 }
 
 type netguardServiceClient struct {
@@ -358,6 +364,26 @@ func (c *netguardServiceClient) GetSvcFqdnRule(ctx context.Context, in *GetSvcFq
 	return out, nil
 }
 
+func (c *netguardServiceClient) ListIECidrSvcRules(ctx context.Context, in *ListIECidrSvcRulesReq, opts ...grpc.CallOption) (*ListIECidrSvcRulesResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListIECidrSvcRulesResp)
+	err := c.cc.Invoke(ctx, NetguardService_ListIECidrSvcRules_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *netguardServiceClient) GetIECidrSvcRule(ctx context.Context, in *GetIECidrSvcRuleReq, opts ...grpc.CallOption) (*GetIECidrSvcRuleResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetIECidrSvcRuleResp)
+	err := c.cc.Invoke(ctx, NetguardService_GetIECidrSvcRule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *netguardServiceClient) WatchServices(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &NetguardService_ServiceDesc.Streams[0], NetguardService_WatchServices_FullMethodName, cOpts...)
@@ -567,6 +593,25 @@ func (c *netguardServiceClient) WatchSvcFqdnRules(ctx context.Context, in *Watch
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type NetguardService_WatchSvcFqdnRulesClient = grpc.ServerStreamingClient[WatchEvent]
 
+func (c *netguardServiceClient) WatchIECidrSvcRules(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WatchEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &NetguardService_ServiceDesc.Streams[11], NetguardService_WatchIECidrSvcRules_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[WatchRequest, WatchEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type NetguardService_WatchIECidrSvcRulesClient = grpc.ServerStreamingClient[WatchEvent]
+
 // NetguardServiceServer is the server API for NetguardService service.
 // All implementations must embed UnimplementedNetguardServiceServer
 // for forward compatibility.
@@ -596,6 +641,8 @@ type NetguardServiceServer interface {
 	GetSvcSvcRule(context.Context, *GetSvcSvcRuleReq) (*GetSvcSvcRuleResp, error)
 	ListSvcFqdnRules(context.Context, *ListSvcFqdnRulesReq) (*ListSvcFqdnRulesResp, error)
 	GetSvcFqdnRule(context.Context, *GetSvcFqdnRuleReq) (*GetSvcFqdnRuleResp, error)
+	ListIECidrSvcRules(context.Context, *ListIECidrSvcRulesReq) (*ListIECidrSvcRulesResp, error)
+	GetIECidrSvcRule(context.Context, *GetIECidrSvcRuleReq) (*GetIECidrSvcRuleResp, error)
 	WatchServices(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error
 	WatchAddressGroups(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error
 	WatchAddressGroupBindings(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error
@@ -607,6 +654,7 @@ type NetguardServiceServer interface {
 	WatchNetworkBindings(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error
 	WatchSvcSvcRules(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error
 	WatchSvcFqdnRules(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error
+	WatchIECidrSvcRules(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error
 	mustEmbedUnimplementedNetguardServiceServer()
 }
 
@@ -692,6 +740,12 @@ func (UnimplementedNetguardServiceServer) ListSvcFqdnRules(context.Context, *Lis
 func (UnimplementedNetguardServiceServer) GetSvcFqdnRule(context.Context, *GetSvcFqdnRuleReq) (*GetSvcFqdnRuleResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSvcFqdnRule not implemented")
 }
+func (UnimplementedNetguardServiceServer) ListIECidrSvcRules(context.Context, *ListIECidrSvcRulesReq) (*ListIECidrSvcRulesResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListIECidrSvcRules not implemented")
+}
+func (UnimplementedNetguardServiceServer) GetIECidrSvcRule(context.Context, *GetIECidrSvcRuleReq) (*GetIECidrSvcRuleResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetIECidrSvcRule not implemented")
+}
 func (UnimplementedNetguardServiceServer) WatchServices(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error {
 	return status.Errorf(codes.Unimplemented, "method WatchServices not implemented")
 }
@@ -724,6 +778,9 @@ func (UnimplementedNetguardServiceServer) WatchSvcSvcRules(*WatchRequest, grpc.S
 }
 func (UnimplementedNetguardServiceServer) WatchSvcFqdnRules(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error {
 	return status.Errorf(codes.Unimplemented, "method WatchSvcFqdnRules not implemented")
+}
+func (UnimplementedNetguardServiceServer) WatchIECidrSvcRules(*WatchRequest, grpc.ServerStreamingServer[WatchEvent]) error {
+	return status.Errorf(codes.Unimplemented, "method WatchIECidrSvcRules not implemented")
 }
 func (UnimplementedNetguardServiceServer) mustEmbedUnimplementedNetguardServiceServer() {}
 func (UnimplementedNetguardServiceServer) testEmbeddedByValue()                         {}
@@ -1196,6 +1253,42 @@ func _NetguardService_GetSvcFqdnRule_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NetguardService_ListIECidrSvcRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListIECidrSvcRulesReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).ListIECidrSvcRules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_ListIECidrSvcRules_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).ListIECidrSvcRules(ctx, req.(*ListIECidrSvcRulesReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _NetguardService_GetIECidrSvcRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetIECidrSvcRuleReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NetguardServiceServer).GetIECidrSvcRule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NetguardService_GetIECidrSvcRule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NetguardServiceServer).GetIECidrSvcRule(ctx, req.(*GetIECidrSvcRuleReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _NetguardService_WatchServices_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(WatchRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -1317,6 +1410,17 @@ func _NetguardService_WatchSvcFqdnRules_Handler(srv interface{}, stream grpc.Ser
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type NetguardService_WatchSvcFqdnRulesServer = grpc.ServerStreamingServer[WatchEvent]
 
+func _NetguardService_WatchIECidrSvcRules_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(WatchRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(NetguardServiceServer).WatchIECidrSvcRules(m, &grpc.GenericServerStream[WatchRequest, WatchEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type NetguardService_WatchIECidrSvcRulesServer = grpc.ServerStreamingServer[WatchEvent]
+
 // NetguardService_ServiceDesc is the grpc.ServiceDesc for NetguardService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1424,6 +1528,14 @@ var NetguardService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "GetSvcFqdnRule",
 			Handler:    _NetguardService_GetSvcFqdnRule_Handler,
 		},
+		{
+			MethodName: "ListIECidrSvcRules",
+			Handler:    _NetguardService_ListIECidrSvcRules_Handler,
+		},
+		{
+			MethodName: "GetIECidrSvcRule",
+			Handler:    _NetguardService_GetIECidrSvcRule_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
@@ -1479,6 +1591,11 @@ var NetguardService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "WatchSvcFqdnRules",
 			Handler:       _NetguardService_WatchSvcFqdnRules_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "WatchIECidrSvcRules",
+			Handler:       _NetguardService_WatchIECidrSvcRules_Handler,
 			ServerStreams: true,
 		},
 	},

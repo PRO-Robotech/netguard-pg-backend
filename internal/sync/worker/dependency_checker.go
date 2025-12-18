@@ -347,6 +347,9 @@ func (w *OutboxWorker) extractEntityDependencies(
 	case string(registry.TypeSvcFqdnRule):
 		// SvcFqdnRule depends on the referenced ServiceFrom (Service must be Ready)
 		return w.extractSvcFqdnRuleDependencies(resource)
+	case string(registry.TypeIECidrSvcRule):
+		// IECidrSvcRule depends on the referenced Service (Service must be Ready)
+		return w.extractIECidrSvcRuleDependencies(resource)
 	default:
 		return nil, fmt.Errorf("unknown entity resource type: %s", resourceType)
 	}
@@ -461,6 +464,40 @@ func (w *OutboxWorker) extractSvcFqdnRuleDependencies(
 		zap.String("rule_namespace", rule.Namespace),
 		zap.String("rule_name", rule.Name),
 		zap.String("service_from", fmt.Sprintf("%s/%s", serviceNamespace, rule.ServiceFromRef.Name)))
+
+	return deps, nil
+}
+
+// extractIECidrSvcRuleDependencies extracts Service dependency from IECidrSvcRule
+// IECidrSvcRule depends on ServiceRef (Service must be Ready)
+func (w *OutboxWorker) extractIECidrSvcRuleDependencies(
+	resource interface{},
+) ([]EntityDependency, error) {
+	// Type assert to *models.IECidrSvcRule
+	rule, ok := resource.(*models.IECidrSvcRule)
+	if !ok {
+		return nil, fmt.Errorf("invalid resource type for IECidrSvcRule extraction: %T (expected *models.IECidrSvcRule)", resource)
+	}
+
+	// Ensure namespace fallback is respected
+	serviceNamespace := rule.ServiceRef.Namespace
+	if serviceNamespace == "" {
+		serviceNamespace = rule.Namespace
+	}
+
+	deps := []EntityDependency{
+		{
+			Type:      string(registry.TypeService),
+			Name:      rule.ServiceRef.Name,
+			Namespace: serviceNamespace,
+			Reason:    fmt.Sprintf("Service referenced in IECidrSvcRule.ServiceRef (sent as Svc='%s/%s' to SGROUP)", serviceNamespace, rule.ServiceRef.Name),
+		},
+	}
+
+	w.logger.Debug("extracted IECidrSvcRule dependencies",
+		zap.String("rule_namespace", rule.Namespace),
+		zap.String("rule_name", rule.Name),
+		zap.String("service", fmt.Sprintf("%s/%s", serviceNamespace, rule.ServiceRef.Name)))
 
 	return deps, nil
 }

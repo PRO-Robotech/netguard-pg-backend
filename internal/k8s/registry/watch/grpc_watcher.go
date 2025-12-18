@@ -159,6 +159,8 @@ func decoderForResource(resourceType string) (runtimeDecoder, error) {
 		return buildSvcSvcRuleDecoder(), nil
 	case "svcfqdnrules":
 		return buildSvcFqdnRuleDecoder(), nil
+	case "iecidrsvrules":
+		return buildIECidrSvcRuleDecoder(), nil
 	default:
 		return nil, fmt.Errorf("unsupported watch resource %q", resourceType)
 	}
@@ -292,6 +294,18 @@ func buildSvcFqdnRuleDecoder() runtimeDecoder {
 			return nil, fmt.Errorf("svc-fqdn rule payload missing")
 		}
 		domain := apiconverters.ConvertSvcFqdnRule(pb)
+		return k8sConv.FromDomain(ctx, &domain)
+	}
+}
+
+func buildIECidrSvcRuleDecoder() runtimeDecoder {
+	k8sConv := &convertk8s.IECidrSvcRuleConverter{}
+	return func(ctx context.Context, evt *watchpb.WatchEvent) (runtime.Object, error) {
+		pb := evt.GetIecidrsvcRule()
+		if pb == nil {
+			return nil, fmt.Errorf("ie-cidr-svc rule payload missing")
+		}
+		domain := apiconverters.ConvertIECidrSvcRule(pb)
 		return k8sConv.FromDomain(ctx, &domain)
 	}
 }

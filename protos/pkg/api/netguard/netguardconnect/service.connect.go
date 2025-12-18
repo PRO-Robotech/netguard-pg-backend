@@ -107,6 +107,12 @@ const (
 	// NetguardServiceGetSvcFqdnRuleProcedure is the fully-qualified name of the NetguardService's
 	// GetSvcFqdnRule RPC.
 	NetguardServiceGetSvcFqdnRuleProcedure = "/netguard.v1.NetguardService/GetSvcFqdnRule"
+	// NetguardServiceListIECidrSvcRulesProcedure is the fully-qualified name of the NetguardService's
+	// ListIECidrSvcRules RPC.
+	NetguardServiceListIECidrSvcRulesProcedure = "/netguard.v1.NetguardService/ListIECidrSvcRules"
+	// NetguardServiceGetIECidrSvcRuleProcedure is the fully-qualified name of the NetguardService's
+	// GetIECidrSvcRule RPC.
+	NetguardServiceGetIECidrSvcRuleProcedure = "/netguard.v1.NetguardService/GetIECidrSvcRule"
 	// NetguardServiceWatchServicesProcedure is the fully-qualified name of the NetguardService's
 	// WatchServices RPC.
 	NetguardServiceWatchServicesProcedure = "/netguard.v1.NetguardService/WatchServices"
@@ -140,6 +146,9 @@ const (
 	// NetguardServiceWatchSvcFqdnRulesProcedure is the fully-qualified name of the NetguardService's
 	// WatchSvcFqdnRules RPC.
 	NetguardServiceWatchSvcFqdnRulesProcedure = "/netguard.v1.NetguardService/WatchSvcFqdnRules"
+	// NetguardServiceWatchIECidrSvcRulesProcedure is the fully-qualified name of the NetguardService's
+	// WatchIECidrSvcRules RPC.
+	NetguardServiceWatchIECidrSvcRulesProcedure = "/netguard.v1.NetguardService/WatchIECidrSvcRules"
 )
 
 // NetguardServiceClient is a client for the netguard.v1.NetguardService service.
@@ -169,6 +178,8 @@ type NetguardServiceClient interface {
 	GetSvcSvcRule(context.Context, *connect.Request[netguard.GetSvcSvcRuleReq]) (*connect.Response[netguard.GetSvcSvcRuleResp], error)
 	ListSvcFqdnRules(context.Context, *connect.Request[netguard.ListSvcFqdnRulesReq]) (*connect.Response[netguard.ListSvcFqdnRulesResp], error)
 	GetSvcFqdnRule(context.Context, *connect.Request[netguard.GetSvcFqdnRuleReq]) (*connect.Response[netguard.GetSvcFqdnRuleResp], error)
+	ListIECidrSvcRules(context.Context, *connect.Request[netguard.ListIECidrSvcRulesReq]) (*connect.Response[netguard.ListIECidrSvcRulesResp], error)
+	GetIECidrSvcRule(context.Context, *connect.Request[netguard.GetIECidrSvcRuleReq]) (*connect.Response[netguard.GetIECidrSvcRuleResp], error)
 	WatchServices(context.Context, *connect.Request[netguard.WatchRequest]) (*connect.ServerStreamForClient[netguard.WatchEvent], error)
 	WatchAddressGroups(context.Context, *connect.Request[netguard.WatchRequest]) (*connect.ServerStreamForClient[netguard.WatchEvent], error)
 	WatchAddressGroupBindings(context.Context, *connect.Request[netguard.WatchRequest]) (*connect.ServerStreamForClient[netguard.WatchEvent], error)
@@ -180,6 +191,7 @@ type NetguardServiceClient interface {
 	WatchNetworkBindings(context.Context, *connect.Request[netguard.WatchRequest]) (*connect.ServerStreamForClient[netguard.WatchEvent], error)
 	WatchSvcSvcRules(context.Context, *connect.Request[netguard.WatchRequest]) (*connect.ServerStreamForClient[netguard.WatchEvent], error)
 	WatchSvcFqdnRules(context.Context, *connect.Request[netguard.WatchRequest]) (*connect.ServerStreamForClient[netguard.WatchEvent], error)
+	WatchIECidrSvcRules(context.Context, *connect.Request[netguard.WatchRequest]) (*connect.ServerStreamForClient[netguard.WatchEvent], error)
 }
 
 // NewNetguardServiceClient constructs a client for the netguard.v1.NetguardService service. By
@@ -343,6 +355,18 @@ func NewNetguardServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(netguardServiceMethods.ByName("GetSvcFqdnRule")),
 			connect.WithClientOptions(opts...),
 		),
+		listIECidrSvcRules: connect.NewClient[netguard.ListIECidrSvcRulesReq, netguard.ListIECidrSvcRulesResp](
+			httpClient,
+			baseURL+NetguardServiceListIECidrSvcRulesProcedure,
+			connect.WithSchema(netguardServiceMethods.ByName("ListIECidrSvcRules")),
+			connect.WithClientOptions(opts...),
+		),
+		getIECidrSvcRule: connect.NewClient[netguard.GetIECidrSvcRuleReq, netguard.GetIECidrSvcRuleResp](
+			httpClient,
+			baseURL+NetguardServiceGetIECidrSvcRuleProcedure,
+			connect.WithSchema(netguardServiceMethods.ByName("GetIECidrSvcRule")),
+			connect.WithClientOptions(opts...),
+		),
 		watchServices: connect.NewClient[netguard.WatchRequest, netguard.WatchEvent](
 			httpClient,
 			baseURL+NetguardServiceWatchServicesProcedure,
@@ -409,6 +433,12 @@ func NewNetguardServiceClient(httpClient connect.HTTPClient, baseURL string, opt
 			connect.WithSchema(netguardServiceMethods.ByName("WatchSvcFqdnRules")),
 			connect.WithClientOptions(opts...),
 		),
+		watchIECidrSvcRules: connect.NewClient[netguard.WatchRequest, netguard.WatchEvent](
+			httpClient,
+			baseURL+NetguardServiceWatchIECidrSvcRulesProcedure,
+			connect.WithSchema(netguardServiceMethods.ByName("WatchIECidrSvcRules")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -439,6 +469,8 @@ type netguardServiceClient struct {
 	getSvcSvcRule                    *connect.Client[netguard.GetSvcSvcRuleReq, netguard.GetSvcSvcRuleResp]
 	listSvcFqdnRules                 *connect.Client[netguard.ListSvcFqdnRulesReq, netguard.ListSvcFqdnRulesResp]
 	getSvcFqdnRule                   *connect.Client[netguard.GetSvcFqdnRuleReq, netguard.GetSvcFqdnRuleResp]
+	listIECidrSvcRules               *connect.Client[netguard.ListIECidrSvcRulesReq, netguard.ListIECidrSvcRulesResp]
+	getIECidrSvcRule                 *connect.Client[netguard.GetIECidrSvcRuleReq, netguard.GetIECidrSvcRuleResp]
 	watchServices                    *connect.Client[netguard.WatchRequest, netguard.WatchEvent]
 	watchAddressGroups               *connect.Client[netguard.WatchRequest, netguard.WatchEvent]
 	watchAddressGroupBindings        *connect.Client[netguard.WatchRequest, netguard.WatchEvent]
@@ -450,6 +482,7 @@ type netguardServiceClient struct {
 	watchNetworkBindings             *connect.Client[netguard.WatchRequest, netguard.WatchEvent]
 	watchSvcSvcRules                 *connect.Client[netguard.WatchRequest, netguard.WatchEvent]
 	watchSvcFqdnRules                *connect.Client[netguard.WatchRequest, netguard.WatchEvent]
+	watchIECidrSvcRules              *connect.Client[netguard.WatchRequest, netguard.WatchEvent]
 }
 
 // Sync calls netguard.v1.NetguardService.Sync.
@@ -578,6 +611,16 @@ func (c *netguardServiceClient) GetSvcFqdnRule(ctx context.Context, req *connect
 	return c.getSvcFqdnRule.CallUnary(ctx, req)
 }
 
+// ListIECidrSvcRules calls netguard.v1.NetguardService.ListIECidrSvcRules.
+func (c *netguardServiceClient) ListIECidrSvcRules(ctx context.Context, req *connect.Request[netguard.ListIECidrSvcRulesReq]) (*connect.Response[netguard.ListIECidrSvcRulesResp], error) {
+	return c.listIECidrSvcRules.CallUnary(ctx, req)
+}
+
+// GetIECidrSvcRule calls netguard.v1.NetguardService.GetIECidrSvcRule.
+func (c *netguardServiceClient) GetIECidrSvcRule(ctx context.Context, req *connect.Request[netguard.GetIECidrSvcRuleReq]) (*connect.Response[netguard.GetIECidrSvcRuleResp], error) {
+	return c.getIECidrSvcRule.CallUnary(ctx, req)
+}
+
 // WatchServices calls netguard.v1.NetguardService.WatchServices.
 func (c *netguardServiceClient) WatchServices(ctx context.Context, req *connect.Request[netguard.WatchRequest]) (*connect.ServerStreamForClient[netguard.WatchEvent], error) {
 	return c.watchServices.CallServerStream(ctx, req)
@@ -634,6 +677,11 @@ func (c *netguardServiceClient) WatchSvcFqdnRules(ctx context.Context, req *conn
 	return c.watchSvcFqdnRules.CallServerStream(ctx, req)
 }
 
+// WatchIECidrSvcRules calls netguard.v1.NetguardService.WatchIECidrSvcRules.
+func (c *netguardServiceClient) WatchIECidrSvcRules(ctx context.Context, req *connect.Request[netguard.WatchRequest]) (*connect.ServerStreamForClient[netguard.WatchEvent], error) {
+	return c.watchIECidrSvcRules.CallServerStream(ctx, req)
+}
+
 // NetguardServiceHandler is an implementation of the netguard.v1.NetguardService service.
 type NetguardServiceHandler interface {
 	Sync(context.Context, *connect.Request[netguard.SyncReq]) (*connect.Response[emptypb.Empty], error)
@@ -661,6 +709,8 @@ type NetguardServiceHandler interface {
 	GetSvcSvcRule(context.Context, *connect.Request[netguard.GetSvcSvcRuleReq]) (*connect.Response[netguard.GetSvcSvcRuleResp], error)
 	ListSvcFqdnRules(context.Context, *connect.Request[netguard.ListSvcFqdnRulesReq]) (*connect.Response[netguard.ListSvcFqdnRulesResp], error)
 	GetSvcFqdnRule(context.Context, *connect.Request[netguard.GetSvcFqdnRuleReq]) (*connect.Response[netguard.GetSvcFqdnRuleResp], error)
+	ListIECidrSvcRules(context.Context, *connect.Request[netguard.ListIECidrSvcRulesReq]) (*connect.Response[netguard.ListIECidrSvcRulesResp], error)
+	GetIECidrSvcRule(context.Context, *connect.Request[netguard.GetIECidrSvcRuleReq]) (*connect.Response[netguard.GetIECidrSvcRuleResp], error)
 	WatchServices(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error
 	WatchAddressGroups(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error
 	WatchAddressGroupBindings(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error
@@ -672,6 +722,7 @@ type NetguardServiceHandler interface {
 	WatchNetworkBindings(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error
 	WatchSvcSvcRules(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error
 	WatchSvcFqdnRules(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error
+	WatchIECidrSvcRules(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error
 }
 
 // NewNetguardServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -831,6 +882,18 @@ func NewNetguardServiceHandler(svc NetguardServiceHandler, opts ...connect.Handl
 		connect.WithSchema(netguardServiceMethods.ByName("GetSvcFqdnRule")),
 		connect.WithHandlerOptions(opts...),
 	)
+	netguardServiceListIECidrSvcRulesHandler := connect.NewUnaryHandler(
+		NetguardServiceListIECidrSvcRulesProcedure,
+		svc.ListIECidrSvcRules,
+		connect.WithSchema(netguardServiceMethods.ByName("ListIECidrSvcRules")),
+		connect.WithHandlerOptions(opts...),
+	)
+	netguardServiceGetIECidrSvcRuleHandler := connect.NewUnaryHandler(
+		NetguardServiceGetIECidrSvcRuleProcedure,
+		svc.GetIECidrSvcRule,
+		connect.WithSchema(netguardServiceMethods.ByName("GetIECidrSvcRule")),
+		connect.WithHandlerOptions(opts...),
+	)
 	netguardServiceWatchServicesHandler := connect.NewServerStreamHandler(
 		NetguardServiceWatchServicesProcedure,
 		svc.WatchServices,
@@ -897,6 +960,12 @@ func NewNetguardServiceHandler(svc NetguardServiceHandler, opts ...connect.Handl
 		connect.WithSchema(netguardServiceMethods.ByName("WatchSvcFqdnRules")),
 		connect.WithHandlerOptions(opts...),
 	)
+	netguardServiceWatchIECidrSvcRulesHandler := connect.NewServerStreamHandler(
+		NetguardServiceWatchIECidrSvcRulesProcedure,
+		svc.WatchIECidrSvcRules,
+		connect.WithSchema(netguardServiceMethods.ByName("WatchIECidrSvcRules")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/netguard.v1.NetguardService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case NetguardServiceSyncProcedure:
@@ -949,6 +1018,10 @@ func NewNetguardServiceHandler(svc NetguardServiceHandler, opts ...connect.Handl
 			netguardServiceListSvcFqdnRulesHandler.ServeHTTP(w, r)
 		case NetguardServiceGetSvcFqdnRuleProcedure:
 			netguardServiceGetSvcFqdnRuleHandler.ServeHTTP(w, r)
+		case NetguardServiceListIECidrSvcRulesProcedure:
+			netguardServiceListIECidrSvcRulesHandler.ServeHTTP(w, r)
+		case NetguardServiceGetIECidrSvcRuleProcedure:
+			netguardServiceGetIECidrSvcRuleHandler.ServeHTTP(w, r)
 		case NetguardServiceWatchServicesProcedure:
 			netguardServiceWatchServicesHandler.ServeHTTP(w, r)
 		case NetguardServiceWatchAddressGroupsProcedure:
@@ -971,6 +1044,8 @@ func NewNetguardServiceHandler(svc NetguardServiceHandler, opts ...connect.Handl
 			netguardServiceWatchSvcSvcRulesHandler.ServeHTTP(w, r)
 		case NetguardServiceWatchSvcFqdnRulesProcedure:
 			netguardServiceWatchSvcFqdnRulesHandler.ServeHTTP(w, r)
+		case NetguardServiceWatchIECidrSvcRulesProcedure:
+			netguardServiceWatchIECidrSvcRulesHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1080,6 +1155,14 @@ func (UnimplementedNetguardServiceHandler) GetSvcFqdnRule(context.Context, *conn
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetSvcFqdnRule is not implemented"))
 }
 
+func (UnimplementedNetguardServiceHandler) ListIECidrSvcRules(context.Context, *connect.Request[netguard.ListIECidrSvcRulesReq]) (*connect.Response[netguard.ListIECidrSvcRulesResp], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.ListIECidrSvcRules is not implemented"))
+}
+
+func (UnimplementedNetguardServiceHandler) GetIECidrSvcRule(context.Context, *connect.Request[netguard.GetIECidrSvcRuleReq]) (*connect.Response[netguard.GetIECidrSvcRuleResp], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.GetIECidrSvcRule is not implemented"))
+}
+
 func (UnimplementedNetguardServiceHandler) WatchServices(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.WatchServices is not implemented"))
 }
@@ -1122,4 +1205,8 @@ func (UnimplementedNetguardServiceHandler) WatchSvcSvcRules(context.Context, *co
 
 func (UnimplementedNetguardServiceHandler) WatchSvcFqdnRules(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.WatchSvcFqdnRules is not implemented"))
+}
+
+func (UnimplementedNetguardServiceHandler) WatchIECidrSvcRules(context.Context, *connect.Request[netguard.WatchRequest], *connect.ServerStream[netguard.WatchEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("netguard.v1.NetguardService.WatchIECidrSvcRules is not implemented"))
 }

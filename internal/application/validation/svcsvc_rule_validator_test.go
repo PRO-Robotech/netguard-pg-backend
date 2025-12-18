@@ -1105,3 +1105,11 @@ func (m *MockReaderForSvcSvcRuleValidator) ListSvcFqdnRules(ctx context.Context,
 func (m *MockReaderForSvcSvcRuleValidator) GetSvcFqdnRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcFqdnRule, error) {
 	return nil, fmt.Errorf("svc fqdn rule not found")
 }
+
+func (m *MockReaderForSvcSvcRuleValidator) ListIECidrSvcRules(ctx context.Context, consume func(models.IECidrSvcRule) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReaderForSvcSvcRuleValidator) GetIECidrSvcRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IECidrSvcRule, error) {
+	return nil, fmt.Errorf("ie cidr svc rule not found")
+}

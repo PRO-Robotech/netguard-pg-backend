@@ -32,13 +32,19 @@ type svcFqdnRuleRefJSON struct {
 	Name       string `json:"name"`
 	Namespace  string `json:"namespace"`
 }
+type ieCidrSvcRuleRefJSON struct {
+	APIVersion string `json:"apiVersion"`
+	Kind       string `json:"kind"`
+	Name       string `json:"name"`
+	Namespace  string `json:"namespace"`
+}
 
 func (r *Reader) ListServices(ctx context.Context, consume func(models.Service) error, scope ports.Scope) error {
 	query := `
 	SELECT s.namespace, s.name, s.description, s.comment, s.ingress_ports,
 	       s.address_groups, s.aggregated_address_groups,
 	       s.xsvcsvc_rules_as_from, s.xsvcsvc_rules_as_to,
-	       s.xsvc_fqdn_rules,
+	       s.xsvc_fqdn_rules, s.xie_cidr_svc_rules,
 		       m.resource_version, m.labels, m.annotations, m.conditions,
 		       m.created_at, m.updated_at, m.deletion_timestamp
 		FROM services s
@@ -84,7 +90,7 @@ func (r *Reader) GetServiceByID(ctx context.Context, id models.ResourceIdentifie
 	SELECT s.namespace, s.name, s.description, s.comment, s.ingress_ports,
 	       s.address_groups, s.aggregated_address_groups,
 	       s.xsvcsvc_rules_as_from, s.xsvcsvc_rules_as_to,
-	       s.xsvc_fqdn_rules,
+	       s.xsvc_fqdn_rules, s.xie_cidr_svc_rules,
 		       m.resource_version, m.labels, m.annotations, m.conditions,
 		       m.created_at, m.updated_at, m.deletion_timestamp
 		FROM services s
@@ -117,6 +123,7 @@ func (r *Reader) scanService(rows pgx.Rows) (models.Service, error) {
 	var ingressPortsJSON []byte
 	var xsvcsvcRulesAsFromJSON, xsvcsvcRulesAsToJSON []byte
 	var xsvcFqdnRulesJSON []byte
+	var xieCidrSvcRulesJSON []byte
 	var labelsJSON, annotationsJSON, conditionsJSON []byte
 	var createdAt, updatedAt time.Time
 	var deletionTS *time.Time
@@ -132,6 +139,7 @@ func (r *Reader) scanService(rows pgx.Rows) (models.Service, error) {
 		&xsvcsvcRulesAsFromJSON,
 		&xsvcsvcRulesAsToJSON,
 		&xsvcFqdnRulesJSON,
+		&xieCidrSvcRulesJSON,
 		&resourceVersion,
 		&labelsJSON,
 		&annotationsJSON,
@@ -205,6 +213,21 @@ func (r *Reader) scanService(rows pgx.Rows) (models.Service, error) {
 			})
 		}
 	}
+	if len(xieCidrSvcRulesJSON) > 0 && string(xieCidrSvcRulesJSON) != "null" {
+		var ruleRefs []ieCidrSvcRuleRefJSON
+		if err := json.Unmarshal(xieCidrSvcRulesJSON, &ruleRefs); err != nil {
+			return service, errors.Wrap(err, "failed to parse xie_cidr_svc_rules JSON")
+		}
+		if len(ruleRefs) > 0 {
+			service.XIECidrSvcRules = &models.XIECidrSvcRules{Rules: make([]models.ResourceIdentifier, len(ruleRefs))}
+			for i, ref := range ruleRefs {
+				service.XIECidrSvcRules.Rules[i] = models.NewResourceIdentifier(ref.Name, models.WithNamespace(ref.Namespace))
+			}
+			sort.Slice(service.XIECidrSvcRules.Rules, func(i, j int) bool {
+				return service.XIECidrSvcRules.Rules[i].Key() < service.XIECidrSvcRules.Rules[j].Key()
+			})
+		}
+	}
 	service.Meta, err = utils.ConvertK8sMetadata(fmt.Sprintf("%d", resourceVersion), labelsJSON, annotationsJSON, conditionsJSON, createdAt, updatedAt, deletionTS)
 	if err != nil {
 		return service, err
@@ -218,6 +241,7 @@ func (r *Reader) scanServiceRow(row pgx.Row) (*models.Service, error) {
 	var ingressPortsJSON []byte
 	var xsvcsvcRulesAsFromJSON, xsvcsvcRulesAsToJSON []byte
 	var xsvcFqdnRulesJSON []byte
+	var xieCidrSvcRulesJSON []byte
 	var labelsJSON, annotationsJSON, conditionsJSON []byte
 	var createdAt, updatedAt time.Time
 	var deletionTS *time.Time
@@ -233,6 +257,7 @@ func (r *Reader) scanServiceRow(row pgx.Row) (*models.Service, error) {
 		&xsvcsvcRulesAsFromJSON,
 		&xsvcsvcRulesAsToJSON,
 		&xsvcFqdnRulesJSON,
+		&xieCidrSvcRulesJSON,
 		&resourceVersion,
 		&labelsJSON,
 		&annotationsJSON,
@@ -303,6 +328,21 @@ func (r *Reader) scanServiceRow(row pgx.Row) (*models.Service, error) {
 			}
 			sort.Slice(service.XSvcFqdnRules.Rules, func(i, j int) bool {
 				return service.XSvcFqdnRules.Rules[i].Key() < service.XSvcFqdnRules.Rules[j].Key()
+			})
+		}
+	}
+	if len(xieCidrSvcRulesJSON) > 0 && string(xieCidrSvcRulesJSON) != "null" {
+		var ruleRefs []ieCidrSvcRuleRefJSON
+		if err := json.Unmarshal(xieCidrSvcRulesJSON, &ruleRefs); err != nil {
+			return nil, errors.Wrap(err, "failed to parse xie_cidr_svc_rules JSON")
+		}
+		if len(ruleRefs) > 0 {
+			service.XIECidrSvcRules = &models.XIECidrSvcRules{Rules: make([]models.ResourceIdentifier, len(ruleRefs))}
+			for i, ref := range ruleRefs {
+				service.XIECidrSvcRules.Rules[i] = models.NewResourceIdentifier(ref.Name, models.WithNamespace(ref.Namespace))
+			}
+			sort.Slice(service.XIECidrSvcRules.Rules, func(i, j int) bool {
+				return service.XIECidrSvcRules.Rules[i].Key() < service.XIECidrSvcRules.Rules[j].Key()
 			})
 		}
 	}

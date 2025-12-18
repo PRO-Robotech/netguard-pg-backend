@@ -23,30 +23,32 @@ type watchCacheProvider interface {
 
 type ServiceServer struct {
 	netguardpb.UnimplementedNetguardServiceServer
-	serviceHandler      *handlers.ServiceHandler
-	addressGroupHandler *handlers.AddressGroupHandler
-	svcSvcRuleHandler   *handlers.SvcSvcRuleHandler
-	svcFqdnRuleHandler  *handlers.SvcFqdnRuleHandler
-	networkHandler      *handlers.NetworkHandler
-	hostHandler         *handlers.HostHandler
-	syncDispatcher      *sync.Dispatcher
-	service             *services.NetguardFacade
-	watchHandler        *WatchHandler
-	watchConfig         config.WatchConfig
-	watchProvider       watchCacheProvider
+	serviceHandler       *handlers.ServiceHandler
+	addressGroupHandler  *handlers.AddressGroupHandler
+	svcSvcRuleHandler    *handlers.SvcSvcRuleHandler
+	svcFqdnRuleHandler   *handlers.SvcFqdnRuleHandler
+	ieCidrSvcRuleHandler *handlers.IECidrSvcRuleHandler
+	networkHandler       *handlers.NetworkHandler
+	hostHandler          *handlers.HostHandler
+	syncDispatcher       *sync.Dispatcher
+	service              *services.NetguardFacade
+	watchHandler         *WatchHandler
+	watchConfig          config.WatchConfig
+	watchProvider        watchCacheProvider
 }
 
 func NewServiceServer(service *services.NetguardFacade, watchCfg config.WatchConfig) *ServiceServer {
 	return &ServiceServer{
-		serviceHandler:      handlers.NewServiceHandler(service),
-		addressGroupHandler: handlers.NewAddressGroupHandler(service),
-		svcSvcRuleHandler:   handlers.NewSvcSvcRuleHandler(service),
-		svcFqdnRuleHandler:  handlers.NewSvcFqdnRuleHandler(service),
-		networkHandler:      handlers.NewNetworkHandler(service),
-		hostHandler:         handlers.NewHostHandler(service),
-		syncDispatcher:      sync.NewDispatcher(service),
-		service:             service,
-		watchConfig:         watchCfg,
+		serviceHandler:       handlers.NewServiceHandler(service),
+		addressGroupHandler:  handlers.NewAddressGroupHandler(service),
+		svcSvcRuleHandler:    handlers.NewSvcSvcRuleHandler(service),
+		svcFqdnRuleHandler:   handlers.NewSvcFqdnRuleHandler(service),
+		ieCidrSvcRuleHandler: handlers.NewIECidrSvcRuleHandler(service),
+		networkHandler:       handlers.NewNetworkHandler(service),
+		hostHandler:          handlers.NewHostHandler(service),
+		syncDispatcher:       sync.NewDispatcher(service),
+		service:              service,
+		watchConfig:          watchCfg,
 	}
 }
 
@@ -108,6 +110,12 @@ func (s *ServiceServer) ListSvcFqdnRules(ctx context.Context, req *netguardpb.Li
 func (s *ServiceServer) GetSvcFqdnRule(ctx context.Context, req *netguardpb.GetSvcFqdnRuleReq) (*netguardpb.GetSvcFqdnRuleResp, error) {
 	return s.svcFqdnRuleHandler.GetSvcFqdnRule(ctx, req)
 }
+func (s *ServiceServer) ListIECidrSvcRules(ctx context.Context, req *netguardpb.ListIECidrSvcRulesReq) (*netguardpb.ListIECidrSvcRulesResp, error) {
+	return s.ieCidrSvcRuleHandler.ListIECidrSvcRules(ctx, req)
+}
+func (s *ServiceServer) GetIECidrSvcRule(ctx context.Context, req *netguardpb.GetIECidrSvcRuleReq) (*netguardpb.GetIECidrSvcRuleResp, error) {
+	return s.ieCidrSvcRuleHandler.GetIECidrSvcRule(ctx, req)
+}
 
 // Watch RPC implementations
 
@@ -153,6 +161,10 @@ func (s *ServiceServer) WatchSvcSvcRules(req *netguardpb.WatchRequest, stream ne
 
 func (s *ServiceServer) WatchSvcFqdnRules(req *netguardpb.WatchRequest, stream netguardpb.NetguardService_WatchSvcFqdnRulesServer) error {
 	return s.streamWatch("svc_fqdn_rules", req, stream.Context(), stream.Send)
+}
+
+func (s *ServiceServer) WatchIECidrSvcRules(req *netguardpb.WatchRequest, stream netguardpb.NetguardService_WatchIECidrSvcRulesServer) error {
+	return s.streamWatch("ie_cidr_svc_rules", req, stream.Context(), stream.Send)
 }
 func (s *ServiceServer) ListNetworks(ctx context.Context, req *netguardpb.ListNetworksReq) (*netguardpb.ListNetworksResp, error) {
 	return s.networkHandler.ListNetworks(ctx, req)

@@ -194,4 +194,29 @@ func modifyStructFieldsWithEnums(defs map[string]common.OpenAPIDefinition) {
 			defs["netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcFqdnRuleSpec"] = svcFqdnSpec
 		}
 	}
+
+	// IECidrSvcRuleSpec - transport, traffic, action
+	if ieCidrSpec, exists := defs["netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IECidrSvcRuleSpec"]; exists {
+		if ieCidrSpec.Schema.Properties != nil {
+			if transportProp, ok := ieCidrSpec.Schema.Properties["transport"]; ok {
+				transportProp.SchemaProps.Enum = []interface{}{"TCP", "UDP"}
+				transportProp.SchemaProps.Description = "Transport protocol (TCP or UDP)"
+				ieCidrSpec.Schema.Properties["transport"] = transportProp
+			}
+
+			if trafficProp, ok := ieCidrSpec.Schema.Properties["traffic"]; ok {
+				trafficProp.SchemaProps.Enum = []interface{}{"INGRESS", "EGRESS"}
+				trafficProp.SchemaProps.Description = "Traffic direction (INGRESS or EGRESS)"
+				ieCidrSpec.Schema.Properties["traffic"] = trafficProp
+			}
+
+			if actionProp, ok := ieCidrSpec.Schema.Properties["action"]; ok {
+				actionProp.SchemaProps.Enum = []interface{}{"ACCEPT", "DROP"}
+				actionProp.SchemaProps.Description = "Action for the rule (ACCEPT or DROP)"
+				ieCidrSpec.Schema.Properties["action"] = actionProp
+			}
+
+			defs["netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IECidrSvcRuleSpec"] = ieCidrSpec
+		}
+	}
 }

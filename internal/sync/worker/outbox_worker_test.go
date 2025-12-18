@@ -147,6 +147,7 @@ func TestNewOutboxWorker(t *testing.T) {
 		nil, // serviceSyncer
 		nil, // svcSvcRuleSyncer
 		nil, // svcFqdnRuleSyncer
+		nil, // ieCidrSvcRuleSyncer
 		nil, // conditionManager
 		logger,
 		nil, // uses default config
@@ -184,6 +185,7 @@ func TestNewOutboxWorker_WithCustomConfig(t *testing.T) {
 		nil, // serviceSyncer
 		nil, // svcSvcRuleSyncer
 		nil, // svcFqdnRuleSyncer
+		nil, // ieCidrSvcRuleSyncer
 		nil, // conditionManager
 		logger,
 		config,

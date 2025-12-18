@@ -521,6 +521,90 @@
         ]
       }
     },
+    "/v1/ie-cidr-svc-rules": {
+      "get": {
+        "description": "ListIECidrSvcRules: gets list of IECidrSvc rules",
+        "operationId": "NetguardService_ListIECidrSvcRules",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListIECidrSvcRulesResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "listOptions.namespace",
+            "description": "Namespace filter (empty = all namespaces)\nDEPRECATED: Use field_selectors with \"metadata.namespace\" instead for consistency",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.continueToken",
+            "description": "Pagination token for retrieving next page of results",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "listOptions.limit",
+            "description": "Limit number of results (0 = no limit)",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
+    "/v1/ie-cidr-svc-rules/{identifier.namespace}/{identifier.name}": {
+      "get": {
+        "description": "GetIECidrSvcRule: gets a specific IECidrSvc rule by ID",
+        "operationId": "NetguardService_GetIECidrSvcRule",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetIECidrSvcRuleResp"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "identifier.namespace",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "identifier.name",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "NetguardService"
+        ]
+      }
+    },
     "/v1/network-bindings": {
       "get": {
         "description": "ListNetworkBindings: gets list of network bindings",
@@ -1392,6 +1476,15 @@
       },
       "title": "GetHostResp - response with a specific host"
     },
+    "v1GetIECidrSvcRuleResp": {
+      "type": "object",
+      "properties": {
+        "iecidrsvcRule": {
+          "$ref": "#/definitions/v1IECidrSvcRule"
+        }
+      },
+      "title": "GetIECidrSvcRuleResp - response with a specific IECidrSvcRule"
+    },
     "v1GetNetworkBindingResp": {
       "type": "object",
       "properties": {
@@ -1581,6 +1674,89 @@
       "description": "- HOST_SOURCE_SPEC: Host registered via AddressGroup.spec.hosts\n - HOST_SOURCE_BINDING: Host registered via HostBinding resource",
       "title": "HostRegistrationSource represents the source of host registration"
     },
+    "v1IECidrSvcPortSpec": {
+      "type": "object",
+      "properties": {
+        "s": {
+          "type": "string",
+          "title": "Source port expression (optional)"
+        },
+        "d": {
+          "type": "string",
+          "title": "Destination port expression (required)"
+        }
+      },
+      "title": "IECidrSvcPortSpec - port specification for CIDR-to-service rule"
+    },
+    "v1IECidrSvcRule": {
+      "type": "object",
+      "properties": {
+        "selfRef": {
+          "$ref": "#/definitions/v1ResourceIdentifier"
+        },
+        "transport": {
+          "$ref": "#/definitions/NetIPTransport",
+          "title": "Transport protocol (TCP/UDP)"
+        },
+        "cidr": {
+          "type": "string",
+          "title": "IPv4/IPv6 CIDR notation"
+        },
+        "svc": {
+          "$ref": "#/definitions/v1NamespacedObjectReference",
+          "title": "Target service reference"
+        },
+        "traffic": {
+          "$ref": "#/definitions/v1Traffic",
+          "title": "Traffic direction (INGRESS/EGRESS)"
+        },
+        "ports": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IECidrSvcPortSpec"
+          },
+          "title": "Port expressions"
+        },
+        "logs": {
+          "type": "boolean",
+          "title": "Enable logging"
+        },
+        "trace": {
+          "type": "boolean",
+          "title": "Enable tracing"
+        },
+        "action": {
+          "$ref": "#/definitions/v1RuleAction",
+          "title": "Firewall action (ACCEPT/DROP)"
+        },
+        "priority": {
+          "type": "integer",
+          "format": "int32",
+          "title": "Rule priority (0-1000)"
+        },
+        "description": {
+          "type": "string",
+          "title": "Optional description (Netguard-only)"
+        },
+        "meta": {
+          "$ref": "#/definitions/v1Meta",
+          "title": "Kubernetes metadata"
+        },
+        "comment": {
+          "type": "string",
+          "title": "Comment - optional user comment (Netguard-only, not synced to SGROUPS)"
+        }
+      },
+      "title": "IECidrSvcRule - ingress/egress CIDR-to-service firewall rule",
+      "required": [
+        "selfRef",
+        "cidr",
+        "svc",
+        "traffic",
+        "transport"
+      ]
+    },
     "v1IPItem": {
       "type": "object",
       "properties": {
@@ -1719,6 +1895,19 @@
         }
       },
       "title": "ListHostsResp - response with list of hosts"
+    },
+    "v1ListIECidrSvcRulesResp": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IECidrSvcRule"
+          }
+        }
+      },
+      "title": "ListIECidrSvcRulesResp - response with list of IECidrSvcRules"
     },
     "v1ListNetworkBindingsResp": {
       "type": "object",
@@ -2133,6 +2322,10 @@
           "$ref": "#/definitions/v1XSvcFqdnRules",
           "title": "XSvcFqdnRules - READ-ONLY field populated by PostgreSQL triggers\nContains all service-to-FQDN rules where this Service participates as source"
         },
+        "xIecidrsvcRules": {
+          "$ref": "#/definitions/v1XIECidrSvcRules",
+          "title": "XIECidrSvcRules - READ-ONLY field populated by PostgreSQL triggers\nContains all IE-CIDR-SVC rules where this Service is the target"
+        },
         "comment": {
           "type": "string",
           "title": "Comment - optional user comment (Netguard-only, not synced to SGROUPS)"
@@ -2368,6 +2561,19 @@
       },
       "title": "SyncHosts - subject of Hosts to sync"
     },
+    "v1SyncIECidrSvcRules": {
+      "type": "object",
+      "properties": {
+        "iecidrsvcRules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IECidrSvcRule"
+          }
+        }
+      },
+      "title": "SyncIECidrSvcRules - subject of IECidrSvcRules to sync"
+    },
     "v1SyncNetworkBindings": {
       "type": "object",
       "properties": {
@@ -2456,6 +2662,10 @@
         "svcfqdnRules": {
           "$ref": "#/definitions/v1SyncSvcFqdnRules",
           "title": "Subject of SvcFqdnRules"
+        },
+        "iecidrsvcRules": {
+          "$ref": "#/definitions/v1SyncIECidrSvcRules",
+          "title": "Subject of IECidrSvcRules"
         }
       },
       "title": "SyncReq - request to sync"
@@ -2509,6 +2719,14 @@
       },
       "title": "SyncSvcSvcRules - subject of SvcSvcRules to sync"
     },
+    "v1Traffic": {
+      "type": "string",
+      "enum": [
+        "Ingress",
+        "Egress"
+      ],
+      "default": "Ingress"
+    },
     "v1WatchEvent": {
       "type": "object",
       "properties": {
@@ -2555,6 +2773,9 @@
         "svcFqdnRule": {
           "$ref": "#/definitions/v1SvcFqdnRule"
         },
+        "iecidrsvcRule": {
+          "$ref": "#/definitions/v1IECidrSvcRule"
+        },
         "errorMessage": {
           "type": "string"
         }
@@ -2571,6 +2792,20 @@
         "WATCH_EVENT_TYPE_ERROR"
       ],
       "default": "WATCH_EVENT_TYPE_UNSPECIFIED"
+    },
+    "v1XIECidrSvcRules": {
+      "type": "object",
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ResourceIdentifier"
+          },
+          "title": "Rules where this Service is the target of IECidrSvcRule"
+        }
+      },
+      "title": "XIECidrSvcRules - READ-ONLY field for Service resource containing all IE-CIDR-SVC rules referencing the Service"
     },
     "v1XSvcFqdnRules": {
       "type": "object",

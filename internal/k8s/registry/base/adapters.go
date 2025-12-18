@@ -400,3 +400,35 @@ func (h *HostBackendOperations) MarkForDeletion(ctx context.Context, namespace, 
 func (h *HostBindingBackendOperations) MarkForDeletion(ctx context.Context, namespace, name, kind string) error {
 	return h.client.MarkForDeletion(ctx, namespace, name, kind)
 }
+
+type IECidrSvcRuleBackendOperations struct {
+	client client.BackendClient
+}
+
+func NewIECidrSvcRuleBackendOperations(client client.BackendClient) BackendOperations[models.IECidrSvcRule] {
+	return &IECidrSvcRuleBackendOperations{client: client}
+}
+
+func (i *IECidrSvcRuleBackendOperations) Get(ctx context.Context, id models.ResourceIdentifier) (*models.IECidrSvcRule, error) {
+	return i.client.GetIECidrSvcRule(ctx, id)
+}
+
+func (i *IECidrSvcRuleBackendOperations) List(ctx context.Context, scope ports.Scope) ([]models.IECidrSvcRule, error) {
+	return i.client.ListIECidrSvcRules(ctx, scope)
+}
+
+func (i *IECidrSvcRuleBackendOperations) Create(ctx context.Context, obj *models.IECidrSvcRule) error {
+	return i.client.CreateIECidrSvcRule(ctx, obj)
+}
+
+func (i *IECidrSvcRuleBackendOperations) Update(ctx context.Context, obj *models.IECidrSvcRule) error {
+	return i.client.UpdateIECidrSvcRule(ctx, obj)
+}
+
+func (i *IECidrSvcRuleBackendOperations) Delete(ctx context.Context, id models.ResourceIdentifier) error {
+	return i.client.DeleteIECidrSvcRule(ctx, id)
+}
+
+func (i *IECidrSvcRuleBackendOperations) MarkForDeletion(ctx context.Context, namespace, name, kind string) error {
+	return i.client.MarkForDeletion(ctx, namespace, name, kind)
+}

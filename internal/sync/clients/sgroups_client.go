@@ -316,6 +316,12 @@ func (c *sgroupsClient) convertSyncRequestToProto(req *types.SyncRequest) (*pb.S
 		} else {
 			return nil, fmt.Errorf("invalid data type for SvcFqdnRules subject, expected *pb.SyncSvcFqdnRules, got %T", req.Data)
 		}
+	case types.SyncSubjectTypeIECidrSvcRules:
+		if rules, ok := req.Data.(*pb.SyncIECidrSvcRules); ok {
+			pbReq.Subject = &pb.SyncReq_IeCidrSvcRules{IeCidrSvcRules: rules}
+		} else {
+			return nil, fmt.Errorf("invalid data type for IECidrSvcRules subject, expected *pb.SyncIECidrSvcRules, got %T", req.Data)
+		}
 	default:
 		return nil, fmt.Errorf("unknown subject type: %s", req.SubjectType)
 	}

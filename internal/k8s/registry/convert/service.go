@@ -77,6 +77,18 @@ func (c *ServiceConverter) ToDomain(ctx context.Context, k8sObj *netguardv1beta1
 		domainService.XSvcFqdnRules = fqdnRules
 	}
 
+	// Convert XIECidrSvcRules (READ-ONLY field populated by PostgreSQL triggers)
+	if k8sObj.XIECidrSvcRules != nil {
+		ieCidrRules := &models.XIECidrSvcRules{}
+		if len(k8sObj.XIECidrSvcRules.Rules) > 0 {
+			ieCidrRules.Rules = make([]models.ResourceIdentifier, len(k8sObj.XIECidrSvcRules.Rules))
+			for i, ref := range k8sObj.XIECidrSvcRules.Rules {
+				ieCidrRules.Rules[i] = models.NewResourceIdentifier(ref.Name, models.WithNamespace(ref.Namespace))
+			}
+		}
+		domainService.XIECidrSvcRules = ieCidrRules
+	}
+
 	return domainService, nil
 }
 
@@ -162,6 +174,25 @@ func (c *ServiceConverter) FromDomain(ctx context.Context, domainObj *models.Ser
 			}
 		}
 		k8sService.XSvcFqdnRules = fqdnRules
+	}
+
+	// Convert XIECidrSvcRules (READ-ONLY field populated by PostgreSQL triggers)
+	if domainObj.XIECidrSvcRules != nil {
+		ieCidrRules := &netguardv1beta1.XIECidrSvcRules{}
+		if len(domainObj.XIECidrSvcRules.Rules) > 0 {
+			ieCidrRules.Rules = make([]netguardv1beta1.NamespacedObjectReference, len(domainObj.XIECidrSvcRules.Rules))
+			for i, ref := range domainObj.XIECidrSvcRules.Rules {
+				ieCidrRules.Rules[i] = netguardv1beta1.NamespacedObjectReference{
+					ObjectReference: netguardv1beta1.ObjectReference{
+						APIVersion: "netguard.sgroups.io/v1beta1",
+						Kind:       "IECidrSvcRule",
+						Name:       ref.Name,
+					},
+					Namespace: ref.Namespace,
+				}
+			}
+		}
+		k8sService.XIECidrSvcRules = ieCidrRules
 	}
 
 	// Convert status using standard helper

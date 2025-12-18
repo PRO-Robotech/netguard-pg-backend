@@ -38,6 +38,7 @@ const (
 	SyncSubjectTypeHostBindings         SyncSubjectType = "HostBindings"
 	SyncSubjectTypeSvcSvcRules          SyncSubjectType = "SvcSvcRules"
 	SyncSubjectTypeSvcFqdnRules         SyncSubjectType = "SvcFqdnRules"
+	SyncSubjectTypeIECidrSvcRules       SyncSubjectType = "IECidrSvcRules"
 )
 
 // SyncRequest represents a synchronization request

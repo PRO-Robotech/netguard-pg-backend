@@ -66,6 +66,11 @@ type BackendClient interface {
 	CreateSvcFqdnRule(ctx context.Context, rule *models.SvcFqdnRule) error
 	UpdateSvcFqdnRule(ctx context.Context, rule *models.SvcFqdnRule) error
 	DeleteSvcFqdnRule(ctx context.Context, id models.ResourceIdentifier) error
+	GetIECidrSvcRule(ctx context.Context, id models.ResourceIdentifier) (*models.IECidrSvcRule, error)
+	ListIECidrSvcRules(ctx context.Context, scope ports.Scope) ([]models.IECidrSvcRule, error)
+	CreateIECidrSvcRule(ctx context.Context, rule *models.IECidrSvcRule) error
+	UpdateIECidrSvcRule(ctx context.Context, rule *models.IECidrSvcRule) error
+	DeleteIECidrSvcRule(ctx context.Context, id models.ResourceIdentifier) error
 	Sync(ctx context.Context, syncOp models.SyncOp, resources interface{}) error
 	GetSyncStatus(ctx context.Context) (*models.SyncStatus, error)
 	GetDependencyValidator() *validation.DependencyValidator
@@ -83,6 +88,7 @@ type BackendClient interface {
 	UpdateHostBindingMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
 	UpdateSvcSvcRuleMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
 	UpdateSvcFqdnRuleMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
+	UpdateIECidrSvcRuleMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error
 	ListAddressGroupsForService(ctx context.Context, serviceID models.ResourceIdentifier) ([]models.AddressGroup, error)
 	ListAccessPorts(ctx context.Context, mappingID models.ResourceIdentifier) ([]models.ServicePortsRef, error)
 	MarkForDeletion(ctx context.Context, namespace, name, kind string) error
@@ -97,6 +103,7 @@ type BackendClient interface {
 	WatchNetworkBindings(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchNetworkBindingsClient, error)
 	WatchSvcSvcRules(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchSvcSvcRulesClient, error)
 	WatchSvcFqdnRules(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchSvcFqdnRulesClient, error)
+	WatchIECidrSvcRules(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchIECidrSvcRulesClient, error)
 	Close() error
 }
 

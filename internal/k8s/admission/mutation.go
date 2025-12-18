@@ -59,6 +59,8 @@ func (w *MutationWebhook) Handle(ctx context.Context, req *admissionv1.Admission
 		return w.mutateSvcSvcRule(ctx, req)
 	case "SvcFqdnRule":
 		return w.mutateSvcFqdnRule(ctx, req)
+	case "IECidrSvcRule":
+		return w.mutateIECidrSvcRule(ctx, req)
 	case "AddressGroupBindingPolicy":
 		return w.mutateAddressGroupBindingPolicy(ctx, req)
 	case "HostBinding":
@@ -279,6 +281,43 @@ func (w *MutationWebhook) mutateSvcFqdnRule(ctx context.Context, req *admissionv
 		patches = append(patches, map[string]interface{}{
 			"op":    "add",
 			"path":  "/spec/serviceFrom/kind",
+			"value": "Service",
+		})
+	}
+
+	return w.createPatchResponse(req.UID, patches)
+}
+
+// mutateIECidrSvcRule applies defaulting logic to IECidrSvcRule resources.
+func (w *MutationWebhook) mutateIECidrSvcRule(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
+	var rule netguardv1beta1.IECidrSvcRule
+	if err := runtime.DecodeInto(w.decoder, req.Object.Raw, &rule); err != nil {
+		return w.errorResponse(req.UID, fmt.Sprintf("Failed to decode IECidrSvcRule: %v", err))
+	}
+
+	var patches []map[string]interface{}
+
+	patches = append(patches, w.addManagedByLabel(&rule)...)
+	patches = append(patches, w.addCreatedByAnnotation(&rule)...)
+
+	if rule.Spec.Svc.Namespace == "" {
+		patches = append(patches, map[string]interface{}{
+			"op":    "add",
+			"path":  "/spec/svc/namespace",
+			"value": rule.Namespace,
+		})
+	}
+	if rule.Spec.Svc.APIVersion == "" {
+		patches = append(patches, map[string]interface{}{
+			"op":    "add",
+			"path":  "/spec/svc/apiVersion",
+			"value": "netguard.sgroups.io/v1beta1",
+		})
+	}
+	if rule.Spec.Svc.Kind == "" {
+		patches = append(patches, map[string]interface{}{
+			"op":    "add",
+			"path":  "/spec/svc/kind",
 			"value": "Service",
 		})
 	}

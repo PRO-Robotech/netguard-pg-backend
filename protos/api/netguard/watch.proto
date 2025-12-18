@@ -42,6 +42,7 @@ message WatchEvent {
     NetworkBinding network_binding = 20;
     SvcSvcRule svc_svc_rule = 22;
     SvcFqdnRule svc_fqdn_rule = 23;
+    IECidrSvcRule iecidrsvc_rule = 24;
   }
 
   string error_message = 40;

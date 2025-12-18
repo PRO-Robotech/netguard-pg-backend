@@ -947,6 +947,8 @@ func (s *BaseStorage[K, D]) startWatchStream(ctx context.Context, req *netguardp
 		return s.backendClient.WatchSvcSvcRules(ctx, req)
 	case "svcfqdnrules":
 		return s.backendClient.WatchSvcFqdnRules(ctx, req)
+	case "iecidrsvrules":
+		return s.backendClient.WatchIECidrSvcRules(ctx, req)
 	default:
 		return nil, fmt.Errorf("watch not supported for resource %s", s.resourceName)
 	}

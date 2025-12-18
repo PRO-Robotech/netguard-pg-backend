@@ -71,6 +71,12 @@ type Service struct {
 	// Users should NOT modify this field directly - changes will be ignored.
 	// +optional
 	XSvcFqdnRules *XSvcFqdnRules `json:"xSvcFqdnRules,omitempty"`
+
+	// xIECidrSvcRules contains references to all IECidrSvcRule resources where this Service is the target.
+	// This field is automatically populated by PostgreSQL triggers and is READ-ONLY.
+	// Users should NOT modify this field directly - changes will be ignored.
+	// +optional
+	XIECidrSvcRules *XIECidrSvcRules `json:"xIECidrSvcRules,omitempty"`
 }
 
 // ServiceSpec defines the desired state of Service
@@ -971,4 +977,113 @@ type SvcFqdnRuleList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []SvcFqdnRule `json:"items"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// IECidrSvcRule represents an ingress/egress CIDR-to-service firewall rule
+type IECidrSvcRule struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   IECidrSvcRuleSpec   `json:"spec"`
+	Status IECidrSvcRuleStatus `json:"status,omitempty"`
+}
+
+// IECidrSvcRuleSpec defines the desired state of IECidrSvcRule
+type IECidrSvcRuleSpec struct {
+	// Transport protocol (TCP or UDP)
+	// +kubebuilder:validation:Enum=TCP;UDP
+	Transport TransportProtocol `json:"transport"`
+
+	// CIDR - IPv4 or IPv6 CIDR notation (e.g., "10.0.0.0/8", "2001:db8::/32")
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=`^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$|^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}/[0-9]{1,3}$`
+	CIDR string `json:"cidr"`
+
+	// Svc - service reference (NamespacedObjectReference)
+	// +kubebuilder:validation:Required
+	Svc NamespacedObjectReference `json:"svc"`
+
+	// Traffic direction (INGRESS or EGRESS)
+	// +kubebuilder:validation:Enum=INGRESS;EGRESS
+	Traffic Traffic `json:"traffic"`
+
+	// Ports - list of port specifications. Each entry can have source and destination ports.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinItems=1
+	Ports []IECidrSvcPortSpec `json:"ports"`
+
+	// Logs - enable traffic logging
+	// +optional
+	Logs bool `json:"logs"`
+
+	// Trace - enable detailed tracing
+	// +optional
+	Trace bool `json:"trace"`
+
+	// Action - firewall action (ACCEPT or DROP)
+	// +kubebuilder:validation:Enum=ACCEPT;DROP
+	Action RuleAction `json:"action"`
+
+	// Priority - rule priority (0-1000, lower = higher priority)
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=1000
+	// +optional
+	Priority int32 `json:"priority,omitempty"`
+
+	// Description - optional human-readable description
+	// +optional
+	Description string `json:"description,omitempty"`
+
+	// Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+	// +optional
+	Comment string `json:"comment,omitempty"`
+}
+
+// IECidrSvcPortSpec represents a port specification for CIDR-to-service rule
+type IECidrSvcPortSpec struct {
+	// S - source port expression (optional)
+	// Can be a single port, range, or comma-separated list
+	// +optional
+	S string `json:"s,omitempty"`
+
+	// D - destination port expression (required)
+	// Can be a single port, range, or comma-separated list
+	// +kubebuilder:validation:Required
+	D string `json:"d"`
+}
+
+// IECidrSvcRuleStatus defines the observed state of IECidrSvcRule
+type IECidrSvcRuleStatus struct {
+	// Conditions represent the latest available observations of the rule's current state
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// ObservedGeneration is the most recent generation observed by the controller
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
+	// SyncReady indicates if the rule is ready for SGROUP synchronization
+	// +optional
+	SyncReady bool `json:"syncReady,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// IECidrSvcRuleList contains a list of IECidrSvcRule
+type IECidrSvcRuleList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []IECidrSvcRule `json:"items"`
+}
+
+// XIECidrSvcRules - READ-ONLY field for Service resource
+// Contains references to all IECidrSvcRule resources where this Service is the target
+// Populated automatically by PostgreSQL triggers
+type XIECidrSvcRules struct {
+	// Rules contains the list of CIDR-to-service rules where this Service is the target
+	// Full NamespacedObjectReference for each rule
+	// +optional
+	Rules []NamespacedObjectReference `json:"rules,omitempty"`
 }

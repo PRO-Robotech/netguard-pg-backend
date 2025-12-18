@@ -357,6 +357,16 @@ func (r *reader) GetSvcFqdnRuleByID(ctx context.Context, id models.ResourceIdent
 	return nil, ports.ErrNotFound
 }
 
+func (r *reader) ListIECidrSvcRules(ctx context.Context, consume func(models.IECidrSvcRule) error, scope ports.Scope) error {
+	// Stub implementation - return empty list
+	return nil
+}
+
+func (r *reader) GetIECidrSvcRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IECidrSvcRule, error) {
+	// Stub implementation - always return not found
+	return nil, ports.ErrNotFound
+}
+
 func (r *reader) ListNetworks(ctx context.Context, consume func(models.Network) error, scope ports.Scope) error {
 	var networks map[string]models.Network
 
