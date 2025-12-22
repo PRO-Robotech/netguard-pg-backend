@@ -99,11 +99,6 @@ func (v *HostBindingValidator) validateSpec(spec v1beta1.HostBindingSpec, parent
 			fmt.Sprintf("addressGroupRef namespace must match HostBinding namespace (%s)", parentNamespace)))
 	}
 
-	// Validate that HostRef and AddressGroupRef are different (they're in same namespace by definition)
-	if spec.HostRef.Name == spec.AddressGroupRef.Name {
-		allErrs = append(allErrs, field.Invalid(fldPath.Child("addressGroupRef"), spec.AddressGroupRef, "addressGroupRef cannot reference the same resource as hostRef"))
-	}
-
 	return allErrs
 }
 
