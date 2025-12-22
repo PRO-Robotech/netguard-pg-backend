@@ -15,7 +15,8 @@ func ConvertHost(protoHost *netguardpb.Host) models.Host {
 				Namespace: protoHost.SelfRef.Namespace,
 			},
 		},
-		UUID: protoHost.Uuid,
+		UUID:    protoHost.Uuid,
+		Comment: protoHost.Comment,
 
 		// Status fields
 		HostName:         protoHost.HostNameSync,
@@ -58,6 +59,18 @@ func ConvertHost(protoHost *netguardpb.Host) models.Host {
 		}
 	}
 
+	// Convert MetaInfo if present (read-only from SGROUP)
+	if protoHost.MetaInfo != nil {
+		host.MetaInfo = &models.HostMetaInfo{
+			HostName:        protoHost.MetaInfo.HostName,
+			Os:              protoHost.MetaInfo.Os,
+			Platform:        protoHost.MetaInfo.Platform,
+			PlatformFamily:  protoHost.MetaInfo.PlatformFamily,
+			PlatformVersion: protoHost.MetaInfo.PlatformVersion,
+			KernelVersion:   protoHost.MetaInfo.KernelVersion,
+		}
+	}
+
 	return host
 }
 
@@ -68,7 +81,8 @@ func ConvertHostToPB(host models.Host) *netguardpb.Host {
 			Name:      host.Name,
 			Namespace: host.Namespace,
 		},
-		Uuid: host.UUID,
+		Uuid:    host.UUID,
+		Comment: host.Comment,
 
 		// Status fields
 		HostNameSync:     host.HostName,
@@ -107,6 +121,18 @@ func ConvertHostToPB(host models.Host) *netguardpb.Host {
 		}
 	}
 
+	// Convert MetaInfo if present (read-only from SGROUP)
+	if host.MetaInfo != nil {
+		pbHost.MetaInfo = &netguardpb.HostMetaInfo{
+			HostName:        host.MetaInfo.HostName,
+			Os:              host.MetaInfo.Os,
+			Platform:        host.MetaInfo.Platform,
+			PlatformFamily:  host.MetaInfo.PlatformFamily,
+			PlatformVersion: host.MetaInfo.PlatformVersion,
+			KernelVersion:   host.MetaInfo.KernelVersion,
+		}
+	}
+
 	return pbHost
 }
 
@@ -119,7 +145,8 @@ func ConvertHostBinding(protoBinding *netguardpb.HostBinding) models.HostBinding
 				Namespace: protoBinding.SelfRef.Namespace,
 			},
 		},
-		Meta: ConvertMeta(protoBinding.Meta),
+		Comment: protoBinding.Comment,
+		Meta:    ConvertMeta(protoBinding.Meta),
 	}
 
 	// Set host reference
@@ -171,6 +198,7 @@ func ConvertHostBindingToPB(binding models.HostBinding) *netguardpb.HostBinding 
 			Namespace:  binding.AddressGroupRef.Namespace,
 		},
 
-		Meta: ConvertMetaToPB(binding.Meta),
+		Comment: binding.Comment,
+		Meta:    ConvertMetaToPB(binding.Meta),
 	}
 }

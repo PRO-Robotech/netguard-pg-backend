@@ -674,6 +674,16 @@ func (w *writer) DeleteSvcFqdnRulesByIDs(ctx context.Context, ids []models.Resou
 	return nil
 }
 
+func (w *writer) SyncIECidrSvcRules(ctx context.Context, rules []models.IECidrSvcRule, scope ports.Scope, opts ...ports.Option) error {
+	// Stub implementation for in-memory registry
+	return nil
+}
+
+func (w *writer) DeleteIECidrSvcRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	// Stub implementation for in-memory registry
+	return nil
+}
+
 func (w *writer) MarkForDeletionWithStatus(namespace, name, kind string) error {
 	// In-memory registry performs immediate deletion; no-op here
 	return nil

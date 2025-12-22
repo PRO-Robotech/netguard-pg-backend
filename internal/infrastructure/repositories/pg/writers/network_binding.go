@@ -102,14 +102,15 @@ func (w *Writer) upsertNetworkBinding(ctx context.Context, binding *models.Netwo
 
 	// Then, upsert the network binding using the NEW resource version
 	bindingQuery := `
-		INSERT INTO network_bindings (namespace, name, network_namespace, network_name, address_group_namespace, address_group_name, resource_version)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO network_bindings (namespace, name, network_namespace, network_name, address_group_namespace, address_group_name, comment, resource_version)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (namespace, name) DO UPDATE SET
 			network_namespace = $3,
 			network_name = $4,
 			address_group_namespace = $5,
 			address_group_name = $6,
-			resource_version = $7`
+			comment = $7,
+			resource_version = $8`
 
 	if err := w.exec(ctx, bindingQuery,
 		binding.Namespace,
@@ -118,6 +119,7 @@ func (w *Writer) upsertNetworkBinding(ctx context.Context, binding *models.Netwo
 		binding.NetworkRef.Name,
 		binding.AddressGroupRef.Namespace,
 		binding.AddressGroupRef.Name,
+		binding.Comment,
 		resourceVersion,
 	); err != nil {
 		return errors.Wrapf(err, "failed to upsert network binding %s/%s", binding.Namespace, binding.Name)

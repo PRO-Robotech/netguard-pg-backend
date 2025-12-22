@@ -11,6 +11,7 @@ func ConvertService(svc *netguardpb.Service) models.Service {
 	result := models.Service{
 		SelfRef:     models.NewSelfRef(GetSelfRef(svc.GetSelfRef())),
 		Description: svc.Description,
+		Comment:     svc.Comment,
 		Meta:        ConvertMeta(svc.Meta),
 	}
 
@@ -93,6 +94,18 @@ func ConvertService(svc *netguardpb.Service) models.Service {
 		result.XSvcFqdnRules = domainFqdnRules
 	}
 
+	// Convert XIECidrSvcRules (READ-ONLY metadata)
+	if svc.XIecidrsvcRules != nil {
+		domainIECidrRules := &models.XIECidrSvcRules{}
+		if len(svc.XIecidrsvcRules.Rules) > 0 {
+			domainIECidrRules.Rules = make([]models.ResourceIdentifier, len(svc.XIecidrsvcRules.Rules))
+			for i, ref := range svc.XIecidrsvcRules.Rules {
+				domainIECidrRules.Rules[i] = models.NewResourceIdentifier(ref.GetName(), models.WithNamespace(ref.GetNamespace()))
+			}
+		}
+		result.XIECidrSvcRules = domainIECidrRules
+	}
+
 	return result
 }
 
@@ -104,6 +117,7 @@ func ConvertServiceToPB(svc models.Service) *netguardpb.Service {
 			Namespace: svc.ResourceIdentifier.Namespace,
 		},
 		Description: svc.Description,
+		Comment:     svc.Comment,
 		Meta:        ConvertMetaToPB(svc.Meta),
 	}
 
@@ -174,6 +188,20 @@ func ConvertServiceToPB(svc models.Service) *netguardpb.Service {
 			result.XSvcfqdnRules.Rules = make([]*netguardpb.ResourceIdentifier, len(svc.XSvcFqdnRules.Rules))
 			for i, ref := range svc.XSvcFqdnRules.Rules {
 				result.XSvcfqdnRules.Rules[i] = &netguardpb.ResourceIdentifier{
+					Name:      ref.Name,
+					Namespace: ref.Namespace,
+				}
+			}
+		}
+	}
+
+	// Convert XIECidrSvcRules (READ-ONLY field populated by PostgreSQL triggers)
+	if svc.XIECidrSvcRules != nil {
+		result.XIecidrsvcRules = &netguardpb.XIECidrSvcRules{}
+		if len(svc.XIECidrSvcRules.Rules) > 0 {
+			result.XIecidrsvcRules.Rules = make([]*netguardpb.ResourceIdentifier, len(svc.XIECidrSvcRules.Rules))
+			for i, ref := range svc.XIECidrSvcRules.Rules {
+				result.XIecidrsvcRules.Rules[i] = &netguardpb.ResourceIdentifier{
 					Name:      ref.Name,
 					Namespace: ref.Namespace,
 				}

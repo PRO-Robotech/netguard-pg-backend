@@ -38,6 +38,9 @@ const (
 	// TypeSvcSvcRule represents a service-to-service firewall rule
 	TypeSvcSvcRule ResourceType = "SvcSvcRule"
 
+	// TypeIECidrSvcRule represents an ingress/egress CIDR to service firewall rule
+	TypeIECidrSvcRule ResourceType = "IECidrSvcRule"
+
 	// TypeHostBinding represents a binding between a Host and an AddressGroup
 	TypeHostBinding ResourceType = "HostBinding"
 
@@ -149,6 +152,16 @@ func init() {
 
 	resourceRegistry[TypeSvcFqdnRule] = ResourceDefinition{
 		Type:             TypeSvcFqdnRule,
+		Category:         CategoryEntity,
+		TargetSystem:     TargetSGROUP,
+		SupportsCreate:   true,
+		SupportsUpdate:   true,
+		SupportsDelete:   true,
+		AffectsResources: nil,
+	}
+
+	resourceRegistry[TypeIECidrSvcRule] = ResourceDefinition{
+		Type:             TypeIECidrSvcRule,
 		Category:         CategoryEntity,
 		TargetSystem:     TargetSGROUP,
 		SupportsCreate:   true,

@@ -58,6 +58,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&SvcSvcRuleList{},
 		&SvcFqdnRule{},
 		&SvcFqdnRuleList{},
+		&IECidrSvcRule{},
+		&IECidrSvcRuleList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil
@@ -94,6 +96,8 @@ func addKnownTypesInternal(scheme *runtime.Scheme) error {
 		&SvcSvcRuleList{},
 		&SvcFqdnRule{},
 		&SvcFqdnRuleList{},
+		&IECidrSvcRule{},
+		&IECidrSvcRuleList{},
 	)
 	// do NOT call metav1.AddToGroupVersion for internal hub version to avoid
 	// duplicate registration of meta types like WatchEvent.
@@ -172,6 +176,14 @@ func addFieldLabelConversionFuncs(scheme *runtime.Scheme) error {
 	if err := scheme.AddFieldLabelConversionFunc(
 		SchemeGroupVersion.WithKind("SvcFqdnRule"),
 		SvcFqdnRuleFieldLabelConversion,
+	); err != nil {
+		return err
+	}
+
+	// Register field label conversion function for IECidrSvcRule resource
+	if err := scheme.AddFieldLabelConversionFunc(
+		SchemeGroupVersion.WithKind("IECidrSvcRule"),
+		IECidrSvcRuleFieldLabelConversion,
 	); err != nil {
 		return err
 	}

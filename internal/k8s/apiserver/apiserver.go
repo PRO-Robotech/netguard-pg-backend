@@ -25,6 +25,7 @@ import (
 	portmappingstorage "netguard-pg-backend/internal/k8s/registry/addressgroupportmapping"
 	hoststorage "netguard-pg-backend/internal/k8s/registry/host"
 	hostbindingstorage "netguard-pg-backend/internal/k8s/registry/host_binding"
+	iecidrstorage "netguard-pg-backend/internal/k8s/registry/iecidrsvc_rule"
 	networkstorage "netguard-pg-backend/internal/k8s/registry/network"
 	networkbindingstorage "netguard-pg-backend/internal/k8s/registry/network_binding"
 	svcstorage "netguard-pg-backend/internal/k8s/registry/service"
@@ -220,6 +221,7 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 	pmStore := portmappingstorage.NewAddressGroupPortMappingStorage(bClient)
 	svcSvcRuleStore := svcsvcstorage.NewSvcSvcRuleStorage(bClient)
 	svcFqdnRuleStore := svcfqdnstorage.NewSvcFqdnRuleStorage(bClient)
+	ieCidrSvcRuleStore := iecidrstorage.NewIECidrSvcRuleStorage(bClient)
 
 	// Use BaseStorage approach for Network resources (supports generateName)
 	networkStore := networkstorage.NewNetworkStorageWithClient(bClient)
@@ -238,6 +240,7 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 		"addressgroupportmappings":    pmStore,
 		"svcsvcrules":                 svcSvcRuleStore,
 		"svcfqdnrules":                svcFqdnRuleStore,
+		"iecidrsvrules":               ieCidrSvcRuleStore,
 		"networks":                    networkStore,
 		"networkbindings":             networkBindingStore,
 		"hosts":                       hostStore,
@@ -250,6 +253,7 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 		"addressgroupportmappings/status":    portmappingstorage.NewStatusREST(pmStore),
 		"svcsvcrules/status":                 svcsvcstorage.NewStatusREST(svcSvcRuleStore),
 		"svcfqdnrules/status":                svcfqdnstorage.NewStatusREST(svcFqdnRuleStore),
+		"iecidrsvrules/status":               iecidrstorage.NewStatusREST(ieCidrSvcRuleStore),
 
 		"services/addressgroups":               svcstorage.NewAddressGroupsREST(bClient),
 		"addressgroupportmappings/accessports": portmappingstorage.NewAccessPortsREST(bClient),

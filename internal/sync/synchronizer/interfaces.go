@@ -33,12 +33,15 @@ type HostWriter interface {
 // SGROUPHostReader defines interface for reading host data from SGROUP
 type SGROUPHostReader interface {
 	// GetHostsByUUIDs retrieves hosts from SGROUP by their UUIDs
+	// Host contains MetaInfo field with host metadata
 	GetHostsByUUIDs(ctx context.Context, uuids []string) ([]*pb.Host, error)
 
 	// ListAllHosts retrieves all hosts from SGROUP (for full sync)
+	// Host contains MetaInfo field with host metadata
 	ListAllHosts(ctx context.Context) ([]*pb.Host, error)
 
 	// GetHostsInSecurityGroup retrieves hosts belonging to specific security groups
+	// Host contains MetaInfo field with host metadata
 	GetHostsInSecurityGroup(ctx context.Context, sgNames []string) ([]*pb.Host, error)
 }
 

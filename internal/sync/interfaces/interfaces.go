@@ -67,12 +67,15 @@ type SGroupGateway interface {
 
 	// Host operations for reverse synchronization
 	// GetHostsByUUIDs retrieves hosts from SGROUP by their UUIDs
+	// Host contains MetaInfo field with host metadata
 	GetHostsByUUIDs(ctx context.Context, uuids []string) ([]*pb.Host, error)
 
 	// ListAllHosts retrieves all hosts from SGROUP (for full sync)
+	// Host contains MetaInfo field with host metadata
 	ListAllHosts(ctx context.Context) ([]*pb.Host, error)
 
 	// GetHostsInSecurityGroup retrieves hosts from SGROUP that belong to specific security groups
+	// Host contains MetaInfo field with host metadata
 	GetHostsInSecurityGroup(ctx context.Context, sgNames []string) ([]*pb.Host, error)
 }
 

@@ -31,7 +31,6 @@ import (
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
 		"k8s.io/apimachinery/pkg/api/resource.Quantity":                                          schema_apimachinery_pkg_api_resource_Quantity(ref),
-		"k8s.io/apimachinery/pkg/api/resource.int64Amount":                                       schema_apimachinery_pkg_api_resource_int64Amount(ref),
 		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroup":                                          schema_pkg_apis_meta_v1_APIGroup(ref),
 		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroupList":                                      schema_pkg_apis_meta_v1_APIGroupList(ref),
 		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResource":                                       schema_pkg_apis_meta_v1_APIResource(ref),
@@ -112,9 +111,15 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostBindingSpec":                 schema_k8s_apis_netguard_v1beta1_HostBindingSpec(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostBindingStatus":               schema_k8s_apis_netguard_v1beta1_HostBindingStatus(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostList":                        schema_k8s_apis_netguard_v1beta1_HostList(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostMetaInfo":                    schema_k8s_apis_netguard_v1beta1_HostMetaInfo(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostReference":                   schema_k8s_apis_netguard_v1beta1_HostReference(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostSpec":                        schema_k8s_apis_netguard_v1beta1_HostSpec(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostStatus":                      schema_k8s_apis_netguard_v1beta1_HostStatus(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IECidrSvcPortSpec":               schema_k8s_apis_netguard_v1beta1_IECidrSvcPortSpec(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IECidrSvcRule":                   schema_k8s_apis_netguard_v1beta1_IECidrSvcRule(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IECidrSvcRuleList":               schema_k8s_apis_netguard_v1beta1_IECidrSvcRuleList(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IECidrSvcRuleSpec":               schema_k8s_apis_netguard_v1beta1_IECidrSvcRuleSpec(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IECidrSvcRuleStatus":             schema_k8s_apis_netguard_v1beta1_IECidrSvcRuleStatus(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IPItem":                          schema_k8s_apis_netguard_v1beta1_IPItem(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IngressPort":                     schema_k8s_apis_netguard_v1beta1_IngressPort(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference":       schema_k8s_apis_netguard_v1beta1_NamespacedObjectReference(ref),
@@ -149,6 +154,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcSvcRuleList":                  schema_k8s_apis_netguard_v1beta1_SvcSvcRuleList(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcSvcRuleSpec":                  schema_k8s_apis_netguard_v1beta1_SvcSvcRuleSpec(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.SvcSvcRuleStatus":                schema_k8s_apis_netguard_v1beta1_SvcSvcRuleStatus(ref),
+		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.XIECidrSvcRules":                 schema_k8s_apis_netguard_v1beta1_XIECidrSvcRules(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.XSvcFqdnRules":                   schema_k8s_apis_netguard_v1beta1_XSvcFqdnRules(ref),
 		"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.XSvcSvcRules":                    schema_k8s_apis_netguard_v1beta1_XSvcSvcRules(ref),
 	}
@@ -1159,15 +1165,12 @@ func schema_pkg_apis_meta_v1_InternalEvent(ref common.ReferenceCallback) common.
 					"Object": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Object is:\n * If Type is Added or Modified: the new state of the object.\n * If Type is Deleted: the state of the object immediately before deletion.\n * If Type is Bookmark: the object (instance of a type being watched) where\n   only ResourceVersion field is set. On successful restart of watch from a\n   bookmark resourceVersion, client is guaranteed to not get repeat event\n   nor miss any events.\n * If Type is Error: *api.Status is recommended; other types may make sense\n   depending on context.",
-							Ref:         ref("k8s.io/apimachinery/pkg/runtime.Object"),
 						},
 					},
 				},
 				Required: []string{"Type", "Object"},
 			},
 		},
-		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/runtime.Object"},
 	}
 }
 
@@ -3259,6 +3262,13 @@ func schema_k8s_apis_netguard_v1beta1_AddressGroupBindingSpec(ref common.Referen
 							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"),
 						},
 					},
+					"comment": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Comment - optional user comment (Netguard-only)",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"serviceRef", "addressGroupRef"},
 			},
@@ -3585,6 +3595,13 @@ func schema_k8s_apis_netguard_v1beta1_AddressGroupSpec(ref common.ReferenceCallb
 							},
 						},
 					},
+					"comment": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Comment - optional user comment (Netguard-only, not synced to SGROUPS)",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"defaultAction"},
 			},
@@ -3788,11 +3805,17 @@ func schema_k8s_apis_netguard_v1beta1_Host(ref common.ReferenceCallback) common.
 							},
 						},
 					},
+					"xMetaInfo": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MetaInfo contains meta information for this Host, synchronized from SGROUP (read-only)",
+							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostMetaInfo"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostSpec", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostStatus", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IPItem"},
+			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostMetaInfo", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostSpec", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.HostStatus", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IPItem"},
 	}
 }
 
@@ -3913,6 +3936,13 @@ func schema_k8s_apis_netguard_v1beta1_HostBindingSpec(ref common.ReferenceCallba
 							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"),
 						},
 					},
+					"comment": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Comment - optional user comment (Netguard-only)",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"hostRef", "addressGroupRef"},
 			},
@@ -4013,6 +4043,61 @@ func schema_k8s_apis_netguard_v1beta1_HostList(ref common.ReferenceCallback) com
 	}
 }
 
+func schema_k8s_apis_netguard_v1beta1_HostMetaInfo(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "HostMetaInfo contains meta information about the host from SGROUP (read-only)",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"hostName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "HostName is the hostname reported by the agent",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"os": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Os is the operating system (e.g., linux, windows)",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"platform": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Platform is the platform (e.g., ubuntu, centos)",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"platformFamily": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PlatformFamily is the platform family (e.g., debian, rhel)",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"platformVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PlatformVersion is the platform version",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"kernelVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "KernelVersion is the kernel version",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func schema_k8s_apis_netguard_v1beta1_HostReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -4063,6 +4148,13 @@ func schema_k8s_apis_netguard_v1beta1_HostSpec(ref common.ReferenceCallback) com
 						SchemaProps: spec.SchemaProps{
 							Description: "UUID is the unique identifier of the host",
 							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"comment": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Comment - optional user comment (Netguard-only, not synced to SGROUPS)",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -4148,6 +4240,281 @@ func schema_k8s_apis_netguard_v1beta1_HostStatus(ref common.ReferenceCallback) c
 		},
 		Dependencies: []string{
 			"k8s.io/apimachinery/pkg/apis/meta/v1.Condition", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"},
+	}
+}
+
+func schema_k8s_apis_netguard_v1beta1_IECidrSvcPortSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "IECidrSvcPortSpec represents a port specification for CIDR-to-service rule",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"s": {
+						SchemaProps: spec.SchemaProps{
+							Description: "S - source port expression (optional) Can be a single port, range, or comma-separated list",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"d": {
+						SchemaProps: spec.SchemaProps{
+							Description: "D - destination port expression (required) Can be a single port, range, or comma-separated list",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"d"},
+			},
+		},
+	}
+}
+
+func schema_k8s_apis_netguard_v1beta1_IECidrSvcRule(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "IECidrSvcRule represents an ingress/egress CIDR-to-service firewall rule",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IECidrSvcRuleSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IECidrSvcRuleStatus"),
+						},
+					},
+				},
+				Required: []string{"spec"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IECidrSvcRuleSpec", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IECidrSvcRuleStatus"},
+	}
+}
+
+func schema_k8s_apis_netguard_v1beta1_IECidrSvcRuleList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "IECidrSvcRuleList contains a list of IECidrSvcRule",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IECidrSvcRule"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IECidrSvcRule"},
+	}
+}
+
+func schema_k8s_apis_netguard_v1beta1_IECidrSvcRuleSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "IECidrSvcRuleSpec defines the desired state of IECidrSvcRule",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"transport": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Transport protocol (TCP or UDP)",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"cidr": {
+						SchemaProps: spec.SchemaProps{
+							Description: "CIDR - IPv4 or IPv6 CIDR notation (e.g., \"10.0.0.0/8\", \"2001:db8::/32\")",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"svc": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Svc - service reference (NamespacedObjectReference)",
+							Default:     map[string]interface{}{},
+							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"),
+						},
+					},
+					"traffic": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Traffic direction (INGRESS or EGRESS)",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"ports": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Ports - list of port specifications. Each entry can have source and destination ports.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IECidrSvcPortSpec"),
+									},
+								},
+							},
+						},
+					},
+					"logs": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Logs - enable traffic logging",
+							Default:     false,
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"trace": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Trace - enable detailed tracing",
+							Default:     false,
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"action": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Action - firewall action (ACCEPT or DROP)",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"priority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Priority - rule priority (0-1000, lower = higher priority)",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"description": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Description - optional human-readable description",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"comment": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Comment - optional user comment (Netguard-only, not synced to SGROUPS)",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"transport", "cidr", "svc", "traffic", "ports", "action"},
+			},
+		},
+		Dependencies: []string{
+			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.IECidrSvcPortSpec", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"},
+	}
+}
+
+func schema_k8s_apis_netguard_v1beta1_IECidrSvcRuleStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "IECidrSvcRuleStatus defines the observed state of IECidrSvcRule",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"conditions": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Conditions represent the latest available observations of the rule's current state",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Condition"),
+									},
+								},
+							},
+						},
+					},
+					"observedGeneration": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ObservedGeneration is the most recent generation observed by the controller",
+							Type:        []string{"integer"},
+							Format:      "int64",
+						},
+					},
+					"syncReady": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SyncReady indicates if the rule is ready for SGROUP synchronization",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Condition"},
 	}
 }
 
@@ -4417,6 +4784,13 @@ func schema_k8s_apis_netguard_v1beta1_NetworkBindingSpec(ref common.ReferenceCal
 							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"),
 						},
 					},
+					"comment": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Comment - optional user comment (Netguard-only)",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"networkRef", "addressGroupRef"},
 			},
@@ -4619,6 +4993,13 @@ func schema_k8s_apis_netguard_v1beta1_NetworkSpec(ref common.ReferenceCallback) 
 						SchemaProps: spec.SchemaProps{
 							Description: "CIDR is the IP range in CIDR notation",
 							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"comment": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Comment - optional user comment (Netguard-only, not synced to SGROUPS)",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -5024,11 +5405,17 @@ func schema_k8s_apis_netguard_v1beta1_Service(ref common.ReferenceCallback) comm
 							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.XSvcFqdnRules"),
 						},
 					},
+					"xIECidrSvcRules": {
+						SchemaProps: spec.SchemaProps{
+							Description: "xIECidrSvcRules contains references to all IECidrSvcRule resources where this Service is the target. This field is automatically populated by PostgreSQL triggers and is READ-ONLY. Users should NOT modify this field directly - changes will be ignored.",
+							Ref:         ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.XIECidrSvcRules"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupReference", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ServiceSpec", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ServiceStatus", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.XSvcFqdnRules", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.XSvcSvcRules"},
+			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.AddressGroupReference", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ServiceSpec", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.ServiceStatus", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.XIECidrSvcRules", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.XSvcFqdnRules", "netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.XSvcSvcRules"},
 	}
 }
 
@@ -5175,6 +5562,13 @@ func schema_k8s_apis_netguard_v1beta1_ServiceSpec(ref common.ReferenceCallback) 
 									},
 								},
 							},
+						},
+					},
+					"comment": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Comment - optional user comment (Netguard-only, not synced to SGROUPS)",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 				},
@@ -5422,6 +5816,13 @@ func schema_k8s_apis_netguard_v1beta1_SvcFqdnRuleSpec(ref common.ReferenceCallba
 							Format:      "",
 						},
 					},
+					"comment": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Comment - optional user comment (Netguard-only, not synced to SGROUPS)",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"serviceFrom", "fqdn", "transport", "ports", "action"},
 			},
@@ -5630,6 +6031,13 @@ func schema_k8s_apis_netguard_v1beta1_SvcSvcRuleSpec(ref common.ReferenceCallbac
 							Format:      "",
 						},
 					},
+					"comment": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Comment - optional user comment (Netguard-only, not synced to SGROUPS)",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"serviceFrom", "serviceTo"},
 			},
@@ -5679,6 +6087,35 @@ func schema_k8s_apis_netguard_v1beta1_SvcSvcRuleStatus(ref common.ReferenceCallb
 		},
 		Dependencies: []string{
 			"k8s.io/apimachinery/pkg/apis/meta/v1.Condition"},
+	}
+}
+
+func schema_k8s_apis_netguard_v1beta1_XIECidrSvcRules(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "XIECidrSvcRules - READ-ONLY field for Service resource Contains references to all IECidrSvcRule resources where this Service is the target Populated automatically by PostgreSQL triggers",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"rules": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Rules contains the list of CIDR-to-service rules where this Service is the target Full NamespacedObjectReference for each rule",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"netguard-pg-backend/internal/k8s/apis/netguard/v1beta1.NamespacedObjectReference"},
 	}
 }
 

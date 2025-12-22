@@ -3,12 +3,14 @@ package readers
 import (
 	"context"
 	"fmt"
-	"github.com/jackc/pgx/v5"
-	"github.com/pkg/errors"
+	"time"
+
 	"netguard-pg-backend/internal/domain/models"
 	"netguard-pg-backend/internal/domain/ports"
 	"netguard-pg-backend/internal/infrastructure/repositories/pg/internal/utils"
-	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/pkg/errors"
 )
 
 func (r *Reader) ListAddressGroupPortMappings(ctx context.Context, consume func(models.AddressGroupPortMapping) error, scope ports.Scope) error {
@@ -42,8 +44,10 @@ func (r *Reader) ListAddressGroupPortMappings(ctx context.Context, consume func(
 			return err
 		}
 	}
+
 	return rows.Err()
 }
+
 func (r *Reader) GetAddressGroupPortMappingByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroupPortMapping, error) {
 	query := `
 		SELECT agpm.namespace, agpm.name, agpm.access_ports,
@@ -60,8 +64,10 @@ func (r *Reader) GetAddressGroupPortMappingByID(ctx context.Context, id models.R
 		}
 		return nil, errors.Wrap(err, "failed to scan address group port mapping")
 	}
+
 	return mapping, nil
 }
+
 func (r *Reader) scanAddressGroupPortMapping(rows pgx.Rows) (models.AddressGroupPortMapping, error) {
 	var mapping models.AddressGroupPortMapping
 	var labelsJSON, annotationsJSON, conditionsJSON []byte
@@ -84,17 +90,22 @@ func (r *Reader) scanAddressGroupPortMapping(rows pgx.Rows) (models.AddressGroup
 	if err != nil {
 		return mapping, err
 	}
+
 	mapping.AccessPorts, err = utils.UnmarshalAccessPorts(accessPortsJSON)
 	if err != nil {
 		return mapping, err
 	}
+
 	mapping.Meta, err = utils.ConvertK8sMetadata(fmt.Sprintf("%d", resourceVersion), labelsJSON, annotationsJSON, conditionsJSON, createdAt, updatedAt, deletionTS)
 	if err != nil {
 		return mapping, err
 	}
+
 	mapping.SelfRef = models.NewSelfRef(models.NewResourceIdentifier(mapping.Name, models.WithNamespace(mapping.Namespace)))
+
 	return mapping, nil
 }
+
 func (r *Reader) scanAddressGroupPortMappingRow(row pgx.Row) (*models.AddressGroupPortMapping, error) {
 	var mapping models.AddressGroupPortMapping
 	var labelsJSON, annotationsJSON, conditionsJSON []byte
@@ -117,14 +128,17 @@ func (r *Reader) scanAddressGroupPortMappingRow(row pgx.Row) (*models.AddressGro
 	if err != nil {
 		return nil, err
 	}
+
 	mapping.AccessPorts, err = utils.UnmarshalAccessPorts(accessPortsJSON)
 	if err != nil {
 		return nil, err
 	}
+
 	mapping.Meta, err = utils.ConvertK8sMetadata(fmt.Sprintf("%d", resourceVersion), labelsJSON, annotationsJSON, conditionsJSON, createdAt, updatedAt, deletionTS)
 	if err != nil {
 		return nil, err
 	}
 	mapping.SelfRef = models.NewSelfRef(models.NewResourceIdentifier(mapping.Name, models.WithNamespace(mapping.Namespace)))
+
 	return &mapping, nil
 }

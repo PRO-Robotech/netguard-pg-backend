@@ -21,6 +21,7 @@ type NetguardFacade struct {
 	addressGroupResourceService   *resources.AddressGroupResourceService
 	svcSvcRuleResourceService     *resources.SvcSvcRuleResourceService
 	svcFqdnRuleResourceService    *resources.SvcFqdnRuleResourceService
+	ieCidrSvcRuleResourceService  *resources.IECidrSvcRuleResourceService
 	validationService             *resources.ValidationService
 	networkResourceService        *resources.NetworkResourceService
 	networkBindingResourceService *resources.NetworkBindingResourceService
@@ -44,6 +45,7 @@ func NewNetguardFacade(
 	hostConditionAdapter := &hostConditionManagerAdapter{conditionManager}
 	hostBindingConditionAdapter := &hostBindingConditionManagerAdapter{conditionManager}
 	svcSvcRuleConditionAdapter := &svcSvcRuleConditionManager{conditionManager}
+	ieCidrSvcRuleConditionAdapter := &ieCidrSvcRuleConditionManagerAdapter{conditionManager}
 	validationService := resources.NewValidationService(registry, syncManager)
 	hostResourceService := resources.NewHostResourceService(registry, syncManager, hostConditionAdapter)
 	serviceResourceService := resources.NewServiceResourceService(registry, syncManager, serviceConditionAdapter)
@@ -57,11 +59,13 @@ func NewNetguardFacade(
 		addressGroupResourceService, syncManager, hostBindingConditionAdapter)
 	svcSvcRuleResourceService := resources.NewSvcSvcRuleResourceService(registry, syncManager, svcSvcRuleConditionAdapter)
 	svcFqdnRuleResourceService := resources.NewSvcFqdnRuleResourceService(registry)
+	ieCidrSvcRuleResourceService := resources.NewIECidrSvcRuleResourceService(registry, ieCidrSvcRuleConditionAdapter)
 	facade := &NetguardFacade{
 		serviceResourceService:        serviceResourceService,
 		addressGroupResourceService:   addressGroupResourceService,
 		svcSvcRuleResourceService:     svcSvcRuleResourceService,
 		svcFqdnRuleResourceService:    svcFqdnRuleResourceService,
+		ieCidrSvcRuleResourceService:  ieCidrSvcRuleResourceService,
 		validationService:             validationService,
 		networkResourceService:        networkResourceService,
 		networkBindingResourceService: networkBindingResourceService,
@@ -263,6 +267,26 @@ func (f *NetguardFacade) DeleteSvcFqdnRulesByIDs(ctx context.Context, ids []mode
 	return f.svcFqdnRuleResourceService.DeleteSvcFqdnRulesByIDs(ctx, ids)
 }
 
+func (f *NetguardFacade) GetIECidrSvcRules(ctx context.Context, scope ports.Scope) ([]models.IECidrSvcRule, error) {
+	return f.ieCidrSvcRuleResourceService.GetIECidrSvcRules(ctx, scope)
+}
+
+func (f *NetguardFacade) GetIECidrSvcRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IECidrSvcRule, error) {
+	return f.ieCidrSvcRuleResourceService.GetIECidrSvcRuleByID(ctx, id)
+}
+
+func (f *NetguardFacade) CreateIECidrSvcRule(ctx context.Context, rule models.IECidrSvcRule) error {
+	return f.ieCidrSvcRuleResourceService.CreateIECidrSvcRule(ctx, rule)
+}
+
+func (f *NetguardFacade) UpdateIECidrSvcRule(ctx context.Context, rule models.IECidrSvcRule) error {
+	return f.ieCidrSvcRuleResourceService.UpdateIECidrSvcRule(ctx, rule)
+}
+
+func (f *NetguardFacade) DeleteIECidrSvcRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier) error {
+	return f.ieCidrSvcRuleResourceService.DeleteIECidrSvcRulesByIDs(ctx, ids)
+}
+
 func (f *NetguardFacade) GetNetworks(ctx context.Context, scope ports.Scope) ([]models.Network, error) {
 	return f.networkResourceService.ListNetworks(ctx, scope)
 }
@@ -434,6 +458,8 @@ func (f *NetguardFacade) Sync(ctx context.Context, syncOp models.SyncOp, resourc
 		return f.svcSvcRuleResourceService.SyncSvcSvcRules(ctx, typedResources, ports.EmptyScope{}, syncOp)
 	case []models.SvcFqdnRule:
 		return f.svcFqdnRuleResourceService.SyncSvcFqdnRules(ctx, typedResources, ports.EmptyScope{}, syncOp)
+	case []models.IECidrSvcRule:
+		return f.ieCidrSvcRuleResourceService.SyncIECidrSvcRules(ctx, typedResources, ports.EmptyScope{}, syncOp)
 	default:
 		return errors.New(fmt.Sprintf("unsupported resource type: %T", resources))
 	}
@@ -571,12 +597,6 @@ func (f *NetguardFacade) GetNetworkBindingResourceService() *resources.NetworkBi
 	return f.networkBindingResourceService
 }
 func (f *NetguardFacade) MarkForDeletion(ctx context.Context, namespace, name, kind string) error {
-	klog.InfoS("NetguardFacade.MarkForDeletion invoked",
-		"namespace", namespace,
-		"name", name,
-		"kind", kind)
-
-	// Use ExecuteDeleteWithRetry to handle serialization failures (SQLSTATE 40001)
 	err := f.registry.ExecuteDeleteWithRetry(ctx, func(writer ports.Writer) error {
 		klog.V(2).InfoS("NetguardFacade.MarkForDeletion: Executing MarkForDeletionWithStatus",
 			"namespace", namespace, "name", name, "kind", kind)
@@ -589,8 +609,6 @@ func (f *NetguardFacade) MarkForDeletion(ctx context.Context, namespace, name, k
 		return err
 	}
 
-	klog.InfoS("NetguardFacade.MarkForDeletion completed",
-		"namespace", namespace, "name", name, "kind", kind)
 	return nil
 }
 
@@ -603,4 +621,15 @@ func (s *svcSvcRuleConditionManager) ProcessSvcSvcRuleConditions(ctx context.Con
 		return nil
 	}
 	return nil
+}
+
+type ieCidrSvcRuleConditionManagerAdapter struct {
+	conditionManager *conditions.ConditionManager
+}
+
+func (a *ieCidrSvcRuleConditionManagerAdapter) ProcessIECidrSvcRuleConditions(ctx context.Context, rule *models.IECidrSvcRule) error {
+	if a.conditionManager == nil {
+		return nil
+	}
+	return a.conditionManager.ProcessIECidrSvcRuleConditions(ctx, rule)
 }

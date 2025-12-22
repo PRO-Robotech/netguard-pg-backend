@@ -105,17 +105,12 @@ func (s *BaseStorage[K, D]) Get(ctx context.Context, name string, options *metav
 	namespace := utils.NamespaceFrom(ctx)
 	domainObj, err := s.getFromBackend(ctx, namespace, name)
 	if err != nil {
-		klog.V(1).InfoS("get: backend error occurred",
-			"name", name,
-			"error", err.Error())
 		if isNotFoundError(err) {
-			klog.V(1).InfoS("get: returning Kubernetes NotFound error", "name", name)
 			return nil, apierrors.NewNotFound(
 				schema.GroupResource{Group: "netguard.sgroups.io", Resource: s.resourceName},
 				name,
 			)
 		}
-		klog.V(1).InfoS("get: backend error is not NotFound, returning raw error", "name", name)
 		return nil, err
 	}
 	k8sObj, err := s.converter.FromDomain(ctx, *domainObj)
@@ -156,11 +151,6 @@ func (s *BaseStorage[K, D]) List(ctx context.Context, options *internalversion.L
 
 	// If we have field or label selectors, convert scope to FieldSelectorScope
 	if len(fieldSelectors) > 0 || len(labelSelectors) > 0 {
-		klog.V(2).InfoS("List: parsing field/label selectors",
-			"resource", s.resourceName,
-			"fieldSelectorsCount", len(fieldSelectors),
-			"labelSelectorsCount", len(labelSelectors))
-
 		// Convert basic scope to FieldSelectorScope
 		var identifiers []models.ResourceIdentifier
 		if idScope, ok := scope.(ports.ResourceIdentifierScope); ok {
@@ -172,10 +162,6 @@ func (s *BaseStorage[K, D]) List(ctx context.Context, options *internalversion.L
 			FieldSelectors: fieldSelectors,
 			LabelSelectors: labelSelectors,
 		}
-
-		klog.V(2).InfoS("List: created FieldSelectorScope",
-			"resource", s.resourceName,
-			"scope", scope.String())
 	}
 
 	domainObjs, err := s.listFromBackend(ctx, scope)
@@ -331,12 +317,7 @@ func (s *BaseStorage[K, D]) Update(ctx context.Context, name string, objInfo res
 			"error", err.Error())
 		return nil, false, fmt.Errorf("failed to convert current domain object to k8s object: %w", err)
 	}
-	klog.V(3).InfoS("conversion success from domain to k8s",
-		"resource", s.resourceName)
-	klog.V(4).InfoS("retrieving updated object from objInfo",
-		"resource", s.resourceName,
-		"objInfoType", fmt.Sprintf("%T", objInfo),
-		"currentK8sObjType", fmt.Sprintf("%T", currentK8sObj))
+
 	objInfoType := fmt.Sprintf("%T", objInfo)
 	if objInfoType == "*rest.defaultUpdatedObjectInfo" {
 		klog.V(4).InfoS("detected defaultUpdatedObjectInfo in patch flow",
@@ -419,15 +400,8 @@ func (s *BaseStorage[K, D]) Update(ctx context.Context, name string, objInfo res
 				"resource", s.resourceName)
 			return nil, false, fmt.Errorf("internal error: patch data is nil")
 		}
-		klog.InfoS("using patched object extracted from objInfo",
-			"resource", s.resourceName,
-			"method", "Unsafe pointer access to private 'obj' field",
-			"reason", "Completely bypassing problematic objInfo.UpdatedObject() call")
+
 		if patchData.ExtractedObject != nil {
-			klog.InfoS("✅ USING EXTRACTED OBJECT: Direct object from objInfo reflection",
-				"resource", s.resourceName,
-				"extractedType", fmt.Sprintf("%T", patchData.ExtractedObject),
-				"solution", "Perfect bypass - using pre-patched object from objInfo")
 			var ok bool
 			finalK8sObj, ok = patchData.ExtractedObject.(K)
 			if !ok {
@@ -456,9 +430,6 @@ func (s *BaseStorage[K, D]) Update(ctx context.Context, name string, objInfo res
 			}
 		}
 	} else {
-		klog.InfoS("🔄 NON-PATCH UPDATE: Using original objInfo.UpdatedObject()",
-			"resource", s.resourceName,
-			"objInfoType", fmt.Sprintf("%T", objInfo))
 		updatedObj, err := objInfo.UpdatedObject(ctx, currentK8sObj)
 		if err != nil {
 			klog.InfoS("❌ FAILED to get updated object from objInfo",
@@ -466,8 +437,7 @@ func (s *BaseStorage[K, D]) Update(ctx context.Context, name string, objInfo res
 				"error", err.Error())
 			return nil, false, fmt.Errorf("objInfo.UpdatedObject() failed: %w", err)
 		}
-		klog.InfoS("✅ objInfo.UpdatedObject() SUCCESS",
-			"resource", s.resourceName)
+
 		var ok bool
 		finalK8sObj, ok = updatedObj.(K)
 		if !ok {
@@ -480,11 +450,6 @@ func (s *BaseStorage[K, D]) Update(ctx context.Context, name string, objInfo res
 	}
 	deletionTimestamp := accessor.GetDeletionTimestamp()
 	if deletionTimestamp != nil && !deletionTimestamp.IsZero() {
-		klog.InfoS("🚫 UPDATE BLOCKED: Object is being deleted, rejecting update to prevent ResourceVersion conflicts",
-			"resource", s.resourceName,
-			"name", name,
-			"namespace", namespace,
-			"deletionTimestamp", deletionTimestamp.String())
 		return nil, false, apierrors.NewConflict(
 			schema.GroupResource{Group: "netguard.sgroups.io", Resource: s.resourceName},
 			name,
@@ -524,14 +489,6 @@ func (s *BaseStorage[K, D]) Update(ctx context.Context, name string, objInfo res
 }
 func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions) (runtime.Object, bool, error) {
 	namespace := utils.NamespaceFrom(ctx)
-	klog.InfoS("🔥 DELETE METHOD CALLED - STARTING DELETE OPERATION",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace)
-	klog.InfoS("🔍 DELETE: Getting object from backend",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace)
 	domainObj, err := s.getFromBackend(ctx, namespace, name)
 	if err != nil {
 		klog.InfoS("❌ DELETE: Failed to get object from backend",
@@ -541,14 +498,7 @@ func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValid
 			"error", err.Error())
 		return nil, false, err
 	}
-	klog.InfoS("✅ DELETE: Successfully got object from backend",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace)
-	klog.InfoS("🔄 DELETE: Converting domain object to k8s object",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace)
+
 	k8sObj, err := s.converter.FromDomain(ctx, *domainObj)
 	if err != nil {
 		klog.InfoS("❌ DELETE: Failed to convert domain object to k8s object",
@@ -558,14 +508,7 @@ func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValid
 			"error", err.Error())
 		return nil, false, fmt.Errorf("failed to convert domain object to k8s object: %w", err)
 	}
-	klog.InfoS("✅ DELETE: Successfully converted domain object to k8s object",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace)
-	klog.InfoS("🔍 DELETE: Validating deletion",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace)
+
 	if errs := s.validator.ValidateDelete(ctx, k8sObj); len(errs) > 0 {
 		klog.InfoS("❌ DELETE: Validation failed",
 			"resource", s.resourceName,
@@ -578,15 +521,8 @@ func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValid
 			errs,
 		)
 	}
-	klog.InfoS("✅ DELETE: Validation passed",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace)
+
 	if deleteValidation != nil {
-		klog.InfoS("🔍 DELETE: Running additional validation",
-			"resource", s.resourceName,
-			"name", name,
-			"namespace", namespace)
 		if err := deleteValidation(ctx, k8sObj); err != nil {
 			klog.InfoS("❌ DELETE: Additional validation failed",
 				"resource", s.resourceName,
@@ -595,15 +531,9 @@ func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValid
 				"error", err.Error())
 			return nil, false, err
 		}
-		klog.InfoS("✅ DELETE: Additional validation passed",
-			"resource", s.resourceName,
-			"name", name,
-			"namespace", namespace)
+
 	}
-	klog.InfoS("🗑️ DELETE: Marking for deletion (soft delete)",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace)
+
 	err = s.markForDeletionInBackend(ctx, namespace, name)
 	if err != nil {
 		klog.InfoS("❌ DELETE: markForDeletionInBackend failed",
@@ -613,14 +543,7 @@ func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValid
 			"error", err.Error())
 		return nil, false, err
 	}
-	klog.InfoS("✅ DELETE: Marked for deletion successfully",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace)
-	klog.InfoS("🔄 DELETE: Fetching updated object after marking for deletion",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace)
+
 	updatedDomainObj, err := s.getFromBackend(ctx, namespace, name)
 	if err != nil {
 		klog.InfoS("❌ DELETE: Failed to fetch updated object",
@@ -657,23 +580,14 @@ func (s *BaseStorage[K, D]) Delete(ctx context.Context, name string, deleteValid
 			"error", err.Error())
 		return nil, false, err
 	}
-	klog.InfoS("📡 DELETE: Broadcasting watch.Modified event (soft delete)",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace)
+
 	s.broadcastWatchEvent(watch.Modified, updatedK8sObj)
-	klog.InfoS("🎉 DELETE: Soft delete completed - resource marked for deletion",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace,
-		"message", "Resource will be physically deleted after SGROUP sync by OutboxWorker")
+
 	return updatedK8sObj, true, nil
 }
 func (s *BaseStorage[K, D]) DeleteCollection(ctx context.Context, deleteValidation rest.ValidateObjectFunc, options *metav1.DeleteOptions, listOptions *internalversion.ListOptions) (runtime.Object, error) {
 	namespace := utils.NamespaceFrom(ctx)
-	klog.InfoS("🗑️🗑️🗑️ DELETE COLLECTION STARTED",
-		"resource", s.resourceName,
-		"namespace", namespace)
+
 	listObj, err := s.List(ctx, listOptions)
 	if err != nil {
 		klog.InfoS("❌ DELETE COLLECTION: Failed to list resources",
@@ -690,10 +604,7 @@ func (s *BaseStorage[K, D]) DeleteCollection(ctx context.Context, deleteValidati
 			"error", err.Error())
 		return nil, err
 	}
-	klog.InfoS("📋 DELETE COLLECTION: Found resources to delete",
-		"resource", s.resourceName,
-		"namespace", namespace,
-		"count", len(items))
+
 	var deletedCount int
 	for _, item := range items {
 		accessor, err := meta.Accessor(item)
@@ -719,11 +630,7 @@ func (s *BaseStorage[K, D]) DeleteCollection(ctx context.Context, deleteValidati
 		}
 		deletedCount++
 	}
-	klog.InfoS("✅ DELETE COLLECTION: Completed",
-		"resource", s.resourceName,
-		"namespace", namespace,
-		"total", len(items),
-		"deleted", deletedCount)
+
 	return &metav1.Status{
 		Status: metav1.StatusSuccess,
 		Details: &metav1.StatusDetails{
@@ -731,14 +638,10 @@ func (s *BaseStorage[K, D]) DeleteCollection(ctx context.Context, deleteValidati
 		},
 	}, nil
 }
+
 func (s *BaseStorage[K, D]) Patch(ctx context.Context, name string, patchType types.PatchType, data []byte, options *metav1.PatchOptions, subresources ...string) (runtime.Object, error) {
 	namespace := utils.NamespaceFrom(ctx)
-	klog.InfoS("🚀🚀🚀 PATCH OPERATION STARTED - DEFINITELY BEING CALLED",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace,
-		"patchType", string(patchType),
-		"dataSize", len(data))
+
 	patchData := &PatchData{
 		PatchType: patchType,
 		Data:      data,
@@ -747,10 +650,7 @@ func (s *BaseStorage[K, D]) Patch(ctx context.Context, name string, patchType ty
 		Namespace: namespace,
 	}
 	ctx = WithPatchData(ctx, patchData)
-	klog.InfoS("✅ Patch data stored in context for fallback use",
-		"resource", s.resourceName,
-		"patchType", string(patchType),
-		"dataSize", len(data))
+
 	var currentK8sObj K
 	var isCreateOperation bool
 	if patchType == types.ApplyPatchType {
@@ -865,6 +765,7 @@ func (s *BaseStorage[K, D]) Patch(ctx context.Context, name string, patchType ty
 	s.broadcastWatchEvent(watch.Modified, finalK8sObj)
 	return finalK8sObj, nil
 }
+
 func (s *BaseStorage[K, D]) Watch(ctx context.Context, options *internalversion.ListOptions) (watch.Interface, error) {
 	if s.backendClient == nil {
 		return nil, apierrors.NewInternalError(fmt.Errorf("watch not configured for resource %s", s.resourceName))
@@ -886,26 +787,11 @@ func (s *BaseStorage[K, D]) Watch(ctx context.Context, options *internalversion.
 		return nil, apierrors.NewInternalError(fmt.Errorf("failed to initialize gRPC watch: %w", err))
 	}
 
-	klog.V(4).InfoS("Created gRPC watch",
-		"resource", s.resourceName,
-		"namespace", req.Namespace,
-		"resourceVersion", req.ResourceVersion,
-		"resourceVersionMatch", req.ResourceVersionMatch,
-		"timeoutSeconds", req.TimeoutSeconds,
-		"labelSelector", req.LabelSelector,
-		"fieldSelector", req.FieldSelector)
-
 	return watcher, nil
 }
 func (s *BaseStorage[K, D]) getFromBackend(ctx context.Context, namespace, name string) (*D, error) {
 	id := models.NewResourceIdentifier(name, models.WithNamespace(namespace))
-	getBackendStartTime := time.Now()
-	klog.InfoS("🚀 getFromBackend CALLED - ENHANCED TRACKING",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace,
-		"timestamp", getBackendStartTime.Format("15:04:05.000000"),
-		"identifier", fmt.Sprintf("%+v", id))
+
 	result, err := s.backendOps.Get(ctx, id)
 	if err != nil {
 		klog.V(1).InfoS("getFromBackend error",
@@ -937,6 +823,7 @@ func (s *BaseStorage[K, D]) getFromBackend(ctx context.Context, namespace, name 
 	}
 	return result, err
 }
+
 func (s *BaseStorage[K, D]) listFromBackend(ctx context.Context, scope interface{}) ([]D, error) {
 	if scope == nil {
 		return s.backendOps.List(ctx, nil)
@@ -946,6 +833,7 @@ func (s *BaseStorage[K, D]) listFromBackend(ctx context.Context, scope interface
 	}
 	return s.backendOps.List(ctx, nil)
 }
+
 func (s *BaseStorage[K, D]) createInBackend(ctx context.Context, obj *D) (*D, error) {
 	err := s.backendOps.Create(ctx, obj)
 	if err != nil {
@@ -953,10 +841,8 @@ func (s *BaseStorage[K, D]) createInBackend(ctx context.Context, obj *D) (*D, er
 	}
 	return obj, nil
 }
+
 func (s *BaseStorage[K, D]) updateInBackend(ctx context.Context, obj *D) (*D, error) {
-	klog.InfoS("🔧 updateInBackend CALLED",
-		"resource", s.resourceName,
-		"objType", fmt.Sprintf("%T", obj))
 	err := s.backendOps.Update(ctx, obj)
 	if err != nil {
 		klog.InfoS("❌ updateInBackend FAILED",
@@ -965,17 +851,12 @@ func (s *BaseStorage[K, D]) updateInBackend(ctx context.Context, obj *D) (*D, er
 			"errorType", fmt.Sprintf("%T", err))
 		return nil, err
 	}
-	klog.InfoS("✅ updateInBackend SUCCESS",
-		"resource", s.resourceName)
+
 	return obj, nil
 }
 func (s *BaseStorage[K, D]) deleteFromBackend(ctx context.Context, namespace, name string) error {
 	id := models.NewResourceIdentifier(name, models.WithNamespace(namespace))
-	klog.InfoS("🔧 deleteFromBackend: Calling backendOps.Delete",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace,
-		"resourceId", fmt.Sprintf("%+v", id))
+
 	err := s.backendOps.Delete(ctx, id)
 	if err != nil {
 		klog.InfoS("❌ deleteFromBackend: backendOps.Delete failed",
@@ -986,19 +867,10 @@ func (s *BaseStorage[K, D]) deleteFromBackend(ctx context.Context, namespace, na
 			"error", err.Error())
 		return err
 	}
-	klog.InfoS("✅ deleteFromBackend: backendOps.Delete succeeded",
-		"resource", s.resourceName,
-		"name", name,
-		"namespace", namespace,
-		"resourceId", fmt.Sprintf("%+v", id))
+
 	return nil
 }
 func (s *BaseStorage[K, D]) markForDeletionInBackend(ctx context.Context, namespace, name string) error {
-	klog.InfoS("🔧 markForDeletionInBackend: Marking resource for deletion",
-		"resource", s.resourceName,
-		"kind", s.kindName,
-		"name", name,
-		"namespace", namespace)
 	err := s.backendOps.MarkForDeletion(ctx, namespace, name, s.kindName)
 	if err != nil {
 		klog.InfoS("❌ markForDeletionInBackend: MarkForDeletion failed",
@@ -1009,11 +881,7 @@ func (s *BaseStorage[K, D]) markForDeletionInBackend(ctx context.Context, namesp
 			"error", err.Error())
 		return err
 	}
-	klog.InfoS("✅ markForDeletionInBackend: Successfully marked for deletion",
-		"resource", s.resourceName,
-		"kind", s.kindName,
-		"name", name,
-		"namespace", namespace)
+
 	return nil
 }
 func (s *BaseStorage[K, D]) broadcastWatchEvent(eventType watch.EventType, obj runtime.Object) {
@@ -1079,6 +947,8 @@ func (s *BaseStorage[K, D]) startWatchStream(ctx context.Context, req *netguardp
 		return s.backendClient.WatchSvcSvcRules(ctx, req)
 	case "svcfqdnrules":
 		return s.backendClient.WatchSvcFqdnRules(ctx, req)
+	case "iecidrsvrules":
+		return s.backendClient.WatchIECidrSvcRules(ctx, req)
 	default:
 		return nil, fmt.Errorf("watch not supported for resource %s", s.resourceName)
 	}
@@ -1129,11 +999,7 @@ func (s *BaseStorage[K, D]) hasDeletionTimestampSet(domainObj *D) bool {
 func (s *BaseStorage[K, D]) applyPatch(current runtime.Object, patchType types.PatchType, data []byte) (runtime.Object, error) {
 	objectName := getObjectName(current)
 	namespace := getObjectNamespace(current)
-	klog.V(2).InfoS("Applying patch operation",
-		"patchType", patchType,
-		"objectName", objectName,
-		"namespace", namespace,
-		"resourceKind", s.kindName)
+
 	var result runtime.Object
 	var err error
 	switch patchType {
@@ -1155,10 +1021,7 @@ func (s *BaseStorage[K, D]) applyPatch(current runtime.Object, patchType types.P
 func applyJSONPatch(current runtime.Object, data []byte) (runtime.Object, error) {
 	objectName := getObjectName(current)
 	namespace := getObjectNamespace(current)
-	klog.V(3).InfoS("Applying JSON Patch",
-		"objectName", objectName,
-		"namespace", namespace,
-		"patchSize", len(data))
+
 	result, err := patch.ApplyJSONPatch(current, data)
 	if err != nil {
 		klog.ErrorS(err, "Failed to apply JSON Patch",
@@ -1166,18 +1029,13 @@ func applyJSONPatch(current runtime.Object, data []byte) (runtime.Object, error)
 			"namespace", namespace)
 		return nil, err
 	}
-	klog.V(3).InfoS("Successfully applied JSON Patch",
-		"objectName", objectName,
-		"namespace", namespace)
+
 	return result, nil
 }
 func applyMergePatch(current runtime.Object, data []byte) (runtime.Object, error) {
 	objectName := getObjectName(current)
 	namespace := getObjectNamespace(current)
-	klog.V(3).InfoS("Applying Merge Patch",
-		"objectName", objectName,
-		"namespace", namespace,
-		"patchSize", len(data))
+
 	result, err := patch.ApplyMergePatch(current, data)
 	if err != nil {
 		klog.ErrorS(err, "Failed to apply Merge Patch",
@@ -1185,18 +1043,13 @@ func applyMergePatch(current runtime.Object, data []byte) (runtime.Object, error
 			"namespace", namespace)
 		return nil, err
 	}
-	klog.V(3).InfoS("Successfully applied Merge Patch",
-		"objectName", objectName,
-		"namespace", namespace)
+
 	return result, nil
 }
 func applyStrategicMergePatch(current runtime.Object, data []byte) (runtime.Object, error) {
 	objectName := getObjectName(current)
 	namespace := getObjectNamespace(current)
-	klog.V(3).InfoS("Applying Strategic Merge Patch",
-		"objectName", objectName,
-		"namespace", namespace,
-		"patchSize", len(data))
+
 	result, err := patch.ApplyStrategicMergePatch(current, data)
 	if err != nil {
 		klog.ErrorS(err, "Failed to apply Strategic Merge Patch",
@@ -1236,6 +1089,7 @@ func (s *BaseStorage[K, D]) isServerSideApplyRequest(ctx context.Context) bool {
 	}
 	return false
 }
+
 func (s *BaseStorage[K, D]) handleSimpleSSACreate(ctx context.Context, namespace, name string) (*D, error) {
 	klog.V(1).InfoS("🛠️ Creating minimal resource for SSA CREATE",
 		"resource", s.resourceName,
@@ -1274,6 +1128,7 @@ func (s *BaseStorage[K, D]) handleSimpleSSACreate(ctx context.Context, namespace
 	klog.V(1).InfoS("✅ Minimal SSA CREATE successful in backend")
 	return &domainObj, nil
 }
+
 func (s *BaseStorage[K, D]) setMinimalRequiredFields(obj runtime.Object) error {
 	accessor, err := meta.Accessor(obj)
 	if err != nil {
@@ -1541,13 +1396,7 @@ func isNotFoundError(err error) bool {
 	isEntityNotFound := strings.Contains(errMsg, "entity not found")
 	isGeneralNotFound := strings.Contains(errMsg, "not found")
 	isK8sNotFound := apierrors.IsNotFound(err)
-	klog.V(1).InfoS("🔍 DEBUG: isNotFoundError check",
-		"errorMsg", errMsg,
-		"entityNotFound", isEntityNotFound,
-		"generalNotFound", isGeneralNotFound,
-		"k8sNotFound", isK8sNotFound)
 	result := isEntityNotFound || isGeneralNotFound || isK8sNotFound
-	klog.V(1).InfoS("🔍 DEBUG: isNotFoundError result", "result", result)
 	return result
 }
 func (s *BaseStorage[K, D]) setObjectMeta(obj runtime.Object, name, namespace string) error {
@@ -1765,9 +1614,7 @@ func extractPatchDataFromObjInfo(objInfo rest.UpdatedObjectInfo) (*PatchData, bo
 			}
 		}
 	}
-	klog.InfoS("❌ PATCH EXTRACTION: Unable to extract patch data from objInfo",
-		"reason", "Could not access private 'obj' field via unsafe pointers",
-		"suggestion", "May need different approach or direct objInfo object usage")
+
 	return nil, false
 }
 

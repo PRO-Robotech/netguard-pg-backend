@@ -25,6 +25,7 @@ type (
 		ListHostBindings(ctx context.Context, consume func(models.HostBinding) error, scope Scope) error
 		ListSvcSvcRules(ctx context.Context, consume func(models.SvcSvcRule) error, scope Scope) error
 		ListSvcFqdnRules(ctx context.Context, consume func(models.SvcFqdnRule) error, scope Scope) error
+		ListIECidrSvcRules(ctx context.Context, consume func(models.IECidrSvcRule) error, scope Scope) error
 		GetSyncStatus(ctx context.Context) (*models.SyncStatus, error)
 		GetServiceByID(ctx context.Context, id models.ResourceIdentifier) (*models.Service, error)
 		GetAddressGroupByID(ctx context.Context, id models.ResourceIdentifier) (*models.AddressGroup, error)
@@ -39,6 +40,7 @@ type (
 		GetHostBindingByID(ctx context.Context, id models.ResourceIdentifier) (*models.HostBinding, error)
 		GetSvcSvcRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcSvcRule, error)
 		GetSvcFqdnRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcFqdnRule, error)
+		GetIECidrSvcRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IECidrSvcRule, error)
 	}
 	Reader interface {
 		ReaderNoClose
@@ -56,6 +58,7 @@ type (
 		SyncHostBindings(ctx context.Context, bindings []models.HostBinding, scope Scope, opts ...Option) error
 		SyncSvcSvcRules(ctx context.Context, rules []models.SvcSvcRule, scope Scope, opts ...Option) error
 		SyncSvcFqdnRules(ctx context.Context, rules []models.SvcFqdnRule, scope Scope, opts ...Option) error
+		SyncIECidrSvcRules(ctx context.Context, rules []models.IECidrSvcRule, scope Scope, opts ...Option) error
 		DeleteServicesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
 		DeleteAddressGroupsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
 		DeleteAddressGroupBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
@@ -67,6 +70,7 @@ type (
 		DeleteHostBindingsByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
 		DeleteSvcSvcRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
 		DeleteSvcFqdnRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
+		DeleteIECidrSvcRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...Option) error
 		MarkForDeletionWithStatus(namespace, name, kind string) error
 		Commit() error
 		Abort()

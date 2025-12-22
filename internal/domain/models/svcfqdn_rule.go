@@ -27,6 +27,7 @@ type SvcFqdnRule struct {
 	Action         RuleAction
 	Priority       int32
 	Description    string
+	Comment        string // Optional user comment (Netguard-only, not synced to SGROUPS)
 	Meta           Meta
 }
 

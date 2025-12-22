@@ -65,6 +65,13 @@ message Service {
   // XSvcFqdnRules - READ-ONLY field populated by PostgreSQL triggers
   // Contains all service-to-FQDN rules where this Service participates as source
   XSvcFqdnRules x_svcfqdn_rules = 9;
+
+  // XIECidrSvcRules - READ-ONLY field populated by PostgreSQL triggers
+  // Contains all IE-CIDR-SVC rules where this Service is the target
+  XIECidrSvcRules x_iecidrsvc_rules = 10;
+
+  // Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+  string comment = 50;
 }
 
 // IngressPort - defines a port configuration for ingress traffic
@@ -141,6 +148,12 @@ message XSvcSvcRules {
 // XSvcFqdnRules - READ-ONLY field for Service resource containing all FQDN rules referencing the Service
 message XSvcFqdnRules {
   // Rules where this Service is referenced by SvcFqdnRule as source
+  repeated ResourceIdentifier rules = 1;
+}
+
+// XIECidrSvcRules - READ-ONLY field for Service resource containing all IE-CIDR-SVC rules referencing the Service
+message XIECidrSvcRules {
+  // Rules where this Service is the target of IECidrSvcRule
   repeated ResourceIdentifier rules = 1;
 }
 
@@ -255,6 +268,9 @@ message Network {
   bool is_bound = 4;                               // Whether the network is bound to an AddressGroup
   NamespacedObjectReference binding_ref = 5;       // Reference to the NetworkBinding
   NamespacedObjectReference address_group_ref = 6; // Reference to the bound AddressGroup
+
+  // Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+  string comment = 50;
 }
 
 
@@ -278,6 +294,9 @@ message AddressGroup {
   string address_group_name = 8;  // Computed address group name (e.g., "namespace/name")
   repeated HostReference aggregated_hosts = 9; // All hosts from any source (spec + HostBinding)
   string description = 10;  // Optional description (Netguard-only)
+
+  // Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+  string comment = 50;
 }
 
 // AddressGroupBinding - binding between a service and an address group
@@ -291,6 +310,9 @@ message AddressGroupBinding {
   ServiceRef service_ref = 3;
   AddressGroupRef address_group_ref = 4;
   Meta meta = 6;
+
+  // Comment - optional user comment (Netguard-only)
+  string comment = 50;
 }
 
 // NetworkBinding - binding between a network and an address group
@@ -305,11 +327,24 @@ message NetworkBinding {
   NamespacedObjectReference address_group_ref = 3;  // Reference to the AddressGroup resource
   NetworkItem network_item = 4;  // Network item details
   Meta meta = 5;
+
+  // Comment - optional user comment (Netguard-only)
+  string comment = 50;
 }
 
 // IPItem - represents an IP address entry
 message IPItem {
   string ip = 1;  // IP address
+}
+
+// HostMetaInfo - represents host meta information from SGROUP (read-only)
+message HostMetaInfo {
+  string host_name = 1;        // Hostname from agent
+  string os = 2;               // Operating system
+  string platform = 3;         // Platform (e.g., ubuntu, centos)
+  string platform_family = 4;  // Platform family (e.g., debian, rhel)
+  string platform_version = 5; // Platform version
+  string kernel_version = 6;   // Kernel version
 }
 
 // Host - represents a host resource (K8s representation of Agent)
@@ -329,8 +364,12 @@ message Host {
   NamespacedObjectReference binding_ref = 7;   // Reference to the HostBinding (includes namespace)
   NamespacedObjectReference address_group_ref = 8; // Reference to the bound AddressGroup (includes namespace)
   repeated IPItem ip_list = 10;                // List of IP addresses from SGROUP synchronization
+  HostMetaInfo meta_info = 12;                 // Meta information from SGROUP synchronization (read-only)
 
   Meta meta = 11;
+
+  // Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+  string comment = 50;
 }
 
 // HostBinding - represents a host binding resource
@@ -344,6 +383,9 @@ message HostBinding {
   NamespacedObjectReference host_ref = 2;      // Reference to the Host resource
   NamespacedObjectReference address_group_ref = 3; // Reference to the AddressGroup resource
   Meta meta = 4;
+
+  // Comment - optional user comment (Netguard-only)
+  string comment = 50;
 }
 
 // ProtocolPorts - mapping of protocols to port ranges
@@ -416,6 +458,9 @@ message SvcSvcRule {
   bool trace = 7;                       // Enable detailed tracing
   string description = 8;               // Optional description (Netguard-only)
   Meta meta = 9;                        // Kubernetes metadata
+
+  // Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+  string comment = 50;
 }
 
 // FqdnPortSpec - port specification for service-to-FQDN rules
@@ -441,6 +486,39 @@ message SvcFqdnRule {
   int32 priority = 9;                         // Rule priority (0-1000)
   string description = 10;                    // Optional description (Netguard-only)
   Meta meta = 11;                             // Kubernetes metadata
+
+  // Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+  string comment = 50;
+}
+
+// IECidrSvcPortSpec - port specification for CIDR-to-service rule
+message IECidrSvcPortSpec {
+  string s = 1; // Source port expression (optional)
+  string d = 2; // Destination port expression (required)
+}
+
+// IECidrSvcRule - ingress/egress CIDR-to-service firewall rule
+message IECidrSvcRule {
+  option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_schema) = {
+    json_schema: {
+      required: ["self_ref", "cidr", "svc", "traffic", "transport"]
+    }
+  };
+  ResourceIdentifier self_ref = 1;
+  Networks.NetIP.Transport transport = 2;   // Transport protocol (TCP/UDP)
+  string cidr = 3;                          // IPv4/IPv6 CIDR notation
+  NamespacedObjectReference svc = 4;        // Target service reference
+  Traffic traffic = 5;                      // Traffic direction (INGRESS/EGRESS)
+  repeated IECidrSvcPortSpec ports = 6;     // Port expressions
+  bool logs = 7;                            // Enable logging
+  bool trace = 8;                           // Enable tracing
+  RuleAction action = 9;                    // Firewall action (ACCEPT/DROP)
+  int32 priority = 10;                      // Rule priority (0-1000)
+  string description = 11;                  // Optional description (Netguard-only)
+  Meta meta = 12;                           // Kubernetes metadata
+
+  // Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+  string comment = 50;
 }
 
 // SyncStatusResp - sync status
@@ -516,6 +594,11 @@ message SyncSvcSvcRules {
 // SyncSvcFqdnRules - subject of SvcFqdnRules to sync
 message SyncSvcFqdnRules {
   repeated SvcFqdnRule svcfqdn_rules = 1;
+}
+
+// SyncIECidrSvcRules - subject of IECidrSvcRules to sync
+message SyncIECidrSvcRules {
+  repeated IECidrSvcRule iecidrsvc_rules = 1;
 }
 
 
@@ -752,6 +835,27 @@ message GetSvcFqdnRuleResp {
   SvcFqdnRule svcfqdn_rule = 1;
 }
 
+// ListIECidrSvcRulesReq - request to list IECidrSvcRules
+message ListIECidrSvcRulesReq {
+  repeated ResourceIdentifier identifiers = 1;
+  ListOptions list_options = 2;
+}
+
+// ListIECidrSvcRulesResp - response with list of IECidrSvcRules
+message ListIECidrSvcRulesResp {
+  repeated IECidrSvcRule items = 1;
+}
+
+// GetIECidrSvcRuleReq - request to get a specific IECidrSvcRule
+message GetIECidrSvcRuleReq {
+  ResourceIdentifier identifier = 1;
+}
+
+// GetIECidrSvcRuleResp - response with a specific IECidrSvcRule
+message GetIECidrSvcRuleResp {
+  IECidrSvcRule iecidrsvc_rule = 1;
+}
+
 // SyncReq - request to sync
 message SyncReq {
   // Sync operation to apply
@@ -791,6 +895,9 @@ message SyncReq {
 
     // Subject of SvcFqdnRules
     SyncSvcFqdnRules svcfqdn_rules = 15;
+
+    // Subject of IECidrSvcRules
+    SyncIECidrSvcRules iecidrsvc_rules = 16;
   }
 }
 

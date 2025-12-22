@@ -242,6 +242,24 @@ service NetguardService {
     };
   }
 
+  rpc ListIECidrSvcRules(ListIECidrSvcRulesReq) returns (ListIECidrSvcRulesResp) {
+    option (google.api.http) = {
+      get: "/v1/ie-cidr-svc-rules"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "ListIECidrSvcRules: gets list of IECidrSvc rules";
+    };
+  }
+
+  rpc GetIECidrSvcRule(GetIECidrSvcRuleReq) returns (GetIECidrSvcRuleResp) {
+    option (google.api.http) = {
+      get: "/v1/ie-cidr-svc-rules/{identifier.namespace}/{identifier.name}"
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      description: "GetIECidrSvcRule: gets a specific IECidrSvc rule by ID";
+    };
+  }
+
   rpc WatchServices(WatchRequest) returns (stream WatchEvent);
   rpc WatchAddressGroups(WatchRequest) returns (stream WatchEvent);
   rpc WatchAddressGroupBindings(WatchRequest) returns (stream WatchEvent);
@@ -253,5 +271,6 @@ service NetguardService {
   rpc WatchNetworkBindings(WatchRequest) returns (stream WatchEvent);
   rpc WatchSvcSvcRules(WatchRequest) returns (stream WatchEvent);
   rpc WatchSvcFqdnRules(WatchRequest) returns (stream WatchEvent);
+  rpc WatchIECidrSvcRules(WatchRequest) returns (stream WatchEvent);
 }
 

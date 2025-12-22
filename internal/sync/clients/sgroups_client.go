@@ -175,6 +175,7 @@ func (c *sgroupsClient) GetStatuses(ctx context.Context) (chan *timestamppb.Time
 }
 
 // GetHostsByUUIDs retrieves hosts from SGROUP by their UUIDs
+// Host contains MetaInfo field with host metadata
 func (c *sgroupsClient) GetHostsByUUIDs(ctx context.Context, uuids []string) ([]*pb.Host, error) {
 	// Create context with timeout
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
@@ -199,6 +200,7 @@ func (c *sgroupsClient) GetHostsByUUIDs(ctx context.Context, uuids []string) ([]
 }
 
 // ListAllHosts retrieves all hosts from SGROUP (for full sync)
+// Host contains MetaInfo field with host metadata
 func (c *sgroupsClient) ListAllHosts(ctx context.Context) ([]*pb.Host, error) {
 	// Create context with timeout
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
@@ -221,6 +223,7 @@ func (c *sgroupsClient) ListAllHosts(ctx context.Context) ([]*pb.Host, error) {
 }
 
 // GetHostsInSecurityGroup retrieves hosts from SGROUP that belong to specific security groups
+// Host contains MetaInfo field with host metadata
 func (c *sgroupsClient) GetHostsInSecurityGroup(ctx context.Context, sgNames []string) ([]*pb.Host, error) {
 	// Create context with timeout
 	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
@@ -312,6 +315,12 @@ func (c *sgroupsClient) convertSyncRequestToProto(req *types.SyncRequest) (*pb.S
 			pbReq.Subject = &pb.SyncReq_SvcFqdnRules{SvcFqdnRules: rules}
 		} else {
 			return nil, fmt.Errorf("invalid data type for SvcFqdnRules subject, expected *pb.SyncSvcFqdnRules, got %T", req.Data)
+		}
+	case types.SyncSubjectTypeIECidrSvcRules:
+		if rules, ok := req.Data.(*pb.SyncIECidrSvcRules); ok {
+			pbReq.Subject = &pb.SyncReq_IeCidrSvcRules{IeCidrSvcRules: rules}
+		} else {
+			return nil, fmt.Errorf("invalid data type for IECidrSvcRules subject, expected *pb.SyncIECidrSvcRules, got %T", req.Data)
 		}
 	default:
 		return nil, fmt.Errorf("unknown subject type: %s", req.SubjectType)

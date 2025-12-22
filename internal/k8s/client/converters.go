@@ -65,6 +65,7 @@ func convertServiceFromProto(protoSvc *netguardpb.Service) models.Service {
 			),
 		},
 		Description: protoSvc.Description,
+		Comment:     protoSvc.Comment,
 	}
 	if protoSvc.Meta != nil {
 		service.Meta = models.Meta{
@@ -162,6 +163,17 @@ func convertServiceFromProto(protoSvc *netguardpb.Service) models.Service {
 		}
 		service.XSvcFqdnRules = fqdnRules
 	}
+	// Convert XIECidrSvcRules (READ-ONLY field populated by PostgreSQL triggers)
+	if protoSvc.XIecidrsvcRules != nil {
+		ieCidrRules := &models.XIECidrSvcRules{}
+		if len(protoSvc.XIecidrsvcRules.Rules) > 0 {
+			ieCidrRules.Rules = make([]models.ResourceIdentifier, len(protoSvc.XIecidrsvcRules.Rules))
+			for i, ref := range protoSvc.XIecidrsvcRules.Rules {
+				ieCidrRules.Rules[i] = models.NewResourceIdentifier(ref.Name, models.WithNamespace(ref.Namespace))
+			}
+		}
+		service.XIECidrSvcRules = ieCidrRules
+	}
 	return service
 }
 func convertServiceToProto(service models.Service) *netguardpb.Service {
@@ -171,6 +183,7 @@ func convertServiceToProto(service models.Service) *netguardpb.Service {
 			Namespace: service.ResourceIdentifier.Namespace,
 		},
 		Description: service.Description,
+		Comment:     service.Comment,
 		Meta: &netguardpb.Meta{
 			Uid:             service.Meta.UID,
 			ResourceVersion: service.Meta.ResourceVersion,
@@ -265,6 +278,7 @@ func convertAddressGroupFromProto(protoAG *netguardpb.AddressGroup) models.Addre
 		Logs:             protoAG.Logs,
 		Trace:            protoAG.Trace,
 		Description:      protoAG.Description,
+		Comment:          protoAG.Comment,
 		AddressGroupName: protoAG.AddressGroupName,
 	}
 	if protoAG.Meta != nil {
@@ -356,6 +370,7 @@ func convertAddressGroupToProto(addressGroup models.AddressGroup) *netguardpb.Ad
 		Logs:          addressGroup.Logs,
 		Trace:         addressGroup.Trace,
 		Description:   addressGroup.Description,
+		Comment:       addressGroup.Comment,
 		Meta: &netguardpb.Meta{
 			Uid:             addressGroup.Meta.UID,
 			ResourceVersion: addressGroup.Meta.ResourceVersion,
@@ -418,6 +433,7 @@ func convertAddressGroupBindingFromProto(protoBinding *netguardpb.AddressGroupBi
 			},
 			Namespace: protoBinding.AddressGroupRef.Identifier.Namespace,
 		},
+		Comment: protoBinding.Comment,
 	}
 	if protoBinding.Meta != nil {
 		binding.Meta = models.Meta{
@@ -470,6 +486,7 @@ func convertAddressGroupBindingToProto(binding models.AddressGroupBinding) *netg
 				Namespace:  binding.AddressGroupRef.Namespace,
 			},
 		},
+		Comment: binding.Comment,
 	}
 	if !binding.Meta.CreationTS.IsZero() {
 		protoBinding.Meta = &netguardpb.Meta{
@@ -701,6 +718,7 @@ func convertSvcSvcRuleFromProto(proto *netguardpb.SvcSvcRule) models.SvcSvcRule 
 		Logs:        proto.Logs,
 		Trace:       proto.Trace,
 		Description: proto.Description,
+		Comment:     proto.Comment,
 	}
 	if proto.Meta != nil {
 		rule.Meta = models.Meta{
@@ -742,6 +760,7 @@ func convertSvcSvcRuleToProto(m models.SvcSvcRule) *netguardpb.SvcSvcRule {
 		Logs:        m.Logs,
 		Trace:       m.Trace,
 		Description: m.Description,
+		Comment:     m.Comment,
 	}
 	if !m.Meta.CreationTS.IsZero() {
 		proto.Meta = &netguardpb.Meta{
@@ -782,6 +801,7 @@ func convertSvcFqdnRuleFromProto(proto *netguardpb.SvcFqdnRule) models.SvcFqdnRu
 		Logs:        proto.Logs,
 		Trace:       proto.Trace,
 		Description: proto.Description,
+		Comment:     proto.Comment,
 	}
 	if proto.ServiceFrom != nil {
 		rule.ServiceFromRef = v1beta1.NamespacedObjectReference{
@@ -845,6 +865,7 @@ func convertSvcFqdnRuleToProto(rule models.SvcFqdnRule) *netguardpb.SvcFqdnRule 
 		Logs:        rule.Logs,
 		Trace:       rule.Trace,
 		Description: rule.Description,
+		Comment:     rule.Comment,
 	}
 	if rule.ServiceFromRef.Name != "" {
 		proto.ServiceFrom = &netguardpb.NamespacedObjectReference{
@@ -859,6 +880,154 @@ func convertSvcFqdnRuleToProto(rule models.SvcFqdnRule) *netguardpb.SvcFqdnRule 
 		for i, port := range rule.Ports {
 			proto.Ports[i] = &netguardpb.FqdnPortSpec{
 				Port: port.Port,
+			}
+		}
+	}
+	if !rule.Meta.CreationTS.IsZero() || rule.Meta.UID != "" {
+		proto.Meta = &netguardpb.Meta{
+			Uid:             rule.Meta.UID,
+			ResourceVersion: rule.Meta.ResourceVersion,
+			Generation:      rule.Meta.Generation,
+			Labels:          rule.Meta.Labels,
+			Annotations:     rule.Meta.Annotations,
+			GeneratedName:   rule.Meta.GeneratedName,
+			ManagedFields:   convertManagedFieldsToProto(rule.Meta.ManagedFields),
+		}
+		if !rule.Meta.CreationTS.IsZero() {
+			proto.Meta.CreationTs = timestamppb.New(rule.Meta.CreationTS.Time)
+		}
+		if rule.Meta.DeletionTS != nil {
+			proto.Meta.DeletionTs = timestamppb.New(rule.Meta.DeletionTS.Time)
+		}
+	}
+	return proto
+}
+
+func convertIECidrSvcRuleFromProto(proto *netguardpb.IECidrSvcRule) models.IECidrSvcRule {
+	var transport models.TransportProtocol
+	switch proto.Transport {
+	case netguardpb.Networks_NetIP_TCP:
+		transport = models.TCP
+	case netguardpb.Networks_NetIP_UDP:
+		transport = models.UDP
+	default:
+		transport = models.TCP
+	}
+	var traffic models.Traffic
+	switch proto.Traffic {
+	case netguardpb.Traffic_Ingress:
+		traffic = models.INGRESS
+	case netguardpb.Traffic_Egress:
+		traffic = models.EGRESS
+	default:
+		traffic = models.INGRESS
+	}
+	rule := models.IECidrSvcRule{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: models.NewResourceIdentifier(
+				proto.SelfRef.Name,
+				models.WithNamespace(proto.SelfRef.Namespace),
+			),
+		},
+		CIDR:        proto.Cidr,
+		Transport:   transport,
+		Traffic:     traffic,
+		Action:      models.RuleAction(proto.Action.String()),
+		Priority:    proto.Priority,
+		Logs:        proto.Logs,
+		Trace:       proto.Trace,
+		Description: proto.Description,
+		Comment:     proto.Comment,
+	}
+	if proto.Svc != nil {
+		rule.ServiceRef = v1beta1.NamespacedObjectReference{
+			ObjectReference: v1beta1.ObjectReference{
+				APIVersion: proto.Svc.ApiVersion,
+				Kind:       proto.Svc.Kind,
+				Name:       proto.Svc.Name,
+			},
+			Namespace: proto.Svc.Namespace,
+		}
+	}
+	if len(proto.Ports) > 0 {
+		rule.Ports = make([]models.IECidrSvcPortSpec, len(proto.Ports))
+		for i, port := range proto.Ports {
+			rule.Ports[i] = models.IECidrSvcPortSpec{
+				S: port.S,
+				D: port.D,
+			}
+		}
+	}
+	if proto.Meta != nil {
+		rule.Meta = models.Meta{
+			UID:                proto.Meta.Uid,
+			ResourceVersion:    proto.Meta.ResourceVersion,
+			Generation:         proto.Meta.Generation,
+			Labels:             proto.Meta.Labels,
+			Annotations:        proto.Meta.Annotations,
+			GeneratedName:      proto.Meta.GeneratedName,
+			Conditions:         models.ProtoConditionsToK8s(proto.Meta.Conditions),
+			ObservedGeneration: proto.Meta.ObservedGeneration,
+			ManagedFields:      convertManagedFieldsFromProto(proto.Meta.ManagedFields),
+		}
+		if proto.Meta.CreationTs != nil {
+			rule.Meta.CreationTS = metav1.NewTime(proto.Meta.CreationTs.AsTime())
+		}
+		if proto.Meta.DeletionTs != nil {
+			rule.Meta.DeletionTS = &metav1.Time{Time: proto.Meta.DeletionTs.AsTime()}
+		}
+	}
+	return rule
+}
+
+func convertIECidrSvcRuleToProto(rule models.IECidrSvcRule) *netguardpb.IECidrSvcRule {
+	var transportProto netguardpb.Networks_NetIP_Transport
+	switch rule.Transport {
+	case models.UDP:
+		transportProto = netguardpb.Networks_NetIP_UDP
+	case models.TCP:
+		transportProto = netguardpb.Networks_NetIP_TCP
+	default:
+		transportProto = netguardpb.Networks_NetIP_TCP
+	}
+	var trafficProto netguardpb.Traffic
+	switch rule.Traffic {
+	case models.INGRESS:
+		trafficProto = netguardpb.Traffic_Ingress
+	case models.EGRESS:
+		trafficProto = netguardpb.Traffic_Egress
+	default:
+		trafficProto = netguardpb.Traffic_Ingress
+	}
+	proto := &netguardpb.IECidrSvcRule{
+		SelfRef: &netguardpb.ResourceIdentifier{
+			Name:      rule.ResourceIdentifier.Name,
+			Namespace: rule.ResourceIdentifier.Namespace,
+		},
+		Cidr:        rule.CIDR,
+		Transport:   transportProto,
+		Traffic:     trafficProto,
+		Action:      netguardpb.RuleAction(netguardpb.RuleAction_value[string(rule.Action)]),
+		Priority:    rule.Priority,
+		Logs:        rule.Logs,
+		Trace:       rule.Trace,
+		Description: rule.Description,
+		Comment:     rule.Comment,
+	}
+	if rule.ServiceRef.Name != "" {
+		proto.Svc = &netguardpb.NamespacedObjectReference{
+			ApiVersion: rule.ServiceRef.APIVersion,
+			Kind:       rule.ServiceRef.Kind,
+			Name:       rule.ServiceRef.Name,
+			Namespace:  rule.ServiceRef.Namespace,
+		}
+	}
+	if len(rule.Ports) > 0 {
+		proto.Ports = make([]*netguardpb.IECidrSvcPortSpec, len(rule.Ports))
+		for i, port := range rule.Ports {
+			proto.Ports[i] = &netguardpb.IECidrSvcPortSpec{
+				S: port.S,
+				D: port.D,
 			}
 		}
 	}

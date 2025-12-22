@@ -1554,8 +1554,9 @@ func convertNetworkFromProto(protoNetwork *netguardpb.Network) models.Network {
 				Namespace: protoNetwork.GetSelfRef().GetNamespace(),
 			},
 		},
-		CIDR: protoNetwork.Cidr,
-		Meta: models.Meta{},
+		CIDR:    protoNetwork.Cidr,
+		Comment: protoNetwork.Comment,
+		Meta:    models.Meta{},
 	}
 	if protoNetwork.Meta != nil {
 		result.Meta = models.Meta{
@@ -1602,7 +1603,8 @@ func convertNetworkToPB(network models.Network) *netguardpb.Network {
 			Name:      network.Name,
 			Namespace: network.Namespace,
 		},
-		Cidr: network.CIDR,
+		Cidr:    network.CIDR,
+		Comment: network.Comment,
 	}
 	pbNetwork.Meta = &netguardpb.Meta{
 		Uid:                network.Meta.UID,
@@ -1626,7 +1628,8 @@ func convertNetworkBindingFromProto(protoBinding *netguardpb.NetworkBinding) mod
 				Namespace: protoBinding.GetSelfRef().GetNamespace(),
 			},
 		},
-		Meta: models.Meta{},
+		Comment: protoBinding.Comment,
+		Meta:    models.Meta{},
 	}
 	result.NetworkRef = v1beta1.NamespacedObjectReference{
 		ObjectReference: v1beta1.ObjectReference{
@@ -1683,6 +1686,7 @@ func convertNetworkBindingToPB(binding models.NetworkBinding) *netguardpb.Networ
 			Name:       binding.AddressGroupRef.Name,
 			Namespace:  binding.AddressGroupRef.Namespace,
 		},
+		Comment: binding.Comment,
 	}
 	pbBinding.NetworkItem = &netguardpb.NetworkItem{
 		Name: binding.NetworkItem.Name,
@@ -1711,6 +1715,7 @@ func convertHostFromProto(protoHost *netguardpb.Host) models.Host {
 			},
 		},
 		UUID:             protoHost.GetUuid(),
+		Comment:          protoHost.GetComment(),
 		HostName:         protoHost.GetHostNameSync(),
 		AddressGroupName: protoHost.GetAddressGroupName(),
 		IsBound:          protoHost.GetIsBound(),
@@ -1761,17 +1766,28 @@ func convertHostFromProto(protoHost *netguardpb.Host) models.Host {
 				IP: ipItem.GetIp(),
 			}
 		}
-	} else {
+	}
+	// Convert MetaInfo if present (read-only from SGROUP)
+	if protoHost.GetMetaInfo() != nil {
+		result.MetaInfo = &models.HostMetaInfo{
+			HostName:        protoHost.GetMetaInfo().GetHostName(),
+			Os:              protoHost.GetMetaInfo().GetOs(),
+			Platform:        protoHost.GetMetaInfo().GetPlatform(),
+			PlatformFamily:  protoHost.GetMetaInfo().GetPlatformFamily(),
+			PlatformVersion: protoHost.GetMetaInfo().GetPlatformVersion(),
+			KernelVersion:   protoHost.GetMetaInfo().GetKernelVersion(),
+		}
 	}
 	return result
 }
 func convertHostToPB(host models.Host) *netguardpb.Host {
-	return &netguardpb.Host{
+	pbHost := &netguardpb.Host{
 		SelfRef: &netguardpb.ResourceIdentifier{
 			Name:      host.Name,
 			Namespace: host.Namespace,
 		},
 		Uuid:             host.UUID,
+		Comment:          host.Comment,
 		HostNameSync:     host.HostName,
 		AddressGroupName: host.AddressGroupName,
 		IsBound:          host.IsBound,
@@ -1808,6 +1824,27 @@ func convertHostToPB(host models.Host) *netguardpb.Host {
 			ObservedGeneration: host.Meta.ObservedGeneration,
 		},
 	}
+	// Convert IpList if present
+	if len(host.IpList) > 0 {
+		pbHost.IpList = make([]*netguardpb.IPItem, len(host.IpList))
+		for i, ipItem := range host.IpList {
+			pbHost.IpList[i] = &netguardpb.IPItem{
+				Ip: ipItem.IP,
+			}
+		}
+	}
+	// Convert MetaInfo if present (read-only from SGROUP)
+	if host.MetaInfo != nil {
+		pbHost.MetaInfo = &netguardpb.HostMetaInfo{
+			HostName:        host.MetaInfo.HostName,
+			Os:              host.MetaInfo.Os,
+			Platform:        host.MetaInfo.Platform,
+			PlatformFamily:  host.MetaInfo.PlatformFamily,
+			PlatformVersion: host.MetaInfo.PlatformVersion,
+			KernelVersion:   host.MetaInfo.KernelVersion,
+		}
+	}
+	return pbHost
 }
 func convertHostBindingFromProto(protoBinding *netguardpb.HostBinding) models.HostBinding {
 	result := models.HostBinding{
@@ -1817,6 +1854,7 @@ func convertHostBindingFromProto(protoBinding *netguardpb.HostBinding) models.Ho
 				Namespace: protoBinding.GetSelfRef().GetNamespace(),
 			},
 		},
+		Comment: protoBinding.GetComment(),
 	}
 	if protoBinding.GetHostRef() != nil {
 		result.HostRef = v1beta1.NamespacedObjectReference{
@@ -1877,6 +1915,7 @@ func convertHostBindingToPB(hostBinding models.HostBinding) *netguardpb.HostBind
 			Name:       hostBinding.AddressGroupRef.Name,
 			Namespace:  hostBinding.AddressGroupRef.Namespace,
 		},
+		Comment: hostBinding.Comment,
 		Meta: &netguardpb.Meta{
 			Uid:                hostBinding.Meta.UID,
 			ResourceVersion:    hostBinding.Meta.ResourceVersion,
@@ -2005,4 +2044,140 @@ func (c *GRPCBackendClient) WatchSvcSvcRules(ctx context.Context, req *netguardp
 
 func (c *GRPCBackendClient) WatchSvcFqdnRules(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchSvcFqdnRulesClient, error) {
 	return c.client.WatchSvcFqdnRules(ctx, req)
+}
+
+func (c *GRPCBackendClient) WatchIECidrSvcRules(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchIECidrSvcRulesClient, error) {
+	return c.client.WatchIECidrSvcRules(ctx, req)
+}
+
+func (c *GRPCBackendClient) GetIECidrSvcRule(ctx context.Context, id models.ResourceIdentifier) (*models.IECidrSvcRule, error) {
+	if !c.limiter.Allow() {
+		return nil, fmt.Errorf("rate limit exceeded")
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+	req := &netguardpb.GetIECidrSvcRuleReq{
+		Identifier: &netguardpb.ResourceIdentifier{
+			Namespace: id.Namespace,
+			Name:      id.Name,
+		},
+	}
+	resp, err := c.client.GetIECidrSvcRule(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get IECidrSvcRule: %w", err)
+	}
+	rule := convertIECidrSvcRuleFromProto(resp.IecidrsvcRule)
+	return &rule, nil
+}
+
+func (c *GRPCBackendClient) ListIECidrSvcRules(ctx context.Context, scope ports.Scope) ([]models.IECidrSvcRule, error) {
+	if !c.limiter.Allow() {
+		return nil, fmt.Errorf("rate limit exceeded")
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+	var identifiers []*netguardpb.ResourceIdentifier
+	var listOptions *netguardpb.ListOptions
+
+	if scope != nil {
+		// Handle FieldSelectorScope (contains identifiers + selectors)
+		if fss, ok := scope.(ports.FieldSelectorScope); ok {
+			// Extract identifiers
+			if len(fss.Identifiers) > 0 {
+				for _, id := range fss.Identifiers {
+					identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
+						Namespace: id.Namespace,
+						Name:      id.Name,
+					})
+				}
+			}
+			// Extract field/label selectors
+			if len(fss.FieldSelectors) > 0 || len(fss.LabelSelectors) > 0 {
+				listOptions = &netguardpb.ListOptions{
+					FieldSelectors: fss.FieldSelectors,
+					LabelSelectors: fss.LabelSelectors,
+				}
+			}
+		} else if ris, ok := scope.(ports.ResourceIdentifierScope); ok && len(ris.Identifiers) > 0 {
+			// Fallback to ResourceIdentifierScope (no selectors)
+			for _, id := range ris.Identifiers {
+				identifiers = append(identifiers, &netguardpb.ResourceIdentifier{
+					Namespace: id.Namespace,
+					Name:      id.Name,
+				})
+			}
+		}
+	}
+	req := &netguardpb.ListIECidrSvcRulesReq{
+		Identifiers: identifiers,
+		ListOptions: listOptions,
+	}
+	resp, err := c.client.ListIECidrSvcRules(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list IECidrSvcRules: %w", err)
+	}
+	rules := make([]models.IECidrSvcRule, 0, len(resp.Items))
+	for _, protoRule := range resp.Items {
+		rules = append(rules, convertIECidrSvcRuleFromProto(protoRule))
+	}
+	return rules, nil
+}
+
+func (c *GRPCBackendClient) CreateIECidrSvcRule(ctx context.Context, rule *models.IECidrSvcRule) error {
+	return c.syncIECidrSvcRule(ctx, models.SyncOpUpsert, []*models.IECidrSvcRule{rule})
+}
+
+func (c *GRPCBackendClient) UpdateIECidrSvcRule(ctx context.Context, rule *models.IECidrSvcRule) error {
+	return c.syncIECidrSvcRule(ctx, models.SyncOpUpsert, []*models.IECidrSvcRule{rule})
+}
+
+func (c *GRPCBackendClient) DeleteIECidrSvcRule(ctx context.Context, id models.ResourceIdentifier) error {
+	rule := &models.IECidrSvcRule{
+		SelfRef: models.SelfRef{ResourceIdentifier: id},
+	}
+	return c.syncIECidrSvcRule(ctx, models.SyncOpDelete, []*models.IECidrSvcRule{rule})
+}
+
+func (c *GRPCBackendClient) syncIECidrSvcRule(ctx context.Context, syncOp models.SyncOp, rules []*models.IECidrSvcRule) error {
+	if !c.limiter.Allow() {
+		return fmt.Errorf("rate limit exceeded")
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.config.RequestTimeout)
+	defer cancel()
+	protoRules := make([]*netguardpb.IECidrSvcRule, 0, len(rules))
+	for _, rule := range rules {
+		protoRules = append(protoRules, convertIECidrSvcRuleToProto(*rule))
+	}
+	var protoSyncOp netguardpb.SyncOp
+	switch syncOp {
+	case models.SyncOpUpsert:
+		protoSyncOp = netguardpb.SyncOp_Upsert
+	case models.SyncOpDelete:
+		protoSyncOp = netguardpb.SyncOp_Delete
+	case models.SyncOpFullSync:
+		protoSyncOp = netguardpb.SyncOp_FullSync
+	default:
+		protoSyncOp = netguardpb.SyncOp_NoOp
+	}
+	req := &netguardpb.SyncReq{
+		SyncOp: protoSyncOp,
+		Subject: &netguardpb.SyncReq_IecidrsvcRules{
+			IecidrsvcRules: &netguardpb.SyncIECidrSvcRules{
+				IecidrsvcRules: protoRules,
+			},
+		},
+	}
+	if _, err := c.client.Sync(ctx, req); err != nil {
+		return fmt.Errorf("failed to sync IECidrSvcRules: %w", err)
+	}
+	return nil
+}
+
+func (c *GRPCBackendClient) UpdateIECidrSvcRuleMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	rule, err := c.GetIECidrSvcRule(ctx, id)
+	if err != nil {
+		return err
+	}
+	rule.Meta = meta
+	return c.UpdateIECidrSvcRule(ctx, rule)
 }

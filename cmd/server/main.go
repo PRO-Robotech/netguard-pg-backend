@@ -7,6 +7,11 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
 	"netguard-pg-backend/internal/api/netguard"
 	"netguard-pg-backend/internal/app/server"
 	"netguard-pg-backend/internal/application/services"
@@ -28,10 +33,6 @@ import (
 	"netguard-pg-backend/internal/sync/worker"
 	"netguard-pg-backend/internal/watch"
 	netguardpb "netguard-pg-backend/protos/pkg/api/netguard"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
 	"github.com/go-logr/stdr"
 	_ "github.com/lib/pq"
@@ -263,6 +264,11 @@ func setupSyncManager(ctx context.Context, cfg *config.Config, sgroupsClient int
 		logger.Error("failed to register SvcFqdnRule syncer", zap.Error(err))
 		return nil
 	}
+	ieCidrSvcRuleSyncer := syncers.NewIECidrSvcRuleSyncer(sgroupsClient, logrLogger)
+	if err := syncManager.RegisterSyncer(types.SyncSubjectTypeIECidrSvcRules, ieCidrSvcRuleSyncer); err != nil {
+		logger.Error("failed to register IECidrSvcRule syncer", zap.Error(err))
+		return nil
+	}
 	if err := syncManager.Start(ctx); err != nil {
 		logger.Error("failed to start sync manager", zap.Error(err))
 		return nil
@@ -326,13 +332,6 @@ func setupReverseSyncSystem(
 						return
 					case <-ticker.C:
 						if reverseSyncSystem.IsRunning() {
-							stats := reverseSyncSystem.GetStats()
-							processorCount := reverseSyncSystem.GetProcessorCount()
-							logger.Info("Reverse sync statistics",
-								zap.Int("processors", processorCount),
-								zap.Int64("total_events", stats.TotalEvents),
-								zap.Int64("processed_events", stats.ProcessedEvents),
-								zap.Int64("failed_events", stats.FailedEvents))
 						}
 					}
 				}
@@ -367,12 +366,14 @@ func setupOutboxWorker(
 	if err != nil {
 		logger.Fatal("failed to create sgroups client for worker", zap.Error(err))
 	}
+
 	hostSyncer := syncers.NewHostSyncer(sgroupsClient, logrLogger)
 	addressGroupSyncer := syncers.NewAddressGroupSyncer(sgroupsClient, logrLogger)
 	networkSyncer := syncers.NewNetworkSyncer(sgroupsClient, logrLogger)
 	serviceSyncer := syncers.NewServiceSyncer(sgroupsClient, logrLogger)
 	svcSvcRuleSyncer := syncers.NewSvcSvcRuleSyncer(sgroupsClient, logrLogger)
 	svcFqdnRuleSyncer := syncers.NewSvcFqdnRuleSyncer(sgroupsClient, logrLogger)
+	ieCidrSvcRuleSyncer := syncers.NewIECidrSvcRuleSyncer(sgroupsClient, logrLogger)
 	outboxWorker := worker.NewOutboxWorker(
 		pool,
 		pgRegistry,
@@ -382,6 +383,7 @@ func setupOutboxWorker(
 		serviceSyncer,
 		svcSvcRuleSyncer,
 		svcFqdnRuleSyncer,
+		ieCidrSvcRuleSyncer,
 		conditionManager,
 		logger,
 		workerConfig,

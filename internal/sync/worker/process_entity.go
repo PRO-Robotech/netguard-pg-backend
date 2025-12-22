@@ -100,32 +100,21 @@ func (w *OutboxWorker) processEntityResource(
 	if item.Operation == domain.SyncOperationUpdate {
 		exists, err := w.entityExists(ctx, item.ResourceType, item.ResourceNamespace, item.ResourceName)
 		if err != nil {
-			w.logger.Error("failed to verify entity existence",
-				zap.String("resource_type", item.ResourceType),
-				zap.String("namespace", item.ResourceNamespace),
-				zap.String("name", item.ResourceName),
-				zap.Error(err))
 			duration := time.Since(startTime)
 			RecordProcessingFailure(item.ResourceType, operation, "existence_check_error", duration)
+
 			return fmt.Errorf("failed to verify resource existence: %w", err)
 		}
 		if !exists {
-			w.logger.Info("skipping UPDATE for deleted resource",
-				zap.String("resource_type", item.ResourceType),
-				zap.String("namespace", item.ResourceNamespace),
-				zap.String("name", item.ResourceName))
 			if err := w.outboxRepo.MarkCompleted(ctx, item.ID); err != nil {
-				w.logger.Error("failed to mark outbox entry completed while skipping deleted resource",
-					zap.String("resource_type", item.ResourceType),
-					zap.String("namespace", item.ResourceNamespace),
-					zap.String("name", item.ResourceName),
-					zap.Error(err))
 				duration := time.Since(startTime)
 				RecordProcessingFailure(item.ResourceType, operation, "mark_completed_error", duration)
+
 				return fmt.Errorf("failed to mark outbox entry completed: %w", err)
 			}
 			duration := time.Since(startTime)
 			RecordProcessingSuccess(item.ResourceType, operation, duration)
+
 			return nil
 		}
 	}
@@ -136,11 +125,9 @@ func (w *OutboxWorker) processEntityResource(
 				zap.Error(err))
 			duration := time.Since(startTime)
 			RecordProcessingFailure(item.ResourceType, operation, "delta_error", duration)
+
 			return fmt.Errorf("failed to apply delta: %w", err)
 		}
-		w.logger.Debug("applied delta",
-			zap.String("resource_type", item.ResourceType),
-			zap.String("operation", operation))
 	}
 	if item.Operation != domain.SyncOperationDelete {
 		allReady, missingDeps, err := w.checkEntityDependencies(ctx, item.ResourceType, resource)
@@ -153,16 +140,6 @@ func (w *OutboxWorker) processEntityResource(
 			return fmt.Errorf("failed to check entity dependencies: %w", err)
 		}
 		if !allReady {
-			for _, dep := range missingDeps {
-				w.logger.Warn("entity dependency not ready",
-					zap.String("resource_type", item.ResourceType),
-					zap.String("namespace", item.ResourceNamespace),
-					zap.String("name", item.ResourceName),
-					zap.String("dep_type", dep.Type),
-					zap.String("dep_namespace", dep.Namespace),
-					zap.String("dep_name", dep.Name),
-					zap.String("dep_reason", dep.Reason))
-			}
 			if item.ResourceType == string(registry.TypeHost) && len(missingDeps) == 1 && missingDeps[0].Type == string(registry.TypeAddressGroup) {
 				if err := w.updatePendingSyncWaitingAddressGroup(ctx, item.ResourceType, item.ResourceNamespace, item.ResourceName,
 					missingDeps[0].Namespace, missingDeps[0].Name); err != nil {
@@ -176,39 +153,27 @@ func (w *OutboxWorker) processEntityResource(
 			}
 			duration := time.Since(startTime)
 			RecordProcessingFailure(item.ResourceType, operation, "missing_dependencies", duration)
+
 			return fmt.Errorf("waiting for %d dependencies to be Ready (e.g., %s/%s)",
 				len(missingDeps),
 				missingDeps[0].Type,
 				missingDeps[0].Name)
 		}
-		w.logger.Debug("all entity dependencies ready, proceeding with sync",
-			zap.String("resource_type", item.ResourceType))
 	} else {
-		w.logger.Debug("DELETE operation detected, checking for binding coordination",
-			zap.String("resource_type", item.ResourceType))
-
-		// Case 2: Coordinate binding deletion BEFORE syncing entity DELETE to SGROUP
-		// This ensures bindings are deleted first, preventing CASCADE from bypassing triggers
 		if err := w.coordinateEntityDeleteWithBindings(ctx, item); err != nil {
-			// If waiting for bindings to be deleted, don't treat as error
 			if IsWaitingForSync(err) {
-				w.logger.Debug("waiting for bindings to be deleted before entity deletion",
-					zap.String("resource_type", item.ResourceType),
-					zap.String("namespace", item.ResourceNamespace),
-					zap.String("name", item.ResourceName))
 				duration := time.Since(startTime)
 				RecordProcessingFailure(item.ResourceType, operation, "waiting_for_bindings", duration)
+
 				return ErrWaitingForSync
 			}
-			// Other errors are failures
 			duration := time.Since(startTime)
 			RecordProcessingFailure(item.ResourceType, operation, "binding_coordination_error", duration)
+
 			return fmt.Errorf("failed to coordinate binding deletion: %w", err)
 		}
-
-		w.logger.Debug("binding coordination complete or not needed, proceeding with entity DELETE",
-			zap.String("resource_type", item.ResourceType))
 	}
+
 	syncer, err := w.getSyncerForEntity(item.ResourceType)
 	if err != nil {
 		duration := time.Since(startTime)
@@ -234,11 +199,7 @@ func (w *OutboxWorker) processEntityResource(
 	}
 	duration := time.Since(startTime)
 	RecordProcessingSuccess(item.ResourceType, operation, duration)
-	w.logger.Debug("entity resource processed successfully",
-		zap.String("resource_type", item.ResourceType),
-		zap.String("namespace", item.ResourceNamespace),
-		zap.String("name", item.ResourceName),
-		zap.Duration("duration", duration))
+
 	return nil
 }
 func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item *domain.OutboxEntry) (interface{}, map[string]interface{}, error) {
@@ -755,6 +716,120 @@ func (w *OutboxWorker) reconstructResourceFromPayload(ctx context.Context, item 
 				},
 			},
 		}, payload, nil
+	case string(registry.TypeIECidrSvcRule):
+		var base *models.IECidrSvcRule
+		if item.Operation != domain.SyncOperationCreate {
+			if existing, err := w.loadEntityResource(ctx, item.ResourceType, namespace, name); err == nil {
+				if existingRule, ok := existing.(*models.IECidrSvcRule); ok {
+					temp := *existingRule
+					base = &temp
+				}
+			}
+		}
+		rule := &models.IECidrSvcRule{
+			SelfRef: models.SelfRef{
+				ResourceIdentifier: models.ResourceIdentifier{
+					Namespace: namespace,
+					Name:      name,
+				},
+			},
+		}
+		if base != nil {
+			rule.ServiceRef = base.ServiceRef
+			rule.CIDR = base.CIDR
+			rule.Transport = base.Transport
+			rule.Traffic = base.Traffic
+			rule.Ports = append([]models.IECidrSvcPortSpec(nil), base.Ports...)
+			rule.Logs = base.Logs
+			rule.Trace = base.Trace
+			rule.Action = base.Action
+			rule.Priority = base.Priority
+			rule.Description = base.Description
+			rule.Comment = base.Comment
+		}
+		if refData, ok := payload["service_ref"].(map[string]interface{}); ok {
+			rule.ServiceRef = v1beta1.NamespacedObjectReference{
+				ObjectReference: v1beta1.ObjectReference{
+					APIVersion: getStringFromMap(refData, "apiVersion"),
+					Kind:       getStringFromMap(refData, "kind"),
+					Name:       getStringFromMap(refData, "name"),
+				},
+				Namespace: getStringFromMap(refData, "namespace"),
+			}
+		}
+		if rule.ServiceRef.Namespace == "" && rule.ServiceRef.Name != "" {
+			rule.ServiceRef.Namespace = namespace
+		}
+		if cidr, ok := payload["cidr"].(string); ok && cidr != "" {
+			rule.CIDR = cidr
+		}
+		if transportRaw, ok := payload["transport"].(string); ok && transportRaw != "" {
+			switch strings.ToUpper(transportRaw) {
+			case string(models.UDP):
+				rule.Transport = models.UDP
+			default:
+				rule.Transport = models.TCP
+			}
+		}
+		if trafficRaw, ok := payload["traffic"].(string); ok && trafficRaw != "" {
+			switch strings.ToUpper(trafficRaw) {
+			case string(models.EGRESS):
+				rule.Traffic = models.EGRESS
+			default:
+				rule.Traffic = models.INGRESS
+			}
+		}
+		if portsRaw, ok := payload["ports"]; ok {
+			parsedPorts := make([]models.IECidrSvcPortSpec, 0)
+			switch typed := portsRaw.(type) {
+			case []interface{}:
+				for _, entry := range typed {
+					if entryMap, ok := entry.(map[string]interface{}); ok {
+						parsedPorts = append(parsedPorts, models.IECidrSvcPortSpec{
+							S: getStringFromMap(entryMap, "s"),
+							D: getStringFromMap(entryMap, "d"),
+						})
+					}
+				}
+			}
+			if len(parsedPorts) > 0 {
+				rule.Ports = parsedPorts
+			}
+		}
+		if logsRaw, ok := payload["logs"].(bool); ok {
+			rule.Logs = logsRaw
+		}
+		if traceRaw, ok := payload["trace"].(bool); ok {
+			rule.Trace = traceRaw
+		}
+		if actionRaw, ok := payload["action"].(string); ok && actionRaw != "" {
+			rule.Action = models.RuleAction(actionRaw)
+		}
+		if priorityRaw, ok := payload["priority"]; ok {
+			switch v := priorityRaw.(type) {
+			case float64:
+				rule.Priority = int32(v)
+			case int:
+				rule.Priority = int32(v)
+			case int32:
+				rule.Priority = v
+			case int64:
+				rule.Priority = int32(v)
+			}
+		}
+		if desc, ok := payload["description"].(string); ok {
+			rule.Description = desc
+		}
+		if comment, ok := payload["comment"].(string); ok {
+			rule.Comment = comment
+		}
+		if rule.Transport == "" {
+			rule.Transport = models.TCP
+		}
+		if rule.Traffic == "" {
+			rule.Traffic = models.INGRESS
+		}
+		return rule, payload, nil
 	default:
 		return nil, nil, fmt.Errorf("unknown resource type: %s", item.ResourceType)
 	}
@@ -902,6 +977,12 @@ func (w *OutboxWorker) loadEntityResource(
 			return nil, err
 		}
 		return rule, nil
+	case string(registry.TypeIECidrSvcRule):
+		rule, err := reader.GetIECidrSvcRuleByID(ctx, models.ResourceIdentifier{Namespace: namespace, Name: name})
+		if err != nil {
+			return nil, err
+		}
+		return rule, nil
 	default:
 		return nil, fmt.Errorf("unknown resource type: %s", resourceType)
 	}
@@ -936,6 +1017,8 @@ func (w *OutboxWorker) getSyncerForEntity(resourceType string) (interfaces.Entit
 		return w.svcSvcRuleSyncer, nil
 	case string(registry.TypeSvcFqdnRule):
 		return w.svcFqdnRuleSyncer, nil
+	case string(registry.TypeIECidrSvcRule):
+		return w.ieCidrSvcRuleSyncer, nil
 	default:
 		return nil, fmt.Errorf("no syncer registered for type: %s", resourceType)
 	}
@@ -1082,6 +1165,24 @@ func (w *OutboxWorker) markEntityResourceReady(
 			return nil
 		}
 		needsWrite = true
+	case *models.IECidrSvcRule:
+		changed := r.Meta.EnsureReadyCondition(metav1.ConditionTrue, models.ReasonReady, "Synced to SGROUP")
+		changed = r.Meta.EnsureSyncedCondition(metav1.ConditionTrue, models.ReasonSynced, "Successfully synced") || changed
+		if !changed {
+			break
+		}
+		rule := *r
+		scope := ports.NewResourceIdentifierScope(models.ResourceIdentifier{
+			Name:      r.Name,
+			Namespace: r.Namespace,
+		})
+		writeFunc = func(writer ports.Writer) error {
+			if err := writer.SyncIECidrSvcRules(ctx, []models.IECidrSvcRule{rule}, scope, ports.ConditionOnlyOperation{}); err != nil {
+				return fmt.Errorf("failed to update iecidrsvc rule: %w", err)
+			}
+			return nil
+		}
+		needsWrite = true
 	default:
 		return fmt.Errorf("unknown resource type for update: %T", resource)
 	}
@@ -1125,13 +1226,14 @@ func convertToSyncOperation(op domain.SyncOperation) types.SyncOperation {
 }
 
 type EntitySyncerAdapter struct {
-	hostSyncer         *syncers.HostSyncer
-	addressGroupSyncer *syncers.AddressGroupSyncer
-	networkSyncer      *syncers.NetworkSyncer
-	serviceSyncer      *syncers.ServiceSyncer
-	svcSvcRuleSyncer   *syncers.SvcSvcRuleSyncer
-	svcFqdnRuleSyncer  *syncers.SvcFqdnRuleSyncer
-	subjectType        types.SyncSubjectType
+	hostSyncer          *syncers.HostSyncer
+	addressGroupSyncer  *syncers.AddressGroupSyncer
+	networkSyncer       *syncers.NetworkSyncer
+	serviceSyncer       *syncers.ServiceSyncer
+	svcSvcRuleSyncer    *syncers.SvcSvcRuleSyncer
+	svcFqdnRuleSyncer   *syncers.SvcFqdnRuleSyncer
+	ieCidrSvcRuleSyncer *syncers.IECidrSvcRuleSyncer
+	subjectType         types.SyncSubjectType
 }
 
 func (a *EntitySyncerAdapter) Sync(ctx context.Context, entity interfaces.SyncableEntity, operation types.SyncOperation) error {
@@ -1148,6 +1250,8 @@ func (a *EntitySyncerAdapter) Sync(ctx context.Context, entity interfaces.Syncab
 		return a.svcSvcRuleSyncer.Sync(ctx, entity, operation)
 	case types.SyncSubjectTypeSvcFqdnRules:
 		return a.svcFqdnRuleSyncer.Sync(ctx, entity, operation)
+	case types.SyncSubjectTypeIECidrSvcRules:
+		return a.ieCidrSvcRuleSyncer.Sync(ctx, entity, operation)
 	default:
 		return fmt.Errorf("unsupported subject type: %s", a.subjectType)
 	}
@@ -1166,6 +1270,8 @@ func (a *EntitySyncerAdapter) SyncBatch(ctx context.Context, entities []interfac
 		return a.svcSvcRuleSyncer.SyncBatch(ctx, entities, operation)
 	case types.SyncSubjectTypeSvcFqdnRules:
 		return a.svcFqdnRuleSyncer.SyncBatch(ctx, entities, operation)
+	case types.SyncSubjectTypeIECidrSvcRules:
+		return a.ieCidrSvcRuleSyncer.SyncBatch(ctx, entities, operation)
 	default:
 		return fmt.Errorf("unsupported subject type: %s", a.subjectType)
 	}
@@ -1191,11 +1297,6 @@ func (w *OutboxWorker) deleteResourceFromDB(ctx context.Context, item *domain.Ou
 	case string(registry.TypeNetwork):
 		deleteQuery = `DELETE FROM networks WHERE namespace = $1 AND name = $2`
 	case string(registry.TypeAddressGroup):
-		// AddressGroupBindings are deleted via coordinated deletion flow (markBindingForDeletion)
-		// in coordinateAddressGroupDelete(). Do NOT delete them directly here - that would
-		// bypass K8s watch notifications and leave CRDs stuck with deletionTimestamp.
-
-		// Delete address_group_port_mappings (no CRD, no watch needed)
 		if err := w.deleteAddressGroupPortMapping(ctx, tx, item.ResourceNamespace, item.ResourceName); err != nil {
 			return fmt.Errorf("failed to delete address group port mapping: %w", err)
 		}
@@ -1206,19 +1307,17 @@ func (w *OutboxWorker) deleteResourceFromDB(ctx context.Context, item *domain.Ou
 		deleteQuery = `DELETE FROM svc_svc_rules WHERE namespace = $1 AND name = $2`
 	case string(registry.TypeSvcFqdnRule):
 		deleteQuery = `DELETE FROM svc_fqdn_rules WHERE namespace = $1 AND name = $2`
+	case string(registry.TypeIECidrSvcRule):
+		deleteQuery = `DELETE FROM ie_cidr_svc_rules WHERE namespace = $1 AND name = $2`
 	default:
 		return fmt.Errorf("unknown resource type for deletion: %s", item.ResourceType)
 	}
 
-	cmdTag, err := tx.Exec(ctx, deleteQuery, item.ResourceNamespace, item.ResourceName)
+	_, err = tx.Exec(ctx, deleteQuery, item.ResourceNamespace, item.ResourceName)
 	if err != nil {
 		return fmt.Errorf("failed to delete %s from DB: %w", item.ResourceType, err)
 	}
-	w.logger.Debug("deleted resource from DB",
-		zap.String("resource_type", item.ResourceType),
-		zap.String("namespace", item.ResourceNamespace),
-		zap.String("name", item.ResourceName),
-		zap.Int64("rows_affected", cmdTag.RowsAffected()))
+
 	updateOutboxQuery := `UPDATE sync_outbox SET status = 'SUCCESS', processed_at = NOW(), updated_at = NOW() WHERE id = $1`
 	_, err = tx.Exec(ctx, updateOutboxQuery, item.ID)
 	if err != nil {
@@ -1227,18 +1326,11 @@ func (w *OutboxWorker) deleteResourceFromDB(ctx context.Context, item *domain.Ou
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("failed to commit deletion transaction: %w", err)
 	}
-	w.logger.Debug("resource and outbox entry deleted from DB",
-		zap.String("resource_type", item.ResourceType),
-		zap.String("namespace", item.ResourceNamespace),
-		zap.String("name", item.ResourceName))
+
 	return nil
 }
 
 func (w *OutboxWorker) deleteAddressGroupPortMapping(ctx context.Context, tx pgx.Tx, namespace, name string) error {
-	w.logger.Debug("️ [DELETE_FROM_DB] Deleting AddressGroupPortMapping prior to AddressGroup removal",
-		zap.String("namespace", namespace),
-		zap.String("name", name))
-
 	if _, err := tx.Exec(ctx, `DELETE FROM address_group_port_mappings WHERE namespace = $1 AND name = $2`, namespace, name); err != nil {
 		return err
 	}
@@ -1256,35 +1348,19 @@ func (w *OutboxWorker) syncAndUpdateStatusAtomic(
 ) error {
 	operation := string(item.Operation)
 	if err := syncer.Sync(syncCtx, syncableEntity, syncOperation); err != nil {
-		w.logger.Error("SGROUP sync failed",
-			zap.String("resource_type", item.ResourceType),
-			zap.String("namespace", item.ResourceNamespace),
-			zap.String("name", item.ResourceName),
-			zap.Error(err))
 		duration := time.Since(startTime)
 		errorCategory := w.categorizeError(err)
 		RecordProcessingFailure(item.ResourceType, operation, string(errorCategory), duration)
 		return fmt.Errorf("SGROUP sync failed: %w", err)
 	}
-	w.logger.Debug("SGROUP sync successful",
-		zap.String("resource_type", item.ResourceType),
-		zap.String("namespace", item.ResourceNamespace),
-		zap.String("name", item.ResourceName))
+
 	if item.Operation == domain.SyncOperationDelete {
-		w.logger.Debug("DELETE operation - SGROUP sync complete, deleting from DB",
-			zap.String("resource_type", item.ResourceType),
-			zap.String("namespace", item.ResourceNamespace),
-			zap.String("name", item.ResourceName))
 		if err := w.deleteResourceFromDB(ctx, item); err != nil {
 			duration := time.Since(startTime)
 			RecordProcessingFailure(item.ResourceType, operation, "db_delete_error", duration)
 			return fmt.Errorf("failed to delete resource from DB: %w", err)
 		}
 		w.handlePostDeleteRegeneration(ctx, item, syncableEntity)
-		w.logger.Info("DELETE operation complete - resource deleted from DB",
-			zap.String("resource_type", item.ResourceType),
-			zap.String("namespace", item.ResourceNamespace),
-			zap.String("name", item.ResourceName))
 	} else {
 		if err := w.markEntityResourceReady(ctx, item.ResourceType, item.ResourceNamespace, item.ResourceName, item.ID); err != nil {
 			w.logger.Error("failed to mark resource ready",
@@ -1412,23 +1488,6 @@ func parseServiceAddressGroups(raw interface{}) []models.AddressGroupRef {
 	return result
 }
 
-// coordinateEntityDeleteWithBindings handles Case 2 (DELETE Entity → CASCADE bindings)
-// for resource types that have binding relationships:
-//   - Host → HostBinding
-//   - Network → NetworkBinding
-//   - AddressGroup → HostBinding + NetworkBinding
-//   - Service → AddressGroupBinding (stub for future)
-//
-// Algorithm:
-//  1. Find all bindings for this entity
-//  2. If no bindings → return nil (proceed with sync)
-//  3. If bindings exist:
-//     a. Mark each binding with deletion_timestamp (soft delete)
-//     b. Check if all bindings are physically deleted
-//     c. If not → return ErrWaitingForSync (wait for next poll)
-//     d. If yes → return nil (proceed with sync)
-//
-// See: docs/architecture/COORDINATED_BINDING_DELETION.md - Case 2
 func (w *OutboxWorker) coordinateEntityDeleteWithBindings(
 	ctx context.Context,
 	item *domain.OutboxEntry,
@@ -1459,52 +1518,29 @@ func (w *OutboxWorker) coordinateHostDelete(
 	ctx context.Context,
 	item *domain.OutboxEntry,
 ) error {
-	w.logger.Info("coordinating Host DELETE with HostBinding CASCADE",
-		zap.String("namespace", item.ResourceNamespace),
-		zap.String("name", item.ResourceName))
-
-	// Step 1: Find all HostBindings for this Host
 	bindings, err := w.findHostBindingsForHost(ctx, item.ResourceNamespace, item.ResourceName)
 	if err != nil {
 		return fmt.Errorf("finding host bindings: %w", err)
 	}
 
 	if len(bindings) == 0 {
-		w.logger.Debug("no HostBindings found, proceeding with Host DELETE",
-			zap.String("namespace", item.ResourceNamespace),
-			zap.String("name", item.ResourceName))
-		return nil // No bindings to coordinate
+		return nil
 	}
 
-	w.logger.Info("found HostBindings that need coordination",
-		zap.String("namespace", item.ResourceNamespace),
-		zap.String("name", item.ResourceName),
-		zap.Int("binding_count", len(bindings)))
-
-	// Step 2: Mark all bindings for deletion (soft delete)
 	for _, binding := range bindings {
 		if err := w.markBindingForDeletion(ctx, binding); err != nil {
 			return fmt.Errorf("marking binding for deletion: %w", err)
 		}
 	}
 
-	// Step 3: Check if all bindings are physically deleted
 	allDeleted, err := w.checkAllHostBindingsDeleted(ctx, bindings)
 	if err != nil {
 		return fmt.Errorf("checking binding deletion status: %w", err)
 	}
 
 	if !allDeleted {
-		w.logger.Debug("HostBindings not yet physically deleted, waiting",
-			zap.String("namespace", item.ResourceNamespace),
-			zap.String("name", item.ResourceName),
-			zap.Int("binding_count", len(bindings)))
-		return ErrWaitingForSync // Don't increment attempts
+		return ErrWaitingForSync
 	}
-
-	w.logger.Info("all HostBindings deleted, proceeding with Host DELETE",
-		zap.String("namespace", item.ResourceNamespace),
-		zap.String("name", item.ResourceName))
 
 	return nil // Ready to proceed with Host deletion
 }
@@ -1515,82 +1551,49 @@ func (w *OutboxWorker) coordinateNetworkDelete(
 	ctx context.Context,
 	item *domain.OutboxEntry,
 ) error {
-	w.logger.Info("coordinating Network DELETE with NetworkBinding CASCADE",
-		zap.String("namespace", item.ResourceNamespace),
-		zap.String("name", item.ResourceName))
-
-	// Step 1: Find all NetworkBindings for this Network
 	bindings, err := w.findNetworkBindingsForNetwork(ctx, item.ResourceNamespace, item.ResourceName)
 	if err != nil {
 		return fmt.Errorf("finding network bindings: %w", err)
 	}
 
 	if len(bindings) == 0 {
-		w.logger.Debug("no NetworkBindings found, proceeding with Network DELETE",
-			zap.String("namespace", item.ResourceNamespace),
-			zap.String("name", item.ResourceName))
-		return nil // No bindings to coordinate
+		return nil
 	}
 
-	w.logger.Info("found NetworkBindings that need coordination",
-		zap.String("namespace", item.ResourceNamespace),
-		zap.String("name", item.ResourceName),
-		zap.Int("binding_count", len(bindings)))
-
-	// Step 2: Mark all bindings for deletion (soft delete)
 	for _, binding := range bindings {
 		if err := w.markBindingForDeletion(ctx, binding); err != nil {
 			return fmt.Errorf("marking binding for deletion: %w", err)
 		}
 	}
 
-	// Step 3: Check if all bindings are physically deleted
 	allDeleted, err := w.checkAllNetworkBindingsDeleted(ctx, bindings)
 	if err != nil {
 		return fmt.Errorf("checking binding deletion status: %w", err)
 	}
 
 	if !allDeleted {
-		w.logger.Debug("NetworkBindings not yet physically deleted, waiting",
-			zap.String("namespace", item.ResourceNamespace),
-			zap.String("name", item.ResourceName),
-			zap.Int("binding_count", len(bindings)))
 		return ErrWaitingForSync // Don't increment attempts
 	}
-
-	w.logger.Info("all NetworkBindings deleted, proceeding with Network DELETE",
-		zap.String("namespace", item.ResourceNamespace),
-		zap.String("name", item.ResourceName))
 
 	return nil // Ready to proceed with Network deletion
 }
 
-// coordinateAddressGroupDelete handles Case 4 for AddressGroup deletion
-// AddressGroup can have HostBindings, NetworkBindings, AND AddressGroupBindings
-// See: docs/architecture/COORDINATED_BINDING_DELETION.md - Case 4
 func (w *OutboxWorker) coordinateAddressGroupDelete(
 	ctx context.Context,
 	item *domain.OutboxEntry,
 ) error {
-	w.logger.Info("coordinating AddressGroup DELETE with binding CASCADE",
-		zap.String("namespace", item.ResourceNamespace),
-		zap.String("name", item.ResourceName))
-
-	// Step 1: Find HostBindings
 	hostBindings, err := w.findHostBindingsForAddressGroup(ctx,
 		item.ResourceNamespace, item.ResourceName)
 	if err != nil {
 		return fmt.Errorf("finding host bindings: %w", err)
 	}
 
-	// Step 2: Find NetworkBindings
 	netBindings, err := w.findNetworkBindingsForAddressGroup(ctx,
 		item.ResourceNamespace, item.ResourceName)
 	if err != nil {
 		return fmt.Errorf("finding network bindings: %w", err)
 	}
 
-	// Step 3: Find AddressGroupBindings (bindings that reference this AddressGroup)
 	agBindings, err := w.findAddressGroupBindingsForAddressGroup(ctx,
 		item.ResourceNamespace, item.ResourceName)
 	if err != nil {
@@ -1599,20 +1602,9 @@ func (w *OutboxWorker) coordinateAddressGroupDelete(
 
 	totalBindings := len(hostBindings) + len(netBindings) + len(agBindings)
 	if totalBindings == 0 {
-		w.logger.Debug("no bindings found, proceeding with AddressGroup DELETE",
-			zap.String("namespace", item.ResourceNamespace),
-			zap.String("name", item.ResourceName))
-		return nil // No bindings
+		return nil
 	}
 
-	w.logger.Info("found bindings for AddressGroup",
-		zap.String("namespace", item.ResourceNamespace),
-		zap.String("name", item.ResourceName),
-		zap.Int("host_bindings", len(hostBindings)),
-		zap.Int("network_bindings", len(netBindings)),
-		zap.Int("address_group_bindings", len(agBindings)))
-
-	// Step 4: Mark all for deletion
 	for _, binding := range hostBindings {
 		if err := w.markBindingForDeletion(ctx, binding); err != nil {
 			return fmt.Errorf("marking host binding for deletion: %w", err)
@@ -1629,7 +1621,6 @@ func (w *OutboxWorker) coordinateAddressGroupDelete(
 		}
 	}
 
-	// Step 5: Check all deleted
 	hostDeleted, err := w.checkAllHostBindingsDeleted(ctx, hostBindings)
 	if err != nil {
 		return fmt.Errorf("checking host binding deletion: %w", err)
@@ -1644,50 +1635,25 @@ func (w *OutboxWorker) coordinateAddressGroupDelete(
 	}
 
 	if !hostDeleted || !netDeleted || !agDeleted {
-		w.logger.Debug("bindings not yet physically deleted, waiting",
-			zap.String("namespace", item.ResourceNamespace),
-			zap.String("name", item.ResourceName),
-			zap.Bool("host_deleted", hostDeleted),
-			zap.Bool("net_deleted", netDeleted),
-			zap.Bool("ag_deleted", agDeleted))
 		return ErrWaitingForSync
 	}
 
-	w.logger.Info("all bindings deleted for AddressGroup",
-		zap.String("namespace", item.ResourceNamespace),
-		zap.String("name", item.ResourceName))
 	return nil
 }
 
-// coordinateServiceDelete handles Case 4 for Service deletion
-// Service can have AddressGroupBindings
-// TODO: Implement when AddressGroupBinding coordination is added
 func (w *OutboxWorker) coordinateServiceDelete(
 	ctx context.Context,
 	item *domain.OutboxEntry,
 ) error {
-	w.logger.Info("coordinating Service DELETE with dependency cascade",
-		zap.String("namespace", item.ResourceNamespace),
-		zap.String("name", item.ResourceName))
-
 	pending := false
 
-	// Step 1: AddressGroupBindings
 	bindings, err := w.findAddressGroupBindingsForService(ctx, item.ResourceNamespace, item.ResourceName)
 	if err != nil {
 		return fmt.Errorf("finding address group bindings: %w", err)
 	}
 
 	if len(bindings) == 0 {
-		w.logger.Debug("no AddressGroupBindings found for Service",
-			zap.String("namespace", item.ResourceNamespace),
-			zap.String("name", item.ResourceName))
 	} else {
-		w.logger.Info("found AddressGroupBindings that need coordination",
-			zap.String("namespace", item.ResourceNamespace),
-			zap.String("name", item.ResourceName),
-			zap.Int("binding_count", len(bindings)))
-
 		for _, binding := range bindings {
 			if err := w.markBindingForDeletion(ctx, binding); err != nil {
 				return fmt.Errorf("marking binding for deletion: %w", err)
@@ -1700,30 +1666,17 @@ func (w *OutboxWorker) coordinateServiceDelete(
 		}
 
 		if !allBindingsDeleted {
-			w.logger.Debug("AddressGroupBindings not yet physically deleted, waiting",
-				zap.String("namespace", item.ResourceNamespace),
-				zap.String("name", item.ResourceName),
-				zap.Int("binding_count", len(bindings)))
 			pending = true
 		}
 	}
 
-	// Step 2: SvcSvcRule dependencies
 	rules, err := w.findSvcSvcRulesForService(ctx, item.ResourceNamespace, item.ResourceName)
 	if err != nil {
 		return fmt.Errorf("finding SvcSvcRule dependencies: %w", err)
 	}
 
 	if len(rules) == 0 {
-		w.logger.Debug("no SvcSvcRules referencing Service",
-			zap.String("namespace", item.ResourceNamespace),
-			zap.String("name", item.ResourceName))
 	} else {
-		w.logger.Info("found SvcSvcRules that need coordination",
-			zap.String("namespace", item.ResourceNamespace),
-			zap.String("name", item.ResourceName),
-			zap.Int("rule_count", len(rules)))
-
 		for _, rule := range rules {
 			if err := w.markSvcSvcRuleForDeletion(ctx, rule); err != nil {
 				return fmt.Errorf("marking SvcSvcRule for deletion: %w", err)
@@ -1736,10 +1689,6 @@ func (w *OutboxWorker) coordinateServiceDelete(
 		}
 
 		if !allRulesDeleted {
-			w.logger.Debug("SvcSvcRules not yet physically deleted, waiting",
-				zap.String("namespace", item.ResourceNamespace),
-				zap.String("name", item.ResourceName),
-				zap.Int("rule_count", len(rules)))
 			pending = true
 		}
 	}
@@ -1751,15 +1700,7 @@ func (w *OutboxWorker) coordinateServiceDelete(
 	}
 
 	if len(fqdnRules) == 0 {
-		w.logger.Debug("no SvcFqdnRules referencing Service",
-			zap.String("namespace", item.ResourceNamespace),
-			zap.String("name", item.ResourceName))
 	} else {
-		w.logger.Info("found SvcFqdnRules that need coordination",
-			zap.String("namespace", item.ResourceNamespace),
-			zap.String("name", item.ResourceName),
-			zap.Int("rule_count", len(fqdnRules)))
-
 		for _, rule := range fqdnRules {
 			if err := w.markSvcFqdnRuleForDeletion(ctx, rule); err != nil {
 				return fmt.Errorf("marking SvcFqdnRule for deletion: %w", err)
@@ -1772,10 +1713,6 @@ func (w *OutboxWorker) coordinateServiceDelete(
 		}
 
 		if !allFqdnRulesDeleted {
-			w.logger.Debug("SvcFqdnRules not yet physically deleted, waiting",
-				zap.String("namespace", item.ResourceNamespace),
-				zap.String("name", item.ResourceName),
-				zap.Int("rule_count", len(fqdnRules)))
 			pending = true
 		}
 	}
@@ -1783,10 +1720,6 @@ func (w *OutboxWorker) coordinateServiceDelete(
 	if pending {
 		return ErrWaitingForSync
 	}
-
-	w.logger.Info("all dependent resources deleted, proceeding with Service DELETE",
-		zap.String("namespace", item.ResourceNamespace),
-		zap.String("name", item.ResourceName))
 
 	return nil
 }

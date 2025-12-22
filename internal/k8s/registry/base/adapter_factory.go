@@ -79,3 +79,6 @@ func NewSvcSvcRulePtrOps(client client.BackendClient) BackendOperations[*models.
 func NewSvcFqdnRulePtrOps(client client.BackendClient) BackendOperations[*models.SvcFqdnRule] {
 	return NewPtrBackendOperations(NewSvcFqdnRuleBackendOperations(client))
 }
+func NewIECidrSvcRulePtrOps(client client.BackendClient) BackendOperations[*models.IECidrSvcRule] {
+	return NewPtrBackendOperations(NewIECidrSvcRuleBackendOperations(client))
+}

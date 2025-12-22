@@ -144,15 +144,16 @@ func (w *Writer) upsertAddressGroup(ctx context.Context, ag models.AddressGroup)
 	// Note: aggregated_hosts is calculated by database trigger after INSERT/UPDATE
 	// We omit aggregated_hosts from the query and let the trigger handle it
 	addressGroupQuery := `
-		INSERT INTO address_groups (namespace, name, default_action, logs, trace, description, networks, hosts, resource_version)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO address_groups (namespace, name, default_action, logs, trace, description, comment, networks, hosts, resource_version)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		ON CONFLICT (namespace, name) DO UPDATE SET
 			default_action = $3,
 			logs = $4,
 			trace = $5,
 			description = $6,
-			hosts = $8,
-			resource_version = $9`
+			comment = $7,
+			hosts = $9,
+			resource_version = $10`
 
 	if err := w.exec(ctx, addressGroupQuery,
 		ag.Namespace,
@@ -161,6 +162,7 @@ func (w *Writer) upsertAddressGroup(ctx context.Context, ag models.AddressGroup)
 		ag.Logs,
 		ag.Trace,
 		ag.Description,
+		ag.Comment,
 		networksJSON,
 		hostsJSON,
 		resourceVersion,
@@ -326,14 +328,15 @@ func (w *Writer) upsertAddressGroupBinding(ctx context.Context, binding models.A
 
 	// Then, upsert the address group binding using the NEW resource version
 	bindingQuery := `
-		INSERT INTO address_group_bindings (namespace, name, service_namespace, service_name, address_group_namespace, address_group_name, resource_version)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO address_group_bindings (namespace, name, service_namespace, service_name, address_group_namespace, address_group_name, comment, resource_version)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (namespace, name) DO UPDATE SET
 			service_namespace = $3,
 			service_name = $4,
 			address_group_namespace = $5,
 			address_group_name = $6,
-			resource_version = $7`
+			comment = $7,
+			resource_version = $8`
 
 	if err := w.exec(ctx, bindingQuery,
 		binding.Namespace,
@@ -342,6 +345,7 @@ func (w *Writer) upsertAddressGroupBinding(ctx context.Context, binding models.A
 		binding.ServiceRef.Name,
 		binding.AddressGroupRef.Namespace,
 		binding.AddressGroupRef.Name,
+		binding.Comment,
 		resourceVersion,
 	); err != nil {
 		return errors.Wrapf(err, "failed to upsert address group binding %s/%s", binding.Namespace, binding.Name)

@@ -285,6 +285,35 @@ func (w *OutboxWorker) buildPendingSyncSQLConfig(resourceType, conditionsNullChe
 			  AND fr.resource_version = km.resource_version
 		`, conditionsNullCheck, safeConditionsExpr, safeConditionsExpr),
 		}, nil
+	case "IECidrSvcRule":
+		return &pendingSyncSQLConfig{
+			tableName: "ie_cidr_svc_rules",
+			updateQuery: fmt.Sprintf(`
+			UPDATE k8s_metadata km
+			SET conditions = CASE
+				WHEN %s THEN jsonb_build_array($1::jsonb)
+				ELSE (
+					SELECT jsonb_agg(
+						CASE
+							WHEN elem->>'type' = 'PendingSync' THEN $1::jsonb
+							ELSE elem
+						END
+					)
+					FROM jsonb_array_elements(%s) AS elem
+				) || CASE
+					WHEN NOT EXISTS (
+						SELECT 1 FROM jsonb_array_elements(%s) AS elem
+						WHERE elem->>'type' = 'PendingSync'
+					) THEN jsonb_build_array($1::jsonb)
+					ELSE '[]'::jsonb
+				END
+			END,
+			updated_at = NOW()
+			FROM ie_cidr_svc_rules ir
+			WHERE ir.namespace = $2 AND ir.name = $3
+			  AND ir.resource_version = km.resource_version
+		`, conditionsNullCheck, safeConditionsExpr, safeConditionsExpr),
+		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported resource type for condition update: %s", resourceType)
 	}

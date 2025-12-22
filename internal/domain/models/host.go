@@ -14,12 +14,25 @@ type IPItem struct {
 	IP string `json:"ip"`
 }
 
+// HostMetaInfo represents host meta information from SGROUP (read-only)
+type HostMetaInfo struct {
+	HostName        string `json:"hostName,omitempty"`
+	Os              string `json:"os,omitempty"`
+	Platform        string `json:"platform,omitempty"`
+	PlatformFamily  string `json:"platformFamily,omitempty"`
+	PlatformVersion string `json:"platformVersion,omitempty"`
+	KernelVersion   string `json:"kernelVersion,omitempty"`
+}
+
 // Host represents a host resource in the domain (K8s representation of Agent)
 type Host struct {
 	SelfRef
 
 	// Specification from HostSpec
 	UUID string `json:"uuid"`
+
+	// Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+	Comment string `json:"comment,omitempty"`
 
 	// Status
 	HostName         string                             `json:"hostName,omitempty"`
@@ -30,6 +43,9 @@ type Host struct {
 
 	// IPList from SGROUP synchronization (matching K8s CRD format)
 	IpList []IPItem `json:"ipList,omitempty"`
+
+	// MetaInfo from SGROUP synchronization (read-only)
+	MetaInfo *HostMetaInfo `json:"metaInfo,omitempty"`
 
 	// Metadata
 	Meta Meta `json:"meta"`
@@ -115,6 +131,26 @@ func (h *Host) ClearIpList() {
 	h.IpList = nil
 }
 
+// SetMetaInfo sets the meta info for the host
+func (h *Host) SetMetaInfo(metaInfo *HostMetaInfo) {
+	h.MetaInfo = metaInfo
+}
+
+// GetMetaInfo returns the meta info for the host
+func (h *Host) GetMetaInfo() *HostMetaInfo {
+	return h.MetaInfo
+}
+
+// HasMetaInfo returns true if the host has meta info
+func (h *Host) HasMetaInfo() bool {
+	return h.MetaInfo != nil
+}
+
+// ClearMetaInfo clears the host's meta info
+func (h *Host) ClearMetaInfo() {
+	h.MetaInfo = nil
+}
+
 // ClearBinding clears all binding-related fields
 func (h *Host) ClearBinding() {
 	h.IsBound = false
@@ -181,6 +217,12 @@ func (h *Host) DeepCopy() Resource {
 		for i, item := range h.IpList {
 			copy.IpList[i] = IPItem{IP: item.IP}
 		}
+	}
+
+	// Deep copy MetaInfo
+	if h.MetaInfo != nil {
+		metaInfoCopy := *h.MetaInfo
+		copy.MetaInfo = &metaInfoCopy
 	}
 
 	return &copy

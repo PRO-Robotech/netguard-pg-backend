@@ -38,7 +38,7 @@ spec:
       
       containers:
       - name: goose-migrator
-        image: netguard/goose:latest
+        image: netguard/goose:local-dev
         imagePullPolicy: Never  # Use locally built image (minikube pattern)
         
         # Run goose migrations (sgroups pattern)

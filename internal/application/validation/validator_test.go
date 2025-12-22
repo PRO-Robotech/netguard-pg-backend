@@ -117,6 +117,14 @@ func (m *MockReader) GetSvcFqdnRuleByID(ctx context.Context, id models.ResourceI
 	return nil, fmt.Errorf("svc fqdn rule not found")
 }
 
+func (m *MockReader) ListIECidrSvcRules(ctx context.Context, consume func(models.IECidrSvcRule) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReader) GetIECidrSvcRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IECidrSvcRule, error) {
+	return nil, fmt.Errorf("ie cidr svc rule not found")
+}
+
 // TestNewDependencyValidator tests that a new DependencyValidator can be created
 func TestNewDependencyValidator(t *testing.T) {
 	mockReader := &MockReader{}

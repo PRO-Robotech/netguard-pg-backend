@@ -347,6 +347,12 @@ func (w *simpleWriter) SyncSvcFqdnRules(ctx context.Context, rules []models.SvcF
 func (w *simpleWriter) DeleteSvcFqdnRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
 	return w.modularWriter.DeleteSvcFqdnRulesByIDs(ctx, ids, opts...)
 }
+func (w *simpleWriter) SyncIECidrSvcRules(ctx context.Context, rules []models.IECidrSvcRule, scope ports.Scope, opts ...ports.Option) error {
+	return w.modularWriter.SyncIECidrSvcRules(ctx, rules, scope, opts...)
+}
+func (w *simpleWriter) DeleteIECidrSvcRulesByIDs(ctx context.Context, ids []models.ResourceIdentifier, opts ...ports.Option) error {
+	return w.modularWriter.DeleteIECidrSvcRulesByIDs(ctx, ids, opts...)
+}
 func (w *simpleWriter) UpdateSyncStatus(ctx context.Context) error {
 	return nil
 }

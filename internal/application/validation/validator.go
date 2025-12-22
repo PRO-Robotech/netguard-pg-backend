@@ -65,6 +65,11 @@ func (v *DependencyValidator) GetSvcSvcRuleValidator() *SvcSvcRuleValidator {
 	return NewSvcSvcRuleValidator(v.reader)
 }
 
+// GetIECidrSvcRuleValidator returns a validator for IE CIDR to Service rules
+func (v *DependencyValidator) GetIECidrSvcRuleValidator() *IECidrSvcRuleValidator {
+	return NewIECidrSvcRuleValidator(v.reader)
+}
+
 // ServiceValidator provides methods for validating services
 type ServiceValidator struct {
 	reader        ports.Reader

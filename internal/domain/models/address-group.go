@@ -111,6 +111,9 @@ type AddressGroup struct {
 	// aggregated from both spec.hosts and HostBinding resources
 	AggregatedHosts []HostReference `json:"aggregatedHosts,omitempty"`
 
+	// Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+	Comment string `json:"comment,omitempty"`
+
 	Meta Meta
 }
 

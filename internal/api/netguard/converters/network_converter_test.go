@@ -82,3 +82,91 @@ func TestConvertNetworkToProtoCarriesBindingRefs(t *testing.T) {
 	require.NotNil(t, pb.GetAddressGroupRef())
 	require.Equal(t, "example", pb.GetAddressGroupRef().GetName())
 }
+
+func TestConvertNetwork_CommentField(t *testing.T) {
+	tests := []struct {
+		name     string
+		comment  string
+		expected string
+	}{
+		{
+			name:     "network with comment",
+			comment:  "Production network segment",
+			expected: "Production network segment",
+		},
+		{
+			name:     "network with empty comment",
+			comment:  "",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pb := &netguardpb.Network{
+				SelfRef: &netguardpb.ResourceIdentifier{
+					Name:      "net-a",
+					Namespace: "ns",
+				},
+				Cidr:    "10.0.0.0/24",
+				Comment: tt.comment,
+			}
+
+			result := ConvertNetwork(pb)
+
+			require.Equal(t, tt.expected, result.Comment)
+		})
+	}
+}
+
+func TestConvertNetworkToPB_CommentField(t *testing.T) {
+	tests := []struct {
+		name     string
+		comment  string
+		expected string
+	}{
+		{
+			name:     "domain network with comment",
+			comment:  "Domain network comment",
+			expected: "Domain network comment",
+		},
+		{
+			name:     "domain network without comment",
+			comment:  "",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			domain := models.Network{
+				SelfRef: models.SelfRef{
+					ResourceIdentifier: models.NewResourceIdentifier("net-a", models.WithNamespace("ns")),
+				},
+				CIDR:    "10.0.0.0/24",
+				Comment: tt.comment,
+			}
+
+			pb := ConvertNetworkToPB(domain)
+
+			require.Equal(t, tt.expected, pb.GetComment())
+		})
+	}
+}
+
+func TestConvertNetwork_BidirectionalComment(t *testing.T) {
+	originalComment := "Bidirectional network comment"
+	pb := &netguardpb.Network{
+		SelfRef: &netguardpb.ResourceIdentifier{
+			Name:      "net-a",
+			Namespace: "ns",
+		},
+		Cidr:    "10.0.0.0/24",
+		Comment: originalComment,
+	}
+
+	domain := ConvertNetwork(pb)
+	backToProto := ConvertNetworkToPB(domain)
+
+	require.Equal(t, originalComment, backToProto.GetComment())
+}

@@ -15,13 +15,13 @@ func TestValidateRegistry(t *testing.T) {
 
 // TestRegistryInitialization tests that all required resources are registered
 func TestRegistryInitialization(t *testing.T) {
-	// Check registry has exactly 9 resources (6 entities + 3 processes)
-	assert.Len(t, resourceRegistry, 9, "Registry should contain exactly 9 resource types")
+	// Check registry has exactly 10 resources (7 entities + 3 processes)
+	assert.Len(t, resourceRegistry, 10, "Registry should contain exactly 10 resource types")
 
 	// Check all required types exist
 	requiredTypes := []ResourceType{
 		TypeHost, TypeAddressGroup, TypeNetwork, TypeService,
-		TypeSvcSvcRule, TypeSvcFqdnRule,
+		TypeSvcSvcRule, TypeSvcFqdnRule, TypeIECidrSvcRule,
 		TypeHostBinding, TypeNetworkBinding, TypeAddressGroupBinding,
 	}
 
@@ -264,12 +264,12 @@ func TestGetTargetSystem(t *testing.T) {
 func TestListEntityResources(t *testing.T) {
 	entities := ListEntityResources()
 
-	// Should have exactly 6 entity resources
-	assert.Len(t, entities, 6, "Should have 6 entity resources")
+	// Should have exactly 7 entity resources
+	assert.Len(t, entities, 7, "Should have 7 entity resources")
 
 	// Check all expected entities are present
 	expectedEntities := []ResourceType{
-		TypeHost, TypeAddressGroup, TypeNetwork, TypeService, TypeSvcSvcRule, TypeSvcFqdnRule,
+		TypeHost, TypeAddressGroup, TypeNetwork, TypeService, TypeSvcSvcRule, TypeSvcFqdnRule, TypeIECidrSvcRule,
 	}
 
 	for _, expected := range expectedEntities {
@@ -308,8 +308,8 @@ func TestListProcessResources(t *testing.T) {
 func TestGetRegistry(t *testing.T) {
 	registry := GetRegistry()
 
-	// Should have all 9 resources
-	assert.Len(t, registry, 9)
+	// Should have all 10 resources
+	assert.Len(t, registry, 10)
 
 	// Modifying the returned copy should not affect the original
 	originalLen := len(resourceRegistry)

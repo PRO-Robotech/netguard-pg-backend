@@ -585,3 +585,26 @@ func (m *MockBackendClient) WatchSvcSvcRules(ctx context.Context, req *netguardp
 func (m *MockBackendClient) WatchSvcFqdnRules(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchSvcFqdnRulesClient, error) {
 	return nil, fmt.Errorf("watch not implemented in mock backend")
 }
+
+func (m *MockBackendClient) WatchIECidrSvcRules(ctx context.Context, req *netguardpb.WatchRequest) (netguardpb.NetguardService_WatchIECidrSvcRulesClient, error) {
+	return nil, fmt.Errorf("watch not implemented in mock backend")
+}
+
+func (m *MockBackendClient) GetIECidrSvcRule(ctx context.Context, id models.ResourceIdentifier) (*models.IECidrSvcRule, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (m *MockBackendClient) ListIECidrSvcRules(ctx context.Context, scope ports.Scope) ([]models.IECidrSvcRule, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+func (m *MockBackendClient) CreateIECidrSvcRule(ctx context.Context, rule *models.IECidrSvcRule) error {
+	return fmt.Errorf("not implemented")
+}
+func (m *MockBackendClient) UpdateIECidrSvcRule(ctx context.Context, rule *models.IECidrSvcRule) error {
+	return fmt.Errorf("not implemented")
+}
+func (m *MockBackendClient) DeleteIECidrSvcRule(ctx context.Context, id models.ResourceIdentifier) error {
+	return fmt.Errorf("not implemented")
+}
+func (m *MockBackendClient) UpdateIECidrSvcRuleMeta(ctx context.Context, id models.ResourceIdentifier, meta models.Meta) error {
+	return fmt.Errorf("not implemented")
+}

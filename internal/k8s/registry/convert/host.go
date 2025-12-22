@@ -28,6 +28,7 @@ func (c *HostConverter) ToDomain(ctx context.Context, k8sObj *netguardv1beta1.Ho
 			},
 		},
 		UUID:             k8sObj.Spec.UUID,
+		Comment:          k8sObj.Spec.Comment,
 		HostName:         k8sObj.Status.HostName,
 		AddressGroupName: k8sObj.Status.AddressGroupName,
 		IsBound:          k8sObj.Status.IsBound,
@@ -41,6 +42,18 @@ func (c *HostConverter) ToDomain(ctx context.Context, k8sObj *netguardv1beta1.Ho
 		domainHost.IpList = make([]models.IPItem, len(k8sObj.IPList))
 		for i, ipItem := range k8sObj.IPList {
 			domainHost.IpList[i] = models.IPItem{IP: ipItem.IP}
+		}
+	}
+
+	// Convert MetaInfo from K8s to domain format (read-only from SGROUP)
+	if k8sObj.MetaInfo != nil {
+		domainHost.MetaInfo = &models.HostMetaInfo{
+			HostName:        k8sObj.MetaInfo.HostName,
+			Os:              k8sObj.MetaInfo.Os,
+			Platform:        k8sObj.MetaInfo.Platform,
+			PlatformFamily:  k8sObj.MetaInfo.PlatformFamily,
+			PlatformVersion: k8sObj.MetaInfo.PlatformVersion,
+			KernelVersion:   k8sObj.MetaInfo.KernelVersion,
 		}
 	}
 
@@ -58,7 +71,8 @@ func (c *HostConverter) FromDomain(ctx context.Context, domainObj *models.Host) 
 		TypeMeta:   CreateStandardTypeMetaForResource("Host"),
 		ObjectMeta: ConvertMetadataFromDomain(domainObj.Meta, domainObj.ResourceIdentifier.Name, domainObj.ResourceIdentifier.Namespace),
 		Spec: netguardv1beta1.HostSpec{
-			UUID: domainObj.UUID,
+			UUID:    domainObj.UUID,
+			Comment: domainObj.Comment,
 		},
 		Status: netguardv1beta1.HostStatus{
 			HostName:         domainObj.HostName,
@@ -75,7 +89,18 @@ func (c *HostConverter) FromDomain(ctx context.Context, domainObj *models.Host) 
 		for i, ipItem := range domainObj.IpList {
 			k8sHost.IPList[i] = netguardv1beta1.IPItem{IP: ipItem.IP}
 		}
-	} else {
+	}
+
+	// Convert MetaInfo from domain to K8s format (read-only from SGROUP)
+	if domainObj.MetaInfo != nil {
+		k8sHost.MetaInfo = &netguardv1beta1.HostMetaInfo{
+			HostName:        domainObj.MetaInfo.HostName,
+			Os:              domainObj.MetaInfo.Os,
+			Platform:        domainObj.MetaInfo.Platform,
+			PlatformFamily:  domainObj.MetaInfo.PlatformFamily,
+			PlatformVersion: domainObj.MetaInfo.PlatformVersion,
+			KernelVersion:   domainObj.MetaInfo.KernelVersion,
+		}
 	}
 
 	conditions, observedGeneration := ConvertStatusFromDomain(domainObj.Meta)

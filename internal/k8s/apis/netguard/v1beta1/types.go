@@ -71,6 +71,12 @@ type Service struct {
 	// Users should NOT modify this field directly - changes will be ignored.
 	// +optional
 	XSvcFqdnRules *XSvcFqdnRules `json:"xSvcFqdnRules,omitempty"`
+
+	// xIECidrSvcRules contains references to all IECidrSvcRule resources where this Service is the target.
+	// This field is automatically populated by PostgreSQL triggers and is READ-ONLY.
+	// Users should NOT modify this field directly - changes will be ignored.
+	// +optional
+	XIECidrSvcRules *XIECidrSvcRules `json:"xIECidrSvcRules,omitempty"`
 }
 
 // ServiceSpec defines the desired state of Service
@@ -86,6 +92,10 @@ type ServiceSpec struct {
 	// AddressGroups is a list of address group references
 	// +optional
 	AddressGroups []NamespacedObjectReference `json:"addressGroups,omitempty"`
+
+	// Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+	// +optional
+	Comment string `json:"comment,omitempty"`
 }
 
 // IngressPort defines a port configuration for ingress traffic
@@ -256,6 +266,10 @@ type AddressGroupSpec struct {
 	// Host namespace MUST match AddressGroup namespace
 	// +optional
 	Hosts []NamespacedObjectReference `json:"hosts,omitempty"`
+
+	// Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+	// +optional
+	Comment string `json:"comment,omitempty"`
 }
 
 // AddressGroupStatus defines the observed state of AddressGroup
@@ -302,6 +316,10 @@ type AddressGroupBindingSpec struct {
 
 	// AddressGroupRef is a reference to the AddressGroup resource
 	AddressGroupRef NamespacedObjectReference `json:"addressGroupRef"`
+
+	// Comment - optional user comment (Netguard-only)
+	// +optional
+	Comment string `json:"comment,omitempty"`
 }
 
 // ObjectReference contains enough information to let you inspect or modify the referred object
@@ -549,6 +567,10 @@ type PortSpec struct {
 type NetworkSpec struct {
 	// CIDR is the IP range in CIDR notation
 	CIDR string `json:"cidr"`
+
+	// Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+	// +optional
+	Comment string `json:"comment,omitempty"`
 }
 
 // NetworkStatus defines the observed state of Network
@@ -601,6 +623,10 @@ type NetworkBindingSpec struct {
 
 	// AddressGroupRef is a reference to the AddressGroup resource
 	AddressGroupRef NamespacedObjectReference `json:"addressGroupRef"`
+
+	// Comment - optional user comment (Netguard-only)
+	// +optional
+	Comment string `json:"comment,omitempty"`
 }
 
 // NetworkBindingStatus defines the observed state of NetworkBinding
@@ -640,6 +666,10 @@ type HostSpec struct {
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Pattern=`^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$`
 	UUID string `json:"uuid"`
+
+	// Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+	// +optional
+	Comment string `json:"comment,omitempty"`
 }
 
 // HostStatus defines the observed state of Host
@@ -678,6 +708,33 @@ type IPItem struct {
 	IP string `json:"ip"`
 }
 
+// HostMetaInfo contains meta information about the host from SGROUP (read-only)
+type HostMetaInfo struct {
+	// HostName is the hostname reported by the agent
+	// +optional
+	HostName string `json:"hostName,omitempty"`
+
+	// Os is the operating system (e.g., linux, windows)
+	// +optional
+	Os string `json:"os,omitempty"`
+
+	// Platform is the platform (e.g., ubuntu, centos)
+	// +optional
+	Platform string `json:"platform,omitempty"`
+
+	// PlatformFamily is the platform family (e.g., debian, rhel)
+	// +optional
+	PlatformFamily string `json:"platformFamily,omitempty"`
+
+	// PlatformVersion is the platform version
+	// +optional
+	PlatformVersion string `json:"platformVersion,omitempty"`
+
+	// KernelVersion is the kernel version
+	// +optional
+	KernelVersion string `json:"kernelVersion,omitempty"`
+}
+
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -692,6 +749,10 @@ type Host struct {
 	// IPList contains IP addresses for this Host, synchronized from SGROUP
 	// +optional
 	IPList []IPItem `json:"xIPList"`
+
+	// MetaInfo contains meta information for this Host, synchronized from SGROUP (read-only)
+	// +optional
+	MetaInfo *HostMetaInfo `json:"xMetaInfo"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -710,6 +771,10 @@ type HostBindingSpec struct {
 
 	// AddressGroupRef is a reference to the AddressGroup resource
 	AddressGroupRef NamespacedObjectReference `json:"addressGroupRef"`
+
+	// Comment - optional user comment (Netguard-only)
+	// +optional
+	Comment string `json:"comment,omitempty"`
 }
 
 // HostBindingStatus defines the observed state of HostBinding
@@ -790,6 +855,10 @@ type SvcSvcRuleSpec struct {
 	// Description - optional human-readable description (Netguard-only)
 	// +optional
 	Description string `json:"description,omitempty"`
+
+	// Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+	// +optional
+	Comment string `json:"comment,omitempty"`
 }
 
 // SvcSvcRuleStatus defines the observed state
@@ -870,6 +939,10 @@ type SvcFqdnRuleSpec struct {
 	// Description - optional human-readable description
 	// +optional
 	Description string `json:"description,omitempty"`
+
+	// Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+	// +optional
+	Comment string `json:"comment,omitempty"`
 }
 
 // SvcFqdnPortSpec represents a single port specification for FQDN rule
@@ -904,4 +977,113 @@ type SvcFqdnRuleList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []SvcFqdnRule `json:"items"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// IECidrSvcRule represents an ingress/egress CIDR-to-service firewall rule
+type IECidrSvcRule struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   IECidrSvcRuleSpec   `json:"spec"`
+	Status IECidrSvcRuleStatus `json:"status,omitempty"`
+}
+
+// IECidrSvcRuleSpec defines the desired state of IECidrSvcRule
+type IECidrSvcRuleSpec struct {
+	// Transport protocol (TCP or UDP)
+	// +kubebuilder:validation:Enum=TCP;UDP
+	Transport TransportProtocol `json:"transport"`
+
+	// CIDR - IPv4 or IPv6 CIDR notation (e.g., "10.0.0.0/8", "2001:db8::/32")
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=`^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$|^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}/[0-9]{1,3}$`
+	CIDR string `json:"cidr"`
+
+	// Svc - service reference (NamespacedObjectReference)
+	// +kubebuilder:validation:Required
+	Svc NamespacedObjectReference `json:"svc"`
+
+	// Traffic direction (INGRESS or EGRESS)
+	// +kubebuilder:validation:Enum=INGRESS;EGRESS
+	Traffic Traffic `json:"traffic"`
+
+	// Ports - list of port specifications. Each entry can have source and destination ports.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinItems=1
+	Ports []IECidrSvcPortSpec `json:"ports"`
+
+	// Logs - enable traffic logging
+	// +optional
+	Logs bool `json:"logs"`
+
+	// Trace - enable detailed tracing
+	// +optional
+	Trace bool `json:"trace"`
+
+	// Action - firewall action (ACCEPT or DROP)
+	// +kubebuilder:validation:Enum=ACCEPT;DROP
+	Action RuleAction `json:"action"`
+
+	// Priority - rule priority (0-1000, lower = higher priority)
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=1000
+	// +optional
+	Priority int32 `json:"priority,omitempty"`
+
+	// Description - optional human-readable description
+	// +optional
+	Description string `json:"description,omitempty"`
+
+	// Comment - optional user comment (Netguard-only, not synced to SGROUPS)
+	// +optional
+	Comment string `json:"comment,omitempty"`
+}
+
+// IECidrSvcPortSpec represents a port specification for CIDR-to-service rule
+type IECidrSvcPortSpec struct {
+	// S - source port expression (optional)
+	// Can be a single port, range, or comma-separated list
+	// +optional
+	S string `json:"s,omitempty"`
+
+	// D - destination port expression (required)
+	// Can be a single port, range, or comma-separated list
+	// +kubebuilder:validation:Required
+	D string `json:"d"`
+}
+
+// IECidrSvcRuleStatus defines the observed state of IECidrSvcRule
+type IECidrSvcRuleStatus struct {
+	// Conditions represent the latest available observations of the rule's current state
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// ObservedGeneration is the most recent generation observed by the controller
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
+	// SyncReady indicates if the rule is ready for SGROUP synchronization
+	// +optional
+	SyncReady bool `json:"syncReady,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// IECidrSvcRuleList contains a list of IECidrSvcRule
+type IECidrSvcRuleList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []IECidrSvcRule `json:"items"`
+}
+
+// XIECidrSvcRules - READ-ONLY field for Service resource
+// Contains references to all IECidrSvcRule resources where this Service is the target
+// Populated automatically by PostgreSQL triggers
+type XIECidrSvcRules struct {
+	// Rules contains the list of CIDR-to-service rules where this Service is the target
+	// Full NamespacedObjectReference for each rule
+	// +optional
+	Rules []NamespacedObjectReference `json:"rules,omitempty"`
 }

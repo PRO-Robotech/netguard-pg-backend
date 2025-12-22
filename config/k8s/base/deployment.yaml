@@ -19,7 +19,7 @@ spec:
       serviceAccountName: netguard-apiserver
       containers:
         - name: apiserver
-          image: netguard/k8s-apiserver:latest
+          image: netguard/k8s-apiserver:local-dev
           imagePullPolicy: IfNotPresent
           command: [ "/root/k8s-apiserver" ]
           args: 
@@ -52,7 +52,7 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 5
         - name: webhook
-          image: netguard/k8s-apiserver:latest
+          image: netguard/k8s-apiserver:local-dev
           imagePullPolicy: IfNotPresent
           command: ["/root/webhook-server"]
           args:

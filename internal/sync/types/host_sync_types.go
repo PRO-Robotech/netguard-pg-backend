@@ -39,7 +39,28 @@ type HostSyncResult struct {
 	Details map[string]interface{} `json:"details,omitempty"`
 }
 
-// HostIPSetUpdate represents an update to a host's IPSet
+// HostMetaInfoUpdate represents meta info update data from SGROUP
+type HostMetaInfoUpdate struct {
+	// HostName is the hostname from the agent
+	HostName string `json:"host_name,omitempty"`
+
+	// Os is the operating system
+	Os string `json:"os,omitempty"`
+
+	// Platform is the platform (e.g., ubuntu, centos)
+	Platform string `json:"platform,omitempty"`
+
+	// PlatformFamily is the platform family (e.g., debian, rhel)
+	PlatformFamily string `json:"platform_family,omitempty"`
+
+	// PlatformVersion is the platform version
+	PlatformVersion string `json:"platform_version,omitempty"`
+
+	// KernelVersion is the kernel version
+	KernelVersion string `json:"kernel_version,omitempty"`
+}
+
+// HostIPSetUpdate represents an update to a host's IPSet and MetaInfo
 type HostIPSetUpdate struct {
 	// HostUUID is the UUID of the host to update
 	HostUUID string `json:"host_uuid"`
@@ -58,6 +79,9 @@ type HostIPSetUpdate struct {
 
 	// SGName is the security group name from SGROUP
 	SGName string `json:"sg_name,omitempty"`
+
+	// MetaInfo contains host metadata from SGROUP (optional)
+	MetaInfo *HostMetaInfoUpdate `json:"meta_info,omitempty"`
 }
 
 // NewHostSyncRequest creates a new HostSyncRequest with default values

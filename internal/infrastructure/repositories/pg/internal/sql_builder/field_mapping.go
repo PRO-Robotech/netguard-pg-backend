@@ -253,6 +253,29 @@ var fieldMappings = map[string]map[string]FieldMapping{
 			ColumnName: "description",
 		},
 	},
+
+	"ie_cidr_svc_rules": {
+		"metadata.name": {
+			Type:       FieldTypeColumn,
+			ColumnName: "name",
+		},
+		"metadata.namespace": {
+			Type:       FieldTypeColumn,
+			ColumnName: "namespace",
+		},
+		"spec.svc.name": {
+			Type:       FieldTypeColumn,
+			ColumnName: "service_ref->>'name'",
+		},
+		"spec.svc.namespace": {
+			Type:       FieldTypeColumn,
+			ColumnName: "service_ref->>'namespace'",
+		},
+		"spec.cidr": {
+			Type:       FieldTypeColumn,
+			ColumnName: "cidr",
+		},
+	},
 }
 
 // GetFieldMapping возвращает маппинг для таблицы и поля

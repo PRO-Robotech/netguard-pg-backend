@@ -232,6 +232,7 @@ func buildEncoders() map[string]eventEncoder {
 		"network_bindings":               encodeNetworkBindingEvent(),
 		"svc_svc_rules":                  encodeSvcSvcRuleEvent(),
 		"svc_fqdn_rules":                 encodeSvcFqdnRuleEvent(),
+		"ie_cidr_svc_rules":              encodeIECidrSvcRuleEvent(),
 	}
 }
 
@@ -428,6 +429,24 @@ func encodeSvcFqdnRuleEvent() eventEncoder {
 		}
 		event.Object = &netguardpb.WatchEvent_SvcFqdnRule{
 			SvcFqdnRule: converters.ConvertSvcFqdnRuleToPB(*domainObj),
+		}
+		return nil
+	}
+}
+
+func encodeIECidrSvcRuleEvent() eventEncoder {
+	k8sConv := &convertk8s.IECidrSvcRuleConverter{}
+	return func(ctx context.Context, obj runtime.Object, event *netguardpb.WatchEvent) error {
+		k8sObj, ok := obj.(*v1beta1.IECidrSvcRule)
+		if !ok {
+			return fmt.Errorf("expected *IECidrSvcRule, got %T", obj)
+		}
+		domainObj, err := k8sConv.ToDomain(ctx, k8sObj)
+		if err != nil {
+			return err
+		}
+		event.Object = &netguardpb.WatchEvent_IecidrsvcRule{
+			IecidrsvcRule: converters.ConvertIECidrSvcRuleToPB(*domainObj),
 		}
 		return nil
 	}

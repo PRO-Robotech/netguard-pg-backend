@@ -15,6 +15,9 @@ type HostBinding struct {
 	HostRef         v1beta1.NamespacedObjectReference `json:"hostRef"`
 	AddressGroupRef v1beta1.NamespacedObjectReference `json:"addressGroupRef"`
 
+	// Comment - optional user comment (Netguard-only)
+	Comment string `json:"comment,omitempty"`
+
 	// Metadata
 	Meta Meta `json:"meta"`
 }

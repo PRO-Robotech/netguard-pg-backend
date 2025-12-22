@@ -263,6 +263,38 @@ func TestBuildCombinedWHERE(t *testing.T) {
 			wantArgs:      []interface{}{"prod"},
 			wantErr:       false,
 		},
+		{
+			name:       "ie_cidr_svc_rules table - spec.svc.name",
+			table:      "ie_cidr_svc_rules",
+			tableAlias: "icr",
+			fieldSelectors: []*netguardpb.FieldSelector{
+				{
+					Field:    "spec.svc.name",
+					Operator: netguardpb.FieldOperator_FIELD_OPERATOR_EQUALS,
+					Value:    "frontend",
+				},
+			},
+			startParamNum: 1,
+			wantClause:    "(icr.service_ref->>'name' = $1)",
+			wantArgs:      []interface{}{"frontend"},
+			wantErr:       false,
+		},
+		{
+			name:       "ie_cidr_svc_rules table - spec.cidr",
+			table:      "ie_cidr_svc_rules",
+			tableAlias: "icr",
+			fieldSelectors: []*netguardpb.FieldSelector{
+				{
+					Field:    "spec.cidr",
+					Operator: netguardpb.FieldOperator_FIELD_OPERATOR_EQUALS,
+					Value:    "10.0.0.0/8",
+				},
+			},
+			startParamNum: 1,
+			wantClause:    "(icr.cidr = $1)",
+			wantArgs:      []interface{}{"10.0.0.0/8"},
+			wantErr:       false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -340,6 +372,20 @@ func TestGetFieldMapping(t *testing.T) {
 			name:       "svc_fqdn_rules - spec.fqdn",
 			table:      "svc_fqdn_rules",
 			field:      "spec.fqdn",
+			wantExists: true,
+			wantType:   FieldTypeColumn,
+		},
+		{
+			name:       "ie_cidr_svc_rules - spec.cidr",
+			table:      "ie_cidr_svc_rules",
+			field:      "spec.cidr",
+			wantExists: true,
+			wantType:   FieldTypeColumn,
+		},
+		{
+			name:       "ie_cidr_svc_rules - spec.svc.name",
+			table:      "ie_cidr_svc_rules",
+			field:      "spec.svc.name",
 			wantExists: true,
 			wantType:   FieldTypeColumn,
 		},
@@ -435,6 +481,17 @@ func TestGetSupportedFields(t *testing.T) {
 				"spec.serviceFrom.namespace",
 				"spec.fqdn",
 				"spec.description",
+			},
+		},
+		{
+			name:  "ie_cidr_svc_rules table",
+			table: "ie_cidr_svc_rules",
+			wantFields: []string{
+				"metadata.name",
+				"metadata.namespace",
+				"spec.svc.name",
+				"spec.svc.namespace",
+				"spec.cidr",
 			},
 		},
 	}

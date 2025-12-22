@@ -772,3 +772,11 @@ func (m *MockReaderForServiceValidator) GetSvcSvcRuleByID(ctx context.Context, i
 func (m *MockReaderForServiceValidator) GetSvcFqdnRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.SvcFqdnRule, error) {
 	return nil, validation.NewEntityNotFoundError("SvcFqdnRule", id.Key())
 }
+
+func (m *MockReaderForServiceValidator) ListIECidrSvcRules(ctx context.Context, consume func(models.IECidrSvcRule) error, scope ports.Scope) error {
+	return nil
+}
+
+func (m *MockReaderForServiceValidator) GetIECidrSvcRuleByID(ctx context.Context, id models.ResourceIdentifier) (*models.IECidrSvcRule, error) {
+	return nil, validation.NewEntityNotFoundError("IECidrSvcRule", id.Key())
+}

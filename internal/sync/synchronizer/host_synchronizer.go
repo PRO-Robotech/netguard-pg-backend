@@ -206,7 +206,7 @@ func (s *hostSynchronizer) syncHostBatch(ctx context.Context, uuids []string, ho
 	result := types.NewHostSyncResult()
 	result.SetTotalRequested(len(uuids))
 
-	// Get host data from SGROUP
+	// Get host data from SGROUP (Host contains MetaInfo field)
 	sgroupHosts, err := s.sgroupReader.GetHostsByUUIDs(ctx, uuids)
 	if err != nil {
 		// Mark all as failed
@@ -216,15 +216,15 @@ func (s *hostSynchronizer) syncHostBatch(ctx context.Context, uuids []string, ho
 		return result, err
 	}
 
-	// Create map of UUID -> SGROUP Host
+	// Create map of UUID -> Host
 	sgroupHostMap := make(map[string]*pb.Host)
-	for _, sgroupHost := range sgroupHosts {
-		if sgroupHost != nil && sgroupHost.Uuid != "" {
-			sgroupHostMap[sgroupHost.Uuid] = sgroupHost
+	for _, host := range sgroupHosts {
+		if host != nil && host.GetUuid() != "" {
+			sgroupHostMap[host.GetUuid()] = host
 		}
 	}
 
-	// Prepare IPSet updates
+	// Prepare IPSet and MetaInfo updates
 	var updates []types.HostIPSetUpdate
 
 	for _, uuid := range uuids {
@@ -241,10 +241,13 @@ func (s *hostSynchronizer) syncHostBatch(ctx context.Context, uuids []string, ho
 			continue
 		}
 
+		// Extract MetaInfo from Host (MetaInfo is now embedded in Host)
+		sgroupMetaInfo := sgroupHost.GetMetaInfo()
+
 		// Extract IPSet from SGROUP host
 		var ipSet []string
-		if sgroupHost.IpList != nil && len(sgroupHost.IpList.IPs) > 0 {
-			ipSet = sgroupHost.IpList.IPs
+		if sgroupHost.GetIpList() != nil && len(sgroupHost.GetIpList().GetIPs()) > 0 {
+			ipSet = sgroupHost.GetIpList().GetIPs()
 
 			// Validate IP addresses if enabled
 			if s.config.EnableIPSetValidation {
@@ -252,7 +255,6 @@ func (s *hostSynchronizer) syncHostBatch(ctx context.Context, uuids []string, ho
 				for _, ip := range ipSet {
 					if s.isValidIP(ip) {
 						validIPs = append(validIPs, ip)
-					} else {
 					}
 				}
 				ipSet = validIPs
@@ -260,14 +262,28 @@ func (s *hostSynchronizer) syncHostBatch(ctx context.Context, uuids []string, ho
 		}
 
 		if len(ipSet) > 0 {
-			updates = append(updates, types.HostIPSetUpdate{
+			update := types.HostIPSetUpdate{
 				HostUUID:  uuid,
 				HostID:    netguardHost.GetID(),
 				Namespace: netguardHost.Namespace,
 				Name:      netguardHost.Name,
 				IPSet:     ipSet,
-				SGName:    sgroupHost.SgName,
-			})
+				SGName:    sgroupHost.GetSgName(),
+			}
+
+			// Add MetaInfo if available from SGROUP
+			if sgroupMetaInfo != nil {
+				update.MetaInfo = &types.HostMetaInfoUpdate{
+					HostName:        sgroupMetaInfo.GetHostName(),
+					Os:              sgroupMetaInfo.GetOs(),
+					Platform:        sgroupMetaInfo.GetPlatform(),
+					PlatformFamily:  sgroupMetaInfo.GetPlatformFamily(),
+					PlatformVersion: sgroupMetaInfo.GetPlatformVersion(),
+					KernelVersion:   sgroupMetaInfo.GetKernelVersion(),
+				}
+			}
+
+			updates = append(updates, update)
 		} else {
 			result.AddFailedHost(uuid, "no valid IP addresses found in SGROUP")
 		}

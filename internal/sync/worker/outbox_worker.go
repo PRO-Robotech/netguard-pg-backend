@@ -37,12 +37,13 @@ type OutboxWorker struct {
 	conditionManager ports.ConditionManager
 
 	// Syncers for entity resources
-	hostSyncer         *syncers.HostSyncer
-	addressGroupSyncer *syncers.AddressGroupSyncer
-	networkSyncer      *syncers.NetworkSyncer
-	serviceSyncer      *syncers.ServiceSyncer
-	svcSvcRuleSyncer   *syncers.SvcSvcRuleSyncer
-	svcFqdnRuleSyncer  *syncers.SvcFqdnRuleSyncer
+	hostSyncer          *syncers.HostSyncer
+	addressGroupSyncer  *syncers.AddressGroupSyncer
+	networkSyncer       *syncers.NetworkSyncer
+	serviceSyncer       *syncers.ServiceSyncer
+	svcSvcRuleSyncer    *syncers.SvcSvcRuleSyncer
+	svcFqdnRuleSyncer   *syncers.SvcFqdnRuleSyncer
+	ieCidrSvcRuleSyncer *syncers.IECidrSvcRuleSyncer
 
 	// Port mapping maintenance (optional)
 	portMappingRegenerator PortMappingRegenerator
@@ -80,6 +81,7 @@ func NewOutboxWorker(
 	serviceSyncer *syncers.ServiceSyncer,
 	svcSvcRuleSyncer *syncers.SvcSvcRuleSyncer,
 	svcFqdnRuleSyncer *syncers.SvcFqdnRuleSyncer,
+	ieCidrSvcRuleSyncer *syncers.IECidrSvcRuleSyncer,
 	conditionManager ports.ConditionManager,
 	logger *zap.Logger,
 	config *WorkerConfig,
@@ -109,6 +111,7 @@ func NewOutboxWorker(
 		serviceSyncer:          serviceSyncer,
 		svcSvcRuleSyncer:       svcSvcRuleSyncer,
 		svcFqdnRuleSyncer:      svcFqdnRuleSyncer,
+		ieCidrSvcRuleSyncer:    ieCidrSvcRuleSyncer,
 		portMappingRegenerator: portMappingRegenerator,
 		config:                 config,
 		logger:                 logger.With(zap.String("component", "outbox-worker")),

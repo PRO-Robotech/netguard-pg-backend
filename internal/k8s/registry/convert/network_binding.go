@@ -29,6 +29,7 @@ func (c *NetworkBindingConverter) ToDomain(ctx context.Context, k8sObj *netguard
 		},
 		NetworkRef:      k8sObj.Spec.NetworkRef,
 		AddressGroupRef: k8sObj.Spec.AddressGroupRef,
+		Comment:         k8sObj.Spec.Comment,
 		// NetworkItem is derived from domain model, not stored in K8s status
 		Meta: ConvertMetadataToDomain(k8sObj.ObjectMeta, k8sObj.Status.Conditions, 0), // NetworkBinding doesn't have ObservedGeneration
 	}
@@ -55,6 +56,7 @@ func (c *NetworkBindingConverter) FromDomain(ctx context.Context, domainObj *mod
 				ObjectReference: EnsureObjectReferenceFields(domainObj.AddressGroupRef.ObjectReference, "AddressGroup"),
 				Namespace:       domainObj.AddressGroupRef.Namespace,
 			},
+			Comment: domainObj.Comment,
 		},
 	}
 

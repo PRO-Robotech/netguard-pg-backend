@@ -39,7 +39,7 @@ spec:
               key: postgres-password
       containers:
       - name: backend
-        image: netguard/pg-backend:latest
+        image: netguard/pg-backend:local-dev
         imagePullPolicy: IfNotPresent
         command: ["/root/server"]
         args:

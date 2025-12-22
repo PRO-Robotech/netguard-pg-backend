@@ -145,3 +145,12 @@ func (p *hostProcessor) logSyncResults(result *types.HostSyncResult, event monit
 	if result.Details != nil && len(result.Details) > 0 {
 	}
 }
+
+// PerformConnectionSync implements OnConnectionSync interface
+func (p *hostProcessor) PerformConnectionSync(ctx context.Context) error {
+	_, err := p.synchronizer.SyncAllHosts(ctx)
+	if err != nil {
+		return fmt.Errorf("connection sync failed: %w", err)
+	}
+	return nil
+}

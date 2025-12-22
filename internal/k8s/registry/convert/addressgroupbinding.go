@@ -40,6 +40,7 @@ func (c *AddressGroupBindingConverter) ToDomain(ctx context.Context, k8sObj *net
 		},
 		ServiceRef:      k8sObj.Spec.ServiceRef,
 		AddressGroupRef: k8sObj.Spec.AddressGroupRef,
+		Comment:         k8sObj.Spec.Comment,
 		Meta:            ConvertMetadataToDomain(k8sObj.ObjectMeta, k8sObj.Status.Conditions, k8sObj.Status.ObservedGeneration),
 	}
 
@@ -61,6 +62,7 @@ func (c *AddressGroupBindingConverter) FromDomain(ctx context.Context, domainObj
 		Spec: netguardv1beta1.AddressGroupBindingSpec{
 			ServiceRef:      EnsureNamespacedObjectReferenceFields(domainObj.ServiceRef, "Service"),
 			AddressGroupRef: EnsureNamespacedObjectReferenceFields(domainObj.AddressGroupRef, "AddressGroup"),
+			Comment:         domainObj.Comment,
 		},
 	}
 

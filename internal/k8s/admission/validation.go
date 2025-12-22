@@ -50,6 +50,8 @@ func (w *ValidationWebhook) ValidateAdmissionReview(ctx context.Context, req *ad
 		response = w.validateNetworkBinding(ctx, req)
 	case "HostBinding":
 		response = w.validateHostBinding(ctx, req)
+	case "IECidrSvcRule":
+		response = w.validateIECidrSvcRule(ctx, req)
 	default:
 		response = w.errorResponse(req.UID, fmt.Sprintf("Unknown resource kind: %s", req.Kind.Kind))
 	}
@@ -787,6 +789,86 @@ func convertNetworkBindingToDomain(k8sBinding netguardv1beta1.NetworkBinding) mo
 			Labels:      k8sBinding.Labels,
 			Annotations: k8sBinding.Annotations,
 		},
+	}
+}
+
+func (w *ValidationWebhook) validateIECidrSvcRule(ctx context.Context, req *admissionv1.AdmissionRequest) *admissionv1.AdmissionResponse {
+	var rule netguardv1beta1.IECidrSvcRule
+	if err := json.Unmarshal(req.Object.Raw, &rule); err != nil {
+		return w.errorResponse(req.UID, fmt.Sprintf("Failed to unmarshal IECidrSvcRule: %v", err))
+	}
+
+	// Получаем Reader для валидации
+	reader, err := w.backendClient.GetReader(ctx)
+	if err != nil {
+		return w.errorResponse(req.UID, fmt.Sprintf("Failed to get reader: %v", err))
+	}
+	defer reader.Close()
+
+	// Получаем валидатор
+	validator := w.backendClient.GetDependencyValidator()
+	ruleValidator := validator.GetIECidrSvcRuleValidator()
+
+	// Конвертируем в domain модель
+	domainRule := convertIECidrSvcRuleToDomain(rule)
+
+	switch req.Operation {
+	case admissionv1.Create:
+		// K8s structural validation
+		k8sValidator := k8svalidation.NewIECidrSvcRuleValidator()
+		if errs := k8sValidator.ValidateCreate(ctx, &rule); len(errs) > 0 {
+			return w.errorResponse(req.UID, fmt.Sprintf("IECidrSvcRule K8s validation failed: %v", errs.ToAggregate()))
+		}
+
+		// Application validation (service exists + Ready)
+		if err := ruleValidator.ValidateForCreation(ctx, domainRule); err != nil {
+			return w.errorResponse(req.UID, fmt.Sprintf("IECidrSvcRule validation failed: %v", err))
+		}
+
+	case admissionv1.Update:
+		var oldRule netguardv1beta1.IECidrSvcRule
+		if err := json.Unmarshal(req.OldObject.Raw, &oldRule); err != nil {
+			return w.errorResponse(req.UID, fmt.Sprintf("Failed to unmarshal old IECidrSvcRule: %v", err))
+		}
+
+		k8sValidator := k8svalidation.NewIECidrSvcRuleValidator()
+		if errs := k8sValidator.ValidateUpdate(ctx, &rule, &oldRule); len(errs) > 0 {
+			return w.errorResponse(req.UID, fmt.Sprintf("IECidrSvcRule K8s validation failed: %v", errs.ToAggregate()))
+		}
+
+		oldDomainRule := convertIECidrSvcRuleToDomain(oldRule)
+		if err := ruleValidator.ValidateForUpdate(ctx, oldDomainRule, domainRule); err != nil {
+			return w.errorResponse(req.UID, fmt.Sprintf("IECidrSvcRule validation failed: %v", err))
+		}
+
+	case admissionv1.Delete:
+		// No additional validation for deletes
+	}
+
+	return w.allowResponse(req.UID, "IECidrSvcRule validation passed")
+}
+
+func convertIECidrSvcRuleToDomain(rule netguardv1beta1.IECidrSvcRule) models.IECidrSvcRule {
+	ports := make([]models.IECidrSvcPortSpec, len(rule.Spec.Ports))
+	for i, p := range rule.Spec.Ports {
+		ports[i] = models.IECidrSvcPortSpec{S: p.S, D: p.D}
+	}
+
+	return models.IECidrSvcRule{
+		SelfRef: models.SelfRef{
+			ResourceIdentifier: models.NewResourceIdentifier(rule.Name, models.WithNamespace(rule.Namespace)),
+		},
+		Transport:   models.TransportProtocol(rule.Spec.Transport),
+		CIDR:        rule.Spec.CIDR,
+		ServiceRef:  rule.Spec.Svc,
+		Traffic:     models.Traffic(rule.Spec.Traffic),
+		Ports:       ports,
+		Logs:        rule.Spec.Logs,
+		Trace:       rule.Spec.Trace,
+		Action:      models.RuleAction(rule.Spec.Action),
+		Priority:    rule.Spec.Priority,
+		Description: rule.Spec.Description,
+		Comment:     rule.Spec.Comment,
 	}
 }
 

@@ -25,6 +25,7 @@ func BuildAllConverters(facade *services.NetguardFacade) []ResourceConverter {
 		newNetworkBindingConverter(facade),
 		newSvcSvcRuleConverter(facade),
 		newSvcFqdnRuleConverter(facade),
+		newIECidrSvcRuleConverter(facade),
 	}
 }
 
@@ -177,6 +178,20 @@ func newSvcFqdnRuleConverter(facade *services.NetguardFacade) ResourceConverter 
 			return facade.GetSvcFqdnRules(ctx, ports.EmptyScope{})
 		},
 		func(ctx context.Context, domainObj *models.SvcFqdnRule) (runtime.Object, error) {
+			return conv.FromDomain(ctx, domainObj)
+		},
+	)
+}
+
+func newIECidrSvcRuleConverter(facade *services.NetguardFacade) ResourceConverter {
+	conv := &convert.IECidrSvcRuleConverter{}
+	return newDomainConverter[models.IECidrSvcRule](
+		"ie_cidr_svc_rules",
+		facade.GetIECidrSvcRuleByID,
+		func(ctx context.Context) ([]models.IECidrSvcRule, error) {
+			return facade.GetIECidrSvcRules(ctx, ports.EmptyScope{})
+		},
+		func(ctx context.Context, domainObj *models.IECidrSvcRule) (runtime.Object, error) {
 			return conv.FromDomain(ctx, domainObj)
 		},
 	)
