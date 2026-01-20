@@ -129,7 +129,7 @@ func NewNegotiatedSerializerWithoutProtobuf(serializer runtime.NegotiatedSeriali
 	return &negotiatedSerializerWithoutProtobuf{wrapped: serializer}
 }
 
-func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServer, error) {
+func NewServer(opts *genericoptions.RecommendedOptions, configPath string) (*server.GenericAPIServer, error) {
 	if err := opts.SecureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, []net.IP{netutils.ParseIPSloppy("127.0.0.1")}); err != nil {
 		return nil, fmt.Errorf("self-signed certs: %w", err)
 	}
@@ -194,7 +194,7 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 	// Backend client
 	// ------------------------------------------------------------------
 
-	cfg, err := backendclient.LoadBackendClientConfig("")
+	cfg, err := backendclient.LoadBackendClientConfig(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("load backend config: %w", err)
 	}
