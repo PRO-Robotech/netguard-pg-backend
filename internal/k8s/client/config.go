@@ -7,6 +7,10 @@ import (
 	"github.com/ilyakaznacheev/cleanenv"
 )
 
+type ApiserverConfig struct {
+	BackendClient BackendClientConfig `yaml:"backend_client"`
+}
+
 // BackendClientConfig конфигурация клиента с cleanenv тегами
 type BackendClientConfig struct {
 	// gRPC настройки
@@ -35,13 +39,15 @@ func LoadBackendClientConfig(configPath string) (BackendClientConfig, error) {
 	var config BackendClientConfig
 
 	if configPath != "" {
-		// Загрузка из YAML файла с автоматическим применением env переменных
-		err := cleanenv.ReadConfig(configPath, &config)
+		var fullConfig ApiserverConfig
+		err := cleanenv.ReadConfig(configPath, &fullConfig)
 		if err != nil {
 			return config, fmt.Errorf("failed to read config from %s: %w", configPath, err)
 		}
+		config = fullConfig.BackendClient
+
+		_ = cleanenv.ReadEnv(&config)
 	} else {
-		// Загрузка только из env переменных с defaults
 		err := cleanenv.ReadEnv(&config)
 		if err != nil {
 			return config, fmt.Errorf("failed to read config from environment: %w", err)
