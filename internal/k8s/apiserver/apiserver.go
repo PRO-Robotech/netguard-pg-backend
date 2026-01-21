@@ -129,7 +129,29 @@ func NewNegotiatedSerializerWithoutProtobuf(serializer runtime.NegotiatedSeriali
 	return &negotiatedSerializerWithoutProtobuf{wrapped: serializer}
 }
 
-func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServer, error) {
+func NewServer(opts *genericoptions.RecommendedOptions, configPath string) (*server.GenericAPIServer, error) {
+	apiCfg, err := LoadAPIServerConfig(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("load apiserver config: %w", err)
+	}
+
+	if apiCfg.BindAddress != "" {
+		opts.SecureServing.BindAddress = net.ParseIP(apiCfg.BindAddress)
+	}
+	if apiCfg.SecurePort > 0 {
+		opts.SecureServing.BindPort = apiCfg.SecurePort
+	}
+	if apiCfg.Authn.TLS.CertFile != "" && apiCfg.Authn.TLS.KeyFile != "" {
+		opts.SecureServing.ServerCert.CertKey.CertFile = apiCfg.Authn.TLS.CertFile
+		opts.SecureServing.ServerCert.CertKey.KeyFile = apiCfg.Authn.TLS.KeyFile
+	}
+	if len(apiCfg.Authn.TLS.Client.CAFiles) > 0 {
+		opts.Authentication.ClientCert.ClientCA = apiCfg.Authn.TLS.Client.CAFiles[0]
+	}
+
+	klog.Infof("API server config: bind=%s:%d, tls=%v",
+		apiCfg.BindAddress, apiCfg.SecurePort, apiCfg.IsTLSEnabled())
+
 	if err := opts.SecureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, []net.IP{netutils.ParseIPSloppy("127.0.0.1")}); err != nil {
 		return nil, fmt.Errorf("self-signed certs: %w", err)
 	}
@@ -190,17 +212,8 @@ func NewServer(opts *genericoptions.RecommendedOptions) (*server.GenericAPIServe
 		return nil, fmt.Errorf("create generic server: %w", err)
 	}
 
-	// ------------------------------------------------------------------
-	// Backend client
-	// ------------------------------------------------------------------
-
-	cfg, err := backendclient.LoadBackendClientConfig("")
-	if err != nil {
-		return nil, fmt.Errorf("load backend config: %w", err)
-	}
-
-	klog.Infof("backend endpoint: %s", cfg.Endpoint)
-	bClient, err := backendclient.NewBackendClient(cfg)
+	klog.Infof("backend endpoint: %s", apiCfg.BackendClient.Endpoint)
+	bClient, err := backendclient.NewBackendClient(apiCfg.BackendClient)
 	if err != nil {
 		return nil, fmt.Errorf("init backend client: %w", err)
 	}

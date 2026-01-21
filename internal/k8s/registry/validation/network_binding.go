@@ -86,11 +86,6 @@ func (v *NetworkBindingValidator) validateSpec(spec v1beta1.NetworkBindingSpec, 
 			fmt.Sprintf("addressGroupRef namespace must match NetworkBinding namespace (%s)", parentNamespace)))
 	}
 
-	// Validate that NetworkRef and AddressGroupRef are different (they're in same namespace by definition)
-	if spec.NetworkRef.Name == spec.AddressGroupRef.Name {
-		allErrs = append(allErrs, field.Invalid(fldPath.Child("addressGroupRef"), spec.AddressGroupRef, "addressGroupRef cannot reference the same resource as networkRef"))
-	}
-
 	return allErrs
 }
 

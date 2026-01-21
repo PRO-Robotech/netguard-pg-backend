@@ -90,18 +90,21 @@ func (c *APIServerConfig) IsTLSEnabled() bool {
 	return c.Authn.Type == AuthnTypeTLS || c.Authn.Type == ""
 }
 
-// LoadAPIServerConfig загружает полную конфигурацию API Server
 func LoadAPIServerConfig(configPath string) (APIServerConfig, error) {
 	var config APIServerConfig
 
 	if configPath != "" {
-		err := cleanenv.ReadConfig(configPath, &config)
+		f, err := os.Open(configPath)
 		if err != nil {
-			return config, fmt.Errorf("failed to read config from %s: %w", configPath, err)
+			return config, fmt.Errorf("failed to open config file %s: %w", configPath, err)
+		}
+		defer f.Close()
+
+		if err := cleanenv.ParseYAML(f, &config); err != nil {
+			return config, fmt.Errorf("failed to parse YAML config from %s: %w", configPath, err)
 		}
 	} else {
-		err := cleanenv.ReadEnv(&config)
-		if err != nil {
+		if err := cleanenv.ReadEnv(&config); err != nil {
 			return config, fmt.Errorf("failed to read config from environment: %w", err)
 		}
 	}
@@ -193,7 +196,7 @@ func (w *WatchConfig) Validate() error {
 	return nil
 }
 
-// GetConfigUsage возвращает описание всех параметров конфигурации
+// GetAPIServerConfigUsage возвращает описание всех параметров конфигурации
 func GetAPIServerConfigUsage() string {
 	var config APIServerConfig
 	usage, _ := cleanenv.GetDescription(&config, nil)

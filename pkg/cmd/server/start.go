@@ -27,13 +27,15 @@ func NewCommandStartNetguardServer(ctx context.Context, out, errOut io.Writer) *
 	opts.Authentication.RemoteKubeConfigFileOptional = true
 	opts.Authorization.RemoteKubeConfigFileOptional = true
 
+	var configPath string
+
 	cmd := &cobra.Command{
 		Use:   "netguard-apiserver",
 		Short: "Launch a netguard API server",
 		RunE: func(c *cobra.Command, args []string) error {
 			klog.Info("Starting Netguard API server with correct pattern...")
 
-			server, err := apiserver.NewServer(opts)
+			server, err := apiserver.NewServer(opts, configPath)
 			if err != nil {
 				return fmt.Errorf("failed to create server: %v", err)
 			}
@@ -46,6 +48,7 @@ func NewCommandStartNetguardServer(ctx context.Context, out, errOut io.Writer) *
 	opts.AddFlags(cmd.Flags())
 	// Make Go standard flags (including klog) available to the command so users can use -v, --v etc.
 	cmd.Flags().AddGoFlagSet(flag.CommandLine)
+	cmd.Flags().StringVar(&configPath, "config", "", "Path to config file")
 
 	return cmd
 }
