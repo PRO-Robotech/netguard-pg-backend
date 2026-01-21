@@ -2,6 +2,7 @@ package client
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/ilyakaznacheev/cleanenv"
@@ -34,19 +35,22 @@ type BackendClientConfig struct {
 	CacheCleanupInterval time.Duration `yaml:"cache_cleanup_interval" env:"BACKEND_CACHE_CLEANUP_INTERVAL" env-default:"10m" env-description:"Cache cleanup interval"`
 }
 
-// LoadBackendClientConfig загружает конфигурацию с помощью cleanenv
+// LoadBackendClientConfig загружает конфигурацию с помощью cleanen
 func LoadBackendClientConfig(configPath string) (BackendClientConfig, error) {
 	var config BackendClientConfig
 
 	if configPath != "" {
-		var fullConfig ApiserverConfig
-		err := cleanenv.ReadConfig(configPath, &fullConfig)
+		f, err := os.Open(configPath)
 		if err != nil {
-			return config, fmt.Errorf("failed to read config from %s: %w", configPath, err)
+			return config, fmt.Errorf("failed to open config file %s: %w", configPath, err)
+		}
+		defer f.Close()
+
+		var fullConfig ApiserverConfig
+		if err := cleanenv.ParseYAML(f, &fullConfig); err != nil {
+			return config, fmt.Errorf("failed to parse YAML from %s: %w", configPath, err)
 		}
 		config = fullConfig.BackendClient
-
-		_ = cleanenv.ReadEnv(&config)
 	} else {
 		err := cleanenv.ReadEnv(&config)
 		if err != nil {
